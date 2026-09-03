@@ -1,0 +1,108 @@
+// # Modular cached check driver
+//
+// Logline: Checks a path per module or as one cached tree and prints OK, skipping unchanged sources via .ooda-cache/check.
+//
+// Setup: Needs FsReadCap, FsWriteCap, and ProcessCap; collect_module_paths, scan_fn_names, run_check_core_binds, oo_file_stamp, and the check_cache_* helpers are in scope.
+//
+// Beats:
+//   1. A g_ listing whose path stamps still match prints OK without collect or typecheck.
+//   2. More than one module: scan names once, then check only stamp-plus-binds misses.
+//   3. One module: load the import tree, hit the content-hash cache, or run_check_core, put the tree key, and print OK.
+//   Entry (last path) keeps import lines so unused-import can see KW_IMPORT.
+//
+// residual: RAM-cold typecheck stays ~523s; disk-warm new-process uses g_ stamp snapshot.
+
+import "check_cache.oo";
+import "ast/ANCHOR.oo";
+
+
+fn persist_graph(fs: &FsWriteCap, sys: &ProcessCap, root: String, listing: String) {
+    let tk: String = check_cache_tree_key(content_hash("dw1\n" + listing));
+    check_cache_put(fs, sys, tk);
+    check_cache_put_body(fs, sys, check_cache_graph_key(root), listing);
+}
+
+fn count_lines(s: String) -> Int {
+    let n: Int = chars_len(s);
+    if n == 0 { return 0;
+    }
+    let mut c: Int = 0;
+    let mut i: Int = 0;
+    while i < n {
+        if char_at(s, i) == "\n" { c = c + 1;
+        }
+        i = i + 1;
+    }
+    if char_at(s, n - 1) != "\n" { c = c + 1;
+    }
+    return c;
+}
+
+fn check_modules(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, paths: List[String]) {
+    let np = list_len(paths);
+    let mut names = "\t";
+    let mut raws: List[String] = list_new();
+    let mut i = 0;
+    while i < np { let pth: String = list_get(paths, i);
+    let rr = read_file(fs_r, pth);
+    let mut raw: String = "";
+    if !rr.is_err() { raw = match rr { Ok(s)    => s, Err(msg) => msg };
+            if count_lines(raw) > 256 { println("ERR\tcheck\toversized " + pth + " " + count_lines(raw).to_string() + " > 256");
+            process_exit(1);
+            }
+            names = names + scan_fn_names(raw);
+        }
+        raws = list_push(raws, raw);
+        i = i + 1;
+    }
+    let binds: String = names_to_depth0_binds(names);
+    let bh: String = content_hash(binds);
+    i = 0;
+    while i < np { let pth2: String = list_get(paths, i);
+    let stamp: String = oo_file_stamp(pth2);
+    let mk: String = check_cache_mod_key(content_hash(stamp + bh));
+    if !check_cache_hit(fs_r, mk) { let raw2: String = list_get(raws, i);
+    let mut body: String = raw2;
+    if i + 1 < np { body = strip_import_lines(raw2);
+    }
+            if chars_len(body) > 0 { run_check_core_binds_path(sys, body, binds, pth2);
+            check_cache_put(fs_w, sys, mk);
+            }
+        }
+        i = i + 1;
+    }
+}
+
+pub fn run_check_path(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, path: String) {
+    check_cache_ensure(fs_r, sys);
+    let listing: String = check_cache_read(fs_r, check_cache_graph_key(path));
+    if check_listing_fresh(listing) {
+        println("OK");
+        return;
+    }
+    let paths: List[String] = collect_module_paths(fs_r, path);
+    let np = list_len(paths);
+    let roll: String = check_paths_listing(paths);
+    if np > 1 { let tk: String = check_cache_tree_key(content_hash("dw1\n" + roll));
+    if !check_cache_hit(fs_r, tk) { check_modules(fs_r, fs_w, sys, paths);
+    }
+        persist_graph(fs_w, sys, path, roll);
+        println("OK");
+        return;
+    }
+    let src: String = load_source_with_imports(fs_r, path);
+    if count_lines(src) > 256 { println("ERR\tcheck\toversized " + path + " " + count_lines(src).to_string() + " > 256");
+    process_exit(1);
+    }
+    let h: String = content_hash(src);
+    let tk2: String = check_cache_tree_key(h);
+    if check_cache_hit(fs_r, tk2) {
+        persist_graph(fs_w, sys, path, roll);
+        println("OK");
+        return;
+    }
+    run_check_core_binds_path(sys, src, "\t", path);
+    check_cache_put(fs_w, sys, tk2);
+    persist_graph(fs_w, sys, path, roll);
+    println("OK");
+}

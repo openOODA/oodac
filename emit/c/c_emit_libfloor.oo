@@ -1,0 +1,228 @@
+// # Lower library free names to C
+//
+// Logline: Map a library free name and its args to a C call snippet, or return empty when the name is not a libfloor call.
+//
+// Setup: c_emit_netio_call, c_emit_sys_call, c_arg_is_cap_ident, println, and process_exit exist. t is the callee; a0 and a1 are the first two C args; args is the joined C arg list.
+//
+// Beats:
+//   1. Try netio then sys; return that snippet when nonempty.
+//   2. Thread, channel, actor, HITL, gpu, and FFI names require the matching cap ident and emit oo_*.
+//   3. Crypto, bytes, string, and math names emit the matching C call; any other name returns empty.
+
+import "c_emit_netio.oo";
+import "c_emit_sys.oo";
+import "c_emit_args.oo";
+
+pub fn c_emit_libfloor_call(t: String, a0: String, a1: String, args: String) -> String {
+    let netio: String = c_emit_netio_call(t, a0, a1, args);
+if netio != "" { return netio;
+}
+    // SysCap path A: process residual + M166 OS syscall seals → c_emit_sys.oo
+    let sysio: String = c_emit_sys_call(t, a0, a1, args);
+    if sysio != "" {
+        return sysio;
+    }
+    if t == "mutex_lock" {
+        if a1 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tmutex_lock requires &ThreadCap first arg");
+            process_exit(1);
+        }
+        return "oo_mutex_lock(" + a0 + ", " + a1 + ")";
+    }
+    if t == "mutex_unlock" {
+        if a1 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tmutex_unlock requires &ThreadCap first arg");
+            process_exit(1);
+        }
+        return "oo_mutex_unlock(" + a0 + ", " + a1 + ")";
+    }
+    if t == "thread_spawn" {
+        if a1 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tthread_spawn requires &ThreadCap first arg");
+            process_exit(1);
+        }
+        return "oo_thread_spawn(" + a0 + ", " + a1 + ")";
+    }
+    // Prefer Int slot: thread_join(thread, 0). String "tid:N" → oo_thread_join_s.
+    if t == "thread_join" {
+        if a1 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tthread_join requires &ThreadCap first arg");
+            process_exit(1);
+        }
+        // Int slot → oo_thread_join; string lit / OoStr expr → oo_thread_join_s
+        if a1.contains("oo_str") || a1.contains("\"") {
+            return "oo_thread_join_s(" + a0 + ", " + a1 + ")";
+        }
+        return "oo_thread_join(" + a0 + ", " + a1 + ")";
+    }
+    // M164: process-local channels under ThreadCap (Int slot preferred)
+    if t == "channel_new" {
+        if !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tchannel_new requires &ThreadCap first arg");
+            process_exit(1);
+        }
+        return "oo_channel_new(" + a0 + ")";
+    }
+    if t == "channel_send" {
+        if !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tchannel_send requires &ThreadCap first arg");
+            process_exit(1);
+        }
+        return "oo_channel_send(" + args + ")";
+    }
+    if t == "channel_recv" {
+        if a1 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tchannel_recv requires &ThreadCap first arg");
+            process_exit(1);
+        }
+        return "oo_channel_recv(" + a0 + ", " + a1 + ")";
+    }
+    // M165 path A: thin actors under ThreadCap (joinable thread + mailbox)
+    if t == "actor_spawn" {
+        if a1 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tactor_spawn requires &ThreadCap first arg");
+            process_exit(1);
+        }
+        return "oo_actor_spawn(" + a0 + ", " + a1 + ")";
+    }
+    if t == "actor_send" {
+        if !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tactor_send requires &ThreadCap first arg");
+            process_exit(1);
+        }
+        return "oo_actor_send(" + args + ")";
+    }
+    if t == "actor_recv" {
+        if a1 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tactor_recv requires &ThreadCap first arg");
+            process_exit(1);
+        }
+        return "oo_actor_recv(" + a0 + ", " + a1 + ")";
+    }
+    if t == "gpu_launch" {
+        if a1 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tgpu_launch requires &GpuCap first arg");
+            process_exit(1);
+        }
+        return "oo_gpu_launch(" + a0 + ", " + a1 + ")";
+    }
+    // M156/M165: UnsafeFFICap — OS dlopen allowlist + dlsym/dlclose residual stubs
+    if t == "dlopen" {
+        if a1 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tdlopen requires &UnsafeFFICap as first arg (not int/lit)");
+            process_exit(1);
+        }
+        return "oo_dlopen(" + a0 + ", " + a1 + ")";
+    }
+    if t == "dlsym" {
+        if !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tdlsym requires &UnsafeFFICap as first arg (not int/lit)");
+            process_exit(1);
+        }
+        return "oo_dlsym(" + args + ")";
+    }
+    if t == "dlclose" {
+        if a1 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tdlclose requires &UnsafeFFICap as first arg (not int/lit)");
+            process_exit(1);
+        }
+        return "oo_dlclose(" + a0 + ", " + a1 + ")";
+    }
+    if t == "crypto_md5_internal" {
+        return "crypto_md5_internal(" + args + ")";
+    }
+    if t == "crypto_sha1_internal" {
+        return "crypto_sha1_internal(" + args + ")";
+    }
+    if t == "crypto_sha512_internal" {
+        return "crypto_sha512_internal(" + args + ")";
+    }
+    if t == "crypto_aes_encrypt_internal" {
+        return "crypto_aes_encrypt_internal(" + args + ")";
+    }
+    if t == "byte_at" || t == "str_byte_at" || t == "oo_str_byte_at" {
+        return "oo_byte_at(" + args + ")";
+    }
+    if t == "limb_add" { return "oo_limb_add(" + args + ")";
+    }
+    if t == "limb_sub" { return "oo_limb_sub(" + args + ")";
+    }
+    if t == "limb_mul" { return "oo_limb_mul(" + args + ")";
+    }
+    if t == "limb_div" { return "oo_limb_div(" + args + ")";
+    }
+    if t == "limb_cmp" { return "oo_limb_cmp(" + args + ")";
+    }
+    // M166: ord(s) = first byte 0..255, or -1 if empty (path A via byte_at)
+    // M166: bit_xor(a,b) → (a^b) free name (caret token residual on some hosts)
+    if t == "bit_xor" {
+        return "(" + a0 + " ^ " + a1 + ")";
+    }
+    if t == "ord" {
+        return "oo_byte_at(" + args + ", 0)";
+    }
+    if t == "bytes_len" {
+        return "oo_bytes_len(" + args + ")";
+    }
+    if t == "byte_slice" {
+        return "oo_byte_slice(" + args + ")";
+    }
+    if t == "bytes_eq" {
+        return "oo_bytes_eq(" + args + ")";
+    }
+    // M164 path A: String byte view + List[Int] 0..255 buffer (not &str / List[Byte])
+    if t == "bytes_from_str" {
+        return "oo_bytes_from_str(" + args + ")";
+    }
+    if t == "bytes_concat" {
+        return "oo_bytes_concat(" + args + ")";
+    }
+    if t == "bytes_new" {
+        return "oo_bytes_new()";
+    }
+    if t == "bytes_push" {
+        return "oo_bytes_push(" + args + ")";
+    }
+    if t == "bytes_get" {
+        return "oo_bytes_get(" + args + ")";
+    }
+    if t == "bytes_to_str" {
+        return "oo_bytes_to_str(" + args + ")";
+    }
+    // M165 path A: owned string ops (byte index; not &str borrow)
+    if t == "str_starts_with" {
+        return "oo_str_starts_with(" + args + ")";
+    }
+    if t == "str_ends_with" {
+        return "oo_str_ends_with(" + args + ")";
+    }
+    if t == "str_index_of" {
+        return "oo_str_index_of(" + args + ")";
+    }
+    if t == "str_repeat" {
+        return "oo_str_repeat(" + args + ")";
+    }
+    if t == "str_to_uppercase" || t == "to_uppercase" {
+        return "oo_str_to_uppercase(" + args + ")";
+    }
+    if t == "str_to_lowercase" || t == "to_lowercase" {
+        return "oo_str_to_lowercase(" + args + ")";
+    }
+    if t == "str_trim" || t == "trim" {
+        return "oo_str_trim(" + args + ")";
+    }
+    // M166 path A: IEEE double math (Float → double; free names lower to oo_*)
+    if t == "sin" { return "oo_sin(" + args + ")";
+    }
+    if t == "cos" { return "oo_cos(" + args + ")";
+    }
+    if t == "ln" { return "oo_ln(" + args + ")";
+    }
+    if t == "exp" { return "oo_exp(" + args + ")";
+    }
+    if t == "sqrt" { return "oo_sqrt(" + args + ")";
+    }
+    if t == "pow" { return "oo_pow(" + args + ")";
+    }
+    return "";
+}

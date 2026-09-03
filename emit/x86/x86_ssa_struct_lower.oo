@@ -1,0 +1,226 @@
+// # Struct field-offset lower for emit-x86
+//
+// Logline: Lowers user-defined struct definitions and field operations from typed AST to x86-64 SSA assembly.
+//
+// Setup: import ast_parse.oo, token_fmt.oo, x86_ssa_print_rax.oo. 8-byte field alignment.
+//
+// Beats:
+//   1. Parse source code into typed AST and collect AstType struct definitions.
+//   2. Allocate stack frames with 8-byte aligned offsets for struct instances.
+//   3. Lower struct literals, field mutations, and field reads to x86-64 SSA memory instructions.
+//   4. Emit SysV print routine for field values.
+//
+
+
+import "x86_lower_helpers.oo";
+
+
+fn x86_st_args(node: String) -> String {
+    let n: Int = chars_len(node);
+    let mut depth: Int = 0;
+    let mut start: Int = 0;
+    let mut i: Int = 0;
+    let mut hit: Bool = false;
+    while i < n {
+        let c: String = char_at(node, i);
+        if c == "(" {
+            if depth == 0 { start = i + 1;
+            hit = true;
+            }
+            depth = depth + 1;
+        }
+        if c == ")" {
+            depth = depth - 1;
+            if depth == 0 && hit { return str_slice(node, start, i);
+            }
+        }
+        i = i + 1;
+    }
+    return "";
+}
+
+fn x86_st_arg_at(args: String, idx: Int) -> String {
+    let n: Int = chars_len(args);
+    let mut depth: Int = 0;
+    let mut cur: Int = 0;
+    let mut start: Int = 0;
+    let mut i: Int = 0;
+    while i < n {
+        let c: String = char_at(args, i);
+        if c == "(" || c == "{" || c == "[" { depth = depth + 1;
+        }
+        else if c == ")" || c == "}" || c == "]" { depth = depth - 1;
+        }
+        else if c == "," && depth == 0 {
+            if cur == idx { return str_slice(args, start, i);
+            }
+            cur = cur + 1;
+            start = i + 1;
+        }
+        i = i + 1;
+    }
+    if cur == idx && start <= n { return str_slice(args, start, n);
+    }
+    return "";
+}
+
+fn x86_st_arg_count(args: String) -> Int {
+    if chars_len(args) == 0 { return 0;
+    }
+    let n: Int = chars_len(args);
+    let mut depth: Int = 0;
+    let mut count: Int = 1;
+    let mut i: Int = 0;
+    while i < n {
+        let c: String = char_at(args, i);
+        if c == "(" || c == "{" || c == "[" { depth = depth + 1;
+        }
+        else if c == ")" || c == "}" || c == "]" { depth = depth - 1;
+        }
+        else if c == "," && depth == 0 { count = count + 1;
+        }
+        i = i + 1;
+    }
+    return count;
+}
+
+fn x86_st_field_slot(fields: List[String], name: String) -> String {
+    let n: Int = list_len(fields);
+let mut i: Int = 0;
+while i < n { if list_get(fields, i) == name { let off: Int = (i - n) * 8;
+return off.to_string() + "(%rbp)";
+}
+        i = i + 1;
+    }
+    let off0: Int = (0 - n) * 8;
+    return off0.to_string() + "(%rbp)";
+}
+
+fn x86_st_extract_val(expr: String) -> String {
+    let tag: String = ast_tag(expr);
+    let args: String = x86_st_args(expr);
+    if tag == "ELitInt" || tag == "ELitBool" { return x86_st_arg_at(args, 0);
+    }
+    if tag == "EUnop" {
+        let op: String = x86_st_arg_at(args, 0);
+        let inner: String = x86_st_extract_val(x86_st_arg_at(args, 1));
+        if op == "Neg" { return "-" + inner;
+        }
+        return inner;
+    }
+    return "0";
+}
+
+pub fn x86_ssa_struct_main_asm_d(src: String) -> String {
+    let toks: List[String] = tokenize_lines(src);
+    if list_len(toks) == 0 { return "";
+    }
+    let ast_str: String = ast_parse_b(toks);
+    if chars_len(ast_str) == 0 { return "";
+    }
+    let file_args: String = x86_st_args(ast_str);
+    let n_items: Int = x86_st_arg_count(file_args);
+    let mut fields: List[String] = list_new();
+    let mut struct_name: String = "";
+    let mut fn_body_node: String = "";
+    let mut it: Int = 0;
+    while it < n_items {
+        let item: String = x86_st_arg_at(file_args, it);
+        let itag: String = ast_tag(item);
+        let iargs: String = x86_st_args(item);
+        if itag == "AstType" {
+            struct_name = x86_st_arg_at(iargs, 0);
+            let field_list_str: String = str_slice(iargs, chars_len(struct_name) + 1, chars_len(iargs));
+            let nf: Int = x86_st_arg_count(field_list_str);
+            let mut fi: Int = 0;
+            while fi < nf {
+                let fld: String = x86_st_arg_at(field_list_str, fi);
+                if ast_tag(fld) == "AstField" {
+                    let fnm: String = x86_st_arg_at(x86_st_args(fld), 0);
+                    if chars_len(fnm) > 0 { fields = list_push(fields, fnm);
+                    }
+                }
+                fi = fi + 1;
+            }
+        }
+        if itag == "AstFn" {
+            let fn_name: String = x86_st_arg_at(iargs, 0);
+            if fn_name == "main" {
+                let n_fn_args: Int = x86_st_arg_count(iargs);
+                fn_body_node = x86_st_arg_at(iargs, n_fn_args - 1);
+            }
+        }
+        it = it + 1;
+    }
+    let nf: Int = list_len(fields);
+    if nf == 0 || chars_len(fn_body_node) == 0 { return "";
+    }
+    let mut out: String = "    .text\n    .globl main\n    .globl _start\nmain:\n_start:\n    push %rbp\n    mov %rsp, %rbp\n    subq $40, %rsp\n";
+    let body_args: String = x86_st_args(fn_body_node);
+    let n_stmts: Int = x86_st_arg_count(body_args);
+    let mut read_f: String = "";
+    let mut si: Int = 0;
+    while si < n_stmts { let stmt: String = x86_st_arg_at(body_args, si);
+    let stag: String = ast_tag(stmt);
+    let sargs: String = x86_st_args(stmt);
+    if stag == "SLet" || stag == "SLetMut" { let rhs: String = x86_st_arg_at(sargs, 2);
+    if ast_tag(rhs) == "EStructLit" { let rargs: String = x86_st_args(rhs);
+    let inits_str: String = str_slice(rargs, chars_len(x86_st_arg_at(rargs, 0)) + 1, chars_len(rargs));
+    let ni: Int = x86_st_arg_count(inits_str);
+    let mut ii: Int = 0;
+    while ii < ni { let fld_init: String = x86_st_arg_at(inits_str, ii);
+    if ast_tag(fld_init) == "AstField" { let i_args: String = x86_st_args(fld_init);
+    let fnm: String = x86_st_arg_at(i_args, 0);
+    let val: String = x86_st_extract_val(x86_st_arg_at(i_args, 1));
+    out = out + "    movq $" + val + ", " + x86_st_field_slot(fields, fnm) + "\n";
+    }
+                    ii = ii + 1;
+                }
+            }
+        }
+        if stag == "SAssign" {
+            let lhs: String = x86_st_arg_at(sargs, 0);
+            let val: String = x86_st_extract_val(x86_st_arg_at(sargs, 1));
+            let mut dot_pos: Int = 0;
+            let mut dp: Int = 0;
+            while dp < chars_len(lhs) {
+                if char_at(lhs, dp) == "." { dot_pos = dp;
+                }
+                dp = dp + 1;
+            }
+            let fnm: String = if dot_pos > 0 { str_slice(lhs, dot_pos + 1, chars_len(lhs)) } else { lhs };
+            out = out + "    movq $" + val + ", " + x86_st_field_slot(fields, fnm) + "\n";
+        }
+        if stag == "SExpr" {
+            let expr: String = x86_st_arg_at(sargs, 0);
+            let etag: String = ast_tag(expr);
+            let eargs: String = x86_st_args(expr);
+            if etag == "EBinop" && x86_st_arg_at(eargs, 0) == "Assign" {
+                let lhs_node: String = x86_st_arg_at(eargs, 1);
+                let val: String = x86_st_extract_val(x86_st_arg_at(eargs, 2));
+                if ast_tag(lhs_node) == "EField" {
+                    let fnm: String = x86_st_arg_at(x86_st_args(lhs_node), 1);
+                    out = out + "    movq $" + val + ", " + x86_st_field_slot(fields, fnm) + "\n";
+                }
+            }
+            if etag == "ECall" {
+                let callee: String = x86_st_arg_at(eargs, 0);
+                let cname: String = if ast_tag(callee) == "EVar" { x86_st_arg_at(x86_st_args(callee), 0) } else { callee };
+                if cname == "println" {
+                    let call_args: String = x86_st_arg_at(eargs, 1);
+                    let arg0: String = x86_st_arg_at(call_args, 0);
+                    if ast_tag(arg0) == "EField" {
+                        read_f = x86_st_arg_at(x86_st_args(arg0), 1);
+                    }
+                }
+            }
+        }
+        si = si + 1;
+    }
+    if read_f == "" { read_f = list_get(fields, 0);
+    }
+    out = out + "    movq " + x86_st_field_slot(fields, read_f) + ", %rax\n";
+    out = out + x86_sysv_print_rax_d();
+    out = out + "    leave\n    mov $60, %rax\n    xor %rdi, %rdi\n    syscall\n";
+    return out;
+}

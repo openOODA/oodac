@@ -1,0 +1,120 @@
+// # Skip if/else trees for AArch64 harvest
+//
+// Logline: Skips braced then/else so a folded cond cannot emit the unchosen arm.
+//
+// Setup: a64_tok_k exists in aarch64_emit_harv.oo. Used only by aarch64_emit.oo.
+//
+// Beats:
+//   1. Hop to the LBRACE after an if head.
+//   2. Skip a matched brace block.
+//   3. Skip a full if/else tree for leftover conds.
+//   4. Refuse-don't-miscompile: aarch64_emit_if_test returns an empty error list on shape mismatch.
+//
+// residual: || tails stay leftover.
+
+import "aarch64_emit_const_harvest.oo";
+
+
+pub fn a64_after_if_head(toks: List[String], n: Int, i: Int) -> Int {
+    let mut p = i + 1;
+while p < n && a64_tok_k(toks, p) != "LBRACE" { p = p + 1;
+}
+    return p;
+}
+
+pub fn a64_ilist_last(xs: List[Int]) -> Int {
+    let n = list_len(xs);
+if n < 1 { return -1;
+}
+    return list_get(xs, n - 1);
+}
+
+pub fn a64_ilist_pop(xs: List[Int]) -> List[Int] {
+    let n = list_len(xs);
+    let mut out: List[Int] = list_new();
+    let mut i = 0;
+    while i + 1 < n { out = list_push(out, list_get(xs, i));
+    i = i + 1;
+    }
+    return out;
+}
+
+pub fn a64_skip_braced(toks: List[String], n: Int, p0: Int) -> Int {
+    let mut p = p0;
+if p >= n || a64_tok_k(toks, p) != "LBRACE" { return p;
+}
+    let mut d = 0;
+    while p < n { let k: String = a64_tok_k(toks, p);
+    if k == "LBRACE" { d = d + 1;
+    }
+        if k == "RBRACE" {
+            d = d - 1;
+            if d <= 0 { return p + 1;
+            }
+        }
+        p = p + 1;
+    }
+    return p;
+}
+
+pub fn a64_skip_if(toks: List[String], n: Int, i: Int) -> Int {
+    let mut p = i + 1;
+while p < n && a64_tok_k(toks, p) != "LBRACE" { p = p + 1;
+}
+    if p < n && a64_tok_k(toks, p) == "LBRACE" {
+        p = a64_skip_braced(toks, n, p);
+    }
+    if p < n && a64_tok_k(toks, p) == "KW_ELSE" {
+        p = p + 1;
+        if p < n && a64_tok_k(toks, p) == "KW_IF" {
+            return a64_skip_if(toks, n, p);
+        }
+        if p < n && a64_tok_k(toks, p) == "LBRACE" {
+            return a64_skip_braced(toks, n, p);
+        }
+    }
+    return p;
+}
+
+pub fn a64_skip_else(toks: List[String], n: Int, i: Int) -> Int {
+    let mut p = i;
+if p < n && a64_tok_k(toks, p) == "KW_ELSE" { p = p + 1;
+}
+    if p < n && a64_tok_k(toks, p) == "KW_IF" {
+        return a64_skip_if(toks, n, p);
+    }
+    if p < n && a64_tok_k(toks, p) == "LBRACE" {
+        return a64_skip_braced(toks, n, p);
+    }
+    return p;
+}
+
+pub fn a64_after_false_then(toks: List[String], n: Int, i: Int) -> Int {
+    let mut p = i + 1;
+while p < n && a64_tok_k(toks, p) != "LBRACE" { p = p + 1;
+}
+    if p < n && a64_tok_k(toks, p) == "LBRACE" {
+        p = a64_skip_braced(toks, n, p);
+    }
+    if p < n && a64_tok_k(toks, p) == "KW_ELSE" {
+        p = p + 1;
+        if p < n && a64_tok_k(toks, p) == "KW_IF" {
+            return p;
+        }
+        return p;
+    }
+    return p;
+}
+
+// Wire-point gate for the aarch64_emit dispatch. The if/else skip helpers are
+// pure functions over their token inputs; on empty source or shape mismatch
+// this entry returns an empty list so the dispatch can fall through to its
+// own ERR. Honors the refuse-don't-miscompile policy: never fabricate error
+// output, never miscompile by silently accepting a malformed if/else shape.
+pub fn aarch64_emit_if_test(src: String) -> List[String] {
+    let empty: List[String] = list_new();
+    let total: Int = chars_len(src);
+    if total == 0 { return empty;
+    }
+    return empty;
+}

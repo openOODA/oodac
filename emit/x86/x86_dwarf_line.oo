@@ -1,0 +1,180 @@
+// # x86-64 DWARF 5 Line Number Program & Section Generator
+//
+// Logline: Synthesize DWARF 5 .debug_line section headers, directory/file tables, and line number state machine bytecode for x86-64 ELF64 binaries.
+//
+// Setup: Pure in-process DWARF 5 line table generator integrating with x86 LEB128 and ELF section serializers.
+//
+// Beats:
+//   1. Define DWARF 5 line table parameters and directory/file metadata tables.
+//   2. Emit DWARF 5 .debug_line header with 64-bit address size and standard opcode lengths.
+//   3. Emit line number program bytecode with extended, standard, and special opcodes.
+//   4. Build complete .debug_line section byte arrays for native ELF64 integration.
+
+import "x86_leb128.oo";
+
+import "x86_elf_sections.oo";
+
+
+pub type X86DwarfLineEntry = struct {
+    address: Int,
+    line: Int,
+    column: Int,
+    is_stmt: Int
+};
+
+pub fn x86_dwarf_line_entry_new(address: Int, line: Int, column: Int, is_stmt: Int) -> X86DwarfLineEntry {
+    let res: X86DwarfLineEntry = X86DwarfLineEntry { address: address, line: line, column: column, is_stmt: is_stmt };
+    return res;
+}
+
+pub fn x86_dwarf5_emit_line_header(file_name: String, dir_name: String) -> List[Int] {
+    let mut hdr: List[Int] = list_new();
+    hdr = elf_append_le16(hdr, 5);
+    hdr = list_push(hdr, 8);
+    hdr = list_push(hdr, 0);
+
+    let mut params: List[Int] = list_new();
+    params = list_push(params, 1);
+    params = list_push(params, 1);
+    params = list_push(params, 1);
+    params = list_push(params, 251);
+    params = list_push(params, 14);
+    params = list_push(params, 13);
+
+    params = list_push(params, 0);
+    params = list_push(params, 1);
+    params = list_push(params, 1);
+    params = list_push(params, 1);
+    params = list_push(params, 1);
+    params = list_push(params, 0);
+    params = list_push(params, 0);
+    params = list_push(params, 0);
+    params = list_push(params, 1);
+    params = list_push(params, 0);
+    params = list_push(params, 0);
+    params = list_push(params, 1);
+
+    params = list_push(params, 1);
+    params = elf_append_bytes(params, x86_encode_u32_leb128(1));
+    params = elf_append_bytes(params, x86_encode_u32_leb128(8));
+    params = elf_append_bytes(params, x86_encode_u32_leb128(1));
+    let dlen: Int = chars_len(dir_name);
+    let mut di: Int = 0;
+    while di < dlen { params = list_push(params, byte_at(dir_name, di));
+    di = di + 1;
+    }
+    params = list_push(params, 0);
+
+    params = list_push(params, 2);
+    params = elf_append_bytes(params, x86_encode_u32_leb128(1));
+    params = elf_append_bytes(params, x86_encode_u32_leb128(8));
+    params = elf_append_bytes(params, x86_encode_u32_leb128(2));
+    params = elf_append_bytes(params, x86_encode_u32_leb128(15));
+    params = elf_append_bytes(params, x86_encode_u32_leb128(1));
+    let flen: Int = chars_len(file_name);
+    let mut fi: Int = 0;
+    while fi < flen { params = list_push(params, byte_at(file_name, fi));
+    fi = fi + 1;
+    }
+    params = list_push(params, 0);
+    params = elf_append_bytes(params, x86_encode_u32_leb128(0));
+
+    let header_length: Int = list_len(params);
+    hdr = elf_append_le32(hdr, header_length);
+    hdr = elf_append_bytes(hdr, params);
+    return hdr;
+}
+
+pub fn x86_dwarf5_emit_line_program_entries(entries: List[X86DwarfLineEntry], text_vaddr: Int) -> List[Int] {
+    let mut prog: List[Int] = list_new();
+    prog = list_push(prog, 0);
+    prog = list_push(prog, 9);
+    prog = list_push(prog, 2);
+    prog = elf_append_le64(prog, text_vaddr);
+
+    // Set file to 0 (DWARF 5 file table is 0-indexed)
+    prog = list_push(prog, 4);
+    prog = elf_append_bytes(prog, x86_encode_u32_leb128(0));
+
+    let n_entries: Int = list_len(entries);
+    let mut cur_addr: Int = text_vaddr;
+    let mut cur_line: Int = 1;
+    let mut i: Int = 0;
+    while i < n_entries { let entry: X86DwarfLineEntry = list_get(entries, i);
+    let target_addr: Int = entry.address;
+    let target_line: Int = entry.line;
+    let target_col: Int = entry.column;
+    let addr_delta: Int = target_addr - cur_addr;
+    let line_delta: Int = target_line - cur_line;
+    if target_col > 0 { prog = list_push(prog, 5);
+    prog = elf_append_bytes(prog, x86_encode_u32_leb128(target_col));
+    }
+
+        let base: Int = -5;
+        let range: Int = 14;
+        let op_base: Int = 13;
+        let adj_line: Int = line_delta - base;
+        let can_special: Bool = (adj_line >= 0 && adj_line < range);
+        if can_special { let spec_op: Int = adj_line + (range * addr_delta) + op_base;
+        if spec_op >= op_base && spec_op <= 255 { prog = list_push(prog, spec_op);
+        cur_addr = target_addr;
+        cur_line = target_line;
+        i = i + 1;
+        continue;
+        }
+        }
+
+        if line_delta != 0 { prog = list_push(prog, 3);
+        prog = elf_append_bytes(prog, x86_encode_i64_leb128(line_delta));
+        cur_line = target_line;
+        }
+        if addr_delta != 0 { prog = list_push(prog, 2);
+        prog = elf_append_bytes(prog, x86_encode_u32_leb128(addr_delta));
+        cur_addr = target_addr;
+        }
+        prog = list_push(prog, 1);
+        i = i + 1;
+    }
+
+    prog = list_push(prog, 0);
+    prog = list_push(prog, 1);
+    prog = list_push(prog, 1);
+    return prog;
+}
+
+pub fn x86_dwarf5_emit_line_program(lines: List[Int], pcs: List[Int], text_vaddr: Int) -> List[Int] {
+    let mut entries: List[X86DwarfLineEntry] = list_new();
+    let n: Int = list_len(lines);
+    let mut i: Int = 0;
+    while i < n { let l: Int = list_get(lines, i);
+    let pc: Int = list_get(pcs, i);
+    let entry: X86DwarfLineEntry = x86_dwarf_line_entry_new(text_vaddr + pc, l, 1, 1);
+    entries = list_push(entries, entry);
+    i = i + 1;
+    }
+    return x86_dwarf5_emit_line_program_entries(entries, text_vaddr);
+}
+
+pub fn x86_dwarf5_build_debug_line(file_name: String, dir_name: String, entries: List[X86DwarfLineEntry], text_vaddr: Int) -> List[Int] {
+    let hdr: List[Int] = x86_dwarf5_emit_line_header(file_name, dir_name);
+    let prog: List[Int] = x86_dwarf5_emit_line_program_entries(entries, text_vaddr);
+    let total_unit_len: Int = list_len(hdr) + list_len(prog);
+
+    let mut out: List[Int] = list_new();
+    out = elf_append_le32(out, total_unit_len);
+    out = elf_append_bytes(out, hdr);
+    out = elf_append_bytes(out, prog);
+    return out;
+}
+
+pub fn x86_dwarf5_build_debug_line_simple(file_name: String, dir_name: String, lines: List[Int], pcs: List[Int], text_vaddr: Int) -> List[Int] {
+    let hdr: List[Int] = x86_dwarf5_emit_line_header(file_name, dir_name);
+    let prog: List[Int] = x86_dwarf5_emit_line_program(lines, pcs, text_vaddr);
+    let total_unit_len: Int = list_len(hdr) + list_len(prog);
+
+    let mut out: List[Int] = list_new();
+    out = elf_append_le32(out, total_unit_len);
+    out = elf_append_bytes(out, hdr);
+    out = elf_append_bytes(out, prog);
+    return out;
+}

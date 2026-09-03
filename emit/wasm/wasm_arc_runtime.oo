@@ -1,0 +1,253 @@
+// # WebAssembly ARC Reference Counting Runtime & Scope Cleanup Engine
+//
+// Logline: Implements 8-byte ARC header ABI, retain/release emissions, and scope exit cleanup.
+//
+// Setup: Import wasm_opcodes.oo, wasm_types.oo, wasm_leb128.oo, wasm_lower_expr.oo.
+//
+// Beats:
+//   1. Define ARC header layout and reference flags.
+//   2. Emit inline atomic retain operations with static object bypass.
+//   3. Emit inline release operations with zero-count free deallocation.
+//   4. Emit scope exit drop sequences for managed locals.
+
+import "wasm_opcodes.oo";
+
+import "wasm_types.oo";
+
+import "wasm_leb128.oo";
+
+import "wasm_lower_expr.oo";
+
+
+pub fn OO_FLAG_NONE() -> Int {
+    return 0;
+}
+pub fn OO_FLAG_STATIC() -> Int {
+    return 1;
+}
+pub fn OO_FLAG_FREED() -> Int {
+    return 2;
+}
+
+pub fn wasm_arc_header_size() -> Int {
+    return 8;
+}
+pub fn wasm_arc_offset_refcount() -> Int {
+    return 0;
+}
+pub fn wasm_arc_offset_flags() -> Int {
+    return 4;
+}
+
+pub fn wasm_arc_is_managed_type(ty_str: String) -> Bool {
+    if ty_str == "String" || ty_str == "TyStr" || ty_str == "TyName(String)" { return true; }
+    if ty_str == "OoSList" || ty_str == "OoIList" || ty_str == "OoFList" { return true; }
+    if str_index_of(ty_str, "List[") >= 0 { return true; }
+    if str_index_of(ty_str, "Result[") >= 0 { return true; }
+    if str_index_of(ty_str, "Option[") >= 0 { return true; }
+    if ty_str == "TyInt" || ty_str == "Int" || ty_str == "i32" || ty_str == "i64" { return false; }
+    if ty_str == "TyFloat" || ty_str == "Float" || ty_str == "f64" { return false; }
+    if ty_str == "TyBool" || ty_str == "Bool" { return false; }
+    if ty_str == "TyUnit" || ty_str == "Void" || ty_str == "void" || ty_str == "" { return false; }
+    if str_index_of(ty_str, "Cap") >= 0 { return false; }
+    return true;
+}
+
+pub fn wasm_arc_emit_init_header(env: &mut WasmEnv, ptr_local: Int, init_rc: Int, flags: Int) {
+    wasm_env_emit(env, op_local_get());
+    wasm_env_emit_u32(env, ptr_local);
+    wasm_env_emit(env, op_i32_const());
+    wasm_env_emit_i32(env, init_rc);
+    wasm_env_emit(env, op_i32_store());
+    wasm_env_emit_u32(env, 2);
+    wasm_env_emit_u32(env, 0);
+
+    wasm_env_emit(env, op_local_get());
+    wasm_env_emit_u32(env, ptr_local);
+    wasm_env_emit(env, op_i32_const());
+    wasm_env_emit_i32(env, flags);
+    wasm_env_emit(env, op_i32_store());
+    wasm_env_emit_u32(env, 2);
+    wasm_env_emit_u32(env, 4);
+}
+
+pub fn wasm_emit_retain(env: &mut WasmEnv, ptr_local: Int) {
+    wasm_env_emit(env, op_local_get());
+    wasm_env_emit_u32(env, ptr_local);
+    wasm_env_emit(env, op_if());
+    wasm_env_emit_byte(env, wasm_block_type_empty());
+    env.current_block_depth = env.current_block_depth + 1;
+
+    wasm_env_emit(env, op_local_get());
+    wasm_env_emit_u32(env, ptr_local);
+    wasm_env_emit(env, op_i32_load());
+    wasm_env_emit_u32(env, 2);
+    wasm_env_emit_u32(env, 4);
+    wasm_env_emit(env, op_i32_const());
+    wasm_env_emit_i32(env, 1);
+    wasm_env_emit(env, op_i32_and());
+    wasm_env_emit(env, op_i32_eqz());
+    wasm_env_emit(env, op_if());
+    wasm_env_emit_byte(env, wasm_block_type_empty());
+    env.current_block_depth = env.current_block_depth + 1;
+
+    wasm_env_emit(env, op_local_get());
+    wasm_env_emit_u32(env, ptr_local);
+    wasm_env_emit(env, op_local_get());
+    wasm_env_emit_u32(env, ptr_local);
+    wasm_env_emit(env, op_i32_load());
+    wasm_env_emit_u32(env, 2);
+    wasm_env_emit_u32(env, 0);
+    wasm_env_emit(env, op_i32_const());
+    wasm_env_emit_i32(env, 1);
+    wasm_env_emit(env, op_i32_add());
+    wasm_env_emit(env, op_i32_store());
+    wasm_env_emit_u32(env, 2);
+    wasm_env_emit_u32(env, 0);
+
+    wasm_env_emit(env, op_end());
+    env.current_block_depth = env.current_block_depth - 1;
+
+    wasm_env_emit(env, op_end());
+    env.current_block_depth = env.current_block_depth - 1;
+}
+
+pub fn wasm_arc_emit_retain(env: &mut WasmEnv, ptr_local: Int) {
+    wasm_emit_retain(env, ptr_local);
+}
+
+pub fn wasm_emit_release(env: &mut WasmEnv, ptr_local: Int) {
+    wasm_env_emit(env, op_local_get());
+    wasm_env_emit_u32(env, ptr_local);
+    wasm_env_emit(env, op_if());
+    wasm_env_emit_byte(env, wasm_block_type_empty());
+    env.current_block_depth = env.current_block_depth + 1;
+
+    wasm_env_emit(env, op_local_get());
+    wasm_env_emit_u32(env, ptr_local);
+    wasm_env_emit(env, op_i32_load());
+    wasm_env_emit_u32(env, 2);
+    wasm_env_emit_u32(env, 4);
+    wasm_env_emit(env, op_i32_const());
+    wasm_env_emit_i32(env, 1);
+    wasm_env_emit(env, op_i32_and());
+    wasm_env_emit(env, op_i32_eqz());
+    wasm_env_emit(env, op_if());
+    wasm_env_emit_byte(env, wasm_block_type_empty());
+    env.current_block_depth = env.current_block_depth + 1;
+
+    wasm_env_emit(env, op_local_get());
+    wasm_env_emit_u32(env, ptr_local);
+    wasm_env_emit(env, op_local_get());
+    wasm_env_emit_u32(env, ptr_local);
+    wasm_env_emit(env, op_i32_load());
+    wasm_env_emit_u32(env, 2);
+    wasm_env_emit_u32(env, 0);
+    wasm_env_emit(env, op_i32_const());
+    wasm_env_emit_i32(env, 1);
+    wasm_env_emit(env, op_i32_sub());
+    wasm_env_emit(env, op_i32_store());
+    wasm_env_emit_u32(env, 2);
+    wasm_env_emit_u32(env, 0);
+
+    wasm_env_emit(env, op_local_get());
+    wasm_env_emit_u32(env, ptr_local);
+    wasm_env_emit(env, op_i32_load());
+    wasm_env_emit_u32(env, 2);
+    wasm_env_emit_u32(env, 0);
+    wasm_env_emit(env, op_i32_eqz());
+    wasm_env_emit(env, op_if());
+    wasm_env_emit_byte(env, wasm_block_type_empty());
+    env.current_block_depth = env.current_block_depth + 1;
+
+    wasm_env_emit(env, op_local_get());
+    wasm_env_emit_u32(env, ptr_local);
+    wasm_env_emit(env, op_local_get());
+    wasm_env_emit_u32(env, ptr_local);
+    wasm_env_emit(env, op_i32_load());
+    wasm_env_emit_u32(env, 2);
+    wasm_env_emit_u32(env, 4);
+    wasm_env_emit(env, op_i32_const());
+    wasm_env_emit_i32(env, 2);
+    wasm_env_emit(env, op_i32_or());
+    wasm_env_emit(env, op_i32_store());
+    wasm_env_emit_u32(env, 2);
+    wasm_env_emit_u32(env, 4);
+
+    wasm_env_emit(env, op_end());
+    env.current_block_depth = env.current_block_depth - 1;
+
+    wasm_env_emit(env, op_end());
+    env.current_block_depth = env.current_block_depth - 1;
+
+    wasm_env_emit(env, op_end());
+    env.current_block_depth = env.current_block_depth - 1;
+}
+
+pub fn wasm_arc_emit_release(env: &mut WasmEnv, ptr_local: Int) {
+    wasm_emit_release(env, ptr_local);
+}
+
+pub fn wasm_emit_scope_exit_drops(env: &mut WasmEnv, arc_locals: List[Int]) {
+    let n: Int = list_len(arc_locals);
+    let mut i: Int = n - 1;
+    while i >= 0 { let slot: Int = list_get(arc_locals, i); if slot >= 0 { wasm_emit_release(env, slot); }
+        i = i - 1;
+    }
+}
+
+pub fn wasm_arc_emit_scope_drops(env: &mut WasmEnv, arc_locals: List[Int]) {
+    wasm_emit_scope_exit_drops(env, arc_locals);
+}
+
+pub fn wasm_emit_return_drops(env: &mut WasmEnv, arc_locals: List[Int], ret_slot: Int) {
+    let n: Int = list_len(arc_locals);
+    let mut i: Int = n - 1;
+    while i >= 0 { let slot: Int = list_get(arc_locals, i); if slot >= 0 && slot != ret_slot { wasm_emit_release(env, slot); }
+        i = i - 1;
+    }
+}
+
+pub fn wasm_arc_emit_return_drops(env: &mut WasmEnv, arc_locals: List[Int], ret_slot: Int) {
+    wasm_emit_return_drops(env, arc_locals, ret_slot);
+}
+
+pub fn wasm_emit_reassignment_drop(env: &mut WasmEnv, target_local: Int, new_val_local: Int) {
+    wasm_emit_retain(env, new_val_local);
+    wasm_emit_release(env, target_local);
+    wasm_env_emit(env, op_local_get());
+    wasm_env_emit_u32(env, new_val_local);
+    wasm_env_emit(env, op_local_set());
+    wasm_env_emit_u32(env, target_local);
+}
+
+pub fn wasm_arc_emit_reassign(env: &mut WasmEnv, target_local: Int, new_val_local: Int) {
+    wasm_emit_reassignment_drop(env, target_local, new_val_local);
+}
+
+pub fn wasm_emit_reassignment_drop_stack(env: &mut WasmEnv, target_local: Int, scratch_local: Int) {
+    wasm_env_emit(env, op_local_set());
+    wasm_env_emit_u32(env, scratch_local);
+    wasm_emit_retain(env, scratch_local);
+    wasm_emit_release(env, target_local);
+    wasm_env_emit(env, op_local_get());
+    wasm_env_emit_u32(env, scratch_local);
+    wasm_env_emit(env, op_local_set());
+    wasm_env_emit_u32(env, target_local);
+}
+
+pub fn wasm_arc_emit_get_refcount(env: &mut WasmEnv, ptr_local: Int) {
+    wasm_env_emit(env, op_local_get());
+    wasm_env_emit_u32(env, ptr_local);
+    wasm_env_emit(env, op_i32_load());
+    wasm_env_emit_u32(env, 2);
+    wasm_env_emit_u32(env, 0);
+}
+
+pub fn wasm_arc_emit_get_flags(env: &mut WasmEnv, ptr_local: Int) {
+    wasm_env_emit(env, op_local_get());
+    wasm_env_emit_u32(env, ptr_local);
+    wasm_env_emit(env, op_i32_load());
+    wasm_env_emit_u32(env, 2);
+    wasm_env_emit_u32(env, 4);
+}

@@ -1,0 +1,81 @@
+// # Emit Linux x86_64 AT&T assembly via unified typed-AST dispatch
+//
+// Logline: Emits SysV AMD64 AT&T assembly through typed-AST lowering with fail-closed gates and single dispatch path.
+//
+// Setup: Requires x86_ast_typed.oo for typed dispatch, which forwards to x86_ssa_compile_program (tokenize to AST to SSA lower to mem2reg to phi to const-fold to emit) and appends runtime blob. Gates: contract, empty, secret, shape-refuse before dispatch.
+//
+// Beats:
+//   1. Check contract, empty source, secret, and shape-refuse gates fail-closed.
+//   2. Dispatch via x86_emit_stream_typed to unified typed-AST lowering.
+//   3. Single return path with no legacy 22-arm ladder.
+//   4. Runtime blob appended by typed shim for zero-libc execution.
+
+import "x86_emit_secret.oo";
+
+import "x86_emit_contract.oo";
+
+import "x86_emit_shims.oo";
+
+import "x86_emit_shape_refuse.oo";
+
+import "x86_emit_type_diag.oo";
+
+import "x86_emit_diag.oo";
+
+
+pub fn x86_emit_stream_b(src: String) {
+    let contract_errs: List[String] = x86_emit_contract_test_b(src);
+    if list_len(contract_errs) > 0 { let mut i = 0;
+    while i < list_len(contract_errs) { println(list_get(contract_errs, i));
+    i = i + 1;
+    }
+        process_exit(1);
+    }
+    if chars_len(src) == 0 { println("ERR\tx86_emit\tempty");
+    process_exit(1);
+    }
+    let secret_errs: List[String] = x86_emit_secret_test(src);
+    if list_len(secret_errs) > 0 { let mut i = 0;
+    while i < list_len(secret_errs) { println(list_get(secret_errs, i));
+    i = i + 1;
+    }
+        process_exit(1);
+    }
+    let cap_errs: List[String] = x86_emit_cap_test(src);
+    if list_len(cap_errs) > 0 { let mut ci = 0;
+    while ci < list_len(cap_errs) { println(list_get(cap_errs, ci));
+    ci = ci + 1;
+    }
+        process_exit(1);
+    }
+    let shape_errs: List[String] = x86_emit_shape_refuse_test(src);
+    if list_len(shape_errs) > 0 { let mut si = 0;
+    while si < list_len(shape_errs) { println(list_get(shape_errs, si));
+    si = si + 1;
+    }
+        process_exit(1);
+    }
+    // Tier 5 #24/#27 Turn 2: single typed-AST dispatch via x86_emit_stream_typed.
+    // The 22-arm token matcher ladder and its legacy chain markers are deleted.
+    // 24 NodeKinds route via x86_ast_handlers.oo in the typed/SSA path.
+    let typed_r: Result[String, String] = x86_emit_stream_typed_b(src);
+    match typed_r {
+        Ok(typed_s)  => { println(typed_s);
+        return;
+        },
+        Err(typed_e) => { println(typed_e);
+        process_exit(1);
+        }
+    }
+}
+
+pub fn x86_emit_stream_c(src: String, path: String) {
+    let tdiags: List[String] = x86_emit_type_mismatch_e(src, path);
+    if list_len(tdiags) > 0 { let mut ti = 0;
+    while ti < list_len(tdiags) { println(list_get(tdiags, ti));
+    ti = ti + 1;
+    }
+        process_exit(1);
+    }
+    x86_emit_stream_b(src);
+}

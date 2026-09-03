@@ -1,0 +1,220 @@
+// # WebAssembly Browser & WUI Target Binding Engine
+//
+// Logline: Configures zero-ambient-authority browser sandbox imports and bridges VDOM diffing patches.
+//
+// Setup: Import wasm_opcodes.oo, wasm_types.oo, wasm_leb128.oo, wasm_binary_builder.oo, ast.oo.
+//
+// Beats:
+//   1. Configure sandbox imports for wui_host_patch and wui_host_log.
+//   2. Export linear memory, wui_init, and wui_on_event dispatchers.
+//   3. Emit host patch buffer writes and event demultiplexing.
+//   4. Compile browser-targeted standalone AST components.
+
+import "wasm_opcodes.oo";
+import "wasm_types.oo";
+import "wasm_leb128.oo";
+import "wasm_binary_builder.oo";
+import "wasm_lower_expr.oo";
+import "wasm_lower_stmt.oo";
+import "wasm_lower_control.oo";
+import "wasm_lower_fn.oo";
+
+type BrowserTarget = struct {
+    host_patch_idx: Int,
+    host_log_idx: Int,
+    wui_init_idx: Int,
+    wui_on_event_idx: Int,
+    patch_buf_offset: Int,
+    patch_buf_size: Int
+};
+
+pub fn wui_event_click() -> Int { return 1; }
+pub fn wui_event_input() -> Int { return 2; }
+pub fn wui_event_keydown() -> Int { return 3; }
+pub fn wui_event_resize() -> Int { return 4; }
+pub fn wui_event_custom() -> Int { return 5; }
+
+pub fn wasm_patch_type_replace() -> Int { return 1; }
+pub fn wasm_patch_type_update_props() -> Int { return 2; }
+pub fn wasm_patch_type_append_child() -> Int { return 3; }
+pub fn wasm_patch_type_remove_child() -> Int { return 4; }
+pub fn wasm_patch_type_set_text() -> Int { return 5; }
+
+fn wasm_import_wui_fn(b: &mut WasmModuleBuilder, name: String) -> Int {
+    let mut p: List[Int] = list_new();
+    p = list_push(p, wasm_val_type_i32());
+    p = list_push(p, wasm_val_type_i32());
+    let ty: Int = (0 + wasm_builder_add_type(b, p, list_new()));
+    return wasm_builder_add_import_func(b, "env", name, ty);
+}
+
+pub fn wasm_target_browser_init(b: &mut WasmModuleBuilder) -> BrowserTarget {
+    let patch_idx: Int = wasm_import_wui_fn(b, "wui_host_patch");
+    let log_idx: Int = wasm_import_wui_fn(b, "wui_host_log");
+
+    if b.has_memory == false {
+        wasm_builder_set_memory(b, 16, 256);
+    }
+    wasm_builder_add_export(b, "memory", wasm_external_memory(), 0);
+
+    return BrowserTarget { host_patch_idx: patch_idx, host_log_idx: log_idx, wui_init_idx: -1, wui_on_event_idx: -1, patch_buf_offset: 1024, patch_buf_size: 4096 };
+}
+
+pub fn wasm_browser_emit_patch_call(env: &mut WasmEnv, patch_idx: Int, ptr: Int, len: Int) {
+    wasm_env_emit(env, op_i32_const());
+    wasm_env_emit_i32(env, ptr);
+    wasm_env_emit(env, op_i32_const());
+    wasm_env_emit_i32(env, len);
+    wasm_env_emit(env, op_call());
+    wasm_env_emit_u32(env, patch_idx);
+}
+
+pub fn wasm_browser_emit_log_call(env: &mut WasmEnv, log_idx: Int, ptr: Int, len: Int) {
+    wasm_env_emit(env, op_i32_const());
+    wasm_env_emit_i32(env, ptr);
+    wasm_env_emit(env, op_i32_const());
+    wasm_env_emit_i32(env, len);
+    wasm_env_emit(env, op_call());
+    wasm_env_emit_u32(env, log_idx);
+}
+
+pub fn wasm_browser_emit_wui_init(b: &mut WasmModuleBuilder, target: BrowserTarget, init_fn_idx: Int) -> Int {
+    let ty_init: Int = (0 + wasm_builder_add_type(b, list_new(), list_new()));
+    let f_init: Int = (0 + wasm_builder_add_func(b, ty_init));
+
+    let mut code: List[Int] = list_new();
+    if init_fn_idx >= 0 {
+        code = list_push(code, op_call());
+        code = wasm_append(code, encode_u32_leb128(init_fn_idx));
+    }
+    code = list_push(code, op_i32_const());
+    code = wasm_append(code, encode_i32_leb128(target.patch_buf_offset));
+    code = list_push(code, op_i32_const());
+    code = wasm_append(code, encode_i32_leb128(4));
+    code = list_push(code, op_call());
+    code = wasm_append(code, encode_u32_leb128(target.host_patch_idx));
+    code = list_push(code, op_end());
+
+    wasm_builder_set_code(b, f_init, list_new(), code);
+    let im1: List[String] = b.import_mods;
+    let n_imp1: Int = list_len(im1);
+    let exp_idx: Int = n_imp1 + f_init;
+    wasm_builder_add_export(b, "wui_init", wasm_external_func(), exp_idx);
+    return exp_idx;
+}
+
+pub fn wasm_browser_emit_wui_on_event(b: &mut WasmModuleBuilder, target: BrowserTarget, handler_fn_idx: Int) -> Int {
+    let mut p_ev: List[Int] = list_new();
+    p_ev = list_push(p_ev, wasm_val_type_i32());
+    p_ev = list_push(p_ev, wasm_val_type_i32());
+    p_ev = list_push(p_ev, wasm_val_type_i32());
+    let mut r_ev: List[Int] = list_new();
+    r_ev = list_push(r_ev, wasm_val_type_i32());
+    let ty_ev: Int = (0 + wasm_builder_add_type(b, p_ev, r_ev));
+    let f_ev: Int = (0 + wasm_builder_add_func(b, ty_ev));
+
+    let mut code: List[Int] = list_new();
+    if handler_fn_idx >= 0 {
+        code = list_push(code, op_local_get()); code = list_push(code, 0);
+        code = list_push(code, op_local_get()); code = list_push(code, 1);
+        code = list_push(code, op_local_get()); code = list_push(code, 2);
+        code = list_push(code, op_call());
+        code = wasm_append(code, encode_u32_leb128(handler_fn_idx));
+    } else {
+        code = list_push(code, op_i32_const());
+        code = list_push(code, 0);
+    }
+    code = list_push(code, op_end());
+
+    wasm_builder_set_code(b, f_ev, list_new(), code);
+    let im2: List[String] = b.import_mods;
+    let n_imp2: Int = list_len(im2);
+    let exp_idx: Int = n_imp2 + f_ev;
+    wasm_builder_add_export(b, "wui_on_event", wasm_external_func(), exp_idx);
+    return exp_idx;
+}
+
+pub fn wasm_browser_emit_patch_buffer(b: &mut WasmModuleBuilder, offset: Int, patch_bytes: List[Int]) {
+    if list_len(patch_bytes) > 0 {
+        wasm_builder_add_data(b, offset, patch_bytes);
+    }
+}
+
+pub fn wasm_browser_emit_patch_accessors(b: &mut WasmModuleBuilder, target: BrowserTarget) {
+    let mut r_int: List[Int] = list_new();
+    r_int = list_push(r_int, wasm_val_type_i32());
+    let ty_get: Int = (0 + wasm_builder_add_type(b, list_new(), r_int));
+
+    let im3: List[String] = b.import_mods;
+    let n_imp3: Int = list_len(im3);
+    let f_ptr: Int = (0 + wasm_builder_add_func(b, ty_get));
+    let mut code_ptr: List[Int] = list_new();
+    code_ptr = list_push(code_ptr, op_i32_const());
+    code_ptr = wasm_append(code_ptr, encode_i32_leb128(target.patch_buf_offset));
+    code_ptr = list_push(code_ptr, op_end());
+    wasm_builder_set_code(b, f_ptr, list_new(), code_ptr);
+    wasm_builder_add_export(b, "wui_get_patch_ptr", wasm_external_func(), n_imp3 + f_ptr);
+
+    let f_len: Int = (0 + wasm_builder_add_func(b, ty_get));
+    let mut code_len: List[Int] = list_new();
+    code_len = list_push(code_len, op_i32_const());
+    code_len = wasm_append(code_len, encode_i32_leb128(target.patch_buf_size));
+    code_len = list_push(code_len, op_end());
+    wasm_builder_set_code(b, f_len, list_new(), code_len);
+    wasm_builder_add_export(b, "wui_get_patch_len", wasm_external_func(), n_imp3 + f_len);
+}
+
+pub fn wasm_compile_browser_module(ast_node: String, default_int: Int) -> List[Int] {
+    let mut b: WasmModuleBuilder = wasm_builder_new();
+    let mut target: BrowserTarget = wasm_target_browser_init(&mut b);
+
+    let tag: String = ast_tag(ast_node);
+    let mut fn_list: List[String] = list_new();
+    if tag == "AstFile" {
+        let items: String = wasm_ast_args(ast_node);
+        let n: Int = (0 + list_len_str(items));
+        let mut i: Int = 0;
+        while i < n {
+            let item: String = list_get_str(items, i);
+            if ast_is(item, "AstFn") { fn_list = list_push(fn_list, item); }
+            i = i + 1;
+        }
+    } else if tag == "AstFn" {
+        fn_list = list_push(fn_list, ast_node);
+    }
+
+    let mut env_globals: WasmEnv = wasm_env_new("browser", default_int);
+    let import_offset: Int = 2; // wui_host_patch (0) and wui_host_log (1)
+    let n_fns: Int = list_len(fn_list);
+    let mut i: Int = 0;
+    let mut init_fn_idx: Int = -1;
+    let mut on_event_fn_idx: Int = -1;
+
+    while i < n_fns {
+        let fn_item: String = list_get(fn_list, i);
+        let fn_args: String = wasm_ast_args(fn_item);
+        let fn_name: String = list_get_str(fn_args, 0);
+        let f_idx: Int = import_offset + i;
+        wasm_env_bind_func(&mut env_globals, fn_name, f_idx);
+        if fn_name == "wui_init" { init_fn_idx = f_idx; }
+        if fn_name == "wui_on_event" { on_event_fn_idx = f_idx; }
+        i = i + 1;
+    }
+
+    i = 0;
+    while i < n_fns {
+        let fn_item: String = list_get(fn_list, i);
+        wasm_lower_fn_def(&mut b, &mut env_globals, fn_item, default_int, import_offset);
+        i = i + 1;
+    }
+
+    if init_fn_idx < 0 {
+        wasm_browser_emit_wui_init(&mut b, target, -1);
+    }
+    if on_event_fn_idx < 0 {
+        wasm_browser_emit_wui_on_event(&mut b, target, -1);
+    }
+    wasm_browser_emit_patch_accessors(&mut b, target);
+
+    return wasm_builder_emit(b);
+}

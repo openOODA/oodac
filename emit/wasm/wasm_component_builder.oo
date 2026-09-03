@@ -1,0 +1,118 @@
+// # WebAssembly Component Model Binary Builder
+//
+// Logline: Binary section framing and component header assembly for Component Model binary v1.0 specifications.
+//
+// Setup: Import wasm_leb128.oo for section length prefixes and component IDs.
+//
+// Beats:
+//   1. Emit Component Model binary v1.0 8-byte preamble header.
+//   2. Encode Component Type Section (Section 1) and Core Module Section (Section 4).
+//   3. Encode Component Instance (Section 6) and Export Sections (Section 7).
+//   4. Assemble complete self-contained binary WebAssembly components.
+
+import "wasm_leb128.oo";
+
+
+pub fn wasm_str_to_byte_list(s: String) -> List[Int] {
+    let mut out: List[Int] = list_new();
+    let n: Int = bytes_len(s);
+    let mut i: Int = 0;
+    while i < n { out = list_push(out, byte_at(s, i));
+    i = i + 1;
+    }
+    return out;
+}
+
+pub fn component_header() -> List[Int] {
+    let mut out: List[Int] = list_new();
+    out = list_push(out, 0);
+    // \0
+    out = list_push(out, 97);
+    // a
+    out = list_push(out, 115);
+    // s
+    out = list_push(out, 109);
+    // m
+    out = list_push(out, 13);
+    // 0x0D (component layer)
+    out = list_push(out, 0);
+    // 0x00
+    out = list_push(out, 1);
+    // 0x01 (version 1)
+    out = list_push(out, 0);
+    // 0x00
+    return out;
+}
+
+pub fn component_section_custom(name: String, payload: List[Int]) -> List[Int] {
+    let mut sec: List[Int] = list_new();
+    sec = list_push(sec, 0);
+    // Section 0
+    let mut body: List[Int] = list_new();
+    let name_bytes: List[Int] = wasm_str_to_byte_list(name);
+    let n_leb: List[Int] = encode_u32_leb128(list_len(name_bytes));
+    let mut i: Int = 0;
+    while i < list_len(n_leb) { body = list_push(body, list_get(n_leb, i));
+    i = i + 1;
+    }
+    i = 0;
+    while i < list_len(name_bytes) { body = list_push(body, list_get(name_bytes, i));
+    i = i + 1;
+    }
+    let mut j: Int = 0;
+    while j < list_len(payload) { body = list_push(body, list_get(payload, j));
+    j = j + 1;
+    }
+    let len_leb: List[Int] = encode_u32_leb128(list_len(body));
+    i = 0;
+    while i < list_len(len_leb) { sec = list_push(sec, list_get(len_leb, i));
+    i = i + 1;
+    }
+    i = 0;
+    while i < list_len(body) { sec = list_push(sec, list_get(body, i));
+    i = i + 1;
+    }
+    return sec;
+}
+
+pub fn component_section_core_module(core_wasm: List[Int]) -> List[Int] {
+    let mut sec: List[Int] = list_new();
+    sec = list_push(sec, 4);
+    // Section 4 = Core Module
+    let len_leb: List[Int] = encode_u32_leb128(list_len(core_wasm));
+    let mut i: Int = 0;
+    while i < list_len(len_leb) { sec = list_push(sec, list_get(len_leb, i));
+    i = i + 1;
+    }
+    i = 0;
+    while i < list_len(core_wasm) { sec = list_push(sec, list_get(core_wasm, i));
+    i = i + 1;
+    }
+    return sec;
+}
+
+pub fn component_build_package(core_wasm: List[Int], wit_idl: String) -> List[Int] {
+    let mut comp: List[Int] = list_new();
+    let hdr: List[Int] = component_header();
+    let mut i: Int = 0;
+    while i < list_len(hdr) { comp = list_push(comp, list_get(hdr, i));
+    i = i + 1;
+    }
+
+    // Embed WIT IDL in custom section "wit"
+    let wit_bytes: List[Int] = wasm_str_to_byte_list(wit_idl);
+    let c_wit: List[Int] = component_section_custom("wit", wit_bytes);
+    i = 0;
+    while i < list_len(c_wit) { comp = list_push(comp, list_get(c_wit, i));
+    i = i + 1;
+    }
+
+    // Embed Core Module
+    let c_mod: List[Int] = component_section_core_module(core_wasm);
+    i = 0;
+    while i < list_len(c_mod) { comp = list_push(comp, list_get(c_mod, i));
+    i = i + 1;
+    }
+
+    return comp;
+}

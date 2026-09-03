@@ -1,0 +1,89 @@
+// # x86-64 Native Backend — Module Entry Door
+//
+// Logline: Re-exports direct x86-64 ELF generation, SSA lowering, and machine code emission.
+//
+// Setup: Imports internal x86-64 backend siblings and provides clean public re-exports.
+//
+// Beats:
+//   1. Import x86-64 ELF builder, SSA instruction lowering, and register allocation siblings.
+//   2. Re-export public assembly and direct machine code generation APIs.
+//   3. Maintain <= 256 lines limit.
+
+import "lex/ANCHOR.oo";
+import "types/ANCHOR.oo";
+import "ast/ANCHOR.oo";
+import "types/byte_out.oo";
+import "x86_abi_classify.oo";
+import "x86_abi_sret.oo";
+import "x86_bin_emit.oo";
+import "x86_dwarf_info.oo";
+import "x86_dwarf_line.oo";
+import "x86_elf64_translate.oo";
+import "x86_elf_builder.oo";
+import "x86_elf_pure.oo";
+import "x86_elf_pure_text.oo";
+import "x86_elf_sections.oo";
+import "x86_emit.oo";
+import "x86_emit_const_harvest.oo";
+import "x86_emit_contract.oo";
+import "x86_emit_diag.oo";
+import "x86_emit_elf.oo";
+import "x86_emit_float_routine.oo";
+import "x86_emit_secret.oo";
+import "x86_emit_shape_refuse.oo";
+import "x86_emit_shims.oo";
+import "x86_emit_sys.oo";
+import "x86_emit_type_diag.oo";
+import "x86_import_resolve.oo";
+import "x86_leb128.oo";
+import "x86_live_interval.oo";
+import "x86_lower_helpers.oo";
+import "x86_magic_div.oo";
+import "x86_phi_resolve.oo";
+import "x86_reg_pool.oo";
+import "x86_regalloc_scan.oo";
+import "x86_runtime.oo";
+import "x86_sib_fold.oo";
+import "x86_ssa_call_lower.oo";
+import "x86_ssa_compile.oo";
+import "x86_ssa_emit.oo";
+import "x86_ssa_emit_base.oo";
+import "x86_ssa_emit_float.oo";
+import "x86_ssa_emit_fp_ops.oo";
+import "x86_ssa_emit_inst.oo";
+import "x86_ssa_emit_remap.oo";
+import "x86_ssa_eval_int.oo";
+import "x86_ssa_eval_match.oo";
+import "x86_ssa_float_eval.oo";
+import "x86_ssa_float_ieee.oo";
+import "x86_ssa_fold_emit.oo";
+import "x86_ssa_list_lower.oo";
+import "x86_ssa_list_lower_util.oo";
+import "x86_ssa_lower_div.oo";
+import "x86_ssa_lower_fn.oo";
+import "x86_ssa_lower_ops.oo";
+import "x86_ssa_lower_reg.oo";
+import "x86_ssa_lower_simd.oo";
+import "x86_ssa_match_lower.oo";
+import "x86_ssa_strlit.oo";
+import "x86_ssa_struct_lower.oo";
+import "x86_xmm_reg_pool.oo";
+import "x86_ymm_reg_pool.oo";
+
+// ──▓▓ Public x86-64 Emitter API ──▓▓──
+
+pub fn emit_x86_stream(src: String) -> String {
+    return x86_emit_stream_b(src);
+}
+
+pub fn x86_emit_stream(src: String) -> String {
+    return x86_emit_stream_b(src);
+}
+
+pub fn emit_x86_ssa(fn_data: SsaFunction) -> X86CompileResult {
+    return x86_ssa_compile_ssa(fn_data);
+}
+
+pub fn emit_x86_elf_bytes(src: String) -> ByteOut {
+    return x86_elf_pure_from_source(src);
+}

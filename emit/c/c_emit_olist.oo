@@ -1,0 +1,167 @@
+// # Emit per-struct list helpers
+//
+// Logline: Print OoL_Name typedef and new/push/get/set/len for List[Name].
+//
+// Setup: Name* needs a forward Name; fns need a complete Name (sizeof). malloc is in the preamble.
+//
+// Beats:
+//   1. Forward-decl Name; typedef OoL_Name as a growable Name* array (once).
+//   2. Emit new, len, get, set, and push after Name is complete (once).
+//   3. Get and set exit on out of range. No recurse into elem types.
+
+import "c_emit_env.oo";
+import "c_emit_list_ty.oo";
+
+pub fn c_emit_olist_fwd(name: String) {
+    println("#ifndef OO_FWD_" + name);
+    println("#define OO_FWD_" + name);
+    println("typedef struct " + name + " " + name + ";");
+    println("#endif");
+}
+
+pub fn c_emit_olist_ty(name: String) {
+    let L: String = "OoL_" + name;
+    println("#ifndef OO_TY_" + L);
+    println("#define OO_TY_" + L);
+    println("#ifndef OO_HAVE_" + L);
+    println("#define OO_HAVE_" + L);
+    println("typedef struct " + L + " { " + name + " *data; long long len; long long cap; } " + L + ";");
+    println("#endif");
+    println("#endif");
+}
+
+// List[Name] / List[OtherUser] on a struct: OoL_* must exist before the field type.
+// Does not re-enter type aliases (self-ref would hang). ifndef: never twice.
+pub fn c_emit_olist_prep(name: String, elem: String) {
+    if elem == "I" || elem == "S" || elem == "F" || elem == "" {
+        return;
+    }
+    if elem == "List" {
+        return;
+    }
+    c_emit_olist_fwd(name);
+    c_emit_olist_ty(name);
+}
+
+pub fn c_emit_olist_fns(name: String) {
+    let L: String = "OoL_" + name;
+    let pfx: String = "oo_l_" + name;
+    println("#ifndef OO_FNS_" + L);
+    println("#define OO_FNS_" + L);
+    println("#define OO_TY_" + L);
+    println("static inline " + L + " " + pfx + "_new(void) { " + L + " l; l.data=0; l.len=0; l.cap=0; return l; }");
+    println("static inline long long " + pfx + "_len(" + L + " l) { return l.len; }");
+    println("static inline " + name + " " + pfx + "_get(" + L + " l, long long i) {");
+    println("  if (i<0||i>=l.len) { fprintf(stderr,\"ERR\\tolist_get OOB\\n\"); exit(1); }");
+    println("  oo_retain_" + name + "(l.data[i]); return l.data[i]; }");
+    println("static inline " + L + " " + pfx + "_set(" + L + " l, long long i, " + name + " v) {");
+    println("  if (i<0||i>=l.len) { fprintf(stderr,\"ERR\\tolist_set OOB\\n\"); exit(1); }");
+    println("  l.data[i] = v; return l; }");
+    println("static inline " + L + " " + pfx + "_push(" + L + " l, " + name + " v) {");
+    println("  " + L + " n; long long ncap = l.cap ? l.cap : 8;");
+    println("  while (ncap < l.len + 1) ncap = ncap * 2;");
+    println("  n.data = (" + name + "*)oo_list_alloc_payload(sizeof(" + name + "), (size_t)ncap);");
+    println("  if (l.data && l.len > 0) { for (long long i = 0; i < l.len; i++) { n.data[i] = l.data[i]; oo_retain_" + name + "(n.data[i]); } }");
+    println("  oo_retain_" + name + "(v);");
+    println("  n.data[l.len] = v; n.len = l.len + 1; n.cap = ncap;");
+    println("  OoListHeader *hdr = ((OoListHeader*)n.data) - 1;");
+    println("  __atomic_store_n(&hdr->ref_count, 1, __ATOMIC_RELEASE); return n; }");
+    println("#ifndef OO_RETAIN_" + L);
+    println("#define OO_RETAIN_" + L);
+    println("static inline void oo_retain_" + L + "(" + L + " v) { if (v.data) { OoListHeader *hdr = ((OoListHeader*)v.data)-1; __atomic_fetch_add(&hdr->ref_count, 1, __ATOMIC_ACQ_REL); } }");
+    println("static inline void oo_release_" + L + "(" + L + " v) { if (v.data) { OoListHeader *hdr = ((OoListHeader*)v.data)-1; if (__atomic_fetch_sub(&hdr->ref_count, 1, __ATOMIC_ACQ_REL) == 1) { for (long long i = 0; i < v.len; i++) { oo_release_" + name + "(v.data[i]); } oo_payload_free(v.data); } } }");
+    println("#endif");
+    println("#endif");
+}
+
+pub fn c_emit_olist_helpers(name: String) {
+    c_emit_olist_ty(name);
+    c_emit_olist_fns(name);
+}
+
+// Result[List[Name]] → payload, OoL_Name, plus OoResL_Name (once).
+pub fn c_emit_res_list_ty(name: String) {
+    c_emit_named_cell_ty(name);
+    c_emit_olist_fwd(name);
+    c_emit_olist_helpers(name);
+    let R: String = "OoResL_" + name;
+    println("#ifndef OO_HAVE_" + R);
+    println("#define OO_HAVE_" + R);
+    println("typedef struct { int ok; OoL_" + name + " val; OoStr err; } " + R + ";");
+    println("#endif");
+}
+
+// Authentic struct forward declaration without dummy padding.
+pub fn c_emit_named_cell_ty(name: String) {
+    if name == "" {
+        return;
+    }
+    println("#ifndef OO_FWD_" + name);
+    println("#define OO_FWD_" + name);
+    println("typedef struct " + name + " " + name + ";");
+    println("#endif");
+}
+
+pub fn c_emit_list_cell_ty(cty: String) {
+    if chars_len(cty) < 5 { return;
+    }
+    if str_slice(cty, 0, 4) != "OoL_" {
+        return;
+    }
+    let name: String = str_slice(cty, 4, chars_len(cty));
+    if name == "" {
+        return;
+    }
+    c_emit_named_cell_ty(name);
+    c_emit_olist_helpers(name);
+}
+
+// Fn param/return C type: monomorphized at top-level; no-op in function bodies.
+pub fn c_emit_need_ty(cty: String) {
+    return;
+}
+
+// Record List field and param names so list_len((tree).nodes) can pick OoL_*.
+pub fn c_list_field_env(toks: List[String], env0: String) -> String {
+    let n: Int = list_len(toks);
+let mut e: String = env0;
+let mut i: Int = 0;
+while i + 4 < n { let k0: String = c_tokk(toks, i);
+if k0 == "IDENT" { if c_tokk(toks, i + 1) == "COLON" { if c_tokk(toks, i + 2) == "IDENT" { if c_tokt(toks, i + 2) == "List" { if c_tokk(toks, i + 3) == "LBRACKET" { if c_tokk(toks, i + 4) == "IDENT" { let fname: String = c_tokt(toks, i);
+let kind: String = c_peek_list_elem2(toks, i + 2, n);
+e = c_env_put(e, "__fldelem__" + fname, kind);
+}
+                        }
+                    }
+                }
+            }
+        }
+        i = i + 1;
+    }
+    return e;
+}
+
+// Direct lookup of a struct field's list element kind from its definition.
+pub fn c_struct_fld_list_kind(toks: List[String], n: Int, sname: String, fname: String) -> String {
+    let mut i: Int = 0;
+    while i + 5 < n {
+        if c_tokk(toks, i) == "KW_TYPE" && c_tokk(toks, i + 1) == "IDENT" && c_tokt(toks, i + 1) == sname && c_tokk(toks, i + 2) == "EQ" {
+            let mut p: Int = i + 3;
+            if p < n && c_tokk(toks, p) == "IDENT" && c_tokt(toks, p) == "packed" { p = p + 1;
+            }
+            if p + 1 < n && c_tokk(toks, p) == "IDENT" && c_tokt(toks, p) == "struct" && c_tokk(toks, p + 1) == "LBRACE" {
+                p = p + 2;
+                while p < n && c_tokk(toks, p) != "RBRACE" {
+                    if c_tokk(toks, p) == "COMMA" { p = p + 1;
+                    }
+                    if p + 4 < n && c_tokk(toks, p) == "IDENT" && c_tokt(toks, p) == fname && c_tokk(toks, p + 1) == "COLON" {
+                        return c_peek_list_elem2(toks, p + 2, n);
+                    }
+                    p = p + 1;
+                }
+            }
+        }
+        i = i + 1;
+    }
+    return "";
+}

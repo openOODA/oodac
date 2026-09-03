@@ -1,0 +1,215 @@
+// # Peek arbitrary nested list type kinds
+//
+// Logline: Reads recursive List type tokens and returns canonical element kinds for C emission.
+//
+// Setup: Token stream sits on outer List IDENT. Supports arbitrary nesting depths.
+//
+// Beats:
+//   1. Parses List types recursively via ty_parse_at.
+//   2. Maps primitive element types (Int, String, Float, Bool) to standard kinds.
+//   3. Supports arbitrary nested List[List[...]] and algebraic composite elements.
+
+
+
+fn c_list_leaf_kind(e: String) -> String {
+    if e == "Int" || e == "TyInt" { return "I";
+    }
+    if e == "String" || e == "TyStr" { return "S";
+    }
+    if e == "Float" || e == "f64" || e == "TyFloat" { return "F";
+    }
+    if e == "Bool" || e == "TyBool" { return "I";
+    }
+    let tag: String = ty_tag(e);
+    if tag == "TyName" { return ty_arg(e, 0);
+    }
+    return ty_mangle(e);
+}
+
+pub fn c_peek_list_elem2(toks: List[String], pos: Int, n: Int) -> String {
+    if pos >= n { return "";
+    }
+    if c_tokk(toks, pos) != "IDENT" { return "";
+    }
+    if c_tokt(toks, pos) != "List" { return "";
+    }
+    let parsed: List[String] = ty_parse_at(toks, pos, n);
+    let ty_ast: String = list_get(parsed, 1);
+    if ty_tag(ty_ast) != "TyList" { return "S";
+    }
+    let elem: String = ty_arg(ty_ast, 0);
+    if elem == "TyInt" { return "I";
+    }
+    if elem == "TyStr" { return "S";
+    }
+    if elem == "TyFloat" { return "LF";
+    }
+    if elem == "TyBool" { return "I";
+    }
+    if ty_tag(elem) == "TyName" { return ty_arg(elem, 0);
+    }
+    if ty_tag(elem) == "TyList" {
+        let inner: String = ty_arg(elem, 0);
+        if inner == "TyInt" { return "LL_I";
+        }
+        if inner == "TyStr" { return "LL_S";
+        }
+        if inner == "TyFloat" { return "LL_F";
+        }
+        if inner == "TyBool" { return "LL_I";
+        }
+        if ty_tag(inner) == "TyList" {
+            let inner2: String = ty_arg(inner, 0);
+            if inner2 == "TyInt" { return "LLL_I";
+            }
+            if inner2 == "TyStr" { return "LLL_S";
+            }
+            if inner2 == "TyFloat" { return "LLL_F";
+            }
+            if inner2 == "TyBool" { return "LLL_I";
+            }
+            if ty_tag(inner2) == "TyList" {
+                let inner3: String = ty_arg(inner2, 0);
+                if inner3 == "TyInt" { return "LLLL_I";
+                }
+                if inner3 == "TyStr" { return "LLLL_S";
+                }
+                if inner3 == "TyFloat" { return "LLLL_F";
+                }
+            }
+        }
+    }
+    return ty_mangle(elem);
+}
+
+pub fn c_is_ll_kind(k: String) -> Bool {
+    if chars_len(k) < 3 { return false;
+    }
+    if chars_len(k) >= 3 && str_slice(k, 0, 3) == "LL_" { return true;
+    }
+    if chars_len(k) >= 4 && str_slice(k, 0, 4) == "LLL_" { return true;
+    }
+    if chars_len(k) >= 5 && str_slice(k, 0, 5) == "LLLL_" { return true;
+    }
+    if chars_len(k) >= 5 && str_slice(k, 0, 5) == "OoLL_" { return true;
+    }
+    if chars_len(k) >= 6 && str_slice(k, 0, 6) == "OoLLL_" { return true;
+    }
+    if chars_len(k) >= 7 && str_slice(k, 0, 7) == "OoLLLL_" { return true;
+    }
+    if chars_len(k) >= 4 && str_slice(k, 0, 4) == "OoL_" { return true;
+    }
+    return false;
+}
+
+pub fn c_reassign_nested_list(name: String, rhs: String) {
+    println("  { OoLL_I __tmp = " + name + "; " + name + " = " + rhs + "; oo_ll_I_release(__tmp); }");
+}
+
+fn c_list_is_ident(s: String) -> Bool {
+    let n = chars_len(s);
+    if n == 0 { return false;
+    }
+    let mut i = 0;
+    while i < n { let c = char_at(s, i);
+    if c == "(" || c == ")" || c == "," || c == " " || c == "+" { return false;
+    }
+        i = i + 1;
+    }
+    return true;
+}
+
+pub fn c_reassign_nested_kind(name: String, rhs: String, kind: String) {
+    let need_retain: Bool = c_list_is_ident(rhs) || (rhs.contains(".") && !rhs.contains("("));
+    let mut out: String = "  ";
+    if chars_len(kind) >= 4 && str_slice(kind, 0, 4) == "OoL_" {
+        let ty: String = kind;
+        if need_retain { out = out + "oo_retain_" + ty + "(" + rhs + "); ";
+        }
+        out = out + "{ " + ty + " __tmp = " + name + "; " + name + " = " + rhs + "; oo_release_" + ty + "(__tmp); }";
+        println(out);
+    } else if chars_len(kind) >= 7 && str_slice(kind, 0, 7) == "OoLLLL_" {
+        let ty: String = kind;
+        if need_retain { out = out + "oo_retain_" + ty + "(" + rhs + "); ";
+        }
+        out = out + "{ " + ty + " __tmp = " + name + "; " + name + " = " + rhs + "; oo_release_" + ty + "(__tmp); }";
+        println(out);
+    } else if chars_len(kind) >= 6 && str_slice(kind, 0, 6) == "OoLLL_" {
+        let ty: String = kind;
+        if need_retain { out = out + "oo_retain_" + ty + "(" + rhs + "); ";
+        }
+        out = out + "{ " + ty + " __tmp = " + name + "; " + name + " = " + rhs + "; oo_release_" + ty + "(__tmp); }";
+        println(out);
+    } else if chars_len(kind) >= 5 && str_slice(kind, 0, 5) == "OoLL_" {
+        let ty: String = kind;
+        if need_retain { out = out + "oo_retain_" + ty + "(" + rhs + "); ";
+        }
+        out = out + "{ " + ty + " __tmp = " + name + "; " + name + " = " + rhs + "; oo_release_" + ty + "(__tmp); }";
+        println(out);
+    } else if chars_len(kind) >= 5 && str_slice(kind, 0, 5) == "LLLL_" {
+        let suf: String = str_slice(kind, 5, chars_len(kind));
+        let ty: String = "OoLLLL_" + suf;
+        if need_retain { out = out + "oo_llll_" + suf + "_retain(" + rhs + "); ";
+        }
+        out = out + "{ " + ty + " __tmp = " + name + "; " + name + " = " + rhs + "; oo_llll_" + suf + "_release(__tmp); }";
+        println(out);
+    } else if chars_len(kind) >= 4 && str_slice(kind, 0, 4) == "LLL_" {
+        let suf: String = str_slice(kind, 4, chars_len(kind));
+        let ty: String = "OoLLL_" + suf;
+        if need_retain { out = out + "oo_lll_" + suf + "_retain(" + rhs + "); ";
+        }
+        out = out + "{ " + ty + " __tmp = " + name + "; " + name + " = " + rhs + "; oo_lll_" + suf + "_release(__tmp); }";
+        println(out);
+    } else if chars_len(kind) >= 3 && str_slice(kind, 0, 3) == "LL_" {
+        let suf: String = str_slice(kind, 3, chars_len(kind));
+        let ty: String = "OoLL_" + suf;
+        if need_retain { out = out + "oo_ll_" + suf + "_retain(" + rhs + "); ";
+        }
+        out = out + "{ " + ty + " __tmp = " + name + "; " + name + " = " + rhs + "; oo_ll_" + suf + "_release(__tmp); }";
+        println(out);
+    } else {
+        println("  " + name + " = " + rhs + ";");
+    }
+}
+
+pub fn c_list_kind_c_ty(k: String) -> String {
+    if k == "I" { return "OoIList";
+    }
+    if k == "S" { return "OoSList";
+    }
+    if k == "F" || k == "LF" { return "OoFList";
+    }
+    if k == "LL_I" { return "OoLL_I";
+    }
+    if k == "LL_S" { return "OoLL_S";
+    }
+    if k == "LL_F" { return "OoLL_F";
+    }
+    if k == "LLL_I" { return "OoLLL_I";
+    }
+    if k == "LLL_S" { return "OoLLL_S";
+    }
+    if k == "LLL_F" { return "OoLLL_F";
+    }
+    if k == "LLLL_I" { return "OoLLLL_I";
+    }
+    if k == "LLLL_S" { return "OoLLLL_S";
+    }
+    if k == "LLLL_F" { return "OoLLLL_F";
+    }
+    if chars_len(k) >= 4 && str_slice(k, 0, 4) == "OoL_" { return k;
+    }
+    if chars_len(k) >= 6 && str_slice(k, 0, 6) == "OoOpt_" { return k;
+    }
+    if chars_len(k) >= 6 && str_slice(k, 0, 6) == "OoRes_" { return k;
+    }
+    if chars_len(k) >= 3 && str_slice(k, 0, 3) == "LL_" { return "OoLL_" + str_slice(k, 3, chars_len(k));
+    }
+    if chars_len(k) >= 4 && str_slice(k, 0, 4) == "LLL_" { return "OoLLL_" + str_slice(k, 4, chars_len(k));
+    }
+    if chars_len(k) >= 5 && str_slice(k, 0, 5) == "LLLL_" { return "OoLLLL_" + str_slice(k, 5, chars_len(k));
+    }
+    if k == "" { return "OoIList";
+    }
+    return "OoL_" + k;
+}

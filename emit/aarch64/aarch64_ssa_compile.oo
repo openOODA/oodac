@@ -1,0 +1,119 @@
+// # AArch64 SSA Compile Driver
+//
+// Logline: Tokenize, parse, lower to SSA, mem2reg, const-fold, emit AArch64 GAS.
+//
+// Setup: Requires token_fmt, ast_parse, oodac/emit/llvm/{ssa_ir,ssa_lower,ssa_mem2reg,ssa_opt}.oo, and aarch64_ssa_emit.oo.
+//
+// Beats:
+//   1. tokenize_lines → toks.
+//   2. ast_parse(toks) → ast.
+//   3. ssa_lower_ast(ast) → SsaFunction.
+//   4. mem2reg + const-fold.
+//   5. aarch64_ssa_emit_function → assembly string.
+
+
+
+import "emit/llvm/ssa_ir.oo";
+import "emit/llvm/ssa_lower.oo";
+import "emit/llvm/ssa_mem2reg.oo";
+import "emit/llvm/ssa_opt.oo";
+import "aarch64_ssa_emit.oo";
+
+
+type A64CompileResult = struct {
+    ok: Bool,
+    asm_code: String,
+    err_msg: String
+};
+
+pub fn aarch64_compile_ok(asm_text: String) -> A64CompileResult {
+    return A64CompileResult { ok: true, asm_code: asm_text, err_msg: "" };
+}
+
+pub fn aarch64_compile_err(err: String) -> A64CompileResult {
+    return A64CompileResult { ok: false, asm_code: "", err_msg: err };
+}
+
+pub fn aarch64_ssa_compile_ssa(fn_data: SsaFunction) -> A64CompileResult {
+    if fn_data.block_count == 0 { return aarch64_compile_err("ERR\taarch64_ssa_compile\tssa_lowering_failed");
+}
+    let promoted_fn: SsaFunction = ssa_mem2reg_promote(fn_data);
+    let optimized_fn: SsaFunction = ssa_opt_const_fold(promoted_fn);
+    let asm_text: String = aarch64_ssa_emit_function(optimized_fn);
+    if chars_len(asm_text) == 0 { return aarch64_compile_err("ERR\taarch64_ssa_compile\tempty_asm");
+    }
+    return aarch64_compile_ok(asm_text);
+}
+
+pub fn aarch64_ssa_compile_fn_with_config(fn_name: String, ret_type: Int, body_ast: String) -> A64CompileResult {
+    if chars_len(fn_name) == 0 { return aarch64_compile_err("ERR\taarch64_ssa_compile\tempty_fn_name");
+}
+    let ssa_fn: SsaFunction = ssa_lower_fn(fn_name, ret_type, body_ast);
+    return aarch64_ssa_compile_ssa(ssa_fn);
+}
+
+pub fn aarch64_ssa_compile_fn(fn_name: String, ret_type: Int, body_ast: String) -> A64CompileResult {
+    return aarch64_ssa_compile_fn_with_config(fn_name, ret_type, body_ast);
+}
+
+pub fn aarch64_ssa_compile_ast_with_config(ast_string: String) -> A64CompileResult {
+    if chars_len(ast_string) == 0 { return aarch64_compile_err("ERR\taarch64_ssa_compile\tempty_ast");
+}
+    let ssa_fn: SsaFunction = ssa_lower_ast(ast_string);
+    return aarch64_ssa_compile_ssa(ssa_fn);
+}
+
+pub fn aarch64_ssa_compile_ast(ast_string: String) -> A64CompileResult {
+    return aarch64_ssa_compile_ast_with_config(ast_string);
+}
+
+pub fn aarch64_ssa_compile_source_with_config(source_code: String) -> A64CompileResult {
+    if chars_len(source_code) == 0 { return aarch64_compile_err("ERR\taarch64_ssa_compile\tempty_source");
+}
+    let toks: List[String] = tokenize_lines(source_code);
+    if list_len(toks) == 0 { return aarch64_compile_err("ERR\taarch64_ssa_compile\ttoken_collection_failed");
+    }
+    let ast_str: String = ast_parse(toks);
+    if chars_len(ast_str) == 0 { return aarch64_compile_err("ERR\taarch64_ssa_compile\tast_parse_empty");
+    }
+    let ssa_fn: SsaFunction = ssa_lower_ast(ast_str);
+    return aarch64_ssa_compile_ssa(ssa_fn);
+}
+
+pub fn aarch64_ssa_compile_source(source_code: String) -> A64CompileResult {
+    return aarch64_ssa_compile_source_with_config(source_code);
+}
+
+pub fn aarch64_ssa_compile_program_source(source_code: String) -> A64CompileResult {
+    if chars_len(source_code) == 0 { return aarch64_compile_err("ERR\taarch64_ssa_compile\tempty_source");
+    }
+    let toks: List[String] = tokenize_lines(source_code);
+    if list_len(toks) == 0 { return aarch64_compile_err("ERR\taarch64_ssa_compile\ttoken_collection_failed");
+    }
+    let ast_str: String = ast_parse(toks);
+    if chars_len(ast_str) == 0 { return aarch64_compile_err("ERR\taarch64_ssa_compile\tast_parse_empty");
+    }
+    let cur: SsaFunction = ssa_lower_ast(ast_str);
+    if cur.block_count == 0 { return aarch64_compile_err("ERR\taarch64_ssa_compile\tssa_lowering_failed");
+    }
+    let promoted: SsaFunction = ssa_mem2reg_promote(cur);
+    let optimized: SsaFunction = ssa_opt_const_fold(promoted);
+    let asm_text: String = aarch64_ssa_emit_function(optimized);
+    if chars_len(asm_text) == 0 { return aarch64_compile_err("ERR\taarch64_ssa_compile\tempty_asm");
+    }
+    return aarch64_compile_ok(asm_text);
+}
+
+pub fn aarch64_ssa_compile_source_asm(source_code: String) -> String {
+    let res: A64CompileResult = aarch64_ssa_compile_source(source_code);
+    if res.ok { return res.asm_code;
+    }
+    return "";
+}
+
+pub fn aarch64_ssa_compile_program_asm(source_code: String) -> String {
+    let res: A64CompileResult = aarch64_ssa_compile_program_source(source_code);
+    if res.ok { return res.asm_code;
+    }
+    return "";
+}

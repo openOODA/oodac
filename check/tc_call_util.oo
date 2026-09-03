@@ -1,0 +1,152 @@
+// # Resolve call and argument types
+//
+// Logline: Splits a CSV field, matches a closing paren, looks up a free-name return type, and types a token span.
+//
+// Setup: toks rows are kind, line, col, text; ret_table and aliases are name maps; lit_env and struct_table feed field chains; resolve_type_alias, is_field_chain_span, and field_chain_type exist.
+//
+// Beats:
+//   1. nth_csv returns the 0-based comma field or empty when the index is missing.
+//   2. match_rparen walks nested parens; call_ret_type_at maps IDENT LPAREN … RPAREN through ret_table and skips method calls.
+//   3. resolve_arg_type types a one-token span, a field chain, or a free call spanning [start, end).
+
+import "tc_infer.oo";
+
+
+pub fn nth_csv(s: String, idx: Int) -> String {
+    let mut cur = 0;
+let mut out = "";
+let n = chars_len(s);
+let mut i = 0;
+let mut depth = 0;
+while i < n { let c = char_at(s, i);
+if c == "[" { depth = depth + 1;
+out = out + c;
+} else if c == "]" {
+            if depth > 0 { depth = depth - 1;
+            }
+            out = out + c;
+        } else if c == "," && depth == 0 { if cur == idx { return out;
+        }
+            cur = cur + 1;
+            out = "";
+        } else {
+            out = out + c;
+        }
+        i = i + 1;
+    }
+    if cur == idx { return out;
+    }
+    return "";
+}
+
+// Match RPAREN for LPAREN at lparen; returns index or -1.
+pub fn match_rparen(toks: List[String], lparen: Int) -> Int {
+    let n = list_len(toks);
+if lparen < 0 { return 0 - 1;
+}
+    if lparen >= n { return 0 - 1;
+    }
+    if field_at(list_get(toks, lparen), 0) != "LPAREN" {
+        return 0 - 1;
+    }
+    let mut depth = 0;
+    let mut p = lparen;
+    while p < n { let k: String = field_at(list_get(toks, p), 0);
+    if k == "LPAREN" { depth = depth + 1;
+    }
+        if k == "RPAREN" {
+            depth = depth - 1;
+            if depth == 0 { return p;
+            }
+        }
+        p = p + 1;
+    }
+    return 0 - 1;
+}
+
+// Declared return type of call at name_pos (IDENT LPAREN … RPAREN, any arity).
+// "" if not a call or ret unknown. Used for multi-import ret_table (concat stream).
+pub fn call_ret_type_at(
+    toks: List[String],
+    name_pos: Int,
+    ret_table: String,
+    aliases: String
+) -> String { let n = list_len(toks);
+if name_pos < 0 { return "";
+}
+    if name_pos + 1 >= n { return "";
+    }
+    if field_at(list_get(toks, name_pos), 0) != "IDENT" {
+        return "";
+    }
+    if field_at(list_get(toks, name_pos + 1), 0) != "LPAREN" {
+        return "";
+    }
+    // Method calls (x.foo()) — not free-name ret table.
+    if name_pos > 0 { if field_at(list_get(toks, name_pos - 1), 0) == "DOT" { return "";
+    }
+    }
+    let rp = match_rparen(toks, name_pos + 1);
+    if rp < 0 { return "";
+    }
+    let cname: String = field_at(list_get(toks, name_pos), 3);
+    let got: String = resolve_type_alias(ret_table, cname);
+    if got != cname { return resolve_type_alias(aliases, got);
+    }
+    return "";
+}
+
+// Fail bare Ok(...)/Err(...)/Some(...) as expression statements (must-use).
+pub fn resolve_arg_type(
+    toks: List[String],
+    start: Int,
+    end: Int,
+    lit_env: String,
+    ret_table: String,
+    aliases: String,
+    struct_table: String
+) -> String { if end <= start { return "";
+}
+    // single token
+    if end == start + 1 {
+        let mut aty: String = lit_token_type(field_at(list_get(toks, start), 0));
+        if aty == "" {
+            if field_at(list_get(toks, start), 0) == "IDENT" {
+                let vname: String = field_at(list_get(toks, start), 3);
+                let cur_fn: String = get_cur_fn_at(toks, start);
+                if cur_fn != "" {
+                    aty = resolve_type_alias(lit_env, cur_fn + "." + vname);
+                    if aty == cur_fn + "." + vname { aty = "";
+                    }
+                }
+                if aty == "" {
+                    aty = resolve_type_alias(lit_env, vname);
+                    if aty == vname { aty = "";
+                    }
+                }
+            }
+        }
+        return aty;
+    }
+    // field chain: IDENT (DOT IDENT)+  e.g. p.x or o.inner.v
+    if is_field_chain_span(toks, start, end) {
+        let fty = field_chain_type(toks, start, end, lit_env, struct_table);
+        if fty != "" {
+            return resolve_type_alias(aliases, fty);
+        }
+    }
+    // Free call any arity: IDENT LPAREN … RPAREN spanning [start, end)
+    // (zero-arg and multi-arg; multi-import ret_table from expanded stream)
+    if end >= start + 3 { if field_at(list_get(toks, start), 0) == "IDENT" { if field_at(list_get(toks, start + 1), 0) == "LPAREN" { if field_at(list_get(toks, end - 1), 0) == "RPAREN" { let rp = match_rparen(toks, start + 1);
+    if rp == end - 1 { let cty: String = call_ret_type_at(toks, start, ret_table, aliases);
+    if cty != "" { return cty;
+    }
+                    }
+                }
+            }
+        }
+    }
+    return "";
+}
+
+// Get nth comma-separated field (0-based); "" if missing.

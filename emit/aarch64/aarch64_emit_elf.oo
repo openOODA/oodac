@@ -1,0 +1,96 @@
+// # Direct In-Process AArch64 ELF64 Binary Generator
+//
+// Logline: Compiles OpenOODA source directly to executable Linux AArch64 ELF64 binaries without external toolchains or shell commands.
+//
+// Setup: Invokes in-process AArch64 code generator and linker, then writes raw ELF bytes directly to disk with write_file.
+//
+// Beats:
+//   1. Compile source to raw machine code and link ELF64 image using aarch64_compile_to_elf.
+//   2. Convert raw ELF64 byte list into binary string representation.
+//   3. Write binary bytes directly to out_path via write_file.
+//   4. Pure in-process execution with zero shell or printf dependencies.
+
+import "std/hw/silicon/aarch64_codegen.oo";
+import "aarch64_leftover_gate.oo";
+
+
+pub fn a64_write_elf_bytes_pure(fs: &FsWriteCap, bytes: List[Int], out_path: String) -> Bool {
+    let n: Int = list_len(bytes);
+if n == 0 { return false;
+}
+    let binary: String = bytes_to_str(bytes);
+    let res: Result[Void, String] = write_file(fs, out_path, binary);
+    return res.is_ok();
+}
+
+pub fn a64_write_elf_bytes(sys: &ProcessCap, bytes: List[Int], out_path: String) -> Bool {
+    let n: Int = list_len(bytes);
+if n == 0 { return false;
+}
+    let r_mk: Result[String, String] = sys_exec(sys, "sh", "-c", "mkdir -p $(dirname " + out_path + ")");
+    if r_mk.is_err() {
+        return false;
+    }
+    let chunk_size: Int = 4096;
+    let mut offset: Int = 0;
+    let mut is_first: Bool = true;
+    while offset < n { let mut end: Int = offset + chunk_size;
+    if end > n { end = n;
+    }
+        let mut hs: List[Int] = list_new();
+        let mut i: Int = offset;
+        while i < end { let b: Int = list_get(bytes, i) & 255;
+        hs = list_push(hs, 92);
+        hs = list_push(hs, 48 + ((b / 64) % 8));
+        hs = list_push(hs, 48 + ((b / 8) % 8));
+        hs = list_push(hs, 48 + (b % 8));
+        i = i + 1;
+        }
+        let oct: String = bytes_to_str(hs);
+        let mut cmd: String = "";
+        if is_first { cmd = "printf '" + oct + "' > " + out_path;
+        is_first = false;
+        } else {
+            cmd = "printf '" + oct + "' >> " + out_path;
+        }
+        let res: Result[String, String] = sys_exec(sys, "sh", "-c", cmd);
+        if res.is_err() {
+            return false;
+        }
+        offset = end;
+    }
+    let chmod_cmd: String = "chmod 0755 " + out_path;
+    let res_ch: Result[String, String] = sys_exec(sys, "sh", "-c", chmod_cmd);
+    return res_ch.is_ok();
+}
+
+pub fn aarch64_emit_direct_elf_binary_pure(fs: &FsWriteCap, src: String, out_path: String) -> Bool {
+    if chars_len(src) == 0 { return false;
+}
+    let elf_bytes: List[Int] = aarch64_compile_to_elf(src);
+    if list_len(elf_bytes) > 0 { return a64_write_elf_bytes_pure(fs, elf_bytes, out_path);
+    }
+    return false;
+}
+
+pub fn aarch64_emit_direct_elf_binary_pure_e(fs: &FsWriteCap, src: String, path: String, out_path: String) -> Bool {
+    if chars_len(src) == 0 { return false;
+    }
+    if !aarch64_src_has_main_e(src) { return false;
+    }
+    let lg: String = aarch64_leftover_gate_f(src, path);
+    if chars_len(lg) > 0 { println(lg);
+    return false;
+    }
+    return aarch64_emit_direct_elf_binary_pure(fs, src, out_path);
+}
+
+pub fn aarch64_emit_direct_elf_binary(sys: &ProcessCap, src: String, out_path: String) -> Bool {
+    if chars_len(src) == 0 { return false;
+}
+    let elf_bytes: List[Int] = aarch64_compile_to_elf(src);
+    if list_len(elf_bytes) > 0 { return a64_write_elf_bytes(sys, elf_bytes, out_path);
+    }
+    println("ERR\tast-emit-aarch64\tcompile failed");
+    return false;
+}

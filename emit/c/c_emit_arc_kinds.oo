@@ -1,0 +1,153 @@
+// # ARC Retain and Release Kind Dispatchers
+//
+// Logline: Generates C runtime retain and release function call expressions for primitive, composite, and nested container types.
+//
+// Setup: Pure .oo code generation module mapping type kinds to oo_*_retain and oo_*_release C runtime calls.
+//
+// Beats:
+//   1. Generate release statements for strings, lists, results, options, and user structs.
+//   2. Generate retain statements for strings, lists, results, options, and user structs.
+//   3. Handle multi-level nested list kinds and generic prefixes.
+
+import "c_emit_env.oo";
+
+
+pub fn c_arc_kind_release(kind: String, name: String) -> String {
+    if kind == "T" || kind == "OoStr" { return "oo_str_release(" + name + "); ";
+    }
+    if kind == "S" || kind == "OoSList" || kind == "OoL_S" { return "oo_slist_release(" + name + "); ";
+    }
+    if kind == "LF" || kind == "OoFList" || kind == "OoL_F" { return "oo_flist_release(" + name + "); ";
+    }
+    if kind == "I" || kind == "F" || kind == "B" || kind == "V" || kind == "long long" || kind == "double" || kind == "int" { return "";
+    }
+    if kind == "R" || kind == "OoResS" || kind == "OoRes_S" { return "oo_str_release(" + name + ".val); ";
+    }
+    if kind == "RI" || kind == "OoResI" || kind == "OoRes_I" { return "if (!" + name + ".ok) { oo_str_release(" + name + ".err); } ";
+    }
+    if kind == "OoResV" { return "if (!" + name + ".ok) { oo_str_release(" + name + ".err); } ";
+    }
+    if kind == "RII" || kind == "OoResII" { return "";
+    }
+    if kind == "RLI" || kind == "OoResLI" || kind == "OoRes_OoL_I" { return "if (" + name + ".ok) { oo_ilist_release(" + name + ".val); } else { oo_str_release(" + name + ".err); } ";
+    }
+    if kind == "RLS" || kind == "OoResLS" || kind == "OoRes_OoL_S" { return "if (" + name + ".ok) { oo_slist_release(" + name + ".val); } else { oo_str_release(" + name + ".err); } ";
+    }
+    if kind == "RLF" || kind == "OoResLF" || kind == "OoRes_OoL_F" { return "if (" + name + ".ok) { oo_flist_release(" + name + ".val); } else { oo_str_release(" + name + ".err); } ";
+    }
+    if kind == "RB" || kind == "OoResB" || kind == "OoRes_B" { return "if (!" + name + ".ok) { oo_str_release(" + name + ".err); } ";
+    }
+    if kind == "RF" || kind == "OoResF" || kind == "OoRes_F" { return "if (!" + name + ".ok) { oo_str_release(" + name + ".err); } ";
+    }
+    if kind == "OoIList" || kind == "OoL_I" { return "oo_ilist_release(" + name + "); ";
+    }
+    if kind == "LL_I" || kind == "OoLL_I" { return "oo_ll_I_release(" + name + "); ";
+    }
+    if kind == "LL_S" || kind == "OoLL_S" { return "oo_ll_S_release(" + name + "); ";
+    }
+    if kind == "LL_F" || kind == "OoLL_F" { return "oo_ll_F_release(" + name + "); ";
+    }
+    if kind == "LLL_I" || kind == "OoLLL_I" { return "oo_lll_I_release(" + name + "); ";
+    }
+    if kind == "LLL_S" || kind == "OoLLL_S" { return "oo_lll_S_release(" + name + "); ";
+    }
+    if kind == "LLL_F" || kind == "OoLLL_F" { return "oo_lll_F_release(" + name + "); ";
+    }
+    if kind == "LLLL_I" || kind == "OoLLLL_I" { return "oo_llll_I_release(" + name + "); ";
+    }
+    if kind == "LLLL_S" || kind == "OoLLLL_S" { return "oo_llll_S_release(" + name + "); ";
+    }
+    if kind == "LLLL_F" || kind == "OoLLLL_F" { return "oo_llll_F_release(" + name + "); ";
+    }
+    let kn = bytes_len(kind);
+    if kn >= 4 && str_slice(kind, 0, 4) == "OoL_" { return "oo_release_" + kind + "(" + name + "); ";
+    }
+    if kn >= 6 && str_slice(kind, 0, 6) == "OoOpt_" { return "oo_release_" + kind + "(" + name + "); ";
+    }
+    if kn >= 6 && str_slice(kind, 0, 6) == "OoRes_" { return "oo_release_" + kind + "(" + name + "); ";
+    }
+    if kn >= 7 && str_slice(kind, 0, 7) == "OoRes2_" { return "oo_release_" + kind + "(" + name + "); ";
+    }
+    if kn >= 5 && str_slice(kind, 0, 5) == "LLLL_" { let suf = str_slice(kind, 5, kn);
+    return "oo_llll_" + suf + "_release(" + name + "); ";
+    }
+    if kn >= 4 && str_slice(kind, 0, 4) == "LLL_" { let suf = str_slice(kind, 4, kn);
+    return "oo_lll_" + suf + "_release(" + name + "); ";
+    }
+    if kn >= 3 && str_slice(kind, 0, 3) == "LL_" { let suf = str_slice(kind, 3, kn);
+    return "oo_ll_" + suf + "_release(" + name + "); ";
+    }
+    if kn > 1 && byte_at(kind, 0) >= 65 && byte_at(kind, 0) <= 90 { return "oo_release_" + kind + "(" + name + "); ";
+    }
+    return "";
+}
+
+pub fn c_arc_kind_retain(kind: String, name: String) -> String {
+    if kind == "T" || kind == "OoStr" { return "oo_str_retain(" + name + "); ";
+    }
+    if kind == "S" || kind == "OoSList" || kind == "OoL_S" { return "oo_slist_retain(" + name + "); ";
+    }
+    if kind == "LF" || kind == "OoFList" || kind == "OoL_F" { return "oo_flist_retain(" + name + "); ";
+    }
+    if kind == "I" || kind == "F" || kind == "B" || kind == "V" || kind == "long long" || kind == "double" || kind == "int" { return "";
+    }
+    if kind == "R" || kind == "OoResS" || kind == "OoRes_S" { return "oo_str_retain(" + name + ".val); ";
+    }
+    if kind == "RI" || kind == "OoResI" || kind == "OoRes_I" { return "if (!" + name + ".ok) { oo_str_retain(" + name + ".err); } ";
+    }
+    if kind == "OoResV" { return "if (!" + name + ".ok) { oo_str_retain(" + name + ".err); } ";
+    }
+    if kind == "RII" || kind == "OoResII" { return "";
+    }
+    if kind == "RLI" || kind == "OoResLI" || kind == "OoRes_OoL_I" { return "if (" + name + ".ok) { oo_ilist_retain(" + name + ".val); } else { oo_str_retain(" + name + ".err); } ";
+    }
+    if kind == "RLS" || kind == "OoResLS" || kind == "OoRes_OoL_S" { return "if (" + name + ".ok) { oo_slist_retain(" + name + ".val); } else { oo_str_retain(" + name + ".err); } ";
+    }
+    if kind == "RLF" || kind == "OoResLF" || kind == "OoRes_OoL_F" { return "if (" + name + ".ok) { oo_flist_retain(" + name + ".val); } else { oo_str_retain(" + name + ".err); } ";
+    }
+    if kind == "RB" || kind == "OoResB" || kind == "OoRes_B" { return "if (!" + name + ".ok) { oo_str_retain(" + name + ".err); } ";
+    }
+    if kind == "RF" || kind == "OoResF" || kind == "OoRes_F" { return "if (!" + name + ".ok) { oo_str_retain(" + name + ".err); } ";
+    }
+    if kind == "OoIList" || kind == "OoL_I" { return "oo_ilist_retain(" + name + "); ";
+    }
+    if kind == "LL_I" || kind == "OoLL_I" { return "oo_ll_I_retain(" + name + "); ";
+    }
+    if kind == "LL_S" || kind == "OoLL_S" { return "oo_ll_S_retain(" + name + "); ";
+    }
+    if kind == "LL_F" || kind == "OoLL_F" { return "oo_ll_F_retain(" + name + "); ";
+    }
+    if kind == "LLL_I" || kind == "OoLLL_I" { return "oo_lll_I_retain(" + name + "); ";
+    }
+    if kind == "LLL_S" || kind == "OoLLL_S" { return "oo_lll_S_retain(" + name + "); ";
+    }
+    if kind == "LLL_F" || kind == "OoLLL_F" { return "oo_lll_F_retain(" + name + "); ";
+    }
+    if kind == "LLLL_I" || kind == "OoLLLL_I" { return "oo_llll_I_retain(" + name + "); ";
+    }
+    if kind == "LLLL_S" || kind == "OoLLLL_S" { return "oo_llll_S_retain(" + name + "); ";
+    }
+    if kind == "LLLL_F" || kind == "OoLLLL_F" { return "oo_llll_F_retain(" + name + "); ";
+    }
+    let kn = bytes_len(kind);
+    if kn >= 4 && str_slice(kind, 0, 4) == "OoL_" { return "oo_retain_" + kind + "(" + name + "); ";
+    }
+    if kn >= 6 && str_slice(kind, 0, 6) == "OoOpt_" { return "oo_retain_" + kind + "(" + name + "); ";
+    }
+    if kn >= 6 && str_slice(kind, 0, 6) == "OoRes_" { return "oo_retain_" + kind + "(" + name + "); ";
+    }
+    if kn >= 7 && str_slice(kind, 0, 7) == "OoRes2_" { return "oo_retain_" + kind + "(" + name + "); ";
+    }
+    if kn >= 5 && str_slice(kind, 0, 5) == "LLLL_" { let suf = str_slice(kind, 5, kn);
+    return "oo_llll_" + suf + "_retain(" + name + "); ";
+    }
+    if kn >= 4 && str_slice(kind, 0, 4) == "LLL_" { let suf = str_slice(kind, 4, kn);
+    return "oo_lll_" + suf + "_retain(" + name + "); ";
+    }
+    if kn >= 3 && str_slice(kind, 0, 3) == "LL_" { let suf = str_slice(kind, 3, kn);
+    return "oo_ll_" + suf + "_retain(" + name + "); ";
+    }
+    if kn > 1 && byte_at(kind, 0) >= 65 && byte_at(kind, 0) <= 90 { return "oo_retain_" + kind + "(" + name + "); ";
+    }
+    return "";
+}

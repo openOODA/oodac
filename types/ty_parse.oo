@@ -1,0 +1,208 @@
+// # Recursive AST type parser
+//
+// Logline: Parses nested types including Option[T], Result[T, E], List[T], Box[T], references, primitives, and user types.
+//
+// Setup: Returns [next_pos_str, ty_ast_str]. Consumes arbitrary generic nesting without fixed lookahead.
+//
+// Beats:
+//   1. Parses AMP / KW_MUT into TyRef / TyRefMut.
+//   2. Parses primitives (Int, Float, Bool, String, Void).
+//   3. Parses generic composites (List, Option, Result, Box) recursively.
+//   4. Parses Cap tokens and user type names.
+
+import "ty.oo";
+import "types_core.oo";
+
+
+
+pub fn ty_pack2(p: String, v: String) -> List[String] {
+    let mut res: List[String] = list_new();
+    res = list_push(res, p);
+    res = list_push(res, v);
+    return res;
+}
+
+pub fn ty_parse_at(toks: List[String], pos: Int, n: Int) -> List[String] {
+    let mut p: Int = pos;
+    if p >= n { return ty_pack2(p.to_string(), ty_unit());
+    }
+    let k: String = c_tokk(toks, p);
+    let t: String = c_tokt(toks, p);
+
+    // 1. References: &T or &T
+    if k == "AMP" {
+        p = p + 1;
+        let mut is_mut: Bool = false;
+        if p < n && c_tokk(toks, p) == "KW_MUT" {
+            is_mut = true;
+            p = p + 1;
+        }
+        let p_arg: Int = p;
+        let sub: List[String] = ty_parse_at(toks, p_arg, n);
+        p = parse_int(list_get(sub, 0));
+        let inner: String = list_get(sub, 1);
+        let node: String = if is_mut { ty_ref_mut(inner) } else { ty_ref(inner) };
+        return ty_pack2(p.to_string(), node);
+    }
+
+    if k == "IDENT" {
+        p = p + 1;
+        // Primitive types
+        if t == "Int" || t == "i64" || t == "i32" || t == "isize" { return ty_pack2(p.to_string(), ty_int());
+        }
+        if t == "Float" || t == "f64" || t == "f32" { return ty_pack2(p.to_string(), ty_float());
+        }
+        if t == "Bool" || t == "bool" { return ty_pack2(p.to_string(), ty_bool());
+        }
+        if t == "String" || t == "str" { return ty_pack2(p.to_string(), ty_str());
+        }
+        if t == "Void" || t == "void" || t == "unit" { return ty_pack2(p.to_string(), ty_unit());
+        }
+        if t == "f32x8" || t == "TyF32x8" { return ty_pack2(p.to_string(), ty_f32x8());
+        }
+        if t == "f64x4" || t == "TyF64x4" { return ty_pack2(p.to_string(), ty_f64x4());
+        }
+
+        // Generic List: List[T] or List<T>
+        if t == "List" {
+            let mut elem_ty: String = ty_str();
+            if p < n && (c_tokk(toks, p) == "LBRACKET" || c_tokk(toks, p) == "LT") {
+                p = p + 1;
+                let p_arg2: Int = p;
+                let sub: List[String] = ty_parse_at(toks, p_arg2, n);
+                p = parse_int(list_get(sub, 0));
+                elem_ty = list_get(sub, 1);
+                if p < n && (c_tokk(toks, p) == "RBRACKET" || c_tokk(toks, p) == "GT") {
+                    p = p + 1;
+                }
+            }
+            return ty_pack2(p.to_string(), ty_list(elem_ty));
+        }
+
+        // Generic Option: Option[T] or Option<T>
+        if t == "Option" {
+            let mut elem_ty: String = ty_int();
+            if p < n && (c_tokk(toks, p) == "LBRACKET" || c_tokk(toks, p) == "LT") {
+                p = p + 1;
+                let p_outer: Int = p;
+                let sub: List[String] = ty_parse_at(toks, p_outer, n);
+                p = parse_int(list_get(sub, 0));
+                elem_ty = list_get(sub, 1);
+                if p < n && (c_tokk(toks, p) == "RBRACKET" || c_tokk(toks, p) == "GT") {
+                    p = p + 1;
+                }
+            }
+            return ty_pack2(p.to_string(), ty_option(elem_ty));
+        }
+
+        // Generic Result: Result[T, E] or Result[T] or Result<T, E>
+        if t == "Result" {
+            let mut ok_ty: String = ty_unit();
+            let mut err_ty: String = ty_str();
+            if p < n && (c_tokk(toks, p) == "LBRACKET" || c_tokk(toks, p) == "LT") {
+                p = p + 1;
+                let p_outer: Int = p;
+                let sub1: List[String] = ty_parse_at(toks, p_outer, n);
+                p = parse_int(list_get(sub1, 0));
+                ok_ty = list_get(sub1, 1);
+                if p < n && c_tokk(toks, p) == "COMMA" {
+                    p = p + 1;
+                    let p_outer2: Int = p;
+                    let sub2: List[String] = ty_parse_at(toks, p_outer2, n);
+                    p = parse_int(list_get(sub2, 0));
+                    err_ty = list_get(sub2, 1);
+                }
+                if p < n && (c_tokk(toks, p) == "RBRACKET" || c_tokk(toks, p) == "GT") {
+                    p = p + 1;
+                }
+            }
+            return ty_pack2(p.to_string(), ty_result(ok_ty, err_ty));
+        }
+
+        // Generic Box: Box[T] or Box<T>
+        if t == "Box" {
+            let mut elem_ty: String = ty_unit();
+            if p < n && (c_tokk(toks, p) == "LBRACKET" || c_tokk(toks, p) == "LT") {
+                p = p + 1;
+                let p_outer: Int = p;
+                let sub: List[String] = ty_parse_at(toks, p_outer, n);
+                p = parse_int(list_get(sub, 0));
+                elem_ty = list_get(sub, 1);
+                if p < n && (c_tokk(toks, p) == "RBRACKET" || c_tokk(toks, p) == "GT") {
+                    p = p + 1;
+                }
+            }
+            return ty_pack2(p.to_string(), ty_box(elem_ty));
+        }
+
+        // Capabilities & Named Structs
+        if is_cap_type(t) || t == "HitlCap" || t == "AuditCap" || t == "IoCap" || t == "ProcessCap" {
+            return ty_pack2(p.to_string(), ty_cap(t));
+        }
+        return ty_pack2(p.to_string(), ty_name(t));
+    }
+
+    let next_p: Int = p + 1;
+    return ty_pack2(next_p.to_string(), ty_unit());
+}
+
+pub fn ty_parse_str(raw: String) -> String {
+    let s: String = str_trim(raw);
+    if s == "Int" || s == "i64" || s == "i32" || s == "isize" { return ty_int();
+    }
+    if s == "Float" || s == "f64" || s == "f32" { return ty_float();
+    }
+    if s == "Bool" || s == "bool" { return ty_bool();
+    }
+    if s == "String" || s == "str" { return ty_str();
+    }
+    if s == "Void" || s == "void" || s == "unit" || s == "()" { return ty_unit();
+    }
+    if s == "f32x8" || s == "TyF32x8" { return ty_f32x8();
+    }
+    if s == "f64x4" || s == "TyF64x4" { return ty_f64x4();
+    }
+    let n: Int = chars_len(s);
+    if n >= 6 && str_slice(s, 0, 5) == "List[" && char_at(s, n - 1) == "]" {
+        let inner: String = str_slice(s, 5, n - 1);
+        return ty_list(ty_parse_str(inner));
+    }
+    if n >= 8 && str_slice(s, 0, 7) == "Option[" && char_at(s, n - 1) == "]" {
+        let inner: String = str_slice(s, 7, n - 1);
+        return ty_option(ty_parse_str(inner));
+    }
+    if n >= 8 && str_slice(s, 0, 7) == "Result[" && char_at(s, n - 1) == "]" {
+        let inner: String = str_slice(s, 7, n - 1);
+        let in_len: Int = chars_len(inner);
+        let mut depth: Int = 0;
+        let mut comma_pos: Int = 0 - 1;
+        let mut i: Int = 0;
+        while i < in_len {
+            let c: String = char_at(inner, i);
+            if c == "[" || c == "<" { depth = depth + 1;
+            }
+            if c == "]" || c == ">" { depth = depth - 1;
+            }
+            if c == "," && depth == 0 { comma_pos = i;
+            break;
+            }
+            i = i + 1;
+        }
+        if comma_pos >= 0 { let ok_part: String = str_slice(inner, 0, comma_pos);
+        let err_part: String = str_slice(inner, comma_pos + 1, in_len);
+        return ty_result(ty_parse_str(ok_part), ty_parse_str(err_part));
+        }
+        return ty_result(ty_parse_str(inner), ty_str());
+    }
+    if n >= 5 && str_slice(s, 0, 4) == "Box[" && char_at(s, n - 1) == "]" {
+        let inner: String = str_slice(s, 4, n - 1);
+        return ty_box(ty_parse_str(inner));
+    }
+    if n >= 5 && str_slice(s, 0, 5) == "&mut " {
+        return ty_ref_mut(ty_parse_str(str_slice(s, 5, n)));
+    }
+    if n >= 1 && char_at(s, 0) == "&" {
+        return ty_ref(ty_parse_str(str_slice(s, 1, n)));
+    }
+    return ty_name(s);
+}

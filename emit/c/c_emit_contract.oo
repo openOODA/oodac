@@ -1,0 +1,175 @@
+// # Lower requires and ensures to C with static invariant elision
+//
+// Logline: Walks fn contract clauses, elides statically proven invariants, and emits dynamic assertions for unproven clauses.
+//
+// Setup: c_contract_expr translates expressions; smt_clause_query determines invariant status; OO_ENS_CHECK verifies dynamic postconditions.
+//
+// Beats:
+//   1. Lower requires and spec clauses: elide if proven invariant, emit runtime check if dynamic.
+//   2. Lower ensures clauses: elide proven clauses, assemble dynamic clauses into OO_ENS_CHECK.
+//   3. Provide c_has_dynamic_ensures to elide return-site assertion logic when all postconditions are proven.
+
+
+import "c_contract_expr.oo";
+import "check/smt_clause_query.oo";
+
+
+
+pub fn c_lower_ensures_return(expr: String) {
+    println("  { long long result = " + expr + ";");
+    println("    if (__builtin_expect(!(OO_ENS_CHECK(result)), 0)) {");
+    println("        oo_print_str(oo_str_lit(\"ERR\\tcontract\\tensures\")); oo_println(); oo_process_exit(1); }");
+    println("    return result; }");
+}
+
+pub fn c_lower_ensures_return_str(expr: String) {
+    println("  { OoStr res_str = " + expr + "; long long result = oo_chars_len(res_str);");
+    println("    if (__builtin_expect(!(OO_ENS_CHECK(result)), 0)) {");
+    println("        oo_print_str(oo_str_lit(\"ERR\\tcontract\\tensures\")); oo_println(); oo_process_exit(1); }");
+    println("    return res_str; }");
+}
+
+pub fn c_lower_contracts(toks: List[String], pos: Int, n: Int) -> Int {
+    let mut p = pos;
+let mut cont = true;
+let mut ens_conds = "";
+while cont { if p >= n { println("ERR\tc_emit\tcontract: missing LBRACE after fn header");
+process_exit(1);
+}
+        let k: String = c_tokk(toks, p);
+        if k == "LBRACE" {
+            cont = false;
+        } else if k == "IDENT" && c_tokt(toks, p) == "caps" {
+            p = p + 1;
+            if p < n && c_tokk(toks, p) == "EQ" { p = p + 1;
+            }
+            if p < n && c_tokk(toks, p) == "IDENT" { p = p + 1;
+            }
+        } else if k == "IDENT" && c_tokt(toks, p) == "spec" {
+            let s_start = p + 1;
+            p = p + 1;
+            let mut in_s = true;
+            while in_s { if p >= n { println("ERR\tc_emit\tspec clause truncated");
+            process_exit(1);
+            }
+                let ks: String = c_tokk(toks, p);
+                if ks == "KW_REQUIRES" || ks == "KW_ENSURES" || ks == "LBRACE" {
+                    in_s = false;
+                } else if ks == "IDENT" && (c_tokt(toks, p) == "spec" || c_tokt(toks, p) == "caps") {
+                    in_s = false;
+                } else if ks == "KW_FN" || ks == "KW_PUB" || ks == "KW_VERIFY" || ks == "KW_TYPE" || ks == "EOF" {
+                    println("ERR\tc_emit\tspec clause garbage");
+                    process_exit(1);
+                } else {
+                    p = p + 1;
+                }
+            }
+            if smt_clause_is_unsat(toks, s_start, p, "spec") {
+                smt_clause_unsat_exit(toks, s_start, "spec");
+            }
+            let is_proven: Bool = smt_clause_is_proven(toks, s_start, p, "spec");
+            if !is_proven { let expr: String = c_contract_expr(toks, s_start, p);
+            if expr == "ERROR" { println("ERR\tc_emit\tspec residual");
+            process_exit(1);
+            }
+                println("  if (__builtin_expect(!(" + expr + "), 0)) {");
+                println("    oo_print_str(oo_str_lit(\"ERR\\tcontract\\tspec\")); oo_println(); oo_process_exit(1); }");
+            }
+        } else if k == "KW_REQUIRES" {
+            let clause_start = p + 1;
+            p = p + 1;
+            let mut in_clause = true;
+            while in_clause { if p >= n { println("ERR\tc_emit\tcontract clause truncated");
+            process_exit(1);
+            }
+                let k2: String = c_tokk(toks, p);
+                if k2 == "KW_REQUIRES" || k2 == "KW_ENSURES" || k2 == "LBRACE" {
+                    in_clause = false;
+                } else if k2 == "IDENT" && (c_tokt(toks, p) == "spec" || c_tokt(toks, p) == "caps") {
+                    in_clause = false;
+                } else if k2 == "KW_FN" || k2 == "KW_PUB" || k2 == "KW_VERIFY" || k2 == "KW_TYPE" || k2 == "EOF" {
+                    println("ERR\tc_emit\tcontract clause garbage");
+                    process_exit(1);
+                } else {
+                    p = p + 1;
+                }
+            }
+            if smt_clause_is_unsat(toks, clause_start, p, "requires") {
+                smt_clause_unsat_exit(toks, clause_start, "requires");
+            }
+            let is_proven: Bool = smt_clause_is_proven(toks, clause_start, p, "requires");
+            if !is_proven { let expr: String = c_contract_expr(toks, clause_start, p);
+            if expr == "ERROR" { println("ERR\tc_emit\trequires residual");
+            process_exit(1);
+            }
+                println("  if (__builtin_expect(!(" + expr + "), 0)) {");
+                println("    oo_print_str(oo_str_lit(\"ERR\\tcontract\\trequires\")); oo_println(); oo_process_exit(1); }");
+            }
+        } else if k == "KW_ENSURES" {
+            let e_start = p + 1;
+            p = p + 1;
+            let mut in_e = true;
+            while in_e { if p >= n { println("ERR\tc_emit\tensures clause truncated");
+            process_exit(1);
+            }
+                let k3: String = c_tokk(toks, p);
+                if k3 == "KW_REQUIRES" || k3 == "KW_ENSURES" || k3 == "LBRACE" {
+                    in_e = false;
+                } else if k3 == "IDENT" && (c_tokt(toks, p) == "spec" || c_tokt(toks, p) == "caps") {
+                    in_e = false;
+                } else if k3 == "KW_FN" || k3 == "KW_PUB" || k3 == "KW_VERIFY" || k3 == "KW_TYPE" || k3 == "EOF" {
+                    println("ERR\tc_emit\tensures clause garbage");
+                    process_exit(1);
+                } else {
+                    p = p + 1;
+                }
+            }
+            if smt_clause_is_unsat(toks, e_start, p, "ensures") {
+                smt_clause_unsat_exit(toks, e_start, "ensures");
+            }
+            let is_proven: Bool = smt_clause_is_proven(toks, e_start, p, "ensures");
+            if !is_proven { let expr: String = c_contract_expr(toks, e_start, p);
+            if expr == "ERROR" { println("ERR\tc_emit\tensures residual");
+            process_exit(1);
+            }
+                if ens_conds != "" { ens_conds = ens_conds + " && ";
+                }
+                ens_conds = ens_conds + "(" + expr + ")";
+            }
+        } else if k == "KW_FN" || k == "KW_PUB" || k == "KW_VERIFY" || k == "KW_TYPE" || k == "EOF" {
+            println("ERR\tc_emit\texpected LBRACE after fn header");
+            process_exit(1);
+        } else if k == "LT" || k == "GT" || k == "COMMA" || k == "RPAREN" || k == "LPAREN" || k == "ARROW" || k == "COLON" {
+            // Skip generic type parameter punctuation (List<String>, Result<X, Y>) and
+            // signature punctuation (the ->, :, ,, (, )) on the way to LBRACE.
+            p = p + 1;
+        } else {
+            // Skip any other token on the way to LBRACE (the return-type expression
+            // and any other signature tokens we don't model). Previously this
+            // triggered a fatal "unexpected <K> before fn body" on generic types
+            // like List<String>, blocking self-rebuild of any .oo file that
+            // declared a generic-returning function followed by a non-generic one.
+            p = p + 1;
+        }
+    }
+    if ens_conds != "" {
+        println("#undef OO_ENS_CHECK");
+        println("#define OO_ENS_CHECK(result) (" + ens_conds + ")");
+    } else {
+        println("#undef OO_ENS_CHECK");
+        println("#define OO_ENS_CHECK(result) (1)");
+    }
+    return p;
+}
+
+pub fn c_emit_contracts_runtime(toks: List[String], pos: Int, n: Int) -> Int {
+    return c_lower_contracts(toks, pos, n);
+}
+
+pub fn c_has_dynamic_ensures(toks: List[String], pos: Int, n: Int) -> Bool {
+    return smt_has_dynamic_ensures(toks, pos, n);
+}
+
+pub fn c_has_simple_ensures(toks: List[String], pos: Int, n: Int) -> Bool {
+    return c_has_dynamic_ensures(toks, pos, n);
+}

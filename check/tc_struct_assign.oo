@@ -1,0 +1,125 @@
+// # Fail closed on field assign and field binops
+//
+// Logline: Reject assignment to a field of an immutable binding, reject an incompatible field type, and reject a field-chain binary operator whose types cannot combine.
+//
+// Setup: build_pure_lit_env, build_struct_field_table, field_chain_end, field_chain_type, is_mut_binding, resolve_type_alias, lit_token_type, field_access_type_at, atom_type_with_env, types_compatible, is_type_binop, combine_binop_types, and tc_err_at exist; toks rows are kind, line, col, text.
+//
+// Beats:
+//   1. typecheck_field_assign walks IDENT (DOT IDENT)+ EQ and skips let or mut introducers.
+//   2. A known immutable root uses tc_err_at cannot assign to field; known incompatible field and rhs types fail closed.
+//   3. typecheck_field_binop_uses types a field-chain OP atom and an atom OP field-chain; ERR_BINOP uses tc_err_at.
+
+pub fn typecheck_field_assign(toks: List[String]) {
+    let n = list_len(toks);
+    let lit_env: String = build_pure_lit_env(toks);
+    let struct_table: String = build_struct_field_table(toks);
+    let mut i = 0;
+    while i < n { if field_at(list_get(toks, i), 0) == "IDENT" { let end = 0 + field_chain_end(toks, i);
+    if end > 0 { if end < n { if field_at(list_get(toks, end), 0) == "EQ" { let mut is_let = false;
+    if i > 0 { let pk: String = field_at(list_get(toks, i - 1), 0);
+    if pk == "KW_LET" || pk == "KW_MUT" { is_let = true;
+    }
+                        }
+                        if !is_let { let root: String = field_at(list_get(toks, i), 3);
+                        let root_ty: String = resolve_type_alias(lit_env, root);
+                        if root_ty != root { if !is_mut_binding(toks, root) { tc_err_at( toks, end, "cannot assign to field of immutable binding '" + root + "'; use `let mut " + root + "`" );
+                        }
+                            }
+                            let lty = field_chain_type(toks, i, end, lit_env, struct_table);
+                            if lty != "" {
+                                if end + 1 < n { let mut rty: String = lit_token_type( field_at(list_get(toks, end + 1), 0) );
+                                if rty == "" { rty = field_access_type_at( toks, end + 1, lit_env, struct_table );
+                                }
+                                    if rty == "" {
+                                        rty = atom_type_with_env(toks, end + 1, lit_env);
+                                    }
+                                    if rty != "" {
+                                        if !types_compatible(lty, rty) {
+                                            tc_err_at(
+                                                toks,
+                                                end,
+                                                "cannot assign "
+                                                    + rty
+                                                    + " to field of type "
+                                                    + lty
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        i = i + 1;
+    }
+}
+
+// Fail-closed: field access as binop operand when field type known.
+// Patterns: p.x + "a", o.inner.v + "a", 1 + p.x (field chain OP atom / atom OP field chain).
+pub fn typecheck_field_binop_uses(toks: List[String]) {
+    let n = list_len(toks);
+    let lit_env: String = build_pure_lit_env(toks);
+    let struct_table: String = build_struct_field_table(toks);
+    let mut i = 0;
+    while i < n { if field_at(list_get(toks, i), 0) == "IDENT" { let end = 0 + field_chain_end(toks, i);
+    if end > 0 { if end < n { let opk: String = field_at(list_get(toks, end), 0);
+    if is_type_binop(opk) { let lty = field_chain_type(toks, i, end, lit_env, struct_table);
+    if lty != "" { let mut rty = "";
+    let rend = 0 + field_chain_end(toks, end + 1);
+    if rend > 0 { rty = field_chain_type(toks, end + 1, rend, lit_env, struct_table);
+    } else {
+                                rty = atom_type_with_env(toks, end + 1, lit_env);
+                            }
+                            if rty != "" {
+                                let comb: String = combine_binop_types(opk, lty, rty);
+                                if comb == "ERR_BINOP" {
+                                    tc_err_at(
+                                        toks,
+                                        end,
+                                        "incompatible operand types for binary operator"
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // Right field: atom BINOP field-chain (when left is lit/env, not mid field-chain)
+        if i + 2 < n { let opk: String = field_at(list_get(toks, i + 1), 0);
+        if is_type_binop(opk) { let mut left_is_field = false;
+        if i >= 1 { if field_at(list_get(toks, i - 1), 0) == "DOT" { left_is_field = true;
+        }
+                }
+                if field_chain_end(toks, i) > 0 { left_is_field = true;
+                }
+                if !left_is_field { let lty: String = atom_type_with_env(toks, i, lit_env);
+                if lty != "" { let rend2 = 0 + field_chain_end(toks, i + 2);
+                let mut rty2 = "";
+                if rend2 > 0 { rty2 = field_chain_type(toks, i + 2, rend2, lit_env, struct_table);
+                } else {
+                            rty2 = field_access_type_at(toks, i + 2, lit_env, struct_table);
+                        }
+                        if rty2 != "" {
+                            let comb: String = combine_binop_types(opk, lty, rty2);
+                            if comb == "ERR_BINOP" {
+                                tc_err_at(
+                                    toks,
+                                    i + 1,
+                                    "incompatible operand types for binary operator"
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        i = i + 1;
+    }
+}
+
+// Fail-closed: known struct literal field initializers with pure-lit values.
+// `Point { x: "hi", y: 2 }` when x: Int → error.
+// Also: missing required fields (`Inner {}` when v required) fail-closed.

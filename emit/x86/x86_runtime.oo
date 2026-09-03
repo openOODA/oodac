@@ -1,0 +1,92 @@
+// # Canonical x86_64 emit-side runtime registry (Tier 7 #33)
+//
+// Logline: One source of truth for the emit-x86 zero-libc runtime surface. x86_runtime_text returns the canonical AT&T source for the list runtime + page allocator, x86_runtime_globls lists every .globl symbol the emit-x86 path may reference, and x86_runtime_count is the registry length. Replaces the three competing _oo_heap_alloc / oo_x86_alloc / freelist copies that lived in x86_emit_list.oo, x86_emit_free.oo, x86_emit_heap.oo, and x86_ssa_emit.oo.
+//
+// Setup: oodac/ helper module. Text return is concatenated into a generated .s file at the start. The list runtime (_oo_heap_alloc + list_new/push/get/set/len) is from x86_emit_list.oo; the page-aligned oo_x86_alloc is from x86_emit_heap.oo; _println_int/float/str are external (emitted by x86_emit_int.oo, x86_emit_float_routine.oo, x86_ssa_emit.oo) but listed in the registry for the surface.
+//
+// Beats:
+//   1. x86_runtime_text returns one canonical AT&T .rodata + .bss + .text blob.
+//   2. x86_runtime_globls returns the .globl surface (10 names: list runtime, oo_x86_alloc, _println_*).
+//   3. x86_runtime_count returns the registry length (10).
+//   4. x86_emit_list.oo and x86_ssa_emit.oo forward to this single source of truth.
+
+pub fn x86_runtime_text() -> String {
+    let mut s: String = "";
+s = s + "    .section .rodata\n.Llist_oob_msg:\n    .ascii \"ERR\\tolist_get OOB\\n\"\n";
+s = s + "    .section .bss\n    .p2align 4\n.Lheap_cur:\n    .quad 0\n.Lheap_end:\n    .quad 0\n.Lmmap_ptr:\n    .quad 0\n.Lmmap_end:\n    .quad 0\n";
+s = s + "    .section .text\n";
+s = s + ".globl _oo_heap_alloc\n.p2align 4\n_oo_heap_alloc:\n";
+s = s + "    push %rbp\n    mov %rsp, %rbp\n    push %rbx\n    push %r12\n";
+s = s + "    add $15, %rdi\n    and $-16, %rdi\n    mov %rdi, %rbx\n";
+s = s + "    movq .Lheap_cur(%rip), %rax\n    test %rax, %rax\n    jnz .Lalloc_check\n";
+s = s + "    mov $12, %rax\n    xor %rdi, %rdi\n    syscall\n";
+s = s + "    movq %rax, .Lheap_cur(%rip)\n    movq %rax, .Lheap_end(%rip)\n";
+s = s + ".Lalloc_check:\n    movq .Lheap_cur(%rip), %rax\n    mov %rax, %r12\n";
+s = s + "    add %rbx, %rax\n    cmpq .Lheap_end(%rip), %rax\n    jbe .Lalloc_done\n";
+s = s + "    mov %rax, %rdi\n    add $65536, %rdi\n    mov $12, %rax\n    syscall\n";
+s = s + "    movq %rax, .Lheap_end(%rip)\n    mov %r12, %rax\n    add %rbx, %rax\n";
+s = s + ".Lalloc_done:\n    movq %rax, .Lheap_cur(%rip)\n    mov %r12, %rax\n";
+s = s + "    pop %r12\n    pop %rbx\n    pop %rbp\n    ret\n";
+s = s + ".globl oo_x86_alloc\n.p2align 4\noo_x86_alloc:\n";
+s = s + "    push %rbp\n    mov %rsp, %rbp\n    push %rbx\n";
+s = s + "    add $7, %rdi\n    and $-8, %rdi\n";
+s = s + "    mov .Lmmap_ptr(%rip), %rax\n    mov .Lmmap_end(%rip), %rdx\n";
+s = s + "    mov %rax, %rcx\n    add %rdi, %rcx\n    cmp %rdx, %rcx\n    jle .Lmmap_fit\n";
+s = s + "    push %rdi\n    mov $9, %rax\n    xor %rdi, %rdi\n    mov $65536, %rsi\n";
+s = s + "    mov $3, %rdx\n    mov $34, %r10\n    mov $-1, %r8\n    xor %r9, %r9\n    syscall\n";
+s = s + "    pop %rdi\n    mov %rax, .Lmmap_ptr(%rip)\n    add $65536, %rax\n";
+s = s + "    mov %rax, .Lmmap_end(%rip)\n    mov .Lmmap_ptr(%rip), %rax\n";
+s = s + "    mov %rax, %rcx\n    add %rdi, %rcx\n.Lmmap_fit:\n";
+s = s + "    mov %rcx, .Lmmap_ptr(%rip)\n    mov %rax, %rbx\n    pop %rbx\n    pop %rbp\n    ret\n";
+s = s + ".globl list_new\n.p2align 4\nlist_new:\n";
+s = s + "    push %rbp\n    mov %rsp, %rbp\n    push %rbx\n";
+s = s + "    mov $24, %rdi\n    call _oo_heap_alloc\n    mov %rax, %rbx\n";
+s = s + "    movq $16, (%rbx)\n    movq $0, 8(%rbx)\n";
+s = s + "    mov $128, %rdi\n    call _oo_heap_alloc\n    movq %rax, 16(%rbx)\n";
+s = s + "    mov %rbx, %rax\n    pop %rbx\n    pop %rbp\n    ret\n";
+s = s + ".globl list_push\n.p2align 4\nlist_push:\n";
+s = s + "    push %rbp\n    mov %rsp, %rbp\n    push %rbx\n    push %r12\n    push %r13\n";
+s = s + "    mov %rdi, %rbx\n    mov %rsi, %r12\n";
+s = s + "    movq (%rbx), %rax\n    movq 8(%rbx), %rcx\n    cmpq %rax, %rcx\n    jne .Lpush_store\n";
+s = s + "    shlq $1, %rax\n    movq %rax, (%rbx)\n    mov %rax, %r13\n";
+s = s + "    shlq $3, %rax\n    mov %rax, %rdi\n    call _oo_heap_alloc\n";
+s = s + "    movq 8(%rbx), %rcx\n    movq 16(%rbx), %rsi\n    mov %rax, %rdi\n";
+s = s + "    test %rcx, %rcx\n    jz .Lpush_cpydone\n.Lpush_cpyloop:\n";
+s = s + "    movq (%rsi), %rdx\n    movq %rdx, (%rdi)\n    add $8, %rsi\n    add $8, %rdi\n";
+s = s + "    dec %rcx\n    jnz .Lpush_cpyloop\n.Lpush_cpydone:\n    movq %rax, 16(%rbx)\n";
+s = s + ".Lpush_store:\n    movq 8(%rbx), %rcx\n    movq 16(%rbx), %rdx\n";
+s = s + "    movq %r12, (%rdx, %rcx, 8)\n    incq %rcx\n    movq %rcx, 8(%rbx)\n";
+s = s + "    mov %rbx, %rax\n    pop %r13\n    pop %r12\n    pop %rbx\n    pop %rbp\n    ret\n";
+s = s + ".globl list_get\n.p2align 4\nlist_get:\n";
+s = s + "    push %rbp\n    mov %rsp, %rbp\n";
+s = s + "    test %rsi, %rsi\n    js .Llist_get_oob\n    cmpq 8(%rdi), %rsi\n    jge .Llist_get_oob\n";
+s = s + "    movq 16(%rdi), %rdx\n    movq (%rdx, %rsi, 8), %rax\n    pop %rbp\n    ret\n";
+s = s + ".Llist_get_oob:\n    mov $1, %rax\n    mov $2, %rdi\n    lea .Llist_oob_msg(%rip), %rsi\n";
+s = s + "    mov $18, %rdx\n    syscall\n    mov $60, %rax\n    mov $1, %rdi\n    syscall\n";
+s = s + ".globl list_len\n.p2align 4\nlist_len:\n    movq 8(%rdi), %rax\n    ret\n";
+s = s + ".globl list_set\n.p2align 4\nlist_set:\n";
+s = s + "    push %rbp\n    mov %rsp, %rbp\n";
+s = s + "    test %rsi, %rsi\n    js .Llist_get_oob\n    cmpq 8(%rdi), %rsi\n    jge .Llist_get_oob\n";
+s = s + "    movq 16(%rdi), %rcx\n    movq %rdx, (%rcx, %rsi, 8)\n    mov %rdi, %rax\n    pop %rbp\n    ret\n";
+return s;
+}
+
+pub fn x86_runtime_globls() -> List[String] {
+    let mut g: List[String] = list_new();
+    g = list_push(g, "_oo_heap_alloc");
+    g = list_push(g, "oo_x86_alloc");
+    g = list_push(g, "list_new");
+    g = list_push(g, "list_push");
+    g = list_push(g, "list_get");
+    g = list_push(g, "list_set");
+    g = list_push(g, "list_len");
+    g = list_push(g, "_println_int");
+    g = list_push(g, "_println_float");
+    g = list_push(g, "_println_str");
+    return g;
+}
+
+pub fn x86_runtime_count() -> Int {
+    let g: List[String] = x86_runtime_globls();
+return list_len(g);
+}

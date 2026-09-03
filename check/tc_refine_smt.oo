@@ -1,0 +1,91 @@
+// # SMT Refinement Pass for Polynomial Contracts
+//
+// Logline: Scans fn headers, verifies non-linear polynomial contracts and interval bounds, and refuses unsat fail-closed.
+//
+// Setup: smt_clause_query and smt_poly_eval evaluate contract clauses; exits fail-closed with ERR smt unsat.
+//
+// Beats:
+//   1. Scan token stream for KW_REQUIRES, KW_ENSURES, and spec clauses in function headers.
+//   2. Run non-linear polynomial interval and sign prover on clause spans.
+//   3. Refuse unsatisfiable clauses with ERR smt unsat <kind> at <line>:<col> and exit code 1.
+
+import "tc_parse_int.oo";
+
+import "smt_poly_interval.oo";
+
+import "smt_poly_sign.oo";
+
+import "smt_poly_eval.oo";
+
+import "smt_clause_query.oo";
+
+
+fn smt_is_stop(k: String) -> Bool {
+    if k == "KW_REQUIRES" || k == "KW_ENSURES" || k == "LBRACE" { return true;
+    }
+    if k == "SEMI" || k == "KW_FN" || k == "KW_PUB" || k == "KW_VERIFY" { return true;
+    }
+    if k == "KW_TYPE" || k == "KW_RETURN" || k == "KW_LET" || k == "EOF" { return true;
+    }
+    return false;
+}
+
+fn smt_clause_end(toks: List[String], start: Int, n: Int) -> Int {
+    let mut p: Int = start;
+    while p < n {
+        let k: String = c_tokk(toks, p);
+        if smt_is_stop(k) { return p;
+        }
+        if k == "IDENT" {
+            let v: String = c_tokt(toks, p);
+            if v == "spec" || v == "caps" { return p;
+            }
+        }
+        p = p + 1;
+    }
+    return p;
+}
+
+fn smt_check_span(kind: String, toks: List[String], start: Int, at: Int, n: Int) {
+    let end: Int = 0 + smt_clause_end(toks, start, n);
+    if smt_clause_is_unsat(toks, start, end, kind) {
+        smt_clause_unsat_exit(toks, at, kind);
+    }
+}
+
+pub fn refine_check_smt(toks: List[String]) {
+    let n: Int = list_len(toks);
+    let mut i: Int = 0;
+    while i < n { let k: String = c_tokk(toks, i);
+    if k == "KW_REQUIRES" { smt_check_span("requires", toks, i + 1, i, n);
+    } else if k == "KW_ENSURES" {
+            smt_check_span("ensures", toks, i + 1, i, n);
+        } else if k == "KW_FN" {
+            let mut j: Int = i + 1;
+            let mut hdr: Bool = true;
+            while hdr {
+                if j >= n { hdr = false;
+                }
+                else {
+                    let kj: String = c_tokk(toks, j);
+                    if kj == "LBRACE" { hdr = false;
+                    }
+                    else if kj == "IDENT" {
+                        if c_tokt(toks, j) == "spec" {
+                            let mut clause: Bool = true;
+                            if j + 1 < n {
+                                if c_tokk(toks, j + 1) == "COLON" { clause = false;
+                                }
+                            }
+                            if clause { smt_check_span("spec", toks, j + 1, j, n);
+                            }
+                        }
+                        j = j + 1;
+                    } else { j = j + 1;
+                    }
+                }
+            }
+        }
+        i = i + 1;
+    }
+}

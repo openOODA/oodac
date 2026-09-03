@@ -1,0 +1,61 @@
+// # AST Subsystem — Canonical ANCHOR Entry
+//
+// Logline: Re-exports public AST parsing and macro expansion interfaces.
+//
+// Setup: Imports private AST siblings and exposes recursive-descent and Pratt parser functions.
+//
+// Beats:
+//   1. Import parse_expr, parse_stmt, parse_file and internal siblings.
+//   2. Re-export public parse functions and import loader.
+//   3. Enforce boundary — internal refactor zero ripple.
+
+import "lex/ANCHOR.oo";
+import "ast.oo";
+import "ast_emit_outline.oo";
+import "ast_emit_reflect.oo";
+import "ast_macros.oo";
+import "ast_parse.oo";
+import "types/ast_type_def.oo";
+import "load_import.oo";
+import "load_import_parse.oo";
+import "macro_expand.oo";
+import "parse_drive.oo";
+import "parse_expr.oo";
+import "parse_file.oo";
+import "parse_item.oo";
+import "parse_method.oo";
+import "parse_primary.oo";
+import "parse_primary_forms.oo";
+import "parse_primary_ident.oo";
+import "parse_skip.oo";
+import "parse_stmt.oo";
+import "parse_stmt_dump.oo";
+import "parse_stmt_nav.oo";
+
+// ──▓▓ Sovereign Lattice ── AST ANCHOR ──▓▓──
+// :: public: parse_expr, parse_stmt, parse_file ::
+
+pub fn parse_expr(src: String) -> String {
+    return parse_expr_inner(src);
+}
+
+pub fn parse_stmt(src: String) -> String {
+    return parse_stmt_inner(src);
+}
+
+pub fn parse_file(src: String) -> String {
+    return parse_file_inner(src);
+}
+
+pub fn ast_dump(src: String) {
+    dump_ast_from_src(src);
+}
+
+pub fn ast_load_imports(fs: &FsReadCap, path: String) -> String {
+    return load_source_with_imports(fs, path);
+}
+
+pub fn ast_expand_macros(src: String) -> String {
+    return macro_expand(src);
+}
+

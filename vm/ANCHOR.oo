@@ -1,0 +1,36 @@
+// # Bytecode VM Subsystem — Module Entry Door
+//
+// Logline: Re-exports stack bytecode emission and in-memory interpreter interfaces.
+//
+// Setup: Imports internal bytecode and VM execution siblings and provides clean public re-exports.
+//
+// Beats:
+//   1. Import bytecode generator, stack evaluator, and interpreter siblings.
+//   2. Re-export public bytecode emission and execution APIs.
+//   3. Maintain <= 256 lines limit.
+
+import "lex/ANCHOR.oo";
+import "types/ANCHOR.oo";
+import "ast/ANCHOR.oo";
+import "bc_emit.oo";
+import "bc_emit_env.oo";
+import "bc_emit_expr.oo";
+import "bc_emit_expr_if.oo";
+import "bc_emit_stmt.oo";
+import "bc_emit_surface.oo";
+import "vm_builtin.oo";
+import "vm_exec.oo";
+import "vm_exec_parse.oo";
+import "vm_ops_stack.oo";
+import "vm_surface.oo";
+import "vm_val.oo";
+
+// ──▓▓ Public VM API ──▓▓──
+
+pub fn vm_emit_bytecode(src: String) -> String {
+    return bc_emit_program(src);
+}
+
+pub fn vm_run(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, bc_text: String) -> Int {
+    return vm_run_bytecode_caps(fs_r, fs_w, sys, bc_text);
+}

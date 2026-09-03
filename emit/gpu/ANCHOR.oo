@@ -1,0 +1,54 @@
+// # GPU Compute Backend — Module Entry Door
+//
+// Logline: Re-exports HIP, PTX, SPIR-V, and Metal compute shader and kernel generator interfaces.
+//
+// Setup: Imports internal GPU backend siblings and provides clean public re-exports.
+//
+// Beats:
+//   1. Import HIP, PTX, SPIR-V, and Metal kernel emitter siblings.
+//   2. Re-export public GPU driver and shader generator interfaces.
+//   3. Maintain <= 256 lines limit.
+
+import "lex/ANCHOR.oo";
+import "types/ANCHOR.oo";
+import "ast/ANCHOR.oo";
+import "gpu_ast_lower.oo";
+import "gpu_ast_validate.oo";
+import "gpu_driver.oo";
+import "gpu_hip.oo";
+import "gpu_hip_ai.oo";
+import "gpu_hip_cli.oo";
+import "gpu_hip_kernels.oo";
+import "gpu_hip_vec.oo";
+import "gpu_kernel_ir.oo";
+import "gpu_metal.oo";
+import "gpu_ptx.oo";
+import "gpu_spirv.oo";
+import "gpu_spirv_disasm.oo";
+
+// ──▓▓ Public GPU Emitter API ──▓▓──
+
+pub fn emit_gpu_driver(target: String, kernel_name: String, op_type: String) -> Result[String, String] {
+    return gpu_compile_kernel_source(target, kernel_name, op_type);
+}
+
+pub fn gpu_emit_stream(src: String) -> String {
+    return hip_emit_vec_add_program(src);
+}
+
+pub fn emit_gpu_hip(kernel_name: String) -> String {
+    return hip_emit_vec_add_program(kernel_name);
+}
+
+pub fn emit_gpu_ptx(ir: GpuKernelIR) -> String {
+    return ptx_emit_from_ir(ir);
+}
+
+pub fn emit_gpu_spirv_magic() -> Int {
+    return spirv_magic();
+}
+
+pub fn emit_gpu_metal_header() -> String {
+    return metal_header();
+}
+

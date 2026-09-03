@@ -1,0 +1,166 @@
+// # x86_64 SSA Emitter (SysV AMD64, AT&T, as+ld) — SSA→AT&T asm: per-vreg 8-byte %rbp slots, opcodes 1-24 plus bitwise 6-10 plus extended-compare 36-40, List/println_int/println_str/match real lowers.
+//
+// Logline: Lowers one SsaFunction to a SysV AMD64 AT&T assembly function body with one basic block per SSA block, per-block register slots, and inlined println_int / println_str / list-op / match arms.
+//
+// Setup: Imported by oodac/x86_ssa_compile.oo after ssa_mem2reg and ssa_opt_const_fold. Uses oodac/emit/llvm/ssa_ir.oo for the parallel instruction arrays, x86_ssa_emit_remap.oo for per-block local-slot lookup, x86_ssa_emit_base.oo for slot/label helpers, and x86_ssa_emit_inst.oo for instruction formatting. The output assembles with `as` and links with `ld` (no libc).
+//
+// Beats:
+//   1. x86_ssa_emit_function: emit the function prologue, frame setup, and one labeled block per SSA block.
+//   2. x86_ssa_emit_function_impl_c: size the frame, emit parameters, walk blocks, and append the epilogue.
+//   3. x86_ssa_emit_program: concatenate per-function assembly for multi-function programs.
+//   4. List runtime helpers for token-based fallbacks.
+
+import "emit/llvm/ssa_ir.oo";
+import "x86_ssa_emit_float.oo";
+
+import "x86_ssa_emit_fp_ops.oo";
+
+import "x86_ssa_emit_remap.oo";
+
+import "x86_ssa_emit_base.oo";
+
+import "x86_ssa_emit_inst.oo";
+
+import "x86_ssa_lower_simd.oo";
+
+
+import "x86_emit_const_harvest.oo";
+
+import "x86_runtime.oo";
+
+// # x86_64 SSA Emitter (SysV AMD64, AT&T, as+ld) — SSA→AT&T asm: per-vreg 8-byte %rbp slots, opcodes 1-24 plus bitwise 6-10 plus extended-compare 36-40, List/println_int/println_str/match real lowers.
+//
+// Logline: Lowers one SsaFunction to a SysV AMD64 AT&T assembly function body with one basic block per SSA block, per-block register slots, and inlined println_int / println_str / list-op / match arms.
+//
+// Setup: Imported by oodac/x86_ssa_compile.oo after ssa_mem2reg and ssa_opt_const_fold. Uses oodac/emit/llvm/ssa_ir.oo for the parallel instruction arrays and oodac/x86_ssa_emit_remap.oo for per-block local-slot lookup. The output assembles with `as` and links with `ld` (no libc).
+//
+// Beats:
+//   1. x86_ssa_emit_function: emit the function prologue, frame setup, and one labeled block per SSA block.
+//   2. x86_ssa_format_inst: dispatch opcodes 1-24 plus 6-10 bitwise plus 36-40 extended-compare (alu, cmp, alloca, load, store, br, cond_br, ret, const, println_int, println_str) to one or more AT&T instructions. Op 13 (phi) emits a comment.
+//   3. x86_ssa_emit_println_int: inline the _println_int body with a per-(function, call-site) label suffix so multiple println_int calls in one function, and across functions, do not duplicate labels.
+//   4. x86_ssa_emit_program: concatenate the per-function assembly strings for multi-function programs.
+//   5. List / match / rodata helpers: standalone lowers used by token-based fallbacks (x86_ssa_emit_list_program, x86_ssa_emit_match_program).
+
+pub fn x86_ssa_emit_function(fn_data: SsaFunction) -> String {
+    return x86_ssa_emit_function_impl_c(fn_data, 1);
+}
+fn x86_ssa_emit_function_impl_c(fn_data: SsaFunction, is_entry: Int) -> String {
+    let fn_label: String = x86_ssa_sanitize_label(fn_data.name);
+    let n_insts: Int = ssa_fn_inst_count(fn_data);
+    let n_blocks: Int = fn_data.block_count;
+    let opcodes: List[Int] = fn_data.inst_opcodes;
+    let simd_used: Int = x86_ssa_uses_simd(opcodes, n_insts);
+    let prologue_tail: String = if simd_used == 1 { "    andq $-32, %rsp\n" } else { "" };
+    let start_prefix: String = if is_entry == 1 { "    .globl _start\n    .p2align 4\n    " + fn_label + ":\n_start:\n    push %rbp\n    mov %rsp, %rbp\n" + prologue_tail } else { "    .p2align 4\n    " + fn_label + ":\n    push %rbp\n    mov %rsp, %rbp\n" + prologue_tail };
+    let mut out: String = "    .text\n    .globl " + fn_label + "\n" + start_prefix;
+    let results: List[Int] = fn_data.inst_results;
+    let imm_vals: List[Int] = fn_data.inst_imm_vals;
+    let lhs_vals: List[Int] = fn_data.inst_lhs_vals;
+    let block_ids: List[Int] = fn_data.inst_block_ids;
+    let names: List[String] = fn_data.block_names;
+    if n_blocks > list_len(names) { println("ERR\tx86_ssa\tblock_names short");
+    process_exit(1);
+    }
+    if list_len(results) < n_insts || list_len(imm_vals) < n_insts || list_len(lhs_vals) < n_insts || list_len(opcodes) < n_insts || list_len(block_ids) < n_insts { println("ERR\tx86_ssa\tinst arrays short");
+    process_exit(1);
+    }
+    let mut max_reg: Int = 0;
+    let mut ret_reg: Int = 0;
+    let mut ret_block: Int = 0;
+    let mut i: Int = 0;
+    while i < n_insts {
+        let r: Int = list_get(results, i);
+        if r > max_reg { max_reg = r;
+        } let im: Int = list_get(imm_vals, i);
+        if im > max_reg { max_reg = im;
+        } let lh: Int = list_get(lhs_vals, i);
+        if lh > max_reg { max_reg = lh;
+        } if list_get(opcodes, i) == 19 { if im > 0 { ret_reg = im;
+        } else { ret_reg = lh;
+        } ret_block = list_get(block_ids, i);
+        }
+        i = i + 1;
+    }
+    let mut nslot: Int = max_reg + 2;
+    if nslot < 16 { nslot = 16;
+    }
+    let slot_stride: Int = if simd_used == 1 { 32 } else { 8 };
+    let frame_size: Int = (nslot * slot_stride + 15) & -16;
+    if frame_size > 0 {
+        if frame_size >= -2147483648 && frame_size <= 2147483647 { out = out + "    subq $" + frame_size.to_string() + ", %rsp\n";
+        }
+        else { out = out + "    movabsq $" + frame_size.to_string() + ", %rax\n    subq %rax, %rsp\n";
+        }
+    }
+    let mut b: Int = 0;
+    while b < n_blocks {
+        let bname: String = list_get(names, b);
+        out = out + ".L" + fn_label + "_" + x86_ssa_sanitize_label(bname) + ":\n";
+        let block_local_slots: List[Int] = x86_ssa_block_local_slots(fn_data, b);
+        if b == 0 {
+            let mut param_idx: Int = 0;
+            let mut ai: Int = 0;
+            while ai < n_insts {
+                if list_get(block_ids, ai) == 0 && list_get(opcodes, ai) == 14 {
+                    let a_res: Int = list_get(results, ai);
+                    let a_slot: String = x86_ssa_slot(a_res);
+                    let preg: String = if param_idx == 0 { "%rdi" } else if param_idx == 1 { "%rsi" } else if param_idx == 2 { "%rdx" } else if param_idx == 3 { "%rcx" } else if param_idx == 4 { "%r8" } else { "%r9" };
+                    if param_idx < 6 { out = out + "    movq " + preg + ", " + a_slot + "\n";
+                    }
+                    param_idx = param_idx + 1;
+                }
+                ai = ai + 1;
+            }
+        }
+        let mut acc: Int = 0;
+        let mut ii: Int = 0;
+        while ii < n_insts {
+            let bid: Int = list_get(block_ids, ii);
+            if bid == b {
+                let op: Int = list_get(opcodes, ii);
+                let res: Int = list_get(results, ii);
+                let imm: Int = list_get(imm_vals, ii);
+                let lh: Int = list_get(lhs_vals, ii);
+                let pair: String = x86_ssa_format_inst_c(op, res, imm, lh, acc, max_reg, fn_label, b, block_local_slots, names, ii);
+                out = out + pair;
+                if ((op >= 1 && op <= 12) || (op >= 14 && op <= 16) || (op >= 20 && op <= 22) || (op >= 25 && op <= 45)) { acc = res;
+                }
+            }
+            ii = ii + 1;
+        }
+        b = b + 1;
+    }
+    out = out + x86_ssa_emit_ret_epilogue_d(fn_data, is_entry, fn_label, ret_reg, ret_block);
+    return out;
+}
+pub fn x86_ssa_emit_program(fns: List[SsaFunction]) -> String {
+    let mut out: String = "    # x86c\n";
+    let n: Int = list_len(fns);
+    let mut i: Int = 0;
+    while i < n {
+        let fn_d: SsaFunction = list_get(fns, i);
+        if i > 0 { out = out + "\n";
+        }
+        // Only the first function is the entry point. Emitting _start:
+        // in every function would cause duplicate-symbol errors at link
+        // time (caught by x86_ssa_smoke.oo's multi-function probe).
+        let is_entry: Int = if i == 0 { 1 } else { 0 };
+        out = out + x86_ssa_emit_function_impl_c(fn_d, is_entry);
+        i = i + 1;
+    }
+    return out;
+}
+pub fn x86_ssa_emit_list_runtime() -> String {
+    return x86_runtime_text();
+}
+pub fn x86_ssa_emit_list_op(op_name: String, base_reg: String, value_slot: Int, idx_slot: Int) -> String {
+    let sv: String = x86_ssa_slot(value_slot);
+    let si: String = x86_ssa_slot(idx_slot);
+    if op_name == "new" { return "    subq $32, %rsp\n    call list_new\n    movq %rax, " + base_reg + "\n    addq $32, %rsp\n";
+    }
+    if op_name == "push" { return "    subq $32, %rsp\n    movq " + base_reg + ", %rdi\n    movq " + sv + ", %rsi\n    call list_push\n    movq %rax, " + base_reg + "\n    addq $32, %rsp\n";
+    }
+    if op_name == "get" { return "    subq $32, %rsp\n    movq " + base_reg + ", %rdi\n    movq " + si + ", %rsi\n    call list_get\n    addq $32, %rsp\n";
+    }
+    return "";
+}

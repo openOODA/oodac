@@ -1,0 +1,92 @@
+// # Emit Return-Path ARC Releases
+//
+// Logline: Emit return-path ARC releases and handle scope cleanups for return expressions.
+//
+// Setup: Backend-C floor. Handles primitives, user structs, options, results, and nested collections.
+//
+// Beats:
+//   1. Stash return expression in __ret_val.
+//   2. Retain return value if necessary under ARC semantics.
+//   3. Release local scope frames and temporaries before return.
+//   4. Maintain <= 256 lines limit.
+
+import "c_emit_env.oo";
+import "c_emit_arc.oo";
+import "c_emit_arc_reassign.oo";
+import "c_emit_ops_str.oo";
+import "c_emit_temps.oo";
+import "c_emit_list_ty.oo";
+
+pub fn c_emit_ret_arc(env: String, mut ret_val: String) {
+    if c_env_get(env, "__main__") == "1" {
+        c_emit_all_scope_releases(env);
+        oo_emit_tmp_release_all_print();
+        println("  return 0;");
+        return;
+    }
+    if ret_val == "" || ret_val == "void" {
+        c_emit_local_releases(env);
+        oo_emit_tmp_release_all_print();
+        println("  return;");
+        return;
+    }
+    let mut rty2: String = "long long";
+    if c_env_get(env, "__ret_str__") == "1" { rty2 = "OoStr"; }
+    let ret_kind: String = c_env_get(env, "__ret__");
+    if ret_kind == "S" { rty2 = "OoSList"; }
+    if ret_kind == "LI" || ret_kind == "OoIList" || ret_kind == "OoL_I" { rty2 = "OoIList"; }
+    if ret_kind == "LF" || ret_kind == "OoFList" || ret_kind == "OoL_F" { rty2 = "OoFList"; }
+    if ret_kind == "R" { rty2 = "OoResS"; }
+    if ret_kind == "V" { rty2 = "OoResV"; }
+    let rct: String = c_env_get(env, "__ret_c_ty__");
+    if rct != "" && rct != "void" {
+        rty2 = rct;
+    }
+    let k: String = c_env_get(env, ret_val);
+    if k != "" && (rct == "" || rct == "void") {
+        if k == "T" { rty2 = "OoStr"; }
+        else if k == "S" { rty2 = "OoSList"; }
+        else if k == "LI" || k == "OoIList" || k == "OoL_I" { rty2 = "OoIList"; }
+        else if k == "LF" || k == "OoFList" || k == "OoL_F" { rty2 = "OoFList"; }
+        else if k == "LL_I" || k == "OoLL_I" { rty2 = "OoLL_I"; }
+        else if k == "LL_S" || k == "OoLL_S" { rty2 = "OoLL_S"; }
+        else if k == "LL_F" || k == "OoLL_F" { rty2 = "OoLL_F"; }
+        else if k == "LLL_I" || k == "OoLLL_I" { rty2 = "OoLLL_I"; }
+        else if k == "LLL_S" || k == "OoLLL_S" { rty2 = "OoLLL_S"; }
+        else if k == "LLL_F" || k == "OoLLL_F" { rty2 = "OoLLL_F"; }
+        else if chars_len(k) > 1 && byte_at(k, 0) >= 65 && byte_at(k, 0) <= 90 { rty2 = k; }
+    }
+    let precise_k: String = c_env_get(env, "__ty__" + ret_val);
+    if precise_k != "" && (rct == "" || rct == "void") { rty2 = precise_k; }
+
+    if ret_kind == "V" {
+        if c_env_get(env, ret_val) == "R" {
+            ret_val = "((OoResV){" + ret_val + ".ok, (" + ret_val + ".ok) ? oo_str_lit(\"\") : " + ret_val + ".val})";
+        }
+    }
+    let mut c_ret: String = c_env_cvar(env, ret_val);
+    println("  " + rty2 + " __ret_val = " + c_ret + ";");
+    if c_env_get(env, "__no_arc__") != "1" {
+        let rk: String = c_env_get(env, ret_val);
+        let is_formal: Bool = c_is_formal_param(env, ret_val) == 1;
+        let is_list_formal: Bool = c_env_get(env, "__list_formal__" + ret_val) == "1";
+        let mut need_ret_retain: Bool = is_formal || (rk != "" || (c_expr_is_c_ident(ret_val) && rk != "")) || (ret_val.contains(".") && !ret_val.contains("(")) || (chars_len(ret_val) >= 2 && str_slice(ret_val, 0, 2) == "((");
+        if need_ret_retain {
+            let ret_rc: String = c_arc_kind_retain(rty2, "__ret_val");
+            if ret_rc != "" {
+                if is_list_formal {
+                    println("  if (!__" + ret_val + "_null) { " + ret_rc + " }");
+                } else {
+                    println("  " + ret_rc);
+                }
+            }
+        }
+    }
+    if c_env_get(env, "__ens__") == "1" && c_env_get(env, "__main__") != "1" {
+        println("  if (__builtin_expect(!(OO_ENS_CHECK(__ret_val)), 0)) {");
+        println("      oo_print_str(oo_str_lit(\"ERR\\tcontract\\tensures\")); oo_println(); oo_process_exit(1); }");
+    }
+    c_emit_local_releases(env);
+    oo_emit_tmp_release_all_print();
+    println("  return __ret_val;");
+}

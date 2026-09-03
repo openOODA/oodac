@@ -1,0 +1,23 @@
+// # Statement parse wrapper
+//
+// Logline: Provides parse_stmt entry for AST barrier.
+//
+// Setup: tokenize_lines, parse_stmt_dump exist via siblings.
+//
+// Beats:
+//   1. Tokenize src, dump single stmt, return src.
+//   2. Fail closed on empty.
+//   3. Keeps private dump details hidden.
+
+import "parse_expr.oo";
+
+
+pub fn parse_stmt_inner(src: String) -> String {
+    let toks: List[String] = tokenize_lines(src);
+let n = list_len(toks);
+if n == 0 { println("ERR\tparse\tempty");
+process_exit(1);
+}
+  parse_stmt_dump(toks, 0, 0, 0);
+  return src;
+}

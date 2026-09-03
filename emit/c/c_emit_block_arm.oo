@@ -1,0 +1,123 @@
+// # Block Arm Splitting and Value Emission Helpers
+//
+// Logline: Helpers for match-let arms that use block syntax to extract and assign the trailing expression.
+//
+// Setup: Token inspect and slice emission helpers for block arms.
+//
+// Beats:
+//   1. Split block arm into pre-statements and trailing expression.
+//   2. Emit pre-statements and assign trailing expression to target variable.
+
+import "c_emit_env.oo";
+
+import "c_emit_ops.oo";
+
+import "c_emit_helpers.oo";
+
+
+pub fn c_block_arm_split(toks: List[String], lbrace_pos: Int, n: Int) -> List[String] {
+    let mut depth: Int = 0;
+    let mut rbrace: Int = -1;
+    let mut i: Int = lbrace_pos;
+    while i < n {
+        let kk: String = c_tokk(toks, i);
+        if kk == "LBRACE" { depth = depth + 1;
+        }
+        else if kk == "RBRACE" {
+            depth = depth - 1;
+            if depth == 0 { rbrace = i;
+            i = n;
+            break;
+            }
+        }
+        i = i + 1;
+    }
+    if rbrace < 0 { let mut out0: List[String] = list_new();
+    out0 = list_push(out0, "unbalanced");
+    out0 = list_push(out0, lbrace_pos.to_string());
+    out0 = list_push(out0, lbrace_pos.to_string());
+    out0 = list_push(out0, rbrace.to_string());
+    return out0;
+    }
+    let mut j: Int = rbrace - 1;
+    let mut d: Int = 0;
+    let mut last_semi: Int = -1;
+    while j > lbrace_pos {
+        let kk: String = c_tokk(toks, j);
+        if kk == "RBRACE" { d = d + 1;
+        }
+        else if kk == "LBRACE" { d = d - 1;
+        }
+        else if kk == "RPAREN" { d = d + 1;
+        }
+        else if kk == "LPAREN" { d = d - 1;
+        }
+        if d == 0 && kk == "SEMI" { last_semi = j;
+        j = lbrace_pos;
+        break;
+        }
+        j = j - 1;
+    }
+    let mut kind: String = "split";
+    let mut expr_start: Int = lbrace_pos + 1;
+    if last_semi < 0 { kind = "single";
+    expr_start = lbrace_pos + 1;
+    } else {
+        expr_start = last_semi + 1;
+    }
+    let mut out: List[String] = list_new();
+    out = list_push(out, kind);
+    out = list_push(out, expr_start.to_string());
+    out = list_push(out, rbrace.to_string());
+    out = list_push(out, last_semi.to_string());
+    return out;
+}
+
+// Emit pre-statements of a block arm with a proper tmp-scope so temps bound
+// during pre-stmts are released at the end of the pre-stmts, not at function
+// exit. c_emit_block cannot be used directly here because its scope ends at
+// the truncated n (expr_start) which has no RBRACE — so its oo_emit_tmp_leave
+// is never called and the temps leak out to function-level cleanup.
+pub fn c_block_arm_emit_pre(toks: List[String], pre_start: Int, expr_start: Int, e: String) -> String {
+    let mut p: Int = pre_start;
+    let mut e2: String = e;
+    if c_tokk(toks, p) == "LBRACE" { p = p + 1;
+    }
+    e2 = c_env_push_scope(e2);
+    oo_emit_tmp_enter();
+    let mut iter: Int = 0;
+    while p < expr_start { iter = iter + 1;
+    if iter > (expr_start - pre_start) + 100 { println("ERR\tc_emit\tblock-arm-pre hang guard exceeded");
+    process_exit(1);
+    }
+        let kk: String = c_tokk(toks, p);
+        if kk == "RBRACE" { break;
+        }
+        if kk == "SEMI" { p = p + 1;
+        continue;
+        }
+        let prev: Int = p;
+        let st: List[String] = c_emit_stmt(toks, p, expr_start, e2);
+        p = parse_int(list_get(st, 0));
+        e2 = list_get(st, 1);
+        if p == prev { p = p + 1;
+        }
+    }
+    e2 = c_emit_scope_exit(e2);
+    oo_emit_tmp_leave();
+    return p.to_string();
+}
+
+pub fn c_block_arm_emit_value(toks: List[String], pre_start: Int, expr_start: Int, rbrace: Int, name: String, e: String) -> String {
+    let mut e2: String = e;
+if expr_start > pre_start + 1 { let _p: String = c_block_arm_emit_pre(toks, pre_start, expr_start, e2);
+}
+    oo_emit_tmp_enter();
+    let pr_e: List[String] = c_emit_expr_c(toks, expr_start, rbrace, e2);
+    let p_after: Int = parse_int(list_get(pr_e, 0));
+    let mut vex: String = list_get(pr_e, 1);
+    oo_emit_tmp_own(vex);
+    println("    " + name + " = " + vex + ";");
+    oo_emit_tmp_leave();
+    return p_after.to_string();
+}

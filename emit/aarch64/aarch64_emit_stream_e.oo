@@ -1,0 +1,82 @@
+// # Product emit-aarch64 stream (Phase D): leftover gate then std/hw compile-to-elf then GAS
+//
+// Logline: need fn main / leftover refuse, then aarch64_compile_to_elf, then GAS without the frame-test catch-all.
+//
+// Setup: leftover_gate + std/hw/silicon codegen. Matchers live in aarch64_emit.oo.
+//
+// Beats:
+//   1. No main / leftover println is typed ERR (no greet intern, no silent frame).
+//   2. Handled units reach aarch64_compile_to_elf (empty → leftover).
+//   3. GAS dispatch skips aarch64_match_frame_test so println STRING is not omitted.
+
+import "aarch64_leftover_gate.oo";
+
+import "aarch64_emit_diag.oo";
+
+import "aarch64_emit_contract.oo";
+
+import "aarch64_emit_secret.oo";
+
+import "std/hw/silicon/aarch64_codegen.oo";
+import "std/hw/silicon/aarch64_linker.oo";
+
+pub fn aarch64_emit_stream_e(src: String, path: String) {
+    if chars_len(src) == 0 { println("ERR\taarch64_emit\tempty");
+    process_exit(1);
+    }
+    if !aarch64_src_has_main_e(src) {
+        let d: String = aarch64_diag_emit_with_src("aarch64_emit", path, 1, 0, "need fn main", aarch64_diag_src_line(src, 1));
+        println(d);
+        process_exit(1);
+    }
+    let lg: String = aarch64_leftover_gate_f(src, path);
+    if chars_len(lg) > 0 { println(lg);
+    process_exit(1);
+    }
+    let elf: List[Int] = aarch64_compile_to_elf(src);
+    if list_len(elf) == 0 { let d2: String = aarch64_diag_emit_with_src("aarch64_emit", path, 1, 0, "leftover", aarch64_diag_src_line(src, 1));
+    println(d2);
+    process_exit(1);
+    }
+    let contract_errs: List[String] = aarch64_emit_contract_test(src);
+    if list_len(contract_errs) > 0 {
+        let mut i: Int = 0;
+        while i < list_len(contract_errs) { println(list_get(contract_errs, i));
+        i = i + 1;
+        }
+        process_exit(1);
+    }
+    let secret_errs: List[String] = aarch64_emit_secret_test(src);
+    if list_len(secret_errs) > 0 {
+        let mut si: Int = 0;
+        while si < list_len(secret_errs) { println(list_get(secret_errs, si));
+        si = si + 1;
+        }
+        process_exit(1);
+    }
+    aarch64_emit_mc_gas_e(elf);
+}
+
+pub fn aarch64_emit_mc_gas_e(elf: List[Int]) {
+    let off: Int = 0 + a64_elf_text_off();
+    let n: Int = list_len(elf);
+    println("    .arch armv8-a");
+    println("    .section .text");
+    println("    .globl _start");
+    println("    .p2align 2");
+    println("_start:");
+    let mut i: Int = off;
+    while i < n {
+        let mut line: String = "    .byte ";
+        let mut j: Int = 0;
+        while j < 12 && i < n {
+            if j > 0 { line = line + ",";
+            }
+            let b: Int = list_get(elf, i) & 255;
+            line = line + b.to_string();
+            i = i + 1;
+            j = j + 1;
+        }
+        println(line);
+    }
+}

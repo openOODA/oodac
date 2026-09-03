@@ -1,0 +1,84 @@
+// # LLVM IR Backend — Module Entry Door
+//
+// Logline: Re-exports textual LLVM IR generation, JIT execution, and PGO optimization interfaces.
+//
+// Setup: Imports internal LLVM backend siblings and provides clean public re-exports.
+//
+// Beats:
+//   1. Import LLVM IR emitter, type mapping, and runtime shim siblings.
+//   2. Re-export public LLVM streaming and JIT engine interfaces.
+//   3. Maintain <= 256 lines limit.
+
+import "types/ty_parse.oo";
+import "types/ty.oo";
+import "types/ty_mangle.oo";
+import "types/ANCHOR.oo";
+import "check/ANCHOR.oo";
+import "lex/ANCHOR.oo";
+import "ast/ANCHOR.oo";
+import "emit/c/c_emit_sum_spec.oo";
+import "llvm_emit.oo";
+import "llvm_emit_arc.oo";
+import "llvm_emit_assert.oo";
+import "llvm_emit_binop.oo";
+import "llvm_emit_call.oo";
+import "llvm_emit_control.oo";
+import "llvm_emit_debug.oo";
+import "llvm_emit_env.oo";
+import "llvm_emit_expr.oo";
+import "llvm_emit_fn.oo";
+import "llvm_emit_for.oo";
+import "llvm_emit_for_list.oo";
+import "llvm_emit_let.oo";
+import "llvm_emit_list.oo";
+import "llvm_emit_list_set.oo";
+import "llvm_emit_match.oo";
+import "llvm_emit_match_arc.oo";
+import "llvm_emit_match_enum.oo";
+import "llvm_emit_match_expr.oo";
+import "llvm_emit_match_slot.oo";
+import "llvm_emit_mem.oo";
+import "llvm_emit_method.oo";
+import "llvm_emit_olist.oo";
+import "llvm_emit_pgo.oo";
+import "llvm_emit_preamble.oo";
+import "llvm_emit_res_eq.oo";
+import "llvm_emit_result.oo";
+import "llvm_emit_secret_marker.oo";
+import "llvm_emit_shims.oo";
+import "llvm_emit_simd.oo";
+import "llvm_emit_slit.oo";
+import "llvm_emit_sret.oo";
+import "llvm_emit_stmt.oo";
+import "llvm_emit_struct.oo";
+import "llvm_emit_trait.oo";
+import "llvm_emit_trait_call.oo";
+import "llvm_emit_try.oo";
+import "llvm_emit_ty.oo";
+import "llvm_fntab.oo";
+import "llvm_jit_engine.oo";
+import "ty_to_llvm.oo";
+import "llvm_native_bin.oo";
+import "ssa_ir.oo";
+import "ssa_lower.oo";
+import "ssa_lower_util.oo";
+import "ssa_lower_simd.oo";
+import "ssa_lower_expr.oo";
+import "ssa_mem2reg.oo";
+import "ssa_dominance_frontier.oo";
+import "ssa_opt.oo";
+import "ssa_opt_licm.oo";
+import "ssa_opt_cse.oo";
+import "ssa_opt_gvn.oo";
+import "ssa_opt_inline.oo";
+import "ssa_opt_tail_call.oo";
+
+// ──▓▓ Public LLVM Emitter API ──▓▓──
+
+pub fn emit_llvm_stream(src: String, no_preamble: Bool, extra_fntab: String) {
+    llvm_emit_stream(src, no_preamble, extra_fntab);
+}
+
+pub fn emit_llvm_stream_target(src: String, no_preamble: Bool, extra_fntab: String, triple: String) {
+    llvm_emit_stream_target(src, no_preamble, extra_fntab, triple);
+}

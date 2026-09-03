@@ -1,0 +1,129 @@
+// # Vectorized Flat Closure Environment Tables
+//
+// Logline: Analyzes closure free-variable captures, classifies stack vs heap escaping lifetimes, and generates flat vectorized environment tables.
+//
+// Setup: Integrates with C backend code generators for zero-cost stack callbacks and unified 16-byte ARC heap closures.
+//
+// Beats:
+//   1. Free-variable capture traversal and deduplication.
+//   2. Static escape classification (stack-local vs heap-boxed).
+//   3. Flat environment struct, destructor, and trampoline C code emission.
+//   4. Direct indexed capture access without intermediate frame-box pointer chasing.
+
+
+
+import "check/sym_frame.oo";
+
+pub type ClosureCapture = struct {
+    name: String, ty_ast: String, c_ty: String, is_managed: Bool, offset_idx: Int
+};
+
+pub fn c_closure_capture_new(name: String, ty_ast: String, c_ty: String, offset_idx: Int) -> ClosureCapture {
+    let res: ClosureCapture = ClosureCapture { name: name, ty_ast: ty_ast, c_ty: c_ty, is_managed: c_is_managed_type(c_ty), offset_idx: offset_idx };
+    return res;
+}
+
+pub fn c_closure_encode_cap(c: ClosureCapture) -> String {
+    let m: String = if c.is_managed { "1" } else { "0" };
+    let off: Int = c.offset_idx;
+    return c.name + "\t" + c.ty_ast + "\t" + c.c_ty + "\t" + m + "\t" + off.to_string();
+}
+
+pub fn c_closure_decode_cap(s: String) -> ClosureCapture {
+    let p: List[String] = str_split(s, "\t");
+    if list_len(p) < 5 { let res: ClosureCapture = ClosureCapture { name: "", ty_ast: "", c_ty: "", is_managed: false, offset_idx: 0 };
+ return res;
+    }
+    let res: ClosureCapture = ClosureCapture { name: list_get(p, 0), ty_ast: list_get(p, 1), c_ty: list_get(p, 2), is_managed: list_get(p, 3) == "1", offset_idx: parse_int(list_get(p, 4)) };
+    return res;
+}
+
+pub fn c_closure_is_escaping(context: String, usage: String) -> Bool {
+    if context == "return" || context == "heap_struct" || context == "list_push" || context == "outer_assign" { return true;
+    }
+    if usage == "escape" || usage == "heap" || usage == "stored" { return true;
+    }
+    return false;
+}
+
+pub fn c_emit_flatenv_struct_def(env_id: String, caps: List[String]) -> String {
+    let mut out: String = "typedef struct __oo_flatenv_" + env_id + " {\n";
+let n: Int = list_len(caps);
+if n == 0 { out = out + "    char __empty_slot;\n";
+} else {
+        let mut i: Int = 0;
+        while i < n {
+            let cap: ClosureCapture = c_closure_decode_cap(list_get(caps, i));
+            let c_ty_str: String = cap.c_ty;
+            let c_name_str: String = cap.name;
+            out = out + "    " + c_ty_str + " " + c_name_str + ";\n";
+            i = i + 1;
+        }
+    }
+    out = out + "} __oo_flatenv_" + env_id + "_t;\n";
+    return out;
+}
+
+pub fn c_emit_flatenv_dtor(env_id: String, caps: List[String]) -> String {
+    let mut out: String = "static void __oo_dtor_flatenv_" + env_id + "(void *raw_env) {\n";
+out = out + "    if (!raw_env) return;\n";
+out = out + "    __oo_flatenv_" + env_id + "_t *env = (__oo_flatenv_" + env_id + "_t *)raw_env;\n";
+let n: Int = list_len(caps);
+let mut i: Int = 0;
+while i < n { let cap: ClosureCapture = c_closure_decode_cap(list_get(caps, i));
+let c_ty_str: String = cap.c_ty;
+let c_name_str: String = cap.name;
+if cap.is_managed { out = out + "    " + c_arc_kind_release_sym(c_ty_str, "env->" + c_name_str) + "\n";
+}
+        i = i + 1;
+    }
+    out = out + "}\n";
+    return out;
+}
+
+pub fn c_emit_closure_trampoline_hdr(env_id: String, ret_c_ty: String, param_sig: String) -> String {
+    return "static " + ret_c_ty + " __oo_trampoline_" + env_id + "(void *raw_env" + param_sig + ")";
+}
+
+pub fn c_emit_closure_stack_init(env_id: String, caps: List[String]) -> String {
+    let n: Int = list_len(caps);
+    let mut out: String = "__oo_flatenv_" + env_id + "_t __stack_env_" + env_id + " = {";
+    let mut i: Int = 0;
+    while i < n {
+        let cap: ClosureCapture = c_closure_decode_cap(list_get(caps, i));
+        if i > 0 { out = out + ", ";
+        }
+        out = out + "." + cap.name + " = " + cap.name;
+        i = i + 1;
+    }
+    out = out + "};\n";
+    out = out + "OoClosure __clo_" + env_id + " = oo_closure_stack((void*)__oo_trampoline_" + env_id + ", &__stack_env_" + env_id + ");\n";
+    return out;
+}
+
+pub fn c_emit_closure_heap_init(env_id: String, caps: List[String]) -> String {
+    let n: Int = list_len(caps);
+let mut out: String = "";
+let mut i: Int = 0;
+while i < n { let cap: ClosureCapture = c_closure_decode_cap(list_get(caps, i));
+if cap.is_managed { out = out + c_arc_kind_retain_sym(cap.c_ty, cap.name) + "\n";
+}
+        i = i + 1;
+    }
+    out = out + "__oo_flatenv_" + env_id + "_t __init_" + env_id + " = {";
+    i = 0;
+    while i < n {
+        let cap: ClosureCapture = c_closure_decode_cap(list_get(caps, i));
+        if i > 0 { out = out + ", ";
+        }
+        out = out + "." + cap.name + " = " + cap.name;
+        i = i + 1;
+    }
+    out = out + "};\n";
+    out = out + "OoClosure __clo_" + env_id + " = oo_closure_heap_create((void*)__oo_trampoline_" + env_id + ", sizeof(__oo_flatenv_" + env_id + "_t), &__init_" + env_id + ", __oo_dtor_flatenv_" + env_id + ");\n";
+    return out;
+}
+
+pub fn c_emit_closure_call_indirect(clo_expr: String, ret_c_ty: String, arg_c_tys: String, args: String) -> String {
+    return "((" + ret_c_ty + " (*)(void*" + arg_c_tys + "))(" + clo_expr + ".fn))(" + clo_expr + ".env" + args + ")";
+}

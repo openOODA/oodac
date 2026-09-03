@@ -1,0 +1,143 @@
+// # WebAssembly GC Cast & Reference Operations
+//
+// Logline: Low-level emission of WebAssembly GC reference testing, casting, conditional branching, and unboxed i31 operations.
+//
+// Setup: Import wasm_leb128.oo for type and label index encoding.
+//
+// Beats:
+//   1. Emit ref.test and ref.cast bytecodes for nominal and abstract types.
+//   2. Emit br_on_cast and br_on_cast_fail branch instructions.
+//   3. Emit unboxed i31ref conversions (ref.i31, i31.get_s, i31.get_u).
+//   4. Emit reference equality (ref.eq) and nullability checks (ref.is_null, ref.as_non_null).
+
+import "wasm_leb128.oo";
+
+
+pub fn emit_gc_ref_test(target_type_idx: Int) -> List[Int] {
+    let mut out: List[Int] = list_new();
+    out = list_push(out, 251);
+    // 0xFB
+    out = list_push(out, 20);
+    // ref.test
+    let leb: List[Int] = encode_u32_leb128(target_type_idx);
+    let mut i: Int = 0;
+    while i < list_len(leb) { out = list_push(out, list_get(leb, i));
+    i = i + 1;
+    }
+    return out;
+}
+
+pub fn emit_gc_ref_test_null(target_type_idx: Int) -> List[Int] {
+    let mut out: List[Int] = list_new();
+    out = list_push(out, 251);
+    // 0xFB
+    out = list_push(out, 21);
+    // ref.test null
+    let leb: List[Int] = encode_u32_leb128(target_type_idx);
+    let mut i: Int = 0;
+    while i < list_len(leb) { out = list_push(out, list_get(leb, i));
+    i = i + 1;
+    }
+    return out;
+}
+
+pub fn emit_gc_ref_cast(target_type_idx: Int) -> List[Int] {
+    let mut out: List[Int] = list_new();
+    out = list_push(out, 251);
+    // 0xFB
+    out = list_push(out, 22);
+    // ref.cast
+    let leb: List[Int] = encode_u32_leb128(target_type_idx);
+    let mut i: Int = 0;
+    while i < list_len(leb) { out = list_push(out, list_get(leb, i));
+    i = i + 1;
+    }
+    return out;
+}
+
+pub fn emit_gc_ref_cast_null(target_type_idx: Int) -> List[Int] {
+    let mut out: List[Int] = list_new();
+    out = list_push(out, 251);
+    // 0xFB
+    out = list_push(out, 23);
+    // ref.cast null
+    let leb: List[Int] = encode_u32_leb128(target_type_idx);
+    let mut i: Int = 0;
+    while i < list_len(leb) { out = list_push(out, list_get(leb, i));
+    i = i + 1;
+    }
+    return out;
+}
+
+pub fn emit_gc_br_on_cast(flags: Int, label_idx: Int, src_type: Int, dst_type: Int) -> List[Int] {
+    let mut out: List[Int] = list_new();
+    out = list_push(out, 251);
+    // 0xFB
+    out = list_push(out, 24);
+    // br_on_cast
+    out = list_push(out, flags & 3);
+    let leb_l: List[Int] = encode_u32_leb128(label_idx);
+    let mut i: Int = 0;
+    while i < list_len(leb_l) { out = list_push(out, list_get(leb_l, i));
+    i = i + 1;
+    }
+    let leb_s: List[Int] = encode_u32_leb128(src_type);
+    let mut j: Int = 0;
+    while j < list_len(leb_s) { out = list_push(out, list_get(leb_s, j));
+    j = j + 1;
+    }
+    let leb_d: List[Int] = encode_u32_leb128(dst_type);
+    let mut k: Int = 0;
+    while k < list_len(leb_d) { out = list_push(out, list_get(leb_d, k));
+    k = k + 1;
+    }
+    return out;
+}
+
+pub fn emit_gc_ref_i31() -> List[Int] {
+    let mut out: List[Int] = list_new();
+    out = list_push(out, 251);
+    // 0xFB
+    out = list_push(out, 28);
+    // ref.i31
+    return out;
+}
+
+pub fn emit_gc_i31_get_s() -> List[Int] {
+    let mut out: List[Int] = list_new();
+    out = list_push(out, 251);
+    // 0xFB
+    out = list_push(out, 29);
+    // i31.get_s
+    return out;
+}
+
+pub fn emit_gc_i31_get_u() -> List[Int] {
+    let mut out: List[Int] = list_new();
+    out = list_push(out, 251);
+    // 0xFB
+    out = list_push(out, 30);
+    // i31.get_u
+    return out;
+}
+
+pub fn emit_gc_ref_eq() -> List[Int] {
+    let mut out: List[Int] = list_new();
+    out = list_push(out, 211);
+    // 0xD3 ref.eq
+    return out;
+}
+
+pub fn emit_gc_ref_is_null() -> List[Int] {
+    let mut out: List[Int] = list_new();
+    out = list_push(out, 209);
+    // 0xD1 ref.is_null
+    return out;
+}
+
+pub fn emit_gc_ref_as_non_null() -> List[Int] {
+    let mut out: List[Int] = list_new();
+    out = list_push(out, 212);
+    // 0xD4 ref.as_non_null
+    return out;
+}

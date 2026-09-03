@@ -1,0 +1,226 @@
+// # Emit one C function
+//
+// Logline: Lower a fn from toks into a C prototype or body, update the fn env, and return the next token index plus that env.
+//
+// Setup: c_ty_at, c_peek_type_name, c_cap_grant_suffix, c_emit_skip_type, c_emit_block, c_lower_contracts, and c_emit_skip_verify exist. fn_env carries __fr__name=T for String returns. mode is all, bodies, protos, or a *_noarc variant.
+//
+// Beats:
+//   1. Parse the name, params, cap grants, and return type; record formal types in env.
+//   2. In protos mode, print a prototype with PGO attributes for non-main, skip the body, and return.
+//   3. Emit main or named fn with PGO attributes and contracts; release locals; return [pos, out_fn].
+
+import "c_emit_skip.oo";
+import "c_emit_skip_peek.oo";
+import "c_emit_skip_grant.oo";
+import "c_emit_helpers.oo";
+import "c_emit_contract.oo";
+import "c_emit_env.oo";
+import "c_emit_arc.oo";
+import "c_emit_dispatch.oo";
+
+
+// returns [new_pos_str, updated_fn_env]; fn_env carries __fr__name=T for String rets
+pub fn c_emit_fn(toks: List[String], pos: Int, n: Int, fn_env: String) -> List[String] {
+    return c_emit_fn_mode(toks, pos, n, fn_env, "all");
+}
+
+pub fn c_emit_fn_mode(toks: List[String], pos: Int, n: Int, fn_env: String, mode: String) -> List[String] {
+    let mut p = pos;
+    if c_tokk(toks, p) == "KW_PUB" { p = p + 1; }
+    if c_tokk(toks, p) == "KW_FN" { p = p + 1; }
+    let fn_name: String = c_tokt(toks, p);
+    p = p + 2;
+    // Per-source-file C name: stops the C linker redefining two .oo files' `pub fn X` as plain `X`. env keeps fn_name for __fr__ lookups.
+    let src_path: String = c_env_get(fn_env, "__file__");
+    let c_fn_name: String = c_mangle_fn_name(fn_name, src_path);
+    // Inherit prior fn String-return map so println(make(..)) sees OoStr.
+    let mut env = fn_env;
+    let mut out_fn = fn_env;
+    env = c_env_put(env, "__cname__" + fn_name, c_fn_name);
+    out_fn = c_env_put(out_fn, "__cname__" + fn_name, c_fn_name);
+    let mut plist = "";
+    let mut list_formals: List[String] = list_new();
+    let mut first = true;
+    // CAP-G3: type-driven main grants encoded as "name=suffix;name=suffix;"
+    let mut mcap = "";
+    while p < n { let pk: String = c_tokk(toks, p); if pk == "RPAREN" { p = p + 1; break; }
+        if pk == "COMMA" {
+            p = p + 1;
+        } else if pk == "IDENT" {
+            let pname: String = c_tokt(toks, p);
+            p = p + 1;
+            let mut pty = "long long";
+            if p < n && c_tokk(toks, p) == "COLON" {
+                p = p + 1;
+                // CAP-G3: capture Ooda type before c_ty_at collapses &Cap → long long
+                let ooda_tn: String = c_peek_type_name(toks, p, n);
+                pty = c_ty_at(toks, p, n);
+                let gsf: String = c_cap_grant_suffix(ooda_tn);
+                if gsf != "" { mcap = mcap + pname + "=" + gsf + ";"; }
+                c_emit_need_ty(pty);
+                let tp: Int = (0 + c_skip_amp_mut(toks, p, n));
+                let orig_was_ptr: Bool = c_tokk(toks, p) == "AMP";
+                if orig_was_ptr { env = c_env_put(env, "__ptr__" + pname, "1"); }
+                if tp < n && c_tokk(toks, tp) == "IDENT" {
+                    let tn: String = c_tokt(toks, tp);
+                    if tn == "List" { let lk: String = c_peek_list_elem2(toks, tp, n); env = c_env_put(env, pname, lk); }
+                    if tn == "String" { env = c_env_put(env, pname, "T"); }
+                    if tn == "Float" || tn == "f64" { env = c_env_put(env, pname, "F"); }
+                    if tn == "Result" || tn == "Option" {
+                        let rpk: String = c_result_ret_kind(ooda_tn);
+                        if rpk != "" {
+                            if pty == "OoResS" { env = c_env_put(env, pname, "R"); }
+                            else if pty == "OoResV" { env = c_env_put(env, pname, "V"); }
+                            else if pty == "OoResI" { env = c_env_put(env, pname, "RI"); }
+                            else if pty == "OoResII" { env = c_env_put(env, pname, "RII"); }
+                            else if pty == "OoResB" { env = c_env_put(env, pname, "RB"); }
+                            else if pty == "OoResF" { env = c_env_put(env, pname, "RF"); }
+                            else if pty == "OoResLI" { env = c_env_put(env, pname, "RLI"); }
+                            else if pty == "OoResLS" { env = c_env_put(env, pname, "RLS"); }
+                            else if pty == "OoResLF" { env = c_env_put(env, pname, "RLF"); }
+                            else if chars_len(pty) > 5 && str_slice(pty, 0, 5) == "OoRes" { env = c_env_put(env, pname, pty); }
+                        }
+                    }
+                    if tn != "List" && tn != "String" && tn != "Float" && tn != "f64" && tn != "Result" && tn != "Option" && tn != "Int" && tn != "Bool" {
+                        env = c_env_put(env, pname, tn);
+                    }
+                }
+                p = c_emit_skip_type(toks, p, n);
+            }
+            env = c_env_put(env, "__formal__" + pname, "1");
+            env = c_env_put(env, "__ty__" + pname, pty);
+            if chars_len(pty) > 1 && char_at(pty, chars_len(pty) - 1) == "*" { env = c_env_put(env, "__ptr__" + pname, "1"); }
+            if c_is_ll_kind(pty) || (chars_len(pty) >= 4 && str_slice(pty, 0, 4) == "OoL_") || pty == "OoIList" || pty == "OoSList" || pty == "OoFList" {
+                env = c_env_put(env, "__list_formal__" + pname, "1");
+                list_formals = list_push(list_formals, pname);
+            }
+            if first { plist = pty + " " + pname; first = false; } else { plist = plist + ", " + pty + " " + pname; }
+        } else {
+            p = p + 1;
+        }
+    }
+    let mut ret_ty = "void";
+    if p < n && c_tokk(toks, p) == "ARROW" {
+        p = p + 1;
+        ret_ty = c_ty_at(toks, p, n);
+        if ret_ty == "OoSList" { env = c_env_put(env, "__ann__", "S"); env = c_env_put(env, "__ret__", "S"); }
+        if ret_ty == "OoIList" { env = c_env_put(env, "__ann__", "I"); env = c_env_put(env, "__ret__", "I"); }
+        if ret_ty == "OoFList" { env = c_env_put(env, "__ann__", "F"); env = c_env_put(env, "__ret__", "F"); }
+        if chars_len(ret_ty) > 4 && char_at(ret_ty, 0) == "O" && char_at(ret_ty, 3) == "_" {
+            let lk: String = c_peek_list_elem(toks, p, n);
+            if lk != "" && lk != "I" && lk != "S" && lk != "F" { env = c_env_put(env, "__ann__", lk); }
+        }
+        if ret_ty == "long long" || ret_ty == "int" { env = c_env_put(env, "__ret_int__", "1"); }
+        if ret_ty == "OoStr" {
+            env = c_env_put(env, "__ret_str__", "1");
+            out_fn = c_env_put(out_fn, "__fr__" + fn_name, "T");
+            env = c_env_put(env, "__fr__" + fn_name, "T");
+        }
+        env = c_result_bind_fn_env(env, ret_ty);
+        c_emit_need_ty(ret_ty);
+        if ret_ty != "void" && ret_ty != "" { env = c_env_put(env, "__ret_c_ty__", ret_ty); }
+        p = c_emit_skip_type(toks, p, n);
+    }
+
+    if mode == "protos" || mode == "protos_noarc" {
+        if fn_name != "main" {
+            let fn_attr: String = c_fn_attributes(fn_name, env);
+            let mut sig = fn_attr + ret_ty + " " + c_fn_name;
+            if first { sig = sig + "(void)"; } else { sig = sig + "(" + plist + ")"; }
+            println(sig + ";");
+        }
+        p = c_emit_skip_contracts(toks, p, n);
+        p = c_emit_skip_braces(toks, p, n);
+        p = c_emit_skip_verify(toks, p, n);
+        let mut out: List[String] = list_new();
+        out = list_push(out, p.to_string());
+        return list_push(out, out_fn);
+    }
+
+    if fn_name == "main" {
+        env = c_env_put(env, "args", "S");
+        env = c_env_put(env, "__main__", "1");
+        env = c_env_push_scope(env);
+        if mode == "all" || mode == "bodies" || mode == "all_noarc" || mode == "bodies_noarc" {
+            println("");
+            let fl: String = c_tokf(toks, pos, 1);
+            let fp: String = c_env_get(env, "__file__");
+            if fl != "" && fp != "" { println("#line " + fl + " \"" + fp + "\""); }
+            else if fl != "" { println("#line " + fl); }
+            println("int main(int argc, char **argv) {");
+            oo_emit_tmp_reset();
+            c_emit_main_typed_cap_grants(mcap);
+            println("  OoSList args = oo_slist_new();");
+            println("  { int ai; for (ai = 1; ai < argc; ai++) {");
+            println("    args = oo_slist_push(args, oo_str_lit(argv[ai]));");
+            println("  } }");
+            if c_env_get(env, "__mc__") != "" { c_emit_while_fuel_check(c_env_get(env, "__mc__")); }
+        }
+        p = c_lower_contracts(toks, p, n);
+        let br: List[String] = c_emit_block(toks, p, n, env);
+        p = parse_int(list_get(br, 0));
+        let benv = list_get(br, 1);
+        if mode == "all" || mode == "bodies" || mode == "all_noarc" || mode == "bodies_noarc" {
+            if mode == "all" || mode == "bodies" { c_emit_all_scope_releases(benv); }
+            println("  return 0;");
+            println("}");
+        }
+    } else {
+        if mode == "all" || mode == "bodies" || mode == "all_noarc" || mode == "bodies_noarc" {
+            println("");
+            let fn_attr: String = c_fn_attributes(fn_name, env);
+            let mut sig = fn_attr + ret_ty + " " + c_fn_name;
+            if first { sig = sig + "(void)"; } else { sig = sig + "(" + plist + ")"; }
+            let fl2: String = c_tokf(toks, pos, 1);
+            let fp2: String = c_env_get(env, "__file__");
+            if fl2 != "" && fp2 != "" { println("#line " + fl2 + " \"" + fp2 + "\""); }
+            else if fl2 != "" { println("#line " + fl2); }
+            println("#ifndef OO_FN_" + c_fn_name);
+            println("#define OO_FN_" + c_fn_name);
+            println(sig + " {");
+            oo_emit_tmp_reset();
+            let lfn: Int = list_len(list_formals);
+            let mut lfi: Int = 0;
+            while lfi < lfn { let lfp: String = list_get(list_formals, lfi); println("  int __" + lfp + "_null = (" + lfp + ".data == NULL);"); lfi = lfi + 1; }
+            if c_env_get(env, "__mc__") != "" { c_emit_while_fuel_check(c_env_get(env, "__mc__")); }
+        }
+        if c_has_simple_ensures(toks, p, n) { env = c_env_put(env, "__ens__", "1"); }
+        env = c_env_push_scope(env);
+        p = c_lower_contracts(toks, p, n);
+        env = c_env_push_scope(env);
+        let br2: List[String] = c_emit_block(toks, p, n, env);
+        p = parse_int(list_get(br2, 0));
+        let benv2 = list_get(br2, 1);
+        if mode == "all" || mode == "bodies" || mode == "all_noarc" || mode == "bodies_noarc" {
+            if mode == "all" || mode == "bodies" { c_emit_local_releases(benv2); }
+            out_fn = c_env_pop_scope(out_fn);
+            println("}");
+            println("#endif");
+        }
+    }
+    if mode == "all" || mode == "bodies" || mode == "all_noarc" || mode == "bodies_noarc" {
+        p = c_emit_verify_ctor(toks, p, n, out_fn);
+    } else {
+        p = c_emit_skip_verify(toks, p, n);
+    }
+    let mut out: List[String] = list_new();
+    out = list_push(out, p.to_string());
+    out = list_push(out, out_fn);
+    return out;
+}
+
+pub fn c_is_cold_fn(name: String) -> Bool {
+    return str_index_of(name, "panic") >= 0 || str_index_of(name, "fail") >= 0 || str_index_of(name, "trap") >= 0 || str_index_of(name, "abort") >= 0 || str_index_of(name, "cold") >= 0 || str_index_of(name, "oom") >= 0 || str_index_of(name, "unreachable") >= 0;
+}
+
+pub fn c_is_hot_fn(name: String) -> Bool {
+    return str_index_of(name, "hot") >= 0 || str_index_of(name, "bench") >= 0 || str_index_of(name, "matrix") >= 0 || str_index_of(name, "compute") >= 0 || str_index_of(name, "fast") >= 0 || str_index_of(name, "tile") >= 0;
+}
+
+pub fn c_fn_attributes(name: String, env: String) -> String {
+    if c_env_get(env, "__cold__" + name) == "1" || c_is_cold_fn(name) { return "__attribute__((cold, noinline)) "; }
+    if c_env_get(env, "__hot__" + name) == "1" || c_is_hot_fn(name) { return "__attribute__((hot)) "; }
+    if c_env_get(env, "__inline__" + name) == "1" { return "__attribute__((always_inline)) "; }
+    return "";
+}
+

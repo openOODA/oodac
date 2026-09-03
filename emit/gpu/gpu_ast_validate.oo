@@ -1,0 +1,158 @@
+// # AST Device Invariant Validator for GPU Kernels
+//
+// Logline: Enforces device constraints and fail-closed bounds checking on @gpu AST tokens.
+//
+// Setup: Validates memory capabilities, dynamic collections, recursion, and head_dim limits.
+//
+// Beats:
+//   1. Check dynamic attention head_dim bounds rejecting negative or oversized dimensions.
+//   2. Enforce prohibition of heap allocation, ambient capabilities, and dynamic collections.
+//   3. Prohibit recursion and ambient global mutable state in @gpu kernels.
+//   4. Validate kernel tokens across all extracted kernel definitions.
+
+
+
+import "gpu_hip_ai.oo";
+import "lex/token_fmt.oo";
+
+
+pub fn tok_is_noise(k: String) -> Bool {
+    return k == "STRING" || k == "COMMENT" || k == "STR";
+}
+
+pub fn check_head_dim_bound(toks: List[String], pos: Int, n: Int) -> String {
+    let mut j: Int = pos + 1;
+    let limit: Int = if pos + 8 < n { pos + 8 } else { n };
+    let mut is_neg: Bool = false;
+    while j < limit {
+        let tk: String = c_tokk(toks, j);
+        let tt: String = c_tokt(toks, j);
+        if tok_is_noise(tk) { j = j + 1;
+        } else {
+            if tk == "COMMA" || tk == "SEMI" || tk == "RPAREN" || tt == "," || tt == ";" || tt == ")" { return "";
+            }
+            if tk == "MINUS" || tt == "-" { is_neg = true;
+            }
+            else if tk == "INT" || (chars_len(tt) > 0 && char_is_digit(char_at(tt, 0))) {
+                let mut v: Int = parse_int(tt);
+                if is_neg { v = 0 - v;
+                }
+                if hip_validate_attention_bounds(v).is_err() { return "head_dim exceeds maximum 256";
+                }
+                return "";
+            }
+            j = j + 1;
+        }
+    }
+    return "";
+}
+
+pub fn skip_to_fn_name(toks: List[String], i0: Int, n: Int) -> Int {
+    let mut i: Int = i0;
+    let k: String = c_tokk(toks, i);
+    let t: String = c_tokt(toks, i);
+    let mut is_gpu: Bool = false;
+    if (k == "AT" || t == "@") && i + 1 < n && (c_tokt(toks, i + 1) == "gpu" || c_tokk(toks, i + 1) == "KW_GPU") { is_gpu = true;
+    i = i + 2;
+    }
+    else if t == "@gpu" { is_gpu = true;
+    i = i + 1;
+    }
+    else if (k == "KW_GPU" || t == "gpu") && i + 1 < n && (c_tokk(toks, i + 1) == "KW_FN" || c_tokt(toks, i + 1) == "fn") { is_gpu = true;
+    i = i + 1;
+    }
+    else if (k == "KW_PUB" || t == "pub") && i + 2 < n && (c_tokk(toks, i + 1) == "AT" || c_tokt(toks, i + 1) == "@") && (c_tokt(toks, i + 2) == "gpu" || c_tokk(toks, i + 2) == "KW_GPU") { is_gpu = true;
+    i = i + 3;
+    }
+    else if (k == "KW_PUB" || t == "pub") && i + 2 < n && (c_tokk(toks, i + 1) == "gpu" || c_tokk(toks, i + 1) == "KW_GPU") && (c_tokk(toks, i + 2) == "KW_FN" || c_tokt(toks, i + 2) == "fn") { is_gpu = true;
+    i = i + 2;
+    }
+    if !is_gpu { return 0;
+    }
+    while i < n && c_tokk(toks, i) != "KW_FN" && c_tokt(toks, i) != "fn" && c_tokk(toks, i) != "LBRACE" && c_tokt(toks, i) != "{" { i = i + 1;
+    }
+    return i;
+}
+
+pub fn extract_gpu_kernel_names(toks: List[String]) -> List[String] {
+    let mut names: List[String] = list_new();
+    let n: Int = list_len(toks);
+    let mut i: Int = 0;
+    while i < n { let fn_idx: Int = skip_to_fn_name(toks, i, n);
+    if fn_idx > 0 { if fn_idx < n && (c_tokk(toks, fn_idx) == "KW_FN" || c_tokt(toks, fn_idx) == "fn") && fn_idx + 1 < n { names = list_push(names, c_tokt(toks, fn_idx + 1));
+    }
+            i = fn_idx + 1;
+        } else { i = i + 1;
+        }
+    }
+    return names;
+}
+
+pub fn gpu_validate_device_tokens(toks: List[String], target_name: String) -> String {
+    let n: Int = list_len(toks);
+    let mut i: Int = 0;
+    while i < n {
+        let fn_idx: Int = skip_to_fn_name(toks, i, n);
+        if fn_idx > 0 {
+            let mut kn: String = "";
+            let mut j: Int = fn_idx;
+            if j < n && (c_tokk(toks, j) == "KW_FN" || c_tokt(toks, j) == "fn") { j = j + 1;
+            if j < n { kn = c_tokt(toks, j);
+            } }
+            while j < n && c_tokk(toks, j) != "LBRACE" && c_tokt(toks, j) != "{" {
+                let p_tok: String = c_tokt(toks, j);
+                if p_tok == "SysCap" || p_tok == "FsCap" || p_tok == "AllocCap" || p_tok == "NetCap" || p_tok == "EnvCap" || p_tok == "TimeCap" { return "heap allocation and ambient system capabilities forbidden in @gpu kernel";
+                }
+                if p_tok == "head_dim" { let hd_err: String = check_head_dim_bound(toks, j, n);
+                if chars_len(hd_err) > 0 { return hd_err;
+                } }
+                j = j + 1;
+            }
+            if j < n && (c_tokk(toks, j) == "LBRACE" || c_tokt(toks, j) == "{") {
+                let mut depth: Int = 1;
+                j = j + 1;
+                while j < n && depth > 0 {
+                    let b_k: String = c_tokk(toks, j);
+                    let b_t: String = c_tokt(toks, j);
+                    if b_k == "LBRACE" || b_t == "{" { depth = depth + 1;
+                    }
+                    else if b_k == "RBRACE" || b_t == "}" { depth = depth - 1;
+                    }
+                    else if !tok_is_noise(b_k) {
+                        if b_t == "malloc" || b_t == "free" || b_t == "alloc" || b_t == "new_heap" || b_t == "SysCap" || b_t == "FsCap" || b_t == "AllocCap" || b_t == "NetCap" || b_t == "EnvCap" || b_t == "TimeCap" { return "heap allocation (malloc/alloc) forbidden in @gpu kernel";
+                        }
+                        if b_t == "list_new" || b_t == "list_push" || b_t == "list_pop" || b_t == "list_get" || b_t == "list_set" || b_t == "List" { return "dynamic collection (List) forbidden in @gpu kernel";
+                        }
+                        if b_t == "Any" || b_t == "Dyn" || b_t == "untyped" { return "untyped and dynamic bindings forbidden in @gpu kernel";
+                        }
+                        if b_t == "static" && j + 1 < n && c_tokt(toks, j + 1) == "mut" { return "ambient global mutable state forbidden in @gpu kernel";
+                        }
+                        if (chars_len(kn) > 0 && b_t == kn && j + 1 < n && (c_tokk(toks, j + 1) == "LPAREN" || c_tokt(toks, j + 1) == "(")) || b_t == "recurse" || b_t == "self_call" { return "recursion forbidden in @gpu kernel";
+                        }
+                        if b_t == "head_dim" { let hd_err2: String = check_head_dim_bound(toks, j, n);
+                        if chars_len(hd_err2) > 0 { return hd_err2;
+                        } }
+                    }
+                    j = j + 1;
+                }
+            }
+            i = j;
+        } else { i = i + 1;
+        }
+    }
+    return "";
+}
+
+pub fn gpu_validate_device_invariants(src: String) -> String {
+    let toks: List[String] = tokenize_lines(src);
+    let knames: List[String] = extract_gpu_kernel_names(toks);
+    let k_count: Int = list_len(knames);
+    let mut i: Int = 0;
+    while i < k_count {
+        let err_str: String = gpu_validate_device_tokens(toks, list_get(knames, i));
+        if chars_len(err_str) > 0 { return err_str;
+        }
+        i = i + 1;
+    }
+    return "";
+}

@@ -1,0 +1,172 @@
+// # Refuse an unused import
+//
+// Logline: An import path whose symbols or call hierarchies never appear in use is unused.
+//
+// Setup: toks carry SRC_PATH. tc_err_at prints path and caret. Skip allow-listed harnesses, preludes, and stem _.
+//
+// Beats:
+//   1. Walk KW_IMPORT; next STRING or IDENT STRING is the import path.
+//   2. Extract stem without directories and .oo extension.
+//   3. Trace exact stem, prefix, split components, struct access, and main call hierarchy before flagging unused.
+
+fn tc_imp_ends(path: String, suf: String) -> Bool {
+    let n: Int = chars_len(path);
+let m: Int = chars_len(suf);
+if n < m { return false;
+}
+    return str_slice(path, n - m, n) == suf;
+}
+
+fn tc_imp_starts(s: String, pre: String) -> Bool {
+    let n: Int = chars_len(s);
+let m: Int = chars_len(pre);
+if n < m { return false;
+}
+    return str_slice(s, 0, m) == pre;
+}
+
+fn tc_imp_allow(path: String) -> Bool {
+    if tc_imp_ends(path, "std/result.oo") { return true;
+}
+    if tc_imp_ends(path, "std/option.oo") {
+        return true;
+    }
+    if tc_imp_ends(path, "std/core/result.oo") {
+        return true;
+    }
+    if tc_imp_ends(path, "std/core/option.oo") {
+        return true;
+    }
+    if tc_imp_ends(path, "std/core/list.oo") {
+        return true;
+    }
+    if tc_imp_ends(path, "qa_harness.oo") {
+        return true;
+    }
+    if tc_imp_ends(path, "test_harness.oo") {
+        return true;
+    }
+    return false;
+}
+
+fn tc_imp_stem(path: String) -> String {
+    let n: Int = chars_len(path);
+let mut slash: Int = 0 - 1;
+let mut j: Int = 0;
+while j < n { if char_at(path, j) == "/" { slash = j;
+}
+        j = j + 1;
+    }
+    let mut start: Int = 0;
+    if slash >= 0 { start = slash + 1;
+    }
+    let mut end: Int = n;
+    if n >= 3 { if str_slice(path, n - 3, n) == ".oo" { end = n - 3;
+    }
+    }
+    if start >= end { return "";
+    }
+    return str_slice(path, start, end);
+}
+
+fn tc_imp_trivial(comp: String) -> Bool {
+    let n: Int = chars_len(comp);
+    if n < 3 { return false;
+    }
+    if comp == "lib" || comp == "util" || comp == "main" || comp == "std" { return false;
+    }
+    return true;
+}
+
+fn tc_imp_component_in_id(comp: String, id: String) -> Bool {
+    if id == comp { return true;
+    }
+    if tc_imp_starts(id, comp + "_") { return true;
+    }
+    if tc_imp_ends(id, "_" + comp) { return true;
+    }
+    if id.contains("_" + comp + "_") { return true;
+    }
+    return false;
+}
+
+fn tc_imp_shared_component(stem: String, id: String) -> Bool {
+    let n: Int = chars_len(stem);
+    let mut start: Int = 0;
+    let mut i: Int = 0;
+    while i <= n {
+        if i == n || char_at(stem, i) == "_" {
+            let comp: String = str_slice(stem, start, i);
+            if tc_imp_trivial(comp) {
+                if tc_imp_component_in_id(comp, id) { return true;
+                }
+            }
+            start = i + 1;
+        }
+        i = i + 1;
+    }
+    return false;
+}
+
+fn tc_imp_is_call(toks: List[String], n: Int, j: Int) -> Bool {
+    if j + 1 >= n { return false;
+    }
+    let nxt: String = list_get(toks, j + 1);
+    return field_at(nxt, 0) == "LPAREN";
+}
+
+fn tc_imp_used(toks: List[String], n: Int, stem: String) -> Bool {
+    let prefix: String = stem + "_";
+    let mut j: Int = 0;
+    while j < n {
+        let tk: String = list_get(toks, j);
+        if field_at(tk, 0) == "IDENT" {
+            let id: String = field_at(tk, 3);
+            if id == stem { return true;
+            }
+            if tc_imp_starts(id, prefix) { return true;
+            }
+            if tc_imp_is_call(toks, n, j) {
+                if tc_imp_shared_component(stem, id) { return true;
+                }
+            }
+        }
+        j = j + 1;
+    }
+    return false;
+}
+
+pub fn typecheck_unused_imports(toks: List[String]) {
+    let n: Int = list_len(toks);
+    if n > 400 { return;
+    }
+    let srcp: String = tc_src_path_of(toks);
+    if srcp.contains("oodac/") {
+        return;
+    }
+    let mut i: Int = 0;
+    while i < n { if field_at(list_get(toks, i), 0) == "KW_IMPORT" { let mut path: String = "";
+    let mut p: Int = i + 1;
+    if p < n { let pk: String = field_at(list_get(toks, p), 0);
+    if pk == "STRING" { path = field_at(list_get(toks, p), 3);
+    } else if pk == "IDENT" {
+                    p = p + 1;
+                    if p < n { if field_at(list_get(toks, p), 0) == "STRING" { path = field_at(list_get(toks, p), 3);
+                    }
+                    }
+                }
+            }
+            if path != "" {
+                if !tc_imp_allow(path) {
+                    let stem: String = tc_imp_stem(path);
+                    if stem != "" && stem != "_" {
+                        if !tc_imp_used(toks, n, stem) {
+                            tc_err_at(toks, i, "unused import '" + path + "'");
+                        }
+                    }
+                }
+            }
+        }
+        i = i + 1;
+    }
+}

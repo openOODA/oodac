@@ -1,0 +1,183 @@
+// # Read Result and Option type args
+//
+// Logline: Collect Result and Option bracket args so typecheck stores T/E, not only the base name.
+//
+// Setup: toks rows are kind, line, col, text; pos is at LBRACKET after the type IDENT.
+//
+// Beats:
+//   1. tc_skip_brackets walks nested [ ] and returns the index after the match.
+//   2. tc_bracket_type_text packs IDENT, COMMA, and nested bracket text.
+//   3. tc_read_result_ann appends that text only when the base is Result or Option.
+
+pub fn tc_skip_brackets(toks: List[String], pos0: Int) -> Int {
+    let n = list_len(toks);
+let mut p = pos0;
+if p >= n { return p;
+}
+    if field_at(list_get(toks, p), 0) != "LBRACKET" {
+        return p;
+    }
+    let mut depth = 0;
+    let mut cont_g = true;
+    while cont_g { if p >= n { cont_g = false;
+    } else {
+            let gk: String = field_at(list_get(toks, p), 0);
+            if gk == "LBRACKET" {
+                depth = depth + 1;
+            }
+            if gk == "RBRACKET" {
+                depth = depth - 1;
+                if depth == 0 { p = p + 1;
+                cont_g = false;
+                } else {
+                    p = p + 1;
+                }
+            } else {
+                p = p + 1;
+            }
+        }
+    }
+    return p;
+}
+
+pub fn tc_bracket_type_text(toks: List[String], pos0: Int) -> String {
+    let n = list_len(toks);
+let mut p = pos0;
+let mut depth = 0;
+let mut out = "";
+let mut cont_g = true;
+while cont_g { if p >= n { cont_g = false;
+} else {
+            let gk: String = field_at(list_get(toks, p), 0);
+            if gk == "LBRACKET" {
+                depth = depth + 1;
+                out = out + "[";
+            }
+            if gk == "RBRACKET" {
+                depth = depth - 1;
+                out = out + "]";
+                if depth == 0 { cont_g = false;
+                }
+            } else {
+                if gk == "IDENT" {
+                    out = out + field_at(list_get(toks, p), 3);
+                }
+                if gk == "COMMA" {
+                    out = out + ", ";
+                }
+            }
+            p = p + 1;
+        }
+    }
+    return out;
+}
+
+pub fn tc_read_result_ann(base: String, toks: List[String], pos: Int) -> String {
+    if base != "Result" && base != "Option" && base != "List" { return base;
+}
+    let n = list_len(toks);
+    if pos >= n { return base;
+    }
+    if field_at(list_get(toks, pos), 0) != "LBRACKET" {
+        return base;
+    }
+    return base + tc_bracket_type_text(toks, pos);
+}
+
+pub fn tc_bind_match_arm(toks: List[String], i: Int, n: Int, lit_env: String) -> String {
+    if i + 4 >= n { return lit_env;
+    }
+    if field_at(list_get(toks, i + 1), 0) != "LPAREN" { return lit_env;
+    }
+    if field_at(list_get(toks, i + 2), 0) != "IDENT" { return lit_env;
+    }
+    if field_at(list_get(toks, i + 3), 0) != "RPAREN" { return lit_env;
+    }
+    if field_at(list_get(toks, i + 4), 0) != "FATARROW" { return lit_env;
+    }
+    let tag: String = field_at(list_get(toks, i), 3);
+    let bname: String = field_at(list_get(toks, i + 2), 3);
+    if tag != "Ok" && tag != "Err" && tag != "Some" { return lit_env;
+    }
+    let mut sp: Int = i - 1;
+    let mut sname: String = "";
+    while sp >= 0 && sp >= i - 20 { if field_at(list_get(toks, sp), 0) == "KW_MATCH" { if sp + 1 < i && field_at(list_get(toks, sp + 1), 0) == "IDENT" { sname = field_at(list_get(toks, sp + 1), 3);
+    }
+            sp = -1;
+        } else {
+            sp = sp - 1;
+        }
+    }
+    let mut bty: String = "";
+    if sname != "" {
+        let sty: String = resolve_type_alias(lit_env, sname);
+        if tag == "Ok" {
+            if sty == "Result[Int, String]" || sty == "OoResI" { bty = "Int";
+            }
+            else if sty == "Result[String, String]" || sty == "OoResS" { bty = "String";
+            }
+            else if sty == "Result[Bool, String]" || sty == "OoResB" { bty = "Bool";
+            }
+            else if sty == "Result[Float, String]" || sty == "OoResF" { bty = "Float";
+            }
+            else if chars_len(sty) > 8 && str_slice(sty, 0, 7) == "Result[" {
+                let inner: String = str_slice(sty, 7, chars_len(sty) - 1);
+                let mut comma_pos: Int = -1;
+                let mut depth: Int = 0;
+                let mut ci: Int = 0;
+                let in_len: Int = chars_len(inner);
+                while ci < in_len {
+                    let ch: String = char_at(inner, ci);
+                    if ch == "[" { depth = depth + 1;
+                    }
+                    else if ch == "]" { depth = depth - 1;
+                    }
+                    else if ch == "," && depth == 0 { comma_pos = ci;
+                    ci = in_len;
+                    }
+                    ci = ci + 1;
+                }
+                if comma_pos > 0 { bty = str_trim(str_slice(inner, 0, comma_pos));
+                }
+                else { bty = inner;
+                }
+            }
+        } else if tag == "Err" {
+            bty = "String";
+        } else if tag == "Some" {
+            if sty == "Option[Int]" || sty == "OoOpt_I" { bty = "Int";
+            }
+            else if sty == "Option[String]" || sty == "OoOpt_S" { bty = "String";
+            }
+            else if sty == "Option[Bool]" || sty == "OoOpt_B" { bty = "Bool";
+            }
+            else if sty == "Option[Float]" || sty == "OoOpt_F" { bty = "Float";
+            }
+            else if chars_len(sty) > 8 && str_slice(sty, 0, 7) == "Option[" {
+                bty = str_trim(str_slice(sty, 7, chars_len(sty) - 1));
+            }
+        }
+    }
+    if bty == "" && tag == "Err" { bty = "String";
+    }
+    if bty != "" {
+        let mut cur_fn: String = "";
+        let mut fp: Int = i;
+        while fp >= 0 {
+            if field_at(list_get(toks, fp), 0) == "KW_FN" {
+                if fp + 1 < n { cur_fn = field_at(list_get(toks, fp + 1), 3);
+                }
+                fp = -1;
+            } else {
+                fp = fp - 1;
+            }
+        }
+        let mut out_env: String = lit_env;
+        if cur_fn != "" {
+            out_env = out_env + cur_fn + "." + bname + ":" + bty + "\t";
+        }
+        out_env = out_env + bname + ":" + bty + "\t";
+        return out_env;
+    }
+    return lit_env;
+}

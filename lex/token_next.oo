@@ -1,0 +1,72 @@
+// # Take one lexer step
+//
+// Logline: Try each scanner in order and return the first nonempty pack, or pack_err for an unexpected character.
+//
+// Setup: chars_len, char_at, list_len, parse_int, list_get, try_scan_ws, try_scan_string, try_scan_number, try_scan_ident, try_scan_punct, pack_tok, and pack_err exist; collect_tokens and dump_tokens call lex_step.
+//
+// Beats:
+//   1. Past the end, pack_tok an EOF at the current cursor.
+//   2. Try ws, string, number, ident, then punct, and return the first nonempty pack.
+//   3. Otherwise pack_err with the unexpected character and line:col. pack_status, pack_i, pack_line, and pack_col read fields 0..3.
+
+import "token_scan_whitespace.oo";
+
+import "token_scan_string.oo";
+
+import "token_scan_number.oo";
+
+import "token_ident.oo";
+
+import "token_scan_punct.oo";
+import "token_parse_int.oo";
+
+
+
+pub fn lex_step(src: String, i0: Int, line0: Int, col0: Int) -> List[String] {
+    let n: Int = chars_len(src);
+    if i0 >= n { return pack_tok(i0, line0, col0, "EOF", "", line0, col0);
+    }
+    let r0: List[String] = try_scan_ws(src, i0, line0, col0);
+    if list_len(r0) > 0 { return r0;
+    }
+    let r1: List[String] = try_scan_string(src, i0, line0, col0);
+    if list_len(r1) > 0 { return r1;
+    }
+    let r2: List[String] = try_scan_number(src, i0, line0, col0);
+    if list_len(r2) > 0 { return r2;
+    }
+    let r3: List[String] = try_scan_ident(src, i0, line0, col0);
+    if list_len(r3) > 0 { return r3;
+    }
+    let r4: List[String] = try_scan_punct(src, i0, line0, col0);
+    if list_len(r4) > 0 { return r4;
+    }
+    let ch: String = char_at(src, i0);
+    let ls: String = line0.to_string();
+    let cs: String = col0.to_string();
+    return pack_err("Unexpected character '" + ch + "' at " + ls + ":" + cs);
+}
+
+pub fn pack_status(p: List[String]) -> String {
+    if list_len(p) < 1 { return "ERR";
+}
+    return list_get(p, 0);
+}
+
+pub fn pack_i(p: List[String]) -> Int {
+    if list_len(p) < 2 { return 0;
+}
+    return parse_int(list_get(p, 1));
+}
+
+pub fn pack_line(p: List[String]) -> Int {
+    if list_len(p) < 3 { return 0;
+}
+    return parse_int(list_get(p, 2));
+}
+
+pub fn pack_col(p: List[String]) -> Int {
+    if list_len(p) < 4 { return 0;
+}
+    return parse_int(list_get(p, 3));
+}

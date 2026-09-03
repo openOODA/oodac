@@ -1,0 +1,109 @@
+// # Map Result[T] to C Result typedef (incl. Result[Option[T]])
+//
+// Logline: Maps the Result[T] type tokens at pos to the OoRes* C typedef name emitted by the C backend.
+//
+// Setup: toks at pos sits on Result IDENT; c_tokk, c_tokt, c_result_e_is_int, c_peek_list_elem, and c_emit_res_list_ty exist; unknown defaults to OoResS and residual forms fail-closed.
+//
+// Beats:
+//   1. Parse generic type applications for Result and Option.
+//   2. Map parsed AST terms to canonical C typedef names.
+//   3. Extract return type kinds and payload signatures.
+
+import "c_emit_mono.oo";
+import "c_emit_skip.oo";
+import "c_emit_olist.oo";
+//
+// c_result_c_ty, c_option_c_ty, and c_ref_c_ty were moved to
+// c_emit_skip.oo (which this file imports) to break the import cycle.
+// They are reachable from c_emit_skip.oo's perspective.
+
+pub fn c_emit_unary_c(toks: List[String], pos: Int, n: Int, env: String, k: String) -> List[String] {
+    let mut p: Int = pos + 1;
+    if k == "AMP" {
+        if p < n { if c_tokk(toks, p) == "KW_MUT" { p = p + 1;
+        }
+        }
+    }
+    let mut pre: String = "!";
+    if k == "AMP" {
+        pre = "&";
+    }
+    if k == "STAR" {
+        pre = "*";
+    }
+    let mut inner: String = "";
+    if p < n && c_tokk(toks, p) == "LPAREN" {
+        p = p + 1;
+        let prg: List[String] = c_emit_expr_c(toks, p, n, env);
+        p = parse_int(list_get(prg, 0));
+        inner = list_get(prg, 1);
+        if p < n && c_tokk(toks, p) == "RPAREN" {
+            p = p + 1;
+        }
+    } else {
+        let pru: List[String] = c_emit_primary_c(toks, p, n, env);
+        p = parse_int(list_get(pru, 0));
+        inner = list_get(pru, 1);
+    }
+    // !(p).f / &mut (p).f: postfix field binds tighter than unary ! and &.
+    let grouped: String = "(" + inner + ")";
+    if k == "BANG" || k == "AMP" {
+        if p < n { if c_tokk(toks, p) == "DOT" { let md: List[String] = c_emit_method(toks, p, n, env, grouped);
+        return c_emit_pack2(list_get(md, 0), "(" + pre + "(" + list_get(md, 1) + "))");
+        }
+        }
+    }
+    let wrapped: String = "(" + pre + inner + ")";
+    if p < n { if c_tokk(toks, p) == "DOT" { return c_emit_method(toks, p, n, env, wrapped);
+    }
+    }
+    return c_emit_pack2(p.to_string(), wrapped);
+}
+
+pub fn c_frty_note(fn_env: String, fn_name: String, toks: List[String], p: Int, n: Int) -> String {
+    let rty: String = c_ty_at(toks, p, n);
+let mut e: String = fn_env;
+if rty != "" { if rty != "void" { e = c_env_put(e, "__frty__" + fn_name, rty);
+}
+    }
+    if p < n { if c_tokk(toks, p) == "IDENT" { if c_tokt(toks, p) == "String" { e = c_env_put(e, "__fr__" + fn_name, "T");
+    }
+        }
+    }
+    return e;
+}
+
+pub fn c_result_ret_kind(cty: String) -> String {
+    if cty == "OoResV" { return "V";
+    }
+    if cty == "OoResS" { return "R";
+    }
+    if cty == "OoResI" { return "RI";
+    }
+    if cty == "OoResII" { return "RII";
+    }
+    if cty == "OoResB" { return "RB";
+    }
+    if cty == "OoResF" { return "RF";
+    }
+    if cty == "OoResLI" { return "RLI";
+    }
+    if cty == "OoResLS" { return "RLS";
+    }
+    if cty == "OoResLF" { return "RLF";
+    }
+    if chars_len(cty) >= 8 && str_slice(cty, 0, 7) == "OoResO_" { return "RO";
+    }
+    if chars_len(cty) > 7 && char_at(cty, 5) == "L" && char_at(cty, 6) == "_" { return "RN";
+    }
+    if chars_len(cty) > 6 && char_at(cty, 0) == "O" && char_at(cty, 4) == "s" && char_at(cty, 5) == "_" { return "RN";
+    }
+    return "";
+}
+
+pub fn c_result_bind_fn_env(env: String, ret_ty: String) -> String {
+    let rk: String = c_result_ret_kind(ret_ty);
+if rk == "" { return env;
+}
+    return c_env_put(env, "__ret__", rk);
+}

@@ -1,0 +1,119 @@
+// # Source to x86-64 ELF image
+//
+// Logline: Compiles a process_exit status into a pure ELF64 image.
+//
+// Setup: Imports x86_elf_pure.oo. Pure. No GNU as or ld.
+//
+// Beats:
+//   1. Parse process_exit with a status in 0 to 255.
+//   2. Fail closed on empty source.
+//   3. Maintain <= 256 lines limit.
+
+import "x86_elf_pure.oo";
+
+fn x86t_digit(c: String) -> Int {
+    if c == "0" { return 0; }
+    if c == "1" { return 1; }
+    if c == "2" { return 2; }
+    if c == "3" { return 3; }
+    if c == "4" { return 4; }
+    if c == "5" { return 5; }
+    if c == "6" { return 6; }
+    if c == "7" { return 7; }
+    if c == "8" { return 8; }
+    if c == "9" { return 9; }
+    return -1;
+}
+
+fn x86t_is_exit(src: String, i: Int) -> Int {
+    let n: Int = chars_len(src);
+    let lim: Int = i + 13;
+    if lim > n { return 0; }
+    if char_at(src, i) != "p" { return 0; }
+    if char_at(src, i + 1) != "r" { return 0; }
+    if char_at(src, i + 2) != "o" { return 0; }
+    if char_at(src, i + 3) != "c" { return 0; }
+    if char_at(src, i + 4) != "e" { return 0; }
+    if char_at(src, i + 5) != "s" { return 0; }
+    if char_at(src, i + 6) != "s" { return 0; }
+    if char_at(src, i + 7) != "_" { return 0; }
+    if char_at(src, i + 8) != "e" { return 0; }
+    if char_at(src, i + 9) != "x" { return 0; }
+    if char_at(src, i + 10) != "i" { return 0; }
+    if char_at(src, i + 11) != "t" { return 0; }
+    if char_at(src, i + 12) != "(" { return 0; }
+    return 1;
+}
+
+fn x86t_exit_text(src: String) -> ByteOut {
+    let n: Int = chars_len(src);
+    let mut i: Int = 0;
+    let mut found: Int = 0;
+    let mut k: Int = 0;
+    while i < n {
+        let hit: Int = x86t_is_exit(src, i);
+        if hit == 1 {
+            found = 1;
+            k = i + 13;
+            i = n;
+        }
+        if found == 0 {
+            i = i + 1;
+        }
+    }
+    if found == 0 {
+        return byte_out_err("x86_elf_pure_text: no process_exit");
+    }
+    let mut st: Int = 0;
+    let mut ndig: Int = 0;
+    let mut go: Int = 1;
+    while go == 1 {
+        if k >= n {
+            go = 0;
+        }
+        if go == 1 {
+            let c: String = char_at(src, k);
+            let d: Int = x86t_digit(c);
+            if d < 0 {
+                go = 0;
+            }
+            if d >= 0 {
+                st = st * 10 + d;
+                ndig = ndig + 1;
+                k = k + 1;
+            }
+        }
+    }
+    if ndig == 0 { return byte_out_err("x86_elf_pure_text: bad status"); }
+    if ndig > 3 { return byte_out_err("x86_elf_pure_text: bad status"); }
+    if st > 255 { return byte_out_err("x86_elf_pure_text: bad status"); }
+    if k >= n { return byte_out_err("x86_elf_pure_text: bad status"); }
+    let close: String = char_at(src, k);
+    if close != ")" {
+        return byte_out_err("x86_elf_pure_text: bad status");
+    }
+    return byte_out_ok(x86_elf_pure_linux_exit(st));
+}
+
+pub fn x86_elf_pure_text(src: String) -> ByteOut {
+    let n: Int = chars_len(src);
+    if n == 0 {
+        return byte_out_err("x86_elf_pure_text: empty source");
+    }
+    return x86t_exit_text(src);
+}
+
+pub fn x86_elf_pure_from_source(src: String) -> ByteOut {
+    let text: ByteOut = x86_elf_pure_text(src);
+    if text.flag == 0 {
+        return text;
+    }
+    let n: Int = list_len(text.bytes);
+    if n > 120 {
+        let mag: Int = list_get(text.bytes, 0) & 255;
+        if mag == 127 {
+            return text;
+        }
+    }
+    return x86_elf_pure_package(text.bytes);
+}

@@ -1,0 +1,156 @@
+// # Typecheck return and assign calls
+//
+// Logline: Checks that return f(...); and name = f(...) match the declared return or mut binding type.
+//
+// Setup: toks rows are kind, line, col, text; build_fn_ret_table is lazy; call_ret_type_at, types_compatible, and tc_err_at exist.
+//
+// Beats:
+//   1. Collect type aliases and mut-only names from let mut bindings.
+//   2. On each fn head, remember the ARROW return type; on return IDENT LPAREN ... SEMI, compare the call type to it.
+//   3. On IDENT EQ IDENT LPAREN that is not a let, compare the call type to the mut binding.
+
+import "tc_infer.oo";
+
+
+pub fn typecheck_return_and_assign_calls(toks: List[String]) {
+    let n: Int = list_len(toks);
+    let mut ret_table: String = "";
+    let mut aliases: String = "\t";
+    let mut ai: Int = 0;
+    while ai < n { if field_at(list_get(toks, ai), 0) == "KW_TYPE" { if ai + 3 < n { if field_at(list_get(toks, ai + 1), 0) == "IDENT" && field_at(list_get(toks, ai + 2), 0) == "EQ" && field_at(list_get(toks, ai + 3), 0) == "IDENT" { let aname: String = field_at(list_get(toks, ai + 1), 3);
+    let base: String = field_at(list_get(toks, ai + 3), 3);
+    if base != "struct" { aliases = aliases + aname + ":" + base + "\t";
+    }
+                }
+            }
+        }
+        ai = ai + 1;
+    }
+    let lit_env: String = build_pure_lit_env(toks);
+    let mut mut_only: String = "\t";
+    let mut mi: Int = 0;
+    while mi < n { if field_at(list_get(toks, mi), 0) == "KW_LET" { let mut p: Int = mi + 1;
+    let mut is_mut: Bool = false;
+    if p < n { if field_at(list_get(toks, p), 0) == "KW_MUT" { is_mut = true;
+    p = p + 1;
+    }
+            }
+            if is_mut && p < n {
+                if field_at(list_get(toks, p), 0) == "IDENT" {
+                    let v: String = field_at(list_get(toks, p), 3);
+                    let cur_fn: String = get_cur_fn_at(toks, p);
+                    let mut ty: String = "";
+                    if cur_fn != "" {
+                        ty = resolve_type_alias(lit_env, cur_fn + "." + v);
+                        if ty == cur_fn + "." + v { ty = "";
+                        }
+                    }
+                    if ty == "" { ty = resolve_type_alias(lit_env, v);
+                    }
+                    if ty != v && ty != "" {
+                        mut_only = mut_only + v + ":" + ty + "\t";
+                    }
+                }
+            }
+        }
+        mi = mi + 1;
+    }
+    let mut i: Int = 0;
+    let mut expected_ret: String = "";
+    while i < n { let k: String = field_at(list_get(toks, i), 0);
+    let mut is_fn_head: Bool = false;
+    if k == "KW_FN" { is_fn_head = true;
+    } else if k == "KW_PUB" && i + 1 < n { if field_at(list_get(toks, i + 1), 0) == "KW_FN" { is_fn_head = true;
+    }
+        }
+        if is_fn_head { expected_ret = "";
+        let mut j: Int = i;
+        let mut cont: Bool = true;
+        while cont { if j >= n { cont = false;
+        } else {
+                    let kk: String = field_at(list_get(toks, j), 0);
+                    if kk == "ARROW" {
+                        j = j + 1;
+                        if j < n {
+                            if field_at(list_get(toks, j), 0) == "IDENT" {
+                                expected_ret = resolve_type_alias(aliases, field_at(list_get(toks, j), 3));
+                            }
+                        }
+                    } else if kk == "LBRACE" {
+                        cont = false;
+                    } else {
+                        j = j + 1;
+                    }
+                }
+            }
+            i = i + 1;
+        } else if k == "KW_RETURN" {
+            if expected_ret != "" && i + 2 < n { if field_at(list_get(toks, i + 1), 0) == "IDENT" && field_at(list_get(toks, i + 2), 0) == "LPAREN" { let rp: Int = match_rparen(toks, i + 2);
+            let mut semi_after: Bool = false;
+            if rp >= 0 && rp + 1 < n { if field_at(list_get(toks, rp + 1), 0) == "SEMI" { semi_after = true;
+            }
+                    }
+                    if semi_after { let mut gty: String = cap_builtin_ret(field_at(list_get(toks, i + 1), 3));
+                    if gty != "" { gty = resolve_type_alias(aliases, gty);
+                    } else {
+                            if ret_table == "" { ret_table = build_fn_ret_table(toks);
+                            }
+                            gty = call_ret_type_at(toks, i + 1, ret_table, aliases);
+                        }
+                        if gty != "" && !types_compatible(expected_ret, gty) {
+                            tc_err_at(toks, i, "return type " + gty + " does not match declared " + expected_ret);
+                        }
+                    }
+                }
+            }
+            i = i + 1;
+        } else if k == "IDENT" {
+            if i + 3 < n {
+                if field_at(list_get(toks, i + 1), 0) == "EQ" {
+                    let mut is_let: Bool = false;
+                    if i > 0 {
+                        let pk: String = field_at(list_get(toks, i - 1), 0);
+                        if pk == "KW_LET" || pk == "KW_MUT" { is_let = true;
+                        }
+                    }
+                    if !is_let { let vname: String = field_at(list_get(toks, i), 3);
+                    let vty: String = resolve_type_alias(mut_only, vname);
+                    if vty != vname && field_at(list_get(toks, i + 2), 0) == "IDENT" && field_at(list_get(toks, i + 3), 0) == "LPAREN" { let mut gty: String = cap_builtin_ret(field_at(list_get(toks, i + 2), 3));
+                    if gty != "" { gty = resolve_type_alias(aliases, gty);
+                    } else {
+                                if ret_table == "" { ret_table = build_fn_ret_table(toks);
+                                }
+                                gty = call_ret_type_at(toks, i + 2, ret_table, aliases);
+                            }
+                            if gty != "" && !types_compatible(vty, gty) {
+                                tc_err_at(toks, i, "cannot assign " + gty + " to '" + vname + "' of type " + vty);
+                            }
+                        }
+                    }
+                }
+            }
+            i = i + 1;
+        } else {
+            i = i + 1;
+        }
+    }
+}
+
+pub fn cap_builtin_ret(name: String) -> String {
+    if name == "env_get" || name == "oo_env_get" || name == "read_file" || name == "oo_read_file" || name == "write_file" || name == "oo_write_file" || name == "fs_read_file" || name == "fs_write_file" || name == "fetch" || name == "sys_exec" || name == "oo_sys_exec" || name == "landlock_restrict" || name == "oo_landlock_restrict" || name == "fs_mkdir" || name == "oo_fs_mkdir" || name == "fs_remove_file" || name == "oo_fs_remove_file" || name == "fs_rmdir" || name == "oo_fs_rmdir" || name == "fs_mkdir_p" || name == "fs_remove_tree" || name == "fs_copy_file" || name == "fs_copy_tree" { return "Result";
+}
+    if name == "path_exists" || name == "oo_path_exists" || name == "fs_path_exists" || name == "fs_is_dir"
+        || name == "oo_fs_is_dir" || name == "cap_attenuate_ok" || name == "oo_cap_attenuate_ok" {
+        return "Bool";
+    }
+    if name == "file_size" || name == "oo_file_size" || name == "fs_file_size" || name == "now_ms" || name == "monotonic_us" || name == "landlock_is_available" || name == "oo_landlock_is_available" || name == "str_byte_at" || name == "byte_at" {
+        return "Int";
+    }
+    if name == "proc_mem_read" || name == "oo_proc_mem_read" {
+        return "Result";
+    }
+    if name == "process_args" || name == "oo_sys_args" || name == "fs_walk" || name == "fs_read_dir" || name == "oo_fs_read_dir" {
+        return "List";
+    }
+    return "";
+}

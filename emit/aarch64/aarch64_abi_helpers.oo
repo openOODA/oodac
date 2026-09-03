@@ -1,0 +1,125 @@
+// # AAPCS64 aggregate return lowering / AArch64 FP emit surface / AArch64 library emit / AArch64 sys_mmap bump pages
+//
+// Logline: Classifies ARM64 struct and Result returns as X0/X1 or hidden X8 SRet. Forwards scalar FADD, FSUB, FMUL, FDIV, FSQRT, and FCMP encodings. Result Ok/Err first-fn GAS, else SSA GAS plus runtime. Empty means matchers run. Emits cap-gated AArch64 SVC mmap 222 for anonymous PROT_RW pages.
+//
+// Setup: Merged cohesive compiler module.
+//
+// Beats:
+//   1. Unified cohesive implementation.
+
+import "aarch64_mc_fp.oo";
+
+
+import "aarch64_emit_const_harvest.oo";
+
+import "aarch64_emit_result.oo";
+
+import "aarch64_runtime.oo";
+
+import "aarch64_ssa_compile.oo";
+
+import "std/hw/bare_metal/sys_cap.oo";
+import "types/byte_out.oo";
+import "aarch64_mc_encode.oo";
+
+pub fn i2s(x: Int) -> String {
+    return x.to_string();
+}
+
+pub fn a64_abi_agg_bytes(nbytes: Int) -> Int {
+    if nbytes <= 0 { return 8;
+}
+    return nbytes;
+}
+
+pub fn a64_abi_needs_sret(nbytes: Int) -> Int {
+    let n: Int = a64_abi_agg_bytes(nbytes);
+if n > 16 { return 1;
+}
+    return 0;
+}
+
+pub fn a64_abi_sret_reg() -> Int {
+    return 8;
+}
+
+pub fn a64_emit_fp_add(rd: Int, rn: Int, rm: Int) -> Int {
+    return a64_enc_fadd(rd, rn, rm);
+}
+
+pub fn a64_emit_fp_sub(rd: Int, rn: Int, rm: Int) -> Int {
+    return a64_enc_fsub(rd, rn, rm);
+}
+
+pub fn a64_emit_fp_mul(rd: Int, rn: Int, rm: Int) -> Int {
+    return a64_enc_fmul(rd, rn, rm);
+}
+
+pub fn a64_emit_fp_div(rd: Int, rn: Int, rm: Int) -> Int {
+    return a64_enc_fdiv(rd, rn, rm);
+}
+
+pub fn a64_emit_fp_sqrt(rd: Int, rn: Int) -> Int {
+    return a64_enc_fsqrt(rd, rn);
+}
+
+pub fn a64_emit_fp_cmp(rn: Int, rm: Int) -> Int {
+    return a64_enc_fcmp(rn, rm);
+}
+
+fn a64_src_has_main(src: String) -> Bool {
+    let toks: List[String] = tokenize_lines(src);
+let n: Int = list_len(toks);
+let mut i: Int = 0;
+while i + 1 < n { if a64_tok_k(toks, i) == "KW_FN" && a64_tok_k(toks, i + 1) == "IDENT" && a64_tok_t(toks, i + 1) == "main" { return true;
+}
+        i = i + 1;
+    }
+    return false;
+}
+
+pub fn aarch64_emit_library(src: String) -> String {
+    let r: String = aarch64_ssa_emit_result_program(src);
+if chars_len(r) > 0 { return r + "\n" + aarch64_runtime_text();
+}
+    if a64_src_has_main(src) {
+        return "";
+    }
+    let ssa: String = aarch64_ssa_compile_program_asm(src);
+    if chars_len(ssa) > 0 { return ssa + "\n" + aarch64_runtime_text();
+    }
+    return "";
+}
+
+fn a64a_le32(b: List[Int], v: Int) -> List[Int] {
+    let mut o: List[Int] = list_push(b, v & 255);
+    o = list_push(o, (v / 256) & 255);
+    o = list_push(o, (v / 65536) & 255);
+    return list_push(o, (v / 16777216) & 255);
+}
+
+fn a64a_movn(rd: Int) -> Int {
+    let hi: Int = 146 * 16777216 + 128 * 65536;
+return hi + rd;
+}
+
+pub fn a64_rt_mmap_sysno() -> Int {
+    return 222;
+}
+
+pub fn a64_rt_mmap_code(tag: Int, len: Int) -> ByteOut {
+    if bare_sys_require(tag, 222) == 0 { return byte_out_err("a64_rt_mmap: cap deny");
+}
+    if len <= 0 { return byte_out_err("a64_rt_mmap: len");
+    }
+    let mut b: List[Int] = list_new();
+    b = a64a_le32(b, a64_enc_movz(8, 222));
+    b = a64a_le32(b, a64_enc_movz(0, 0));
+    b = a64a_le32(b, a64_enc_movz(1, len));
+    b = a64a_le32(b, a64_enc_movz(2, 3));
+    b = a64a_le32(b, a64_enc_movz(3, 34));
+    b = a64a_le32(b, a64a_movn(4));
+    b = a64a_le32(b, a64_enc_movz(5, 0));
+    b = a64a_le32(b, a64_enc_svc0());
+    return byte_out_ok(b);
+}

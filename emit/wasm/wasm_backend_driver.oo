@@ -1,0 +1,145 @@
+// # WebAssembly Sovereign Backend Driver
+//
+// Logline: Primary entry point connecting openOODA source code, tokenization, AST parser, and WebAssembly binary compiler.
+//
+// Setup: Import token_fmt.oo, ast.oo, ast_parse.oo, load_import.oo, and wasm compiler modules.
+//
+// Beats:
+//   1. Tokenize and parse source code into high-level AST.
+//   2. Compile AST to target WebAssembly bytecode module (GC, Linear, Browser).
+//   3. Extract module exports for TypeScript glue generation.
+//   4. Emit complete binary WebAssembly byte stream.
+
+
+
+import "wasm_opcodes.oo";
+
+import "wasm_types.oo";
+
+import "wasm_binary_builder.oo";
+
+import "wasm_lower_expr.oo";
+
+import "wasm_lower_stmt.oo";
+
+import "wasm_lower_control.oo";
+
+import "wasm_lower_fn.oo";
+
+import "wasm_opt_transforms.oo";
+
+import "wasm_target_browser.oo";
+
+import "wasm_alloc_slab.oo";
+
+import "wasm_alloc_buddy.oo";
+
+import "wasm_gc_types.oo";
+
+import "wasm_gc_lower.oo";
+
+import "wasm_gc_cast.oo";
+
+import "wasm_opt_ir.oo";
+
+import "wasm_opt_peephole.oo";
+
+import "wasm_opt_locals.oo";
+
+import "wasm_component_types.oo";
+
+import "wasm_component_canonical.oo";
+
+import "wasm_component_wit_emit.oo";
+
+import "wasm_component_builder.oo";
+
+import "wasm_wasi_p2.oo";
+
+import "wasm_simd_emitter.oo";
+
+import "wasm_atomic_emitter.oo";
+
+import "wasm_threads_sync.oo";
+
+import "wasm_js_glue_gen.oo";
+
+import "wasm_dwarf_header.oo";
+
+import "wasm_dwarf_lines.oo";
+
+import "wasm_sourcemap_vlq.oo";
+
+import "wasm_sourcemap_gen.oo";
+
+import "wasm_debug_custom_sec.oo";
+
+
+pub fn wasm_driver_compile_source(src: String, target_mode: String) -> List[Int] {
+    // 32768: motors concat 27496 emits type/func/code in ~1s; check of that concat does not finish in 12s.
+    if chars_len(src) > 32768 { println("ERR\twasm_emit\tsource too large");
+    process_exit(1);
+    }
+    let toks: List[String] = tokenize_lines(src);
+    if list_len(toks) > 8192 { println("ERR\twasm_emit\ttoo many tokens");
+    process_exit(1);
+    }
+    let ast_str: String = ast_parse(toks);
+    if target_mode == "browser" {
+        return wasm_compile_browser_module(ast_str, wasm_val_type_i32());
+    }
+    return wasm_compile_ast_module(ast_str, "wasi", wasm_val_type_i32());
+}
+
+pub fn wasm_driver_compile_gc(src: String) -> List[Int] {
+    return wasm_driver_compile_source(src, "wasm-gc");
+}
+
+pub fn wasm_driver_compile_linear(src: String) -> List[Int] {
+    return wasm_driver_compile_source(src, "wasm-linear");
+}
+
+pub fn wasm_driver_extract_exported_fns(src: String) -> List[String] {
+    let toks: List[String] = tokenize_lines(src);
+    let ast_str: String = ast_parse(toks);
+    let mut names: List[String] = list_new();
+    let tag: String = ast_tag(ast_str);
+    if tag == "AstFile" {
+        let items: String = wasm_ast_args(ast_str);
+        let n: Int = (0 + list_len_str(items));
+        let mut i: Int = 0;
+        while i < n {
+            let item: String = list_get_str(items, i);
+            if ast_is(item, "AstFn") {
+                let fn_args: String = wasm_ast_args(item);
+                let fn_name: String = list_get_str(fn_args, 0);
+                if fn_name != "" { names = list_push(names, fn_name);
+                }
+            }
+            i = i + 1;
+        }
+    } else if tag == "AstFn" {
+        let fn_args: String = wasm_ast_args(ast_str);
+        let fn_name: String = list_get_str(fn_args, 0);
+        if fn_name != "" { names = list_push(names, fn_name);
+        }
+    }
+    if list_len(names) == 0 { names = list_push(names, "main");
+    }
+    return names;
+}
+
+pub fn wasm_driver_build_file(fs_r: &FsReadCap, fs_w: &FsWriteCap, in_path: String, out_path: String, target_mode: String) -> Result[Bool, String] {
+    let src: String = load_source_with_imports(fs_r, in_path);
+    if chars_len(src) == 0 { return Err("ERR\twasm_driver\tempty_source");
+    }
+    let bin: List[Int] = wasm_driver_compile_source(src, target_mode);
+    if list_len(bin) == 0 { return Err("ERR\twasm_driver\tcompilation_failed");
+    }
+    let s: String = bytes_to_str(bin);
+    let w_res: Result[Void, String] = write_file(fs_w, out_path, s);
+    if !w_res.is_ok() {
+        return Err("ERR\twasm_driver\twrite_file_failed");
+    }
+    return Ok(true);
+}

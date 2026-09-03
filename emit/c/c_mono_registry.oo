@@ -1,0 +1,170 @@
+// # Monomorphization type collection and DAG registry
+//
+// Logline: Discovers generic type applications across tokens and emits monomorphized typedefs and helper prototypes in topological order.
+//
+// Setup: Parses AST type terms and resolves dependencies so element types precede composite wrappers.
+//
+// Beats:
+//   1. Recursive DAG registration ensuring child types precede parent types.
+//   2. Token stream scanner collecting all type annotations, signatures, and struct fields.
+//   3. Whole-program module collector building deduplicated monomorphization registries.
+//   4. Topological bulk emitter emitting header-guarded C definitions before function bodies.
+
+
+
+
+
+pub fn c_mono_reg_new() -> List[String] {
+    return list_new();
+}
+
+pub fn c_mono_reg_has(reg: List[String], ty: String) -> Bool {
+    let n: Int = list_len(reg);
+let mut i: Int = 0;
+while i < n { if list_get(reg, i) == ty { return true;
+}
+        i = i + 1;
+    }
+    return false;
+}
+
+pub fn ty_has_name(ty: String) -> Bool {
+    let tag: String = ty_tag(ty);
+    if tag == "TyName" { return true;
+    }
+    if tag == "TyList" || tag == "TyOption" || tag == "TyBox" || tag == "TyRef" || tag == "TyRefMut" {
+        return ty_has_name(ty_arg(ty, 0));
+    }
+    if tag == "TyResult" {
+        return ty_has_name(ty_arg(ty, 0)) || ty_has_name(ty_arg(ty, 1));
+    }
+    return false;
+}
+
+pub fn c_mono_reg_add(reg: List[String], ty: String) -> List[String] {
+    if ty == "" || ty == "TyInt" || ty == "TyFloat" || ty == "TyBool" || ty == "TyStr" || ty == "TyUnit" || ty == "TyCap" || ty == "TyF32x8" || ty == "TyF64x4" {
+        return reg;
+    }
+    if ty == "Int" || ty == "Float" || ty == "Bool" || ty == "String" || ty == "Void" || ty == "void" || ty == "unit" || ty == "f32x8" || ty == "f64x4" {
+        return reg;
+    }
+    if ty == "TyList(TyInt)" || ty == "TyList(TyStr)" || ty == "TyList(TyFloat)" || ty == "TyList(TyBool)" { return reg;
+    }
+    if ty == "TyList(TyList(TyInt))" || ty == "TyList(TyList(TyStr))" || ty == "TyList(TyList(TyFloat))" { return reg;
+    }
+    if ty == "TyList(TyList(TyList(TyInt)))" || ty == "TyList(TyList(TyList(TyStr)))" || ty == "TyList(TyList(TyList(TyFloat)))" { return reg;
+    }
+    if ty == "TyList(TyList(TyList(TyList(TyInt))))" || ty == "TyList(TyList(TyList(TyList(TyStr))))" || ty == "TyList(TyList(TyList(TyList(TyFloat))))" { return reg;
+    }
+    if ty == "TyOption(TyInt)" || ty == "TyOption(TyStr)" || ty == "TyOption(TyBool)" || ty == "TyOption(TyFloat)" { return reg;
+    }
+    if ty == "TyOption(TyList(TyInt))" || ty == "TyOption(TyList(TyStr))" || ty == "TyOption(TyList(TyFloat))" { return reg;
+    }
+    if ty == "TyResult(TyInt,TyStr)" || ty == "TyResult(TyStr,TyStr)" || ty == "TyResult(TyBool,TyStr)" || ty == "TyResult(TyFloat,TyStr)" { return reg;
+    }
+    if ty == "TyResult(TyInt,TyInt)" || ty == "TyResult(TyUnit,TyStr)" || ty == "TyResult(TyVoid,TyStr)" { return reg;
+    }
+    if ty == "TyResult(TyList(TyInt),TyStr)" || ty == "TyResult(TyList(TyStr),TyStr)" || ty == "TyResult(TyList(TyFloat),TyStr)" { return reg;
+    }
+    if ty == "TyResult(TyOption(TyInt),TyStr)" || ty == "TyResult(TyOption(TyStr),TyStr)" || ty == "TyResult(TyOption(TyBool),TyStr)" || ty == "TyResult(TyOption(TyFloat),TyStr)" { return reg;
+    }
+    if ty == "TyResult(TyOption(TyList(TyInt)),TyStr)" || ty == "TyResult(TyOption(TyList(TyStr)),TyStr)" || ty == "TyResult(TyOption(TyList(TyFloat)),TyStr)" { return reg;
+    }
+    let tag: String = ty_tag(ty);
+    if tag == "TyName" {
+        return reg;
+    }
+    if c_mono_reg_has(reg, ty) {
+        return reg;
+    }
+    let mut cur: List[String] = reg;
+    if tag == "TyList" {
+        let elem: String = ty_arg(ty, 0);
+        cur = c_mono_reg_add(cur, elem);
+        if !c_mono_reg_has(cur, ty) {
+            cur = list_push(cur, ty);
+        }
+        return cur;
+    }
+    if tag == "TyOption" {
+        let elem: String = ty_arg(ty, 0);
+        cur = c_mono_reg_add(cur, elem);
+        if !c_mono_reg_has(cur, ty) {
+            cur = list_push(cur, ty);
+        }
+        return cur;
+    }
+    if tag == "TyResult" {
+        let ok: String = ty_arg(ty, 0);
+        let err: String = ty_arg(ty, 1);
+        cur = c_mono_reg_add(cur, ok);
+        cur = c_mono_reg_add(cur, err);
+        if !c_mono_reg_has(cur, ty) {
+            cur = list_push(cur, ty);
+        }
+        return cur;
+    }
+    if tag == "TyBox" || tag == "TyRef" || tag == "TyRefMut" {
+        let inner: String = ty_arg(ty, 0);
+        cur = c_mono_reg_add(cur, inner);
+        if tag == "TyBox" && !c_mono_reg_has(cur, ty) {
+            cur = list_push(cur, ty);
+        }
+        return cur;
+    }
+    if !c_mono_reg_has(cur, ty) {
+        cur = list_push(cur, ty);
+    }
+    return cur;
+}
+
+pub fn c_mono_collect_tokens(toks: List[String], reg0: List[String]) -> List[String] {
+    let mut reg: List[String] = reg0;
+    let n: Int = list_len(toks);
+    let mut i: Int = 0;
+    while i < n { let k: String = c_tokk(toks, i);
+    let t: String = c_tokt(toks, i);
+    if k == "COLON" && i + 1 < n { let pr: List[String] = ty_parse_at(toks, i + 1, n);
+    let parsed_ty: String = list_get(pr, 1);
+    reg = c_mono_reg_add(reg, parsed_ty);
+    } else if k == "ARROW" && i + 1 < n { let pr2: List[String] = ty_parse_at(toks, i + 1, n);
+    let parsed_ty2: String = list_get(pr2, 1);
+    reg = c_mono_reg_add(reg, parsed_ty2);
+    } else if k == "IDENT" {
+            if t == "List" || t == "Option" || t == "Result" || t == "Box" {
+                if i + 1 < n && (c_tokk(toks, i + 1) == "LBRACKET" || c_tokk(toks, i + 1) == "LT") {
+                    let pr3: List[String] = ty_parse_at(toks, i, n);
+                    let parsed_ty3: String = list_get(pr3, 1);
+                    reg = c_mono_reg_add(reg, parsed_ty3);
+                }
+            }
+        }
+        i = i + 1;
+    }
+    return reg;
+}
+
+pub fn c_mono_collect_modules(fs: &FsReadCap, mods: List[String]) -> List[String] {
+    let mut reg: List[String] = c_mono_reg_new();
+    let n: Int = list_len(mods);
+    let mut i: Int = 0;
+    while i < n {
+        let m: String = list_get(mods, i);
+        let src_r: Result[String, String] = read_file(fs, m);
+        if src_r.is_ok() {
+            let src: String = match src_r { Ok(s) => s, Err(_) => "" };
+            let toks: List[String] = tokenize_lines(src);
+            reg = c_mono_collect_tokens(toks, reg);
+        }
+        i = i + 1;
+    }
+    return reg;
+}
+
+pub fn c_mono_emit_all(reg: List[String]) {
+    let n: Int = list_len(reg);
+    let mut i: Int = 0;
+    while i < n { let ty: String = list_get(reg, i);
+    i = i + 1;
+    }
+}

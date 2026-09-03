@@ -1,0 +1,105 @@
+// # x86-64 XMM Register Pool & System V AMD64 SSE Classification
+//
+// Logline: Defines 16 XMM floating point hardware registers, argument mappings, return register, and allocation priority.
+//
+// Setup: Pure architecture mapping module for SSE/SSE2 register management in the openOODA x86-64 backend.
+//
+// Beats:
+//   1. Enumerate 16 XMM hardware registers (XMM0 through XMM15).
+//   2. Provide string names for all XMM registers (%xmm0 through %xmm15).
+//   3. Classify System V AMD64 argument registers (XMM0 through XMM7) and return register (XMM0).
+//   4. Define caller-saved status and linear scan allocation order.
+
+pub fn x86_xmm_reg_count() -> Int {
+    return 16;
+}
+
+pub fn x86_xmm_reg_name(id: Int) -> String {
+    if id == 0 { return "%xmm0";
+    }
+    if id == 1 { return "%xmm1";
+    }
+    if id == 2 { return "%xmm2";
+    }
+    if id == 3 { return "%xmm3";
+    }
+    if id == 4 { return "%xmm4";
+    }
+    if id == 5 { return "%xmm5";
+    }
+    if id == 6 { return "%xmm6";
+    }
+    if id == 7 { return "%xmm7";
+    }
+    if id == 8 { return "%xmm8";
+    }
+    if id == 9 { return "%xmm9";
+    }
+    if id == 10 { return "%xmm10";
+    }
+    if id == 11 { return "%xmm11";
+    }
+    if id == 12 { return "%xmm12";
+    }
+    if id == 13 { return "%xmm13";
+    }
+    if id == 14 { return "%xmm14";
+    }
+    if id == 15 { return "%xmm15";
+    }
+    return "%xmm0";
+}
+
+pub fn x86_xmm_is_arg(id: Int) -> Bool {
+    return id >= 0 && id <= 7;
+}
+
+pub fn x86_xmm_arg_index(id: Int) -> Int {
+    if id >= 0 && id <= 7 { return id;
+    }
+    return -1;
+}
+
+pub fn x86_xmm_arg_to_reg(arg_idx: Int) -> Int {
+    if arg_idx >= 0 && arg_idx <= 7 { return arg_idx;
+    }
+    return -1;
+}
+
+pub fn x86_xmm_return_reg() -> Int {
+    return 0;
+}
+
+pub fn x86_xmm_return_reg_name() -> String {
+    return "%xmm0";
+}
+
+pub fn x86_xmm_is_caller_saved(id: Int) -> Bool {
+    return id >= 0 && id <= 15;
+}
+
+pub fn x86_xmm_all_reg_ids() -> List[Int] {
+    let mut xs: List[Int] = list_new();
+    let mut i: Int = 0;
+    while i < 16 { xs = list_push(xs, i);
+    i = i + 1;
+    }
+    return xs;
+}
+
+pub fn x86_xmm_alloc_order() -> List[Int] {
+    let mut xs: List[Int] = list_new();
+    // Scratch / non-argument registers first: %xmm8..%xmm15
+    let mut i: Int = 8;
+    while i < 16 { xs = list_push(xs, i);
+    i = i + 1;
+    }
+    // Argument registers next: %xmm1..%xmm7
+    i = 1;
+    while i < 8 { xs = list_push(xs, i);
+    i = i + 1;
+    }
+    // Return register last: %xmm0
+    xs = list_push(xs, 0);
+    return xs;
+}

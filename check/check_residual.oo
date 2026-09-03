@@ -1,0 +1,99 @@
+// # Residual DESIGN free-name default-deny
+//
+// Logline: Maps unshipped residual free names to DESIGN feature tags and refuse-exits if a program calls them.
+//
+// Setup: Token rows are kind, line, col, text; path A is default-deny at check, not stub implementations.
+//
+// Beats:
+//   1. residual_feature_of returns a DESIGN tag or empty for each residual free name.
+//   2. is_residual_forbidden is true when that tag is nonempty; residual_deny prints the path-A refuse and exits.
+//   3. check_residual_free_calls walks IDENT LPAREN pairs and denies any tagged name.
+//
+// honesty: refuse is product path A — not full DESIGN moonshot implementations
+// OPEN-70: import_c, ffi_gen, lto_xlang_link are product (not residual).
+// Other residual_feature_of tags below stay path A default-deny.
+
+// Feature tag for agent-facing residual refuse messages
+// M165: verify_human + actor_spawn promoted off residual refuse (product path A)
+// OPEN-89..92: macro_expand/ast_macro, hot_reload/live_reload,
+//   emit_ptx/emit_spirv, bare_metal_init are product (not residual).
+// OPEN-75: lsp_serve is product (not residual).
+pub fn residual_feature_of(name: String) -> String {
+    if name == "snapshot_state" { return "TEMPORAL";
+    }
+    if name == "hive_fuzz" { return "HIVEMIND";
+    }
+    if name == "hivemind_join" { return "HIVEMIND";
+    }
+    if name == "shadow_revert" { return "SHADOW_STATE";
+    }
+    if name == "shadow_commit" { return "SHADOW_STATE";
+    }
+    if name == "metamorphic_emit" { return "METAMORPHIC";
+    }
+    if name == "metamorphic_build" { return "METAMORPHIC";
+    }
+    if name == "holo_persist" { return "HOLOGRAPHIC";
+    }
+    if name == "holo_load" { return "HOLOGRAPHIC";
+    }
+    // gpu_launch sealed under GpuCap; actor_* sealed under ThreadCap (M165)
+    // OPEN-82: type_state_check / typestate_assert are product (not residual).
+
+    if name == "telepathic_compile" { return "TELEPATHIC_AST";
+    }
+    if name == "intent_compile" { return "TELEPATHIC_AST";
+    }
+    if name == "sign_callgraph" { return "CALLGRAPH_CRYPTO";
+    }
+    if name == "verify_callgraph" { return "CALLGRAPH_CRYPTO";
+    }
+    if name == "advanced_toolchain" { return "TOOLCHAINS_ADV";
+    }
+    if name == "playground_eval" { return "PLAYGROUND";
+    }
+    if name == "metamorphic_vs_det" { return "META_VS_DET";
+    }
+    return "";
+}
+
+pub fn is_residual_forbidden(name: String) -> Bool {
+    if residual_feature_of(name) != "" { return true;
+}
+    return false;
+}
+
+pub fn residual_deny(name: String, feature: String, line: String, col: String) {
+    println(
+        "ERR\tresidual\tResidual product refuse (path A): free call '"
+            + name
+            + "' names DESIGN surface "
+            + feature
+            + " which is not product-implemented. Default-deny at check. See SHIPPED.oot and ROADMAP.oot for "
+            + feature
+            + " at line "
+            + line
+            + ", col "
+            + col
+            + "."
+    );
+    process_exit(1);
+}
+
+// Walk program tokens; refuse residual free calls (IDENT + LPAREN).
+pub fn check_residual_free_calls(toks: List[String]) {
+    let n = list_len(toks);
+    let mut i = 0;
+    while i < n { let k: String = field_at(list_get(toks, i), 0);
+    if k == "IDENT" { if i + 1 < n { if field_at(list_get(toks, i + 1), 0) == "LPAREN" { let name: String = field_at(list_get(toks, i), 3);
+    let feature: String = residual_feature_of(name);
+    if feature != "" { let line: String = field_at(list_get(toks, i), 1);
+    let col: String = field_at(list_get(toks, i), 2);
+    residual_deny(name, feature, line, col);
+    }
+                }
+            }
+        }
+        i = i + 1;
+    }
+}

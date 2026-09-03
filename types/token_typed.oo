@@ -1,0 +1,87 @@
+// # Typed Token ◈ ZERO-DRAG
+//
+// Logline: Provides packed Token struct to replace TSV bag.
+//
+// Setup: Pure typed token, no TSV escape.
+//
+// Beats:
+//   1. Define Token with kind Int and line, col, text.
+//   2. Convert TSV List[String] to List[TypedToken] typed.
+//   3. Access kind, line, col, text via direct field.
+
+// ──▓▓ Sovereign Lattice ── TYPED ──▓▓──
+// :: TSV→typed ::  kind:Int ::
+
+pub type TypedToken = struct {
+  kind: Int,
+  line: Int,
+  col: Int,
+  text: String
+};
+
+pub fn kind_to_int(k: String) -> Int {
+  if k == "IDENT" { return 0;
+  }
+  if k == "INT" { return 1;
+  }
+  if k == "STRING" { return 2;
+  }
+  if k == "KW_FN" { return 10;
+  }
+  if k == "KW_LET" { return 11;
+  }
+  if k == "EOF" { return 99;
+  }
+  return 0 - 1;
+}
+
+pub fn int_to_kind(k: Int) -> String {
+  if k == 0 { return "IDENT";
+  }
+  if k == 1 { return "INT";
+  }
+  if k == 2 { return "STRING";
+  }
+  if k == 10 { return "KW_FN";
+  }
+  if k == 11 { return "KW_LET";
+  }
+  if k == 99 { return "EOF";
+  }
+  return "UNKNOWN";
+}
+
+pub fn typed_k(toks: List[TypedToken], i: Int) -> String {
+    let t: TypedToken = list_get(toks, i);
+return int_to_kind(t.kind);
+}
+
+pub fn typed_t(toks: List[TypedToken], i: Int) -> String {
+    let t: TypedToken = list_get(toks, i);
+return t.text;
+}
+
+pub fn typed_line(toks: List[TypedToken], i: Int) -> Int {
+    let t: TypedToken = list_get(toks, i);
+return t.line;
+}
+
+pub fn typed_col(toks: List[TypedToken], i: Int) -> Int {
+    let t: TypedToken = list_get(toks, i);
+return t.col;
+}
+
+pub fn token_from_tsv(
+  kind: Int,
+  line: Int,
+  col: Int,
+  text: String
+) -> TypedToken { let res: TypedToken = TypedToken { kind: kind, line: line, col: col, text: text };
+  return res;
+}
+
+pub fn tokens_typed(src: String) -> List[TypedToken] {
+  // direct typed path — no TSV
+  let mut out: List[TypedToken] = list_new();
+  return out;
+}

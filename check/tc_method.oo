@@ -1,0 +1,106 @@
+// # Typecheck method calls
+//
+// Logline: Find a recv.method(...) span and return its types.
+//
+// Setup: toks plus env. Receiver is IDENT or a pure lit, not a paren group.
+//
+// Beats:
+//   1. method_call_end returns the exclusive end or 0.
+//   2. Type the receiver and the method.
+//   3. Fail closed on a miss.
+import "types/types_core.oo";
+
+
+// Exclusive end after recv.method(...); 0 if pos is not a method call.
+// Receiver: IDENT or pure lit (INT/FLOAT/STRING/Bool). Not paren groups.
+pub fn method_call_end(toks: List[String], pos: Int) -> Int {
+    let n = list_len(toks);
+if pos + 3 >= n { return 0;
+}
+    let rk: String = field_at(list_get(toks, pos), 0);
+    let mut ok_recv = false;
+    if rk == "IDENT" || lit_token_type(rk) != "" {
+        ok_recv = true;
+    }
+    if !ok_recv { return 0;
+    }
+    let mut p: Int = pos;
+    let mut saw_method = false;
+    let mut cont = true;
+    while cont { if p + 3 < n && field_at(list_get(toks, p + 1), 0) == "DOT" && field_at(list_get(toks, p + 2), 0) == "IDENT" && field_at(list_get(toks, p + 3), 0) == "LPAREN" { let mut depth: Int = 0;
+    let mut q: Int = p + 3;
+    let mut matched_rparen = false;
+    while q < n { let k: String = field_at(list_get(toks, q), 0);
+    if k == "LPAREN" { depth = depth + 1;
+    } else if k == "RPAREN" {
+                    depth = depth - 1;
+                    if depth == 0 { p = q;
+                    saw_method = true;
+                    matched_rparen = true;
+                    q = n;
+                    }
+                }
+                q = q + 1;
+            }
+            if !matched_rparen { cont = false;
+            }
+        } else {
+            cont = false;
+        }
+    }
+    if saw_method { return p + 1;
+    }
+    return 0;
+}
+
+// Known method result when receiver type is known; "" = incomplete (no false fail).
+pub fn method_result_type(mname: String, rty: String) -> String {
+    if mname == "to_string" { return "String";
+}
+    if mname == "len" {
+        if rty == "String" || is_list_type_name(rty) {
+            return "Int";
+        }
+        return "";
+    }
+    if mname == "is_ok" || mname == "is_err" {
+        if is_result_type_name(rty) || rty == "Result" {
+            return "Bool";
+        }
+        return "";
+    }
+    if mname == "is_some" || mname == "is_none" {
+        if rty == "Option" {
+            return "Bool";
+        }
+        if chars_len(rty) >= 6 { if str_slice(rty, 0, 6) == "Option" { return "Bool";
+        }
+        }
+        return "";
+    }
+    if mname == "contains" {
+        if rty == "String" {
+            return "Bool";
+        }
+        return "";
+    }
+    if mname == "trim" || mname == "to_lowercase" {
+        if rty == "String" {
+            return "String";
+        }
+        return "";
+    }
+    if mname == "char_at" || mname == "str_slice" {
+        if rty == "String" {
+            return "String";
+        }
+        return "";
+    }
+    if mname == "unwrap" {
+        if is_result_type_name(rty) || rty == "Result" {
+            return result_ok_payload_type(rty);
+        }
+        return "";
+    }
+    return "";
+}

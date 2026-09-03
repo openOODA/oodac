@@ -1,0 +1,183 @@
+// # WebAssembly GC Bytecode Lowering
+//
+// Logline: Low-level emission of WebAssembly GC prefixed opcodes (0xFB) for struct and array allocation, field access, and updates.
+//
+// Setup: Import wasm_leb128.oo for type and field index encoding.
+//
+// Beats:
+//   1. Emit struct.new, struct.new_default, and struct.get/set bytecodes.
+//   2. Emit array.new, array.new_fixed, array.get/set, and array.len bytecodes.
+//   3. Handle signed vs unsigned field getters (get_s vs get_u).
+//   4. Emit bulk array operations (array.fill, array.copy).
+
+import "wasm_leb128.oo";
+
+
+pub fn emit_gc_struct_new(type_idx: Int) -> List[Int] {
+    let mut out: List[Int] = list_new();
+    out = list_push(out, 251);
+    // 0xFB
+    out = list_push(out, 0);
+    // struct.new
+    let leb: List[Int] = encode_u32_leb128(type_idx);
+    let mut i: Int = 0;
+    while i < list_len(leb) { out = list_push(out, list_get(leb, i));
+    i = i + 1;
+    }
+    return out;
+}
+
+pub fn emit_gc_struct_new_default(type_idx: Int) -> List[Int] {
+    let mut out: List[Int] = list_new();
+    out = list_push(out, 251);
+    // 0xFB
+    out = list_push(out, 1);
+    // struct.new_default
+    let leb: List[Int] = encode_u32_leb128(type_idx);
+    let mut i: Int = 0;
+    while i < list_len(leb) { out = list_push(out, list_get(leb, i));
+    i = i + 1;
+    }
+    return out;
+}
+
+pub fn emit_gc_struct_get(type_idx: Int, field_idx: Int) -> List[Int] {
+    let mut out: List[Int] = list_new();
+    out = list_push(out, 251);
+    // 0xFB
+    out = list_push(out, 2);
+    // struct.get
+    let leb_t: List[Int] = encode_u32_leb128(type_idx);
+    let mut i: Int = 0;
+    while i < list_len(leb_t) { out = list_push(out, list_get(leb_t, i));
+    i = i + 1;
+    }
+    let leb_f: List[Int] = encode_u32_leb128(field_idx);
+    let mut j: Int = 0;
+    while j < list_len(leb_f) { out = list_push(out, list_get(leb_f, j));
+    j = j + 1;
+    }
+    return out;
+}
+
+pub fn emit_gc_struct_set(type_idx: Int, field_idx: Int) -> List[Int] {
+    let mut out: List[Int] = list_new();
+    out = list_push(out, 251);
+    // 0xFB
+    out = list_push(out, 5);
+    // struct.set
+    let leb_t: List[Int] = encode_u32_leb128(type_idx);
+    let mut i: Int = 0;
+    while i < list_len(leb_t) { out = list_push(out, list_get(leb_t, i));
+    i = i + 1;
+    }
+    let leb_f: List[Int] = encode_u32_leb128(field_idx);
+    let mut j: Int = 0;
+    while j < list_len(leb_f) { out = list_push(out, list_get(leb_f, j));
+    j = j + 1;
+    }
+    return out;
+}
+
+pub fn emit_gc_array_new(type_idx: Int) -> List[Int] {
+    let mut out: List[Int] = list_new();
+    out = list_push(out, 251);
+    // 0xFB
+    out = list_push(out, 6);
+    // array.new
+    let leb: List[Int] = encode_u32_leb128(type_idx);
+    let mut i: Int = 0;
+    while i < list_len(leb) { out = list_push(out, list_get(leb, i));
+    i = i + 1;
+    }
+    return out;
+}
+
+pub fn emit_gc_array_new_fixed(type_idx: Int, count: Int) -> List[Int] {
+    let mut out: List[Int] = list_new();
+    out = list_push(out, 251);
+    // 0xFB
+    out = list_push(out, 8);
+    // array.new_fixed
+    let leb_t: List[Int] = encode_u32_leb128(type_idx);
+    let mut i: Int = 0;
+    while i < list_len(leb_t) { out = list_push(out, list_get(leb_t, i));
+    i = i + 1;
+    }
+    let leb_c: List[Int] = encode_u32_leb128(count);
+    let mut j: Int = 0;
+    while j < list_len(leb_c) { out = list_push(out, list_get(leb_c, j));
+    j = j + 1;
+    }
+    return out;
+}
+
+pub fn emit_gc_array_get(type_idx: Int) -> List[Int] {
+    let mut out: List[Int] = list_new();
+    out = list_push(out, 251);
+    // 0xFB
+    out = list_push(out, 11);
+    // array.get
+    let leb: List[Int] = encode_u32_leb128(type_idx);
+    let mut i: Int = 0;
+    while i < list_len(leb) { out = list_push(out, list_get(leb, i));
+    i = i + 1;
+    }
+    return out;
+}
+
+pub fn emit_gc_array_set(type_idx: Int) -> List[Int] {
+    let mut out: List[Int] = list_new();
+    out = list_push(out, 251);
+    // 0xFB
+    out = list_push(out, 14);
+    // array.set
+    let leb: List[Int] = encode_u32_leb128(type_idx);
+    let mut i: Int = 0;
+    while i < list_len(leb) { out = list_push(out, list_get(leb, i));
+    i = i + 1;
+    }
+    return out;
+}
+
+pub fn emit_gc_array_len() -> List[Int] {
+    let mut out: List[Int] = list_new();
+    out = list_push(out, 251);
+    // 0xFB
+    out = list_push(out, 15);
+    // array.len
+    return out;
+}
+
+pub fn emit_gc_array_fill(type_idx: Int) -> List[Int] {
+    let mut out: List[Int] = list_new();
+    out = list_push(out, 251);
+    // 0xFB
+    out = list_push(out, 16);
+    // array.fill
+    let leb: List[Int] = encode_u32_leb128(type_idx);
+    let mut i: Int = 0;
+    while i < list_len(leb) { out = list_push(out, list_get(leb, i));
+    i = i + 1;
+    }
+    return out;
+}
+
+pub fn emit_gc_array_copy(dst_type: Int, src_type: Int) -> List[Int] {
+    let mut out: List[Int] = list_new();
+    out = list_push(out, 251);
+    // 0xFB
+    out = list_push(out, 17);
+    // array.copy
+    let leb_d: List[Int] = encode_u32_leb128(dst_type);
+    let mut i: Int = 0;
+    while i < list_len(leb_d) { out = list_push(out, list_get(leb_d, i));
+    i = i + 1;
+    }
+    let leb_s: List[Int] = encode_u32_leb128(src_type);
+    let mut j: Int = 0;
+    while j < list_len(leb_s) { out = list_push(out, list_get(leb_s, j));
+    j = j + 1;
+    }
+    return out;
+}

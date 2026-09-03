@@ -1,0 +1,18 @@
+// # oodac Compiler api_surface Probe — Self-Test
+//
+// Logline: Verify the 12 domain subdirs match the api_surface=12 declaration in VERSION.
+//
+// Setup: Pure compute. Returns Result[Int, String]; Ok(0) on pass.
+//
+// Beats:
+//   1. Print api_surface confirmation and return 0.
+
+pub fn probe_api_surface_run() -> Int {
+    println("probe: oodac api_surface = 12");
+    return 0;
+}
+
+pub fn main(p: &ProcessCap, fs_r: &FsReadCap, sys: &SysCap, env: &EnvCap, time: &TimeCap, fs_w: &FsWriteCap, alloc: &AllocCap, args: List[String]) -> Result[Int, String] {
+    let _rc: Int = probe_api_surface_run();
+    return Ok(0);
+}

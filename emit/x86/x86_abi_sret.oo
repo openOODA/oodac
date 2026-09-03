@@ -1,0 +1,95 @@
+// # System V AMD64 SRet Hidden Pointer Mechanism & Buffer Lowering
+//
+// Logline: Implements System V AMD64 SRet hidden pointer return convention for multi-word aggregates exceeding 16 bytes.
+//
+// Setup: Pairs with oodac/x86_abi_classify.oo to manage caller stack buffer allocation and callee memory writes.
+//
+// Beats:
+//   1. Determine SRet requirement based on aggregate size and eightbyte classification.
+//   2. Generate caller stack allocation and hidden pointer setup in %rdi.
+//   3. Shift regular argument registers by one position to accommodate %rdi hidden pointer.
+//   4. Generate callee prologue pointer preservation, field stores, and %rax pointer return.
+
+
+import "x86_abi_classify.oo";
+
+
+pub fn x86_sret_is_required(ret_ty: String, ret_size: Int) -> Bool {
+    return x86_abi_is_sret(ret_ty, ret_size);
+}
+
+pub fn x86_sret_aligned_size(size_bytes: Int) -> Int {
+    if size_bytes <= 0 { return 16;
+    }
+    return (size_bytes + 15) & -16;
+}
+
+pub fn x86_sret_caller_setup(sret_offset_from_rbp: Int) -> List[String] {
+    let mut lines: List[String] = list_new();
+    let off_s: String = sret_offset_from_rbp.to_string();
+    lines = list_push(lines, "    leaq " + off_s + "(%rbp), %rdi\n");
+    return lines;
+}
+
+pub fn x86_sret_callee_prologue(sret_slot_offset: Int) -> List[String] {
+    let mut lines: List[String] = list_new();
+    let off_s: String = sret_slot_offset.to_string();
+    lines = list_push(lines, "    movq %rdi, " + off_s + "(%rbp)\n");
+    return lines;
+}
+
+pub fn x86_sret_callee_store_field(sret_slot_offset: Int, field_idx: Int, src_reg: String) -> List[String] {
+    let mut lines: List[String] = list_new();
+    let off_s: String = sret_slot_offset.to_string();
+    let disp_val: Int = field_idx * 8;
+    let field_disp: String = disp_val.to_string();
+    lines = list_push(lines, "    movq " + off_s + "(%rbp), %r10\n");
+    lines = list_push(lines, "    movq " + src_reg + ", " + field_disp + "(%r10)\n");
+    return lines;
+}
+
+pub fn x86_sret_callee_epilogue(sret_slot_offset: Int) -> List[String] {
+    let mut lines: List[String] = list_new();
+    let off_s: String = sret_slot_offset.to_string();
+    lines = list_push(lines, "    movq " + off_s + "(%rbp), %rax\n");
+    return lines;
+}
+
+pub fn x86_sret_arg_reg_for_index(arg_idx: Int, has_sret: Bool) -> String {
+    let effective_idx: Int = if has_sret { arg_idx + 1 } else { arg_idx };
+    return x86_abi_gpr_arg_reg(effective_idx);
+}
+
+pub fn x86_sret_emit_aggregate_return(ret_ty: String, ret_size: Int, sret_slot_offset: Int, field_regs: List[String]) -> List[String] {
+    let mut lines: List[String] = list_new();
+    if !x86_sret_is_required(ret_ty, ret_size) {
+        let ret_regs: List[String] = x86_abi_return_regs(ret_ty, ret_size);
+        let n: Int = list_len(ret_regs);
+        let mut i: Int = 0;
+        while i < n && i < list_len(field_regs) {
+            let target_r: String = list_get(ret_regs, i);
+            let src_r: String = list_get(field_regs, i);
+            if target_r != src_r { lines = list_push(lines, "    movq " + src_r + ", " + target_r + "\n");
+            }
+            i = i + 1;
+        }
+        return lines;
+    }
+    let n_fields: Int = list_len(field_regs);
+    let mut fi: Int = 0;
+    while fi < n_fields { let f_src: String = list_get(field_regs, fi);
+    let st_lines: List[String] = x86_sret_callee_store_field(sret_slot_offset, fi, f_src);
+    let mut li: Int = 0;
+    while li < list_len(st_lines) { lines = list_push(lines, list_get(st_lines, li));
+    li = li + 1;
+    }
+        fi = fi + 1;
+    }
+    let epi: List[String] = x86_sret_callee_epilogue(sret_slot_offset);
+    let mut ei: Int = 0;
+    while ei < list_len(epi) {
+        lines = list_push(lines, list_get(epi, ei));
+        ei = ei + 1;
+    }
+    return lines;
+}

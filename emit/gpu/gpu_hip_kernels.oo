@@ -1,0 +1,134 @@
+// # HIP Physics and 3D Stencil Kernel Emitter / HIP Tiled GEMM Matrix Multiplication Emitter
+//
+// Logline: Generates 3D 7-point finite-difference stencil and particle advection compute kernels for ROCm. Generates 2D tiled SGEMM and DGEMM matrix multiplication kernels with LDS caching and bank-conflict avoidance.
+//
+// Setup: Merged cohesive compiler module.
+//
+// Beats:
+//   1. Unified cohesive implementation.
+
+import "gpu_kernel_ir.oo";
+
+
+pub fn hip_emit_stencil_3d_kernel(kernel_name: String) -> String {
+    return "__global__ void " + kernel_name + "(const float* restrict__ u_in, float* restrict__ u_out, int nx, int ny, int nz, float c0, float c1) {\n"
+        + "    int x = (int)(blockIdx.x * blockDim.x + threadIdx.x);\n"
+        + "    int y = (int)(blockIdx.y * blockDim.y + threadIdx.y);\n"
+        + "    int z = (int)(blockIdx.z * blockDim.z + threadIdx.z);\n"
+        + "    if (x < nx && y < ny && z < nz) {\n"
+        + "        int idx = z * (nx * ny) + y * nx + x;\n"
+        + "        float center = u_in[idx];\n"
+        + "        float left   = (x > 0)      ? u_in[idx - 1]       : center;\n"
+        + "        float right  = (x < nx - 1) ? u_in[idx + 1]       : center;\n"
+        + "        float down   = (y > 0)      ? u_in[idx - nx]      : center;\n"
+        + "        float up     = (y < ny - 1) ? u_in[idx + nx]      : center;\n"
+        + "        float back   = (z > 0)      ? u_in[idx - nx * ny] : center;\n"
+        + "        float front  = (z < nz - 1) ? u_in[idx + nx * ny] : center;\n"
+        + "        u_out[idx] = c0 * center + c1 * (left + right + down + up + back + front);\n"
+        + "    }\n"
+        + "}\n";
+}
+
+pub fn hip_emit_stencil_2d_kernel(kernel_name: String) -> String {
+    return "__global__ void " + kernel_name + "(const float* restrict__ u_in, float* restrict__ u_out, int nx, int ny, float c0, float c1) {\n"
+        + "    int x = (int)(blockIdx.x * blockDim.x + threadIdx.x);\n"
+        + "    int y = (int)(blockIdx.y * blockDim.y + threadIdx.y);\n"
+        + "    if (x < nx && y < ny) {\n"
+        + "        int idx = y * nx + x;\n"
+        + "        float center = u_in[idx];\n"
+        + "        float left   = (x > 0)      ? u_in[idx - 1]  : center;\n"
+        + "        float right  = (x < nx - 1) ? u_in[idx + 1]  : center;\n"
+        + "        float down   = (y > 0)      ? u_in[idx - nx] : center;\n"
+        + "        float up     = (y < ny - 1) ? u_in[idx + nx] : center;\n"
+        + "        u_out[idx] = c0 * center + c1 * (left + right + down + up);\n"
+        + "    }\n"
+        + "}\n";
+}
+
+pub fn hip_emit_particle_advection_kernel(kernel_name: String) -> String {
+    return "__global__ void " + kernel_name + "(float4* restrict__ pos, const float4* restrict__ vel, int num_particles, float dt, float bound_min, float bound_max) {\n"
+        + "    int idx = (int)(blockIdx.x * blockDim.x + threadIdx.x);\n"
+        + "    if (idx < num_particles) {\n"
+        + "        float4 p = pos[idx];\n"
+        + "        float4 v = vel[idx];\n"
+        + "        p.x += v.x * dt;\n"
+        + "        p.y += v.y * dt;\n"
+        + "        p.z += v.z * dt;\n"
+        + "        if (p.x < bound_min) { p.x = bound_min; }\n"
+        + "        if (p.x > bound_max) { p.x = bound_max; }\n"
+        + "        if (p.y < bound_min) { p.y = bound_min; }\n"
+        + "        if (p.y > bound_max) { p.y = bound_max; }\n"
+        + "        if (p.z < bound_min) { p.z = bound_min; }\n"
+        + "        if (p.z > bound_max) { p.z = bound_max; }\n"
+        + "        pos[idx] = p;\n"
+        + "    }\n"
+        + "}\n";
+}
+
+pub fn hip_emit_tiled_sgemm_kernel(kernel_name: String) -> String {
+    return "__global__ void " + kernel_name + "(const float* restrict__ a, const float* restrict__ b, float* restrict__ c, int m, int n, int k) {\n"
+        + "    __shared__ float s_a[16][17];\n"
+        + "    __shared__ float s_b[16][17];\n"
+        + "    int row = (int)(blockIdx.y * 16 + threadIdx.y);\n"
+        + "    int col = (int)(blockIdx.x * 16 + threadIdx.x);\n"
+        + "    float acc = 0.0f;\n"
+        + "    int num_tiles = (k + 15) / 16;\n"
+        + "    for (int t = 0; t < num_tiles; t++) {\n"
+        + "        int a_col = t * 16 + threadIdx.x;\n"
+        + "        int b_row = t * 16 + threadIdx.y;\n"
+        + "        s_a[threadIdx.y][threadIdx.x] = (row < m && a_col < k) ? a[row * k + a_col] : 0.0f;\n"
+        + "        s_b[threadIdx.y][threadIdx.x] = (b_row < k && col < n) ? b[b_row * n + col] : 0.0f;\n"
+        + "        __syncthreads();\n"
+        + "        #pragma unroll\n"
+        + "        for (int i = 0; i < 16; i++) {\n"
+        + "            acc = fmaf(s_a[threadIdx.y][i], s_b[i][threadIdx.x], acc);\n"
+        + "        }\n"
+        + "        __syncthreads();\n"
+        + "    }\n"
+        + "    if (row < m && col < n) {\n"
+        + "        c[row * n + col] = acc;\n"
+        + "    }\n"
+        + "}\n";
+}
+
+pub fn hip_emit_tiled_dgemm_kernel(kernel_name: String) -> String {
+    return "__global__ void " + kernel_name + "(const double* restrict__ a, const double* restrict__ b, double* restrict__ c, int m, int n, int k) {\n"
+        + "    __shared__ double s_a[16][17];\n"
+        + "    __shared__ double s_b[16][17];\n"
+        + "    int row = (int)(blockIdx.y * 16 + threadIdx.y);\n"
+        + "    int col = (int)(blockIdx.x * 16 + threadIdx.x);\n"
+        + "    double acc = 0.0;\n"
+        + "    int num_tiles = (k + 15) / 16;\n"
+        + "    for (int t = 0; t < num_tiles; t++) {\n"
+        + "        int a_col = t * 16 + threadIdx.x;\n"
+        + "        int b_row = t * 16 + threadIdx.y;\n"
+        + "        s_a[threadIdx.y][threadIdx.x] = (row < m && a_col < k) ? a[row * k + a_col] : 0.0;\n"
+        + "        s_b[threadIdx.y][threadIdx.x] = (b_row < k && col < n) ? b[b_row * n + col] : 0.0;\n"
+        + "        __syncthreads();\n"
+        + "        #pragma unroll\n"
+        + "        for (int i = 0; i < 16; i++) {\n"
+        + "            acc = fma(s_a[threadIdx.y][i], s_b[i][threadIdx.x], acc);\n"
+        + "        }\n"
+        + "        __syncthreads();\n"
+        + "    }\n"
+        + "    if (row < m && col < n) {\n"
+        + "        c[row * n + col] = acc;\n"
+        + "    }\n"
+        + "}\n";
+}
+
+pub fn hip_emit_naive_matmul_kernel(kernel_name: String) -> String {
+    return "__global__ void " + kernel_name + "(const float* restrict__ a, const float* restrict__ b, float* restrict__ c, int m, int n, int k) {\n"
+        + "    int row = (int)(blockIdx.y * blockDim.y + threadIdx.y);\n"
+        + "    int col = (int)(blockIdx.x * blockDim.x + threadIdx.x);\n"
+        + "    if (row < m && col < n) {\n"
+        + "        float acc = 0.0f;\n"
+        + "        int t = 0;\n"
+        + "        while (t < k) {\n"
+        + "            acc = acc + a[row * k + t] * b[t * n + col];\n"
+        + "            t = t + 1;\n"
+        + "        }\n"
+        + "        c[row * n + col] = acc;\n"
+        + "    }\n"
+        + "}\n";
+}

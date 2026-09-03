@@ -1,0 +1,255 @@
+// # Lower a Result or Option match to C if/else
+//
+// Logline: Emits Ok/Some and Err/None arms in any order with balanced ARC retention and release.
+//
+// Setup: toks sit on KW_MATCH; emits if/else branching and scoped arm payload drops.
+//
+// Beats:
+//   1. Resolve scrutinee C type from environment (__ty__, __ret__, respay__).
+//   2. Parse arm 1 (Ok/Some/Err/None) and arm 2 in either order.
+//   3. Emit if/else branching with structured frame bindings and scope exit releases.
+
+import "c_emit_env.oo";
+
+import "c_emit_ops.oo";
+
+import "c_emit_helpers.oo";
+
+import "c_emit_arc.oo";
+
+import "c_emit_type_helpers.oo";
+
+
+pub fn c_match_rkind(env: String, scrut: String) -> String {
+    if str_starts_with(scrut, "oo_read_file") || str_starts_with(scrut, "read_file") || str_starts_with(scrut, "oo_sys_exec") || str_starts_with(scrut, "sys_exec") { return "R"; }
+    let sty: String = c_env_get(env, "__ty__" + scrut);
+    if sty != "" {
+        if sty == "OoResS" { return "R"; }
+        if sty == "OoResV" { return "V"; }
+        if sty == "OoResI" { return "RI"; }
+        if sty == "OoResII" { return "RII"; }
+        if sty == "OoResLI" || sty == "OoRes_OoL_I" { return "RLI"; }
+        if sty == "OoResLS" || sty == "OoRes_OoL_S" { return "RLS"; }
+        if sty == "OoResLF" || sty == "OoRes_OoL_F" { return "RLF"; }
+        if sty == "OoResB" { return "RB"; }
+        if sty == "OoResF" { return "RF"; }
+        if chars_len(sty) > 5 && (str_slice(sty, 0, 5) == "OoRes" || str_slice(sty, 0, 5) == "OoOpt") { return sty; }
+    }
+    let sk: String = c_env_get(env, scrut);
+    if sk == "V" || sk == "RI" || sk == "RII" || sk == "RLI" || sk == "RB" || sk == "RF" || sk == "RLS" || sk == "RLF" { return sk; }
+    if chars_len(sk) > 5 && (str_slice(sk, 0, 5) == "OoRes" || str_slice(sk, 0, 5) == "OoOpt") { return sk; }
+    let rp: String = c_env_get(env, "respay__");
+    if rp == "RI" || rp == "I" { return "RI"; }
+    if sk == "R" { return "R"; }
+    let ret: String = c_env_get(env, "__ret__");
+    if ret == "RI" || ret == "RII" || ret == "RLI" || ret == "RLS" || ret == "RLF" || ret == "RB" || ret == "RF" || ret == "V" { return ret; }
+    let ret_ct: String = c_env_get(env, "__ret_c_ty__");
+    if ret_ct != "" && chars_len(ret_ct) > 5 {
+        if str_slice(ret_ct, 0, 5) == "OoRes" || str_slice(ret_ct, 0, 5) == "OoOpt" { return ret_ct; }
+    }
+    return "R";
+}
+
+pub fn c_emit_arm_retain(ty: String, name: String) {
+    if ty == "OoStr" { println("    oo_str_retain(" + name + ");"); }
+    else if ty == "OoSList" || ty == "OoL_S" { println("    oo_slist_retain(" + name + ");"); }
+    else if ty == "OoIList" || ty == "OoL_I" { println("    oo_ilist_retain(" + name + ");"); }
+    else if ty == "OoFList" || ty == "OoL_F" { println("    oo_flist_retain(" + name + ");"); }
+    else if chars_len(ty) > 4 && str_slice(ty, 0, 4) == "OoL_" { println("    oo_retain_" + ty + "(" + name + ");"); }
+    else if chars_len(ty) > 6 && str_slice(ty, 0, 6) == "OoOpt_" { println("    oo_retain_" + ty + "(" + name + ");"); }
+    else if chars_len(ty) > 6 && str_slice(ty, 0, 6) == "OoRes_" { println("    oo_retain_" + ty + "(" + name + ");"); }
+    else if chars_len(ty) > 7 && str_slice(ty, 0, 7) == "OoRes2_" { println("    oo_retain_" + ty + "(" + name + ");"); }
+    else if chars_len(ty) > 5 && str_slice(ty, 0, 5) == "OoLL_" { println("    oo_retain_" + ty + "(" + name + ");"); }
+    else if chars_len(ty) > 6 && str_slice(ty, 0, 6) == "OoLLL_" { println("    oo_retain_" + ty + "(" + name + ");"); }
+    else if chars_len(ty) > 1 && byte_at(ty, 0) >= 65 && byte_at(ty, 0) <= 90 { println("    oo_retain_" + ty + "(" + name + ");"); }
+}
+
+pub fn c_emit_match_stmt(toks: List[String], pos: Int, n: Int, env: String) -> List[String] {
+    let mut p: Int = pos + 1;
+    let pr: List[String] = c_emit_expr_c(toks, p, n, env);
+    p = parse_int(list_get(pr, 0));
+    let scrut: String = list_get(pr, 1);
+    if p >= n || c_tokk(toks, p) != "LBRACE" { println("ERR\tc_emit\tmatch: expected {"); process_exit(1); }
+    p = p + 1;
+    if p >= n || c_tokk(toks, p) != "IDENT" { println("ERR\tc_emit\tmatch: expected arm 1"); process_exit(1); }
+    let arm1_tag: String = c_tokt(toks, p);
+    p = p + 1;
+    let mut arm1_bind: String = "";
+    if p < n && c_tokk(toks, p) == "LPAREN" {
+        p = p + 1;
+        if p < n && c_tokk(toks, p) == "IDENT" { arm1_bind = c_tokt(toks, p); p = p + 1; }
+        if p < n && c_tokk(toks, p) == "RPAREN" { p = p + 1; }
+    }
+    if p >= n || c_tokk(toks, p) != "FATARROW" { println("ERR\tc_emit\tmatch: expected =>"); process_exit(1); }
+    p = p + 1;
+    let rkind: String = c_match_rkind(env, scrut);
+    let mut is_opt: Bool = (chars_len(rkind) >= 5 && str_slice(rkind, 0, 5) == "OoOpt") || arm1_tag == "Some" || arm1_tag == "None";
+    let mut m_type: String = "OoResS";
+    if is_opt {
+        m_type = rkind;
+        if m_type == "OoOpt" || m_type == "R" { m_type = "OoOpt_I"; }
+    } else if rkind == "V" { m_type = "OoResV"; }
+    else if rkind == "RI" { m_type = "OoResI"; } else if rkind == "RII" { m_type = "OoResII"; }
+    else if rkind == "RLI" { m_type = "OoResLI"; } else if rkind == "RB" { m_type = "OoResB"; }
+    else if rkind == "RF" { m_type = "OoResF"; } else if rkind == "RLS" { m_type = "OoResLS"; }
+    else if rkind == "RLF" { m_type = "OoResLF"; }
+    else if chars_len(rkind) > 5 && str_slice(rkind, 0, 5) == "OoRes" { m_type = rkind; }
+
+    let mut ok_c_ty: String = "OoStr";
+    let mut ok_env_k: String = "T";
+    if is_opt {
+        if m_type == "OoOpt_I" { ok_c_ty = "long long"; ok_env_k = "I"; }
+        else if m_type == "OoOpt_S" { ok_c_ty = "OoStr"; ok_env_k = "T"; }
+        else if m_type == "OoOpt_F" { ok_c_ty = "double"; ok_env_k = "F"; } else if m_type == "OoOpt_B" { ok_c_ty = "int"; ok_env_k = "B"; }
+        else if chars_len(m_type) > 10 && str_slice(m_type, 0, 10) == "OoOpt_OoL_" {
+            ok_c_ty = str_slice(m_type, 6, chars_len(m_type));
+            ok_env_k = str_slice(m_type, 10, chars_len(m_type));
+        } else if chars_len(m_type) > 6 && str_slice(m_type, 0, 6) == "OoOpt_" {
+            let in_t: String = str_slice(m_type, 6, chars_len(m_type));
+            if in_t == "I" { ok_c_ty = "long long"; ok_env_k = "I"; }
+            else if in_t == "S" { ok_c_ty = "OoStr"; ok_env_k = "T"; }
+            else if in_t == "F" { ok_c_ty = "double"; ok_env_k = "F"; }
+            else if in_t == "B" { ok_c_ty = "int"; ok_env_k = "B"; }
+            else { ok_c_ty = in_t; ok_env_k = in_t; }
+        }
+    } else {
+        if rkind == "V" { ok_c_ty = "void"; ok_env_k = "V"; }
+        else if rkind == "RI" || rkind == "RII" { ok_c_ty = "long long"; ok_env_k = "I"; }
+        else if rkind == "RLI" { ok_c_ty = "OoIList"; ok_env_k = "I"; } else if rkind == "RB" { ok_c_ty = "int"; ok_env_k = "B"; }
+        else if rkind == "RF" { ok_c_ty = "double"; ok_env_k = "F"; } else if rkind == "RLS" { ok_c_ty = "OoSList"; ok_env_k = "S"; }
+        else if rkind == "RLF" { ok_c_ty = "OoFList"; ok_env_k = "LF"; }
+        else if chars_len(rkind) > 10 && str_slice(rkind, 0, 10) == "OoRes_OoL_" {
+            ok_c_ty = str_slice(rkind, 6, chars_len(rkind));
+            ok_env_k = str_slice(rkind, 10, chars_len(rkind));
+        } else if chars_len(rkind) > 7 && str_slice(rkind, 0, 7) == "OoResL_" {
+            let elem_name: String = str_slice(rkind, 7, chars_len(rkind));
+            ok_c_ty = "OoL_" + elem_name;
+            ok_env_k = elem_name;
+        } else if chars_len(rkind) > 6 && str_slice(rkind, 0, 6) == "OoRes_" {
+            let elem_s: String = str_slice(rkind, 6, chars_len(rkind));
+            if elem_s == "I" { ok_c_ty = "long long"; ok_env_k = "I"; }
+            else if elem_s == "S" { ok_c_ty = "OoStr"; ok_env_k = "T"; }
+            else if elem_s == "F" { ok_c_ty = "double"; ok_env_k = "F"; }
+            else if elem_s == "B" { ok_c_ty = "int"; ok_env_k = "B"; }
+            else { ok_c_ty = elem_s; ok_env_k = elem_s; }
+        }
+    }
+    println("  {");
+    println("  " + m_type + " __m = " + scrut + ";");
+    c_emit_src_line(toks, pos, env);
+    let is_ok_first: Bool = (arm1_tag == "Ok" || arm1_tag == "Some");
+    let mut arm1_cond: String = "__m.ok";
+    if is_opt { if is_ok_first { arm1_cond = "__m.has_val"; } else { arm1_cond = "!__m.has_val"; } }
+    else { if is_ok_first { arm1_cond = "__m.ok"; } else { arm1_cond = "!__m.ok"; } }
+    println("  if (" + arm1_cond + ") {");
+    let mut e1: String = c_env_push_scope(env);
+    if is_ok_first {
+        if ok_c_ty != "void" && arm1_bind != "" {
+            let mut d1: Int = (0 + c_env_scope_depth(e1)) - 1;
+            if d1 < 0 { d1 = 0; }
+            let cb1: String = arm1_bind + "_lvl" + d1.to_string();
+            println("    " + ok_c_ty + " " + cb1 + " = __m.val;");
+            c_emit_arm_retain(ok_c_ty, cb1);
+            e1 = c_env_put(e1, "__cvar__" + arm1_bind, cb1);
+            e1 = c_env_put(e1, "__ty__" + arm1_bind, ok_c_ty);
+            e1 = c_env_put(e1, cb1, ok_env_k);
+            e1 = c_env_put(e1, "__ty__" + cb1, ok_c_ty);
+        }
+    } else {
+        if !is_opt && arm1_bind != "" {
+            let mut d1: Int = (0 + c_env_scope_depth(e1)) - 1;
+            if d1 < 0 { d1 = 0; }
+            let cb1: String = arm1_bind + "_lvl" + d1.to_string();
+            let mut err_c: String = "OoStr"; let mut err_k: String = "T";
+            if rkind == "RII" || rkind == "RSI" || rkind == "RBI" || rkind == "RFI" || m_type == "OoResII" || m_type == "OoResSI" || m_type == "OoResBI" || m_type == "OoResFI" {
+                err_c = "long long"; err_k = "I";
+            } else if rkind == "RSB" || rkind == "RBB" || m_type == "OoResSB" || m_type == "OoResBB" {
+                err_c = "int"; err_k = "B";
+            } else if rkind == "RSF" || rkind == "RFF" || m_type == "OoResSF" || m_type == "OoResFF" {
+                err_c = "double"; err_k = "F";
+            }
+            let mut ef1: String = "__m.err";
+            if m_type == "OoResS" || m_type == "OoRes_S" || rkind == "R" { ef1 = "__m.val"; }
+            println("    " + err_c + " " + cb1 + " = " + ef1 + ";");
+            c_emit_arm_retain(err_c, cb1);
+            e1 = c_env_put(e1, "__cvar__" + arm1_bind, cb1);
+            e1 = c_env_put(e1, "__ty__" + arm1_bind, err_c);
+            e1 = c_env_put(e1, cb1, err_k);
+            e1 = c_env_put(e1, "__ty__" + cb1, err_c);
+        }
+    }
+    oo_emit_tmp_enter();
+    if p < n && c_tokk(toks, p) == "LBRACE" {
+        let br: List[String] = c_emit_block(toks, p, n, e1);
+        p = parse_int(list_get(br, 0));
+    } else {
+        let st: List[String] = c_emit_stmt(toks, p, n, e1);
+        p = parse_int(list_get(st, 0));
+    }
+    oo_emit_tmp_leave();
+    e1 = c_emit_scope_exit(e1);
+    p = c_match_skip_comma(toks, p, n);
+    println("  } else {");
+    if p >= n || c_tokk(toks, p) != "IDENT" { println("ERR\tc_emit\tmatch: expected arm 2"); process_exit(1); }
+    let arm2_tag: String = c_tokt(toks, p);
+    p = p + 1;
+    let mut arm2_bind: String = "";
+    if p < n && c_tokk(toks, p) == "LPAREN" {
+        p = p + 1;
+        if p < n && c_tokk(toks, p) == "IDENT" { arm2_bind = c_tokt(toks, p); p = p + 1; }
+        if p < n && c_tokk(toks, p) == "RPAREN" { p = p + 1; }
+    }
+    if p >= n || c_tokk(toks, p) != "FATARROW" { println("ERR\tc_emit\tmatch: expected =>"); process_exit(1); }
+    p = p + 1;
+    let mut e2: String = c_env_push_scope(env);
+    if !is_ok_first {
+        if ok_c_ty != "void" && arm2_bind != "" {
+            let mut d2: Int = (0 + c_env_scope_depth(e2)) - 1;
+            if d2 < 0 { d2 = 0; }
+            let cb2: String = arm2_bind + "_lvl" + d2.to_string();
+            println("    " + ok_c_ty + " " + cb2 + " = __m.val;");
+            c_emit_arm_retain(ok_c_ty, cb2);
+            e2 = c_env_put(e2, "__cvar__" + arm2_bind, cb2);
+            e2 = c_env_put(e2, "__ty__" + arm2_bind, ok_c_ty);
+            e2 = c_env_put(e2, cb2, ok_env_k);
+            e2 = c_env_put(e2, "__ty__" + cb2, ok_c_ty);
+        }
+    } else {
+        if !is_opt && arm2_bind != "" {
+            let mut d2: Int = (0 + c_env_scope_depth(e2)) - 1;
+            if d2 < 0 { d2 = 0; }
+            let cb2: String = arm2_bind + "_lvl" + d2.to_string();
+            let mut err_c2: String = "OoStr"; let mut err_k2: String = "T";
+            if rkind == "RII" || rkind == "RSI" || rkind == "RBI" || rkind == "RFI" || m_type == "OoResII" || m_type == "OoResSI" || m_type == "OoResBI" || m_type == "OoResFI" {
+                err_c2 = "long long"; err_k2 = "I";
+            } else if rkind == "RSB" || rkind == "RBB" || m_type == "OoResSB" || m_type == "OoResBB" {
+                err_c2 = "int"; err_k2 = "B";
+            } else if rkind == "RSF" || rkind == "RFF" || m_type == "OoResSF" || m_type == "OoResFF" {
+                err_c2 = "double"; err_k2 = "F";
+            }
+            let mut ef2: String = "__m.err";
+            if m_type == "OoResS" || m_type == "OoRes_S" || rkind == "R" { ef2 = "__m.val"; }
+            println("    " + err_c2 + " " + cb2 + " = " + ef2 + ";");
+            c_emit_arm_retain(err_c2, cb2);
+            e2 = c_env_put(e2, "__cvar__" + arm2_bind, cb2);
+            e2 = c_env_put(e2, "__ty__" + arm2_bind, err_c2);
+            e2 = c_env_put(e2, cb2, err_k2);
+            e2 = c_env_put(e2, "__ty__" + cb2, err_c2);
+        }
+    }
+    oo_emit_tmp_enter();
+    if p < n && c_tokk(toks, p) == "LBRACE" {
+        let br2: List[String] = c_emit_block(toks, p, n, e2);
+        p = parse_int(list_get(br2, 0));
+    } else {
+        let st2: List[String] = c_emit_stmt(toks, p, n, e2);
+        p = parse_int(list_get(st2, 0));
+    }
+    oo_emit_tmp_leave();
+    e2 = c_emit_scope_exit(e2);
+    p = c_match_skip_comma(toks, p, n);
+    println("  }");
+    println("  }");
+    if p < n && c_tokk(toks, p) == "RBRACE" { p = p + 1; }
+    return c_pack_pos_env(p, env);
+}

@@ -1,0 +1,250 @@
+// # Lower a method call to LLVM
+//
+// Logline: Load a named receiver or reuse a call value, then lower to_string, is_ok, is_err, unwrap, or byval list len.
+//
+// Setup: pos is the DOT; env is the five-slot LLVM emit env. List len matches preamble byval.
+//
+// Beats:
+//   1. Parse the method name and empty ().
+//   2. Named recv loads from its slot; call recv uses the value register.
+//   3. Result methods extract the %OoResS tag or payload; unknown methods fail closed.
+
+
+import "llvm_emit_ty.oo";
+
+import "llvm_emit_env.oo";
+
+
+fn llvm_method_parse(toks: List[String], pos: Int, n: Int) -> List[String] {
+    let mut p = pos + 1;
+    let mname: String = field_at(list_get(toks, p), 3);
+    p = p + 1;
+    if p < n && field_at(list_get(toks, p), 0) == "LPAREN" {
+        let mut depth = 0;
+        while p < n {
+            let pk: String = field_at(list_get(toks, p), 0);
+            if pk == "LPAREN" { depth = depth + 1;
+            }
+            if pk == "RPAREN" {
+                depth = depth - 1;
+                p = p + 1;
+                if depth == 0 { break;
+                }
+            } else {
+                p = p + 1;
+            }
+        }
+    }
+    let mut o: List[String] = list_new();
+    o = list_push(o, mname);
+    o = list_push(o, p.to_string());
+    return o;
+}
+
+fn llvm_method_out(val: String, ty: String, p: Int, env: List[String]) -> List[String] {
+    let mut o: List[String] = list_new();
+    o = list_push(o, val);
+    o = list_push(o, ty);
+    o = list_push(o, p.to_string());
+    o = list_push(o, list_get(env, 0));
+    o = list_push(o, list_get(env, 1));
+    o = list_push(o, list_get(env, 2));
+    o = list_push(o, list_get(env, 3));
+    o = list_push(o, list_get(env, 4));
+    return o;
+}
+
+pub fn llvm_apply_method(mname: String, recv: String, rty: String, p: Int, env: List[String]) -> List[String] {
+    let mut cur_env: List[String] = env;
+    let g: List[String] = llvm_gen_reg(cur_env);
+    let t2: String = list_get(g, 0);
+    cur_env = list_new();
+    cur_env = list_push(cur_env, list_get(g, 1));
+    cur_env = list_push(cur_env, list_get(g, 2));
+    cur_env = list_push(cur_env, list_get(g, 3));
+    cur_env = list_push(cur_env, list_get(g, 4));
+    cur_env = list_push(cur_env, list_get(g, 5));
+    if mname == "to_string" {
+        println("  " + t2 + " = call %OoStr @oo_int_to_str(i64 " + recv + ")");
+        return llvm_method_out(t2, "%OoStr", p, cur_env);
+    }
+    if mname == "is_ok" {
+        if rty != "%OoResI" && rty != "%OoResS" && rty != "%OoResV" && rty != "%OoResB" && rty != "%OoResF" && rty != "%OoResLI" && rty != "%OoResLS" && rty != "%OoResLF" && !(chars_len(rty) >= 7 && str_slice(rty, 0, 7) == "%OoRes.") {
+            println("ERR\tllvm_emit\tis_ok needs Result");
+            process_exit(1);
+        }
+        println("  " + t2 + " = extractvalue " + rty + " " + recv + ", 0");
+        return llvm_method_out(t2, "i32", p, cur_env);
+    }
+    if mname == "is_err" {
+        if rty != "%OoResI" && rty != "%OoResS" && rty != "%OoResV" && rty != "%OoResB" && rty != "%OoResF" && rty != "%OoResLI" && rty != "%OoResLS" && rty != "%OoResLF" && !(chars_len(rty) >= 7 && str_slice(rty, 0, 7) == "%OoRes.") {
+            println("ERR\tllvm_emit\tis_err needs Result");
+            process_exit(1);
+        }
+        println("  " + t2 + " = extractvalue " + rty + " " + recv + ", 0");
+        let g3: List[String] = llvm_gen_reg(cur_env);
+        let t3: String = list_get(g3, 0);
+        cur_env = list_new();
+        cur_env = list_push(cur_env, list_get(g3, 1));
+        cur_env = list_push(cur_env, list_get(g3, 2));
+        cur_env = list_push(cur_env, list_get(g3, 3));
+        cur_env = list_push(cur_env, list_get(g3, 4));
+        cur_env = list_push(cur_env, list_get(g3, 5));
+        let g4: List[String] = llvm_gen_reg(cur_env);
+        let t4: String = list_get(g4, 0);
+        cur_env = list_new();
+        cur_env = list_push(cur_env, list_get(g4, 1));
+        cur_env = list_push(cur_env, list_get(g4, 2));
+        cur_env = list_push(cur_env, list_get(g4, 3));
+        cur_env = list_push(cur_env, list_get(g4, 4));
+        cur_env = list_push(cur_env, list_get(g4, 5));
+        println("  " + t3 + " = icmp eq i32 " + t2 + ", 0");
+        println("  " + t4 + " = zext i1 " + t3 + " to i32");
+        return llvm_method_out(t4, "i32", p, cur_env);
+    }
+    if mname == "unwrap" {
+        if rty == "%OoResI" {
+            println("  " + t2 + " = extractvalue %OoResI " + recv + ", 1");
+            return llvm_method_out(t2, "i64", p, cur_env);
+        }
+        if rty == "%OoResB" {
+            println("  " + t2 + " = extractvalue %OoResB " + recv + ", 1");
+            return llvm_method_out(t2, "i32", p, cur_env);
+        }
+        if rty == "%OoResF" {
+            println("  " + t2 + " = extractvalue %OoResF " + recv + ", 1");
+            return llvm_method_out(t2, "double", p, cur_env);
+        }
+        if rty == "%OoResS" {
+            println("  " + t2 + " = extractvalue %OoResS " + recv + ", 1");
+            return llvm_method_out(t2, "%OoStr", p, cur_env);
+        }
+        println("ERR\tllvm_emit\tunwrap residual");
+        process_exit(1);
+        return llvm_method_out("0", "i64", p, cur_env);
+    }
+    if mname == "len" {
+        if rty == "%OoSList" || rty == "%OoIList" {
+            let in_slot: String = t2 + ".byv";
+            println("  " + in_slot + " = alloca " + rty + ", align 8");
+            println("  store " + rty + " " + recv + ", " + rty + "* " + in_slot + ", align 8");
+            let glen: List[String] = llvm_gen_reg(cur_env);
+            let tlen: String = list_get(glen, 0);
+            cur_env = list_new();
+            cur_env = list_push(cur_env, list_get(glen, 1));
+            cur_env = list_push(cur_env, list_get(glen, 2));
+            cur_env = list_push(cur_env, list_get(glen, 3));
+            cur_env = list_push(cur_env, list_get(glen, 4));
+            cur_env = list_push(cur_env, list_get(glen, 5));
+            let mut lfn: String = "oo_ilist_len";
+            if rty == "%OoSList" {
+                lfn = "oo_slist_len";
+            }
+            println("  " + tlen + " = call i64 @" + lfn + "(" + rty + "* byval(" + rty + ") " + in_slot + ")");
+            return llvm_method_out(tlen, "i64", p, cur_env);
+        }
+        if rty == "%OoStr" {
+            println("  " + t2 + " = call i64 @oo_chars_len(%OoStr " + recv + ")");
+            return llvm_method_out(t2, "i64", p, cur_env);
+        }
+        println("ERR\tllvm_emit\t.len() needs String or List");
+        process_exit(1);
+        return llvm_method_out("0", "i64", p, cur_env);
+    }
+    println("ERR\tllvm_emit\tunknown method " + mname);
+    process_exit(1);
+    return llvm_method_out("0", "i64", p, cur_env);
+}
+
+pub fn llvm_emit_method_val(recv: String, rty: String, toks: List[String], pos: Int, n: Int, env: List[String]) -> List[String] {
+    let pr: List[String] = llvm_method_parse(toks, pos, n);
+    return llvm_apply_method(list_get(pr, 0), recv, rty, parse_int(list_get(pr, 1)), env);
+}
+
+pub fn llvm_emit_method(recv_name: String, toks: List[String], pos: Int, n: Int, env: List[String]) -> List[String] {
+    let pr: List[String] = llvm_method_parse(toks, pos, n);
+    let mname: String = list_get(pr, 0);
+    let p_after: Int = parse_int(list_get(pr, 1));
+    let mut cur_env: List[String] = env;
+    let lty: String = llvm_ty_map(llvm_env_get_var_ty(cur_env, recv_name));
+    let g: List[String] = llvm_gen_reg(cur_env);
+    let treg: String = list_get(g, 0);
+    cur_env = list_new();
+    cur_env = list_push(cur_env, list_get(g, 1));
+    cur_env = list_push(cur_env, list_get(g, 2));
+    cur_env = list_push(cur_env, list_get(g, 3));
+    cur_env = list_push(cur_env, list_get(g, 4));
+    cur_env = list_push(cur_env, list_get(g, 5));
+    let rslot: String = llvm_env_slot(cur_env, recv_name);
+    println("  " + treg + " = load " + lty + ", " + lty + "* %" + rslot + ".slot, align 8");
+    // Method .push() on lists: lower as list_push.
+    if mname == "push" && (lty == "%OoSList" || lty == "%OoIList" || lty == "%OoFList" || lty == "%OoLL_I" || lty == "%OoLL_S" || lty == "%OoLL_F") {
+        // toks[pos] = DOT, toks[pos+1] = "push", toks[pos+2] = LPAREN, args at pos+3.
+        if pos + 2 < n && field_at(list_get(toks, pos + 2), 0) == "LPAREN" {
+            let ar: List[String] = llvm_emit_expr(toks, pos + 3, n, cur_env);
+            let arg_val: String = list_get(ar, 0);
+            let mut ap: Int = parse_int(list_get(ar, 2));
+            cur_env = list_new();
+            cur_env = list_push(cur_env, list_get(ar, 3));
+            cur_env = list_push(cur_env, list_get(ar, 4));
+            cur_env = list_push(cur_env, list_get(ar, 5));
+            cur_env = list_push(cur_env, list_get(ar, 6));
+            cur_env = list_push(cur_env, list_get(ar, 7));
+            // Walk ap forward to RPAREN.
+            while ap < n && field_at(list_get(toks, ap), 0) != "RPAREN" { ap = ap + 1;
+            }
+            if ap < n { ap = ap + 1;
+            }
+            // Emit list_push: byval receiver, sret out slot, push the element.
+            let in_slot: String = treg + ".byv";
+            println("  " + in_slot + " = alloca " + lty + ", align 8");
+            println("  store " + lty + " " + treg + ", " + lty + "* " + in_slot + ", align 8");
+            let reg_out: List[String] = llvm_gen_reg(cur_env);
+            let out_slot: String = list_get(reg_out, 0) + ".sret";
+            cur_env = list_new();
+            cur_env = list_push(cur_env, list_get(reg_out, 1));
+            cur_env = list_push(cur_env, list_get(reg_out, 2));
+            cur_env = list_push(cur_env, list_get(reg_out, 3));
+            cur_env = list_push(cur_env, list_get(reg_out, 4));
+            cur_env = list_push(cur_env, list_get(reg_out, 5));
+            println("  " + out_slot + " = alloca " + lty + ", align 8");
+            let mut ety: String = "i64";
+            let mut fn_name: String = "oo_ilist_push";
+            if lty == "%OoSList" { ety = "%OoStr";
+            fn_name = "oo_slist_push";
+            }
+            if lty == "%OoFList" { ety = "double";
+            fn_name = "oo_flist_push";
+            }
+            if lty == "%OoLL_I" { ety = "%OoIList";
+            fn_name = "oo_ll_I_push";
+            }
+            if lty == "%OoLL_S" { ety = "%OoSList";
+            fn_name = "oo_ll_S_push";
+            }
+            if lty == "%OoLL_F" { ety = "%OoFList";
+            fn_name = "oo_ll_F_push";
+            }
+            if ety == "%OoIList" || ety == "%OoSList" || ety == "%OoFList" {
+                // Aggregate element — pass byval.
+                let el_slot: String = arg_val + ".elv";
+                println("  " + el_slot + " = alloca " + ety + ", align 8");
+                println("  store " + ety + " " + arg_val + ", " + ety + "* " + el_slot + ", align 8");
+                println("  call void @" + fn_name + "(" + lty + "* sret(" + lty + ") " + out_slot + ", " + lty + "* byval(" + lty + ") " + in_slot + ", " + ety + "* byval(" + ety + ") " + el_slot + ")");
+            } else {
+                println("  call void @" + fn_name + "(" + lty + "* sret(" + lty + ") " + out_slot + ", " + lty + "* byval(" + lty + ") " + in_slot + ", " + ety + " " + arg_val + ")");
+            }
+            let reg_ld: List[String] = llvm_gen_reg(cur_env);
+            let result_reg: String = list_get(reg_ld, 0);
+            cur_env = list_new();
+            cur_env = list_push(cur_env, list_get(reg_ld, 1));
+            cur_env = list_push(cur_env, list_get(reg_ld, 2));
+            cur_env = list_push(cur_env, list_get(reg_ld, 3));
+            cur_env = list_push(cur_env, list_get(reg_ld, 4));
+            cur_env = list_push(cur_env, list_get(reg_ld, 5));
+            println("  " + result_reg + " = load " + lty + ", " + lty + "* " + out_slot + ", align 8");
+            return llvm_out_val(result_reg, lty, ap, cur_env);
+        }
+    }
+    return llvm_apply_method(mname, treg, lty, p_after, cur_env);
+}

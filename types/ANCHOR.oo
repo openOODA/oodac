@@ -1,0 +1,43 @@
+// # Compiler Type System
+//
+// Logline: Type system core — type definitions, representation, parsing, and name mangling. The companion type-checker lives in oodac/check/.
+//
+// Setup: Pure functional type primitives. The lexer produces typed tokens (token_typed.oo) that flow into ty.oo for type representation. ty_parse.oo parses type expressions; ty_mangle.oo lowers type names to linker symbols; types_core.oo is the canonical type algebra.
+//
+// Beats:
+//   1. ast_type_def.oo — type definitions in the AST (struct, enum, type alias).
+//   2. token_typed.oo — typed tokens produced by the lexer.
+//   3. ty.oo — type representation (the central type algebra).
+//   4. ty_parse.oo — parse a type expression into a ty.oo value.
+//   5. ty_mangle.oo — mangle a type into a stable linker symbol.
+//   6. types_core.oo — primitive type constructors and operations.
+
+import "lex/ANCHOR.oo";
+import "ast_type_def.oo";
+import "token_typed.oo";
+import "ty.oo";
+import "ty_parse.oo";
+import "ty_mangle.oo";
+import "types_core.oo";
+
+// ──▓▓ Public Types Subsystem API ──▓▓──
+
+pub fn types_is_cap(t: String) -> Bool {
+    return is_cap_type(t);
+}
+
+pub fn types_result_payload(rty: String) -> String {
+    return result_ok_payload_type(rty);
+}
+
+pub fn types_env_new() -> String {
+    return type_env_new();
+}
+
+pub fn types_env_put(env: String, name: String, ty: String) -> String {
+    return type_env_put(env, name, ty);
+}
+
+pub fn types_env_get(env: String, name: String) -> String {
+    return type_env_get(env, name);
+}

@@ -1,0 +1,173 @@
+// # Emit Reassignment and Let-Alias ARC Retains
+//
+// Logline: Handle ARC retain and release on variable reassignment and let aliasing for managed types.
+//
+// Setup: Backend-C floor. Handles primitives, user structs, options, results, and nested collections.
+//
+// Beats:
+//   1. Retain new value and drop old value for strings, lists, structs, and nested kinds.
+//   2. Retain aliased variables and struct field references in let bindings.
+//   3. Helper functions for list push arguments and identifier classification.
+//   4. Maintain <= 256 lines limit.
+
+import "c_emit_env.oo";
+import "c_emit_arc.oo";
+import "c_emit_ops_str.oo";
+import "c_emit_temps.oo";
+import "c_emit_list_ty.oo";
+
+pub fn c_slist_push_arg(rhs: String) -> String {
+    let pre = "oo_slist_push(";
+    let n = chars_len(rhs);
+    let pn = chars_len(pre);
+    if n <= pn {
+        return "";
+    }
+    let mut i = 0;
+    while i < pn {
+        if char_at(rhs, i) != char_at(pre, i) {
+            return "";
+        }
+        i = i + 1;
+    }
+    let mut depth = 1;
+    let mut comma = -1;
+    while i < n {
+        let c = char_at(rhs, i);
+        if c == "(" {
+            depth = depth + 1;
+        }
+        if c == ")" {
+            depth = depth - 1;
+            if depth == 0 {
+                if comma < 0 {
+                    return "";
+                }
+                let a0 = comma + 1;
+                if a0 < i && char_at(rhs, a0) == " " {
+                    return str_slice(rhs, a0 + 1, i);
+                }
+                return str_slice(rhs, a0, i);
+            }
+        }
+        if c == "," && depth == 1 && comma < 0 {
+            comma = i;
+        }
+        i = i + 1;
+    }
+    return "";
+}
+
+pub fn c_expr_is_c_ident(s: String) -> Bool {
+    let n = chars_len(s);
+    if n == 0 {
+        return false;
+    }
+    let mut i = 0;
+    while i < n {
+        let c = char_at(s, i);
+        if c == "(" || c == ")" || c == "," || c == " " || c == "+" {
+            return false;
+        }
+        i = i + 1;
+    }
+    return true;
+}
+
+pub fn c_emit_reassign_arc(name: String, rhs: String, env: String) {
+    let mut k: String = c_env_get(env, "__ty__" + name);
+    if k == "" { k = c_env_get(env, name); }
+    let rk: String = c_env_get(env, rhs);
+    if k == "T" || k == "OoStr" {
+        let mut out = "  ";
+        if (rk == "T" || rk == "OoStr" || (c_expr_is_c_ident(rhs) && rk != "") || (rhs.contains(".") && !rhs.contains("("))) && c_env_get(env, "__no_arc__") != "1" {
+            out = out + "oo_str_retain(" + rhs + "); ";
+        }
+        if c_env_get(env, "__no_arc__") != "1" {
+            out = out + "{ OoStr __tmp = " + name + "; " + name + " = " + rhs + "; oo_str_release(__tmp); }";
+        } else {
+            out = out + name + " = " + rhs + ";";
+        }
+        println(out);
+    } else if k == "S" || k == "OoSList" || k == "OoL_S" {
+        let mut out = "  ";
+        if (rk == "S" || rk == "OoSList" || (c_expr_is_c_ident(rhs) && rk != "") || (rhs.contains(".") && !rhs.contains("("))) && c_env_get(env, "__no_arc__") != "1" {
+            out = out + "oo_slist_retain(" + rhs + "); ";
+        }
+        if c_env_get(env, "__no_arc__") != "1" {
+            let parg: String = c_slist_push_arg(rhs);
+            if parg != "" && !c_expr_is_c_ident(parg) {
+                out = out + "{ OoStr __pa = " + parg + "; OoSList __tmp = " + name + "; "
+                    + name + " = oo_slist_push(" + name + ", __pa); oo_str_release(__pa); oo_slist_release(__tmp); }";
+            } else {
+                out = out + "{ OoSList __tmp = " + name + "; " + name + " = " + rhs + "; oo_slist_release(__tmp); }";
+            }
+        } else {
+            out = out + name + " = " + rhs + ";";
+        }
+        println(out);
+    } else if k == "LI" || k == "OoIList" || k == "OoL_I" {
+        let mut out = "  ";
+        if (rk == "LI" || rk == "OoIList" || (c_expr_is_c_ident(rhs) && rk != "") || (rhs.contains(".") && !rhs.contains("("))) && c_env_get(env, "__no_arc__") != "1" {
+            out = out + "oo_ilist_retain(" + rhs + "); ";
+        }
+        if c_env_get(env, "__no_arc__") != "1" {
+            out = out + "{ OoIList __tmp = " + name + "; " + name + " = " + rhs + "; oo_ilist_release(__tmp); }";
+        } else {
+            out = out + name + " = " + rhs + ";";
+        }
+        println(out);
+    } else if k == "LF" || k == "OoFList" || k == "OoL_F" {
+        let mut out = "  ";
+        if (rk == "LF" || rk == "OoFList" || (c_expr_is_c_ident(rhs) && rk != "") || (rhs.contains(".") && !rhs.contains("("))) && c_env_get(env, "__no_arc__") != "1" {
+            out = out + "oo_flist_retain(" + rhs + "); ";
+        }
+        if c_env_get(env, "__no_arc__") != "1" {
+            out = out + "{ OoFList __tmp = " + name + "; " + name + " = " + rhs + "; oo_flist_release(__tmp); }";
+        } else {
+            out = out + name + " = " + rhs + ";";
+        }
+        println(out);
+    } else if c_is_ll_kind(k) {
+        c_reassign_nested_kind(name, rhs, k);
+    } else if c_is_managed_type(k) {
+        let mut out = "  ";
+        let is_struct_lit: Bool = chars_len(rhs) >= 2 && str_slice(rhs, 0, 2) == "((";
+        let mut need_retain: Bool = (rk != "" || (c_expr_is_c_ident(rhs) && rk != "") || (rhs.contains(".") && !rhs.contains("(")) || is_struct_lit);
+        if c_env_get(env, "__no_arc__") != "1" {
+            if is_struct_lit {
+                out = out + "{ " + k + " __tmp = " + name + "; " + name + " = " + rhs + "; " + c_arc_kind_retain(k, name) + c_arc_kind_release(k, "__tmp") + "}";
+            } else {
+                if need_retain { out = out + c_arc_kind_retain(k, rhs); }
+                out = out + "{ " + k + " __tmp = " + name + "; " + name + " = " + rhs + "; " + c_arc_kind_release(k, "__tmp") + "}";
+            }
+        } else {
+            out = out + name + " = " + rhs + ";";
+        }
+        println(out);
+    } else {
+        println("  " + name + " = " + rhs + ";");
+    }
+}
+
+pub fn c_emit_let_alias_retain(name: String, rhs: String, lty: String, env: String) {
+    if !c_is_managed_type(lty) || (chars_len(rhs) >= 3 && str_slice(rhs, 0, 3) == "oo_") { return; }
+    let rk: String = c_env_get(env, rhs);
+    let mut need: Bool = rk != "" || (c_expr_is_c_ident(rhs) && rk != "");
+    let rn: Int = chars_len(rhs);
+    let mut di: Int = 0;
+    while di < rn {
+        if char_at(rhs, di) == "." && !rhs.contains("(") { need = true; }
+        di = di + 1;
+    }
+    if chars_len(lty) > 1 && byte_at(lty, 0) >= 65 && byte_at(lty, 0) <= 90 {
+        if chars_len(lty) < 4 || str_slice(lty, 0, 4) != "OoL_" {
+            if rk != "" || (chars_len(rhs) >= 2 && str_slice(rhs, 0, 2) == "((") { need = true; }
+        }
+    }
+    if !need { return; }
+    if c_env_get(env, "__no_arc__") != "1" {
+        let ret_code: String = c_arc_kind_retain(lty, name);
+        if ret_code != "" { println("  " + ret_code); }
+    }
+}

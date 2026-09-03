@@ -1,0 +1,132 @@
+// # Type Checking & Verification Subsystem — Module Entry Door
+//
+// Logline: Re-exports bidirectional type checking, typestate verification, SMT contracts, and polyhedral analysis.
+//
+// Setup: Imports internal check siblings and exposes public verification APIs.
+//
+// Beats:
+//   1. Import type checker, typestate, SMT, and polyhedral analysis siblings.
+//   2. Re-export public verification and typechecking interfaces.
+//   3. Preserve capability passing and zero ambient authority.
+
+import "emit/c/c_emit_env.oo";
+import "check_cache.oo";
+import "check_cap_grant.oo";
+import "check_cap_util.oo";
+import "check_caps.oo";
+import "check_collect.oo";
+import "check_drive.oo";
+import "check_hash.oo";
+import "check_mod.oo";
+import "check_residual.oo";
+import "check_scan.oo";
+import "check_secret.oo";
+import "check_typestate.oo";
+import "check_typestate_call.oo";
+import "check_typestate_fn.oo";
+import "check_typestate_item.oo";
+import "check_typestate_join.oo";
+import "check_typestate_match.oo";
+import "check_typestate_parse.oo";
+import "check_typestate_tok.oo";
+import "check_typestate_walk.oo";
+import "diag_json.oo";
+import "diag_json_parse.oo";
+import "poly_domain.oo";
+import "poly_schedule.oo";
+import "poly_tile.oo";
+import "smt_clause_query.oo";
+import "smt_contract_parse.oo";
+import "smt_poly_eval.oo";
+import "smt_poly_interval.oo";
+import "smt_poly_sign.oo";
+import "smt_prover_lia.oo";
+import "smt_verify.oo";
+import "smt_wp_calc.oo";
+import "sym_frame.oo";
+import "tc_ann.oo";
+import "tc_ann_let.oo";
+import "tc_ann_ops.oo";
+import "tc_ann_return.oo";
+import "tc_assign_immut.oo";
+import "tc_assign_mut.oo";
+import "tc_call_arg_lits.oo";
+import "tc_call_arg_prep.oo";
+import "tc_call_arity.oo";
+import "tc_call_binop.oo";
+import "tc_call_eq.oo";
+import "tc_call_let.oo";
+import "tc_call_logic.oo";
+import "tc_call_order.oo";
+import "tc_call_ret.oo";
+import "tc_call_util.oo";
+import "tc_control_branch.oo";
+import "tc_control_cond.oo";
+import "tc_diag.oo";
+import "tc_drive.oo";
+import "tc_effects.oo";
+import "tc_infer.oo";
+import "tc_list_int_name.oo";
+import "tc_match_exh.oo";
+import "tc_method.oo";
+import "tc_must_use_call.oo";
+import "tc_names.oo";
+import "tc_names_known.oo";
+import "tc_names_sum.oo";
+import "tc_ops_cmp.oo";
+import "tc_ops_logic.oo";
+import "tc_ops_unary.oo";
+import "tc_parse_int.oo";
+import "tc_read_result.oo";
+import "tc_refine.oo";
+import "tc_refine_bind.oo";
+import "tc_refine_calls.oo";
+import "tc_refine_fn_ret.oo";
+import "tc_refine_path.oo";
+import "tc_refine_smt.oo";
+import "tc_scope.oo";
+import "tc_struct_assign.oo";
+import "tc_struct_chain.oo";
+import "tc_struct_field_table.oo";
+import "tc_struct_lit.oo";
+import "tc_struct_method.oo";
+import "tc_struct_method_receiver.oo";
+import "tc_tables.oo";
+import "tc_tables_ret.oo";
+import "tc_types_core.oo";
+import "tc_unused_import.oo";
+import "tc_unused_let.oo";
+import "types/ty.oo";
+import "types/ty_mangle.oo";
+import "types/ty_parse.oo";
+import "types/types_core.oo";
+
+// ──▓▓ Public Type Checking & Verification API ──▓▓──
+
+pub fn types_check_caps(toks: List[String], pos0: Int) -> Int {
+    return check_caps(toks, pos0);
+}
+
+pub fn types_check_types(src: String) -> String {
+    return check_types(src);
+}
+
+pub fn types_type_env(env: String, name: String, ty: String) -> String {
+    return type_env(env, name, ty);
+}
+
+pub fn check_run_src(src: String) -> Int {
+    return run_check_from_src(src);
+}
+
+pub fn check_run_modules(fs: &FsReadCap, entry: String) -> Int {
+    return check_modules(fs, entry);
+}
+
+pub fn check_run_typestate(src: String) -> Int {
+    return check_typestate(src);
+}
+
+pub fn check_run_smt(src: String) -> Int {
+    return smt_verify_pass_run(src);
+}

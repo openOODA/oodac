@@ -1,0 +1,162 @@
+// # Same-fn let binds for emit-aarch64 harvest
+//
+// Logline: Binds a same-fn string mix, ALU fold, typed INT, minus, or int alias for the AArch64 harvest walker.
+//
+// Setup: a64_tok_k, a64_tok_t, a64_str_fold, a64_str_after, a64_neg_dec, a64_bind_idx, a64_mix_try, a64_int_digits exist in aarch64_emit_harv.oo. a64_is_alu and a64_alu_i exist in aarch64_emit_num.oo.
+//
+// Beats:
+//   1. Mix string concat first so printf chains fold before any int path.
+//   2. Bind let-RHS ALU ending at SEMI (single-op fold only, chains stay empty).
+//   3. Lone STRING with no PLUS, lone INT with no ALU next, and MINUS INT bind.
+//   4. IDENT (no LPAREN) maps to a prior int bind so let x = y copies y's value.
+//   5. IDENT+LPAREN stays unbound so leftover call-ident still ERRs.
+//
+// residual: Multi-op ALU chains, paren-wrapped ALU, and AAPCS calls stay later.
+
+import "aarch64_emit_const_harvest.oo";
+
+import "aarch64_emit_num.oo";
+
+
+// Fold one ALU step ([MINUS] (INT | (INT)) with optional INT ALU INT) starting at p.
+// Stops only when the next token is stop_kw. Returns [folded] on success, [] on mismatch.
+// Lighter than x86_alu_until: single-op only, no chain fold, no paren-wrapped chain.
+fn a64_bind_alu_until(toks: List[String], n: Int, p: Int, inames: List[String], ivals: List[String], stop_kw: String) -> List[String] {
+    let empty: List[String] = list_new();
+    if p >= n { return empty;
+    }
+    let mut q = p;
+    let mut neg = false;
+    if a64_tok_k(toks, q) == "MINUS" {
+        neg = true;
+        q = q + 1;
+        if q >= n { return empty;
+        }
+    }
+    let mut paren = 0;
+    if a64_tok_k(toks, q) == "LPAREN" {
+        paren = 1;
+        q = q + 1;
+        if q >= n { return empty;
+        }
+    }
+    if a64_tok_k(toks, q) != "INT" {
+        return empty;
+    }
+    let base_t: String = a64_tok_t(toks, q);
+    let base_v: Int = 0 + a64_int_digits(base_t);
+    if base_v < 0 { return empty;
+    }
+    q = q + 1;
+    let mut acc: String = base_t;
+    if neg { acc = "-" + base_t;
+    }
+    if q < n && a64_is_alu(a64_tok_k(toks, q)) {
+        let op: String = a64_tok_k(toks, q);
+        if q + 1 >= n || a64_tok_k(toks, q + 1) != "INT" {
+            return empty;
+        }
+        let rhs_v: Int = 0 + a64_int_digits(a64_tok_t(toks, q + 1));
+        if rhs_v < 0 { return empty;
+        }
+        let folded: String = a64_alu_i(op, base_v, rhs_v);
+        if folded == "" {
+            return empty;
+        }
+        acc = folded;
+        q = q + 2;
+    }
+    if paren == 1 { if q >= n || a64_tok_k(toks, q) != "RPAREN" { return empty;
+    }
+        q = q + 1;
+    }
+    if q >= n { return empty;
+    }
+    if a64_tok_k(toks, q) != stop_kw { return empty;
+    }
+    let mut out: List[String] = list_new();
+    out = list_push(out, acc);
+    return out;
+}
+
+pub fn aarch64_apply_let(toks: List[String], n: Int, i: Int, bind_names: List[String], bind_vals: List[String], int_names: List[String], int_vals: List[String]) -> List[String] {
+    let empty: List[String] = list_new();
+    let mut ni = i + 1;
+    if ni < n && a64_tok_k(toks, ni) == "KW_MUT" {
+        ni = ni + 1;
+    }
+    if ni + 2 >= n || a64_tok_k(toks, ni) != "IDENT" {
+        return empty;
+    }
+    let mut eqi = ni + 1;
+    if eqi < n && a64_tok_k(toks, eqi) == "COLON" {
+        eqi = eqi + 1;
+        if eqi < n && a64_tok_k(toks, eqi) == "IDENT" {
+            eqi = eqi + 1;
+        }
+    }
+    if eqi >= n || a64_tok_k(toks, eqi) != "EQ" {
+        return empty;
+    }
+    let nm: String = a64_tok_t(toks, ni);
+    let rhs = eqi + 1;
+    let lgot: List[String] = a64_mix_try(toks, n, rhs, bind_names, bind_vals, int_names, int_vals);
+    if list_len(lgot) >= 1 { let mut o: List[String] = list_new();
+    o = list_push(o, "S");
+    o = list_push(o, nm);
+    o = list_push(o, list_get(lgot, 0));
+    return o;
+    }
+    let agot: List[String] = a64_bind_alu_until(toks, n, rhs, int_names, int_vals, "SEMI");
+    if list_len(agot) >= 1 { let mut o: List[String] = list_new();
+    o = list_push(o, "I");
+    o = list_push(o, nm);
+    o = list_push(o, list_get(agot, 0));
+    return o;
+    }
+    if a64_tok_k(toks, rhs) == "STRING" {
+        let after: Int = 0 + a64_str_after(toks, n, rhs);
+        let mut mixed = false;
+        if after < n { if a64_tok_k(toks, after) == "PLUS" { mixed = true;
+        }
+        }
+        if !mixed { let mut o: List[String] = list_new();
+        o = list_push(o, "S");
+        o = list_push(o, nm);
+        o = list_push(o, a64_str_fold(toks, n, rhs));
+        return o;
+        }
+    }
+    if a64_tok_k(toks, rhs) == "INT" {
+        if rhs + 1 >= n || !a64_is_alu(a64_tok_k(toks, rhs + 1)) {
+            let mut o: List[String] = list_new();
+            o = list_push(o, "I");
+            o = list_push(o, nm);
+            o = list_push(o, a64_tok_t(toks, rhs));
+            return o;
+        }
+    }
+    if a64_tok_k(toks, rhs) == "MINUS" {
+        if rhs + 1 < n && a64_tok_k(toks, rhs + 1) == "INT" {
+            if rhs + 2 >= n || !a64_is_alu(a64_tok_k(toks, rhs + 2)) {
+                let mut o: List[String] = list_new();
+                o = list_push(o, "I");
+                o = list_push(o, nm);
+                o = list_push(o, a64_neg_dec(a64_tok_t(toks, rhs + 1)));
+                return o;
+            }
+        }
+    }
+    if a64_tok_k(toks, rhs) == "IDENT" {
+        if rhs + 1 >= n || a64_tok_k(toks, rhs + 1) != "LPAREN" {
+            let iidx: Int = 0 + a64_bind_idx(int_names, a64_tok_t(toks, rhs));
+            if iidx >= 0 { let mut o: List[String] = list_new();
+            o = list_push(o, "I");
+            o = list_push(o, nm);
+            o = list_push(o, list_get(int_vals, iidx));
+            return o;
+            }
+        }
+    }
+    return empty;
+}

@@ -1,0 +1,228 @@
+// # Emit a let binding as C
+//
+// Logline: Lower let or let mut to a C declaration, infer the type from annotation or symbol table, and record env and secret marks.
+//
+// Setup: Backend-C floor. Uses typed AST and environment symbols instead of token-sliding heuristics.
+//
+// Beats:
+//   1. Parse variable name, mutability, and explicit type annotation.
+//   2. Lower RHS expression and resolve type via annotation, struct-lit name, symbol table, or typed inference.
+//   3. Bind type in environment and emit C declaration / assignment.
+
+import "c_emit_env.oo";
+import "c_emit_list_ty.oo";
+import "c_emit_ty.oo";
+import "c_emit_ty_ext.oo";
+import "c_emit_ops.oo";
+import "c_emit_secret_alias.oo";
+import "c_emit_secret_prop.oo";
+import "c_emit_secret.oo";
+import "c_emit_temps.oo";
+import "c_emit_let_ext.oo";
+import "c_emit_struct.oo";
+
+pub fn c_emit_let_stmt(toks: List[String], pos: Int, n: Int, env: String) -> List[String] {
+    let mut p: Int = pos;
+    let mut e: String = env;
+    let k: String = c_tokk(toks, p);
+    if k == "KW_LET" {
+        p = p + 1;
+        if p < n && c_tokk(toks, p) == "KW_MUT" { p = p + 1; }
+    }
+    let name: String = c_tokt(toks, p);
+    p = p + 1;
+    let mut ann_kind: String = "";
+    let mut ann_ty: String = "";
+    if p < n && c_tokk(toks, p) == "COLON" {
+        p = p + 1;
+        ann_kind = c_peek_list_elem2(toks, p, n);
+        ann_ty = c_ty_at(toks, p, n);
+        p = c_emit_skip_type(toks, p, n);
+    }
+    if p < n && c_tokk(toks, p) == "EQ" { p = p + 1; }
+    if p >= n { println("ERR\tc_emit\tincomplete let RHS"); process_exit(1); }
+    let rk0: String = c_tokk(toks, p);
+    if rk0 == "SEMI" || rk0 == "RBRACE" || rk0 == "EOF" {
+        println("ERR\tc_emit\tincomplete let RHS");
+        process_exit(1);
+    }
+    if p < n && c_tokk(toks, p) == "KW_MATCH" {
+        // FIX: pass the declared let type annotation through to c_emit_match_let
+        // so the produced declaration (e.g. `long long len1;`) matches the user's
+        // type annotation (e.g. `let len1: Int = match ...`) instead of the
+        // rkind-based default (which is OoStr for OoResS scrutinees).
+        // has_ann is true when the user wrote `: Type` on the let.
+        let has_ann: Bool = (ann_ty != "" && ann_ty != "void");
+        let mut mlty: String = "long long";
+        if has_ann { mlty = ann_ty; }
+        return c_emit_match_let_typed(name, toks, p, n, e, has_ann, mlty);
+    }
+    if p < n && c_tokk(toks, p) == "KW_IF" {
+        let mut lty: String = "long long";
+        let mut bind_kind: String = "";
+        if ann_ty != "" && ann_ty != "void" {
+            lty = ann_ty;
+            if ann_ty == "OoSList" || ann_ty == "OoL_S" { bind_kind = "S"; }
+            if ann_ty == "OoIList" || ann_ty == "OoL_I" { bind_kind = "I"; }
+            if ann_ty == "OoFList" || ann_ty == "OoL_F" { bind_kind = "LF"; }
+            if ann_ty == "OoLL_I" { bind_kind = "LL_I"; }
+            if ann_ty == "OoLL_S" { bind_kind = "LL_S"; }
+            if ann_ty == "OoLL_F" { bind_kind = "LL_F"; }
+            if ann_ty == "OoStr" { bind_kind = "T"; }
+            if chars_len(ann_ty) > 4 && str_slice(ann_ty, 0, 4) == "OoL_" {
+                bind_kind = ann_kind;
+            }
+        }
+        let mut depth_if: Int = (0 + c_env_scope_depth(e)) - 1;
+        if depth_if < 0 { depth_if = 0; }
+        let c_var_if: String = name + "_lvl" + depth_if.to_string();
+        if c_env_get(e, "__decl__" + name) == "" && c_env_get(e, "__formal__" + name) == "" {
+            c_emit_need_ty(lty);
+            println("  " + lty + " " + c_var_if + " = {0};");
+            e = c_env_put(e, "__cvar__" + name, c_var_if);
+            e = c_env_put(e, "__decl__" + c_var_if, "1");
+            e = c_env_put(e, "__decl__" + name, "1");
+        }
+        let mut ea: String = c_env_put(e, "__asgn__", c_var_if);
+        if ann_kind != "" { ea = c_env_put(ea, "__ann__", ann_kind); }
+        let rkind: String = c_result_ret_kind(ann_ty);
+        if rkind != "" {
+            ea = c_env_put(ea, "__ret__", rkind);
+            ea = c_env_put(ea, "__ret_c_ty__", ann_ty);
+        }
+        let mut guard: Int = 0;
+        while guard < 32 {
+            if p >= n { break; }
+            let kk: String = c_tokk(toks, p);
+            if kk != "KW_IF" && kk != "KW_ELSE" { break; }
+            let st: List[String] = c_emit_stmt(toks, p, n, ea);
+            p = parse_int(list_get(st, 0));
+            ea = list_get(st, 1);
+            guard = guard + 1;
+        }
+        if lty == "OoStr" { bind_kind = "T"; }
+        else if lty == "OoResS" { bind_kind = "R"; }
+        else if lty == "OoResV" { bind_kind = "V"; }
+        else if lty == "OoResI" { bind_kind = "RI"; }
+        else if lty == "OoResII" { bind_kind = "RII"; }
+        else if lty == "OoResB" { bind_kind = "RB"; }
+        else if lty == "OoResF" { bind_kind = "RF"; }
+        else if lty == "OoResLI" { bind_kind = "RLI"; }
+        else if lty == "OoResLS" { bind_kind = "RLS"; }
+        else if lty == "OoResLF" { bind_kind = "RLF"; }
+        else if chars_len(lty) > 5 && str_slice(lty, 0, 5) == "OoRes" { bind_kind = lty; }
+        else if lty == "double" { bind_kind = "F"; }
+        else if bind_kind == "" && c_is_managed_type(lty) { bind_kind = lty; }
+        if bind_kind != "" { e = c_env_put(e, c_var_if, bind_kind); }
+        e = c_env_put(e, "__ty__" + c_var_if, lty);
+        e = c_env_put(e, "__ty__" + name, lty);
+        if p < n && c_tokk(toks, p) == "SEMI" { p = p + 1; }
+        return c_pack_pos_env(p, e);
+    }
+    let mut env_rhs: String = e;
+    if ann_kind != "" { env_rhs = c_env_put(e, "__ann__", ann_kind); }
+    if c_env_get(e, "__plain__") != "1" && c_env_get(e, "__sec__" + name) == "1" {
+        env_rhs = c_env_put(env_rhs, "__sec_rhs__", "1");
+    }
+    let rkind: String = c_result_ret_kind(ann_ty);
+    if rkind != "" {
+        env_rhs = c_env_put(env_rhs, "__ret__", rkind);
+        env_rhs = c_env_put(env_rhs, "__ret_c_ty__", ann_ty);
+    }
+    if chars_len(ann_ty) >= 6 && str_slice(ann_ty, 0, 6) == "OoOpt_" {
+        env_rhs = c_env_put(env_rhs, "__opt_c_ty__", ann_ty);
+    }
+    let rhs_pos: Int = p;
+    let pr: List[String] = c_emit_expr_c(toks, p, n, env_rhs);
+    p = parse_int(list_get(pr, 0));
+    let mut rhs: String = list_get(pr, 1);
+    oo_emit_tmp_own(rhs);
+    let mut lty: String = "long long";
+    let mut bind_kind: String = "";
+    if ann_ty != "" && ann_ty != "void" {
+        lty = ann_ty;
+        if ann_ty == "OoSList" || ann_ty == "OoL_S" {
+            bind_kind = "S";
+            if rhs == "oo_ilist_new()" { rhs = "oo_slist_new()"; }
+        }
+        if ann_ty == "OoIList" || ann_ty == "OoL_I" { bind_kind = "I"; }
+        if ann_ty == "OoFList" || ann_ty == "OoL_F" {
+            bind_kind = "LF";
+            if rhs == "oo_ilist_new()" { rhs = "oo_flist_new()"; }
+        }
+        if ann_ty == "OoLL_I" { bind_kind = "LL_I"; if rhs == "oo_ilist_new()" { rhs = "oo_ll_I_new()"; } }
+        if ann_ty == "OoLL_S" { bind_kind = "LL_S"; if rhs == "oo_ilist_new()" { rhs = "oo_ll_S_new()"; } }
+        if ann_ty == "OoLL_F" { bind_kind = "LL_F"; if rhs == "oo_ilist_new()" { rhs = "oo_ll_F_new()"; } }
+        if ann_ty == "OoLLL_I" { bind_kind = "LLL_I"; if rhs == "oo_ilist_new()" { rhs = "oo_lll_I_new()"; } }
+        if ann_ty == "OoLLL_S" { bind_kind = "LLL_S"; if rhs == "oo_ilist_new()" { rhs = "oo_lll_S_new()"; } }
+        if ann_ty == "OoLLL_F" { bind_kind = "LLL_F"; if rhs == "oo_ilist_new()" { rhs = "oo_lll_F_new()"; } }
+        if ann_ty == "OoLLLL_I" { bind_kind = "LLLL_I"; if rhs == "oo_ilist_new()" { rhs = "oo_llll_I_new()"; } }
+        if ann_ty == "OoLLLL_S" { bind_kind = "LLLL_S"; if rhs == "oo_ilist_new()" { rhs = "oo_llll_S_new()"; } }
+        if ann_ty == "OoLLLL_F" { bind_kind = "LLLL_F"; if rhs == "oo_ilist_new()" { rhs = "oo_llll_F_new()"; } }
+        if chars_len(ann_ty) > 4 && str_slice(ann_ty, 0, 4) == "OoL_" {
+            bind_kind = ann_kind;
+            if rhs == "oo_ilist_new()" || rhs == "oo_slist_new()" { rhs = "oo_l_" + ann_kind + "_new()"; }
+        }
+    } else if ann_kind == "S" {
+        lty = "OoSList";
+        if rhs == "oo_ilist_new()" { rhs = "oo_slist_new()"; }
+    } else if ann_kind == "I" {
+        lty = "OoIList";
+    } else {
+        let inf: List[String] = c_emit_let_untyped_ty(rhs, e);
+        lty = list_get(inf, 0);
+        let bk: String = list_get(inf, 1);
+        if bk != "" { bind_kind = bk; }
+        let sty: String = c_struct_lit_ty_name(rhs);
+        if sty != "" { lty = sty; }
+    }
+    if ann_ty == "" && lty == "long long" {
+        let inf2: List[String] = c_emit_let_untyped_ty(rhs, e);
+        let u: String = list_get(inf2, 0);
+        if u != "long long" && u != "" {
+            lty = u;
+            let bk2: String = list_get(inf2, 1);
+            if bk2 != "" { bind_kind = bk2; }
+        }
+    }
+    if c_rhs_is_unwrap(rhs) {
+        if ann_ty == "" || ann_ty == "void" { lty = "OoStr"; }
+    }
+    if lty == "" { lty = "long long"; }
+    if lty == "OoStr" { bind_kind = "T"; }
+    else if lty == "OoResS" { bind_kind = "R"; }
+    else if lty == "OoResV" { bind_kind = "V"; }
+    else if lty == "OoResI" { bind_kind = "RI"; }
+    else if lty == "OoResII" { bind_kind = "RII"; }
+    else if lty == "OoResB" { bind_kind = "RB"; }
+    else if lty == "OoResF" { bind_kind = "RF"; }
+    else if lty == "OoResLI" || lty == "OoRes_OoL_I" { bind_kind = "RLI"; }
+    else if lty == "OoResLS" || lty == "OoRes_OoL_S" { bind_kind = "RLS"; }
+    else if lty == "OoResLF" || lty == "OoRes_OoL_F" { bind_kind = "RLF"; }
+    else if chars_len(lty) > 5 && str_slice(lty, 0, 5) == "OoRes" { bind_kind = lty; }
+    else if lty == "double" { bind_kind = "F"; }
+    else if bind_kind == "" && c_is_managed_type(lty) { bind_kind = lty; }
+
+    let mut depth: Int = (0 + c_env_scope_depth(e)) - 1;
+    if depth < 0 { depth = 0; }
+    let c_var: String = name + "_lvl" + depth.to_string();
+
+    e = c_secret_try_record_alias_rhs(toks, rhs_pos, n, e, name);
+    e = c_secret_prop_from_rhs(toks, rhs_pos, n, e, name);
+    rhs = c_coerce_let_rhs(lty, rhs, e);
+    c_emit_need_ty(lty);
+    println("  " + lty + " " + c_var + " = " + rhs + ";");
+    e = c_env_put(e, "__cvar__" + name, c_var);
+    if bind_kind != "" { e = c_env_put(e, c_var, bind_kind); }
+    e = c_env_put(e, "__ty__" + c_var, lty);
+    e = c_env_put(e, "__ty__" + name, lty);
+    e = c_env_put(e, "__decl__" + c_var, "1");
+    e = c_env_put(e, "__decl__" + name, "1");
+    if chars_len(lty) > 1 && char_at(lty, chars_len(lty) - 1) == "*" {
+        e = c_env_put(e, "__ptr__" + c_var, "1");
+        e = c_env_put(e, "__ptr__" + name, "1");
+    }
+    c_emit_let_alias_retain(c_var, rhs, lty, e);
+    if p < n && c_tokk(toks, p) == "SEMI" { p = p + 1; }
+    return c_pack_pos_env(p, e);
+}

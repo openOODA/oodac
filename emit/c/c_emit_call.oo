@@ -1,0 +1,246 @@
+// # Lower call arguments, methods, and index gets
+//
+// Logline: Collects C call arguments and lowers .method and [index] sugar to oo_* or list helpers, with the same secret guard as free calls.
+//
+// Setup: c_emit_expr_c, c_secret_emit_guard, c_env_get, c_list_c_name, and c_infer_list_kind exist; method pos is the DOT and index pos is the LBRACKET. Residual: flight-recorder wrap stays disabled.
+//
+// Beats:
+//   1. c_emit_call_args walks args; empty () is unit void; pack is 5 cells.
+//   2. c_emit_method uses -> when c_recv_is_ptr (paren-stripped __ptr__ base), else .; lowers to_string, contains, len, is_ok, is_err, unwrap.
+//   3. c_emit_index_get emits list_get(base, idx) and may chain a following method.
+
+import "c_emit_env.oo";
+import "c_emit_ty.oo";
+import "c_emit_ty_ext.oo";
+import "c_emit_secret_guard.oo";
+import "c_emit_ops.oo";
+import "check/check_typestate_item.oo";
+
+// Strip wrapping parens so __ptr__cap_ref matches recv "(cap_ref)".
+fn c_recv_base(recv: String) -> String {
+    let mut s: String = recv;
+    let mut guard: Int = 0;
+    while guard < 8 {
+        let n: Int = chars_len(s);
+        if n < 3 { return s;
+        }
+        if char_at(s, 0) != "(" || char_at(s, n - 1) != ")" { return s;
+        }
+        s = str_slice(s, 1, n - 1);
+        guard = guard + 1;
+    }
+    return s;
+}
+
+fn c_recv_is_ptr(env: String, recv: String) -> Bool {
+    let b: String = c_recv_base(recv);
+    let bn: Int = chars_len(b);
+    if bn < 1 || char_at(b, 0) == "*" { return false;
+    }
+    if char_at(b, 0) == "&" || c_env_get(env, "__ptr__" + b) == "1" { return true;
+    }
+    let ty: String = c_env_get(env, "__ty__" + b);
+    let tn: Int = chars_len(ty);
+    if tn > 0 {
+        if char_at(ty, tn - 1) == "*" || char_at(ty, 0) == "&" { return true;
+        }
+        if tn > 5 && str_slice(ty, 0, 5) == "TyRef" { return true;
+        }
+    }
+    return false;
+}
+
+pub fn c_emit_call_args(toks: List[String], pos: Int, n: Int, env: String) -> List[String] {
+    let mut p = pos;
+    let mut a0 = "";
+    let mut a1 = "";
+    let mut a2 = "";
+    let mut args = "";
+    let mut first = true;
+    let mut ac = 0;
+    while p < n { let ak: String = field_at(list_get(toks, p), 0);
+    if ak == "RPAREN" { p = p + 1;
+    break;
+    }
+        if ak == "COMMA" {
+            p = p + 1;
+        } else if ak == "LPAREN" {
+            let mut unit: Bool = false;
+            if p + 1 < n { if field_at(list_get(toks, p + 1), 0) == "RPAREN" { unit = true;
+            }
+            }
+            if unit {
+                p = p + 2;
+                if ac == 0 { a0 = "void";
+                }
+                ac = ac + 1;
+                if first { args = "void";
+                first = false;
+                } else { args = args + ", void";
+                }
+            } else {
+                let pru: List[String] = c_emit_expr_c(toks, p, n, env);
+                if list_len(pru) < 2 { println("ERR\tc_emit\tcall-arg pack");
+                process_exit(1);
+                }
+                p = parse_int(list_get(pru, 0));
+                let au = list_get(pru, 1);
+                if ac == 0 { a0 = au;
+                }
+                if ac == 1 { a1 = au;
+                }
+                if ac == 2 { a2 = au;
+                }
+                ac = ac + 1;
+                if first { args = au;
+                first = false;
+                } else { args = args + ", " + au;
+                }
+            }
+        } else {
+            let pr: List[String] = c_emit_expr_c(toks, p, n, env);
+            if list_len(pr) < 2 { println("ERR\tc_emit\tcall-arg pack");
+            process_exit(1);
+            }
+            p = parse_int(list_get(pr, 0));
+            let a = list_get(pr, 1);
+            if ac == 0 { a0 = a;
+            }
+            if ac == 1 { a1 = a;
+            }
+            if ac == 2 { a2 = a;
+            }
+            ac = ac + 1;
+            if first { args = a;
+            first = false;
+            } else { args = args + ", " + a;
+            }
+        }
+    }
+    let mut out: List[String] = list_new();
+    out = list_push(out, p.to_string());
+    out = list_push(out, args);
+    out = list_push(out, a0);
+    out = list_push(out, a1);
+    out = list_push(out, a2);
+    return out;
+}
+
+// pos at DOT after receiver primary text `recv`. Lowers .to_string/.contains/.len/.is_ok/.is_err
+pub fn c_emit_method(toks: List[String], pos: Int, n: Int, env: String, recv: String) -> List[String] {
+    let mut p = pos;
+    p = p + 1;
+    // DOT
+    if p >= n || c_tokk(toks, p) != "IDENT" {
+        let mut bad: List[String] = list_new();
+        bad = list_push(bad, p.to_string());
+        bad = list_push(bad, recv);
+        return bad;
+    }
+    let mname: String = c_tokt(toks, p);
+    p = p + 1;
+    let mut margs = "";
+    let mut a0 = "";
+    let mut a1 = "";
+    let mut a2 = "";
+    let mut acc: String = ".";
+    if c_recv_is_ptr(env, recv) { acc = "->";
+    }
+    let mut call = recv + acc + mname;
+    let mut has_parens: Bool = false;
+    if p < n && c_tokk(toks, p) == "LPAREN" {
+        has_parens = true;
+        p = p + 1;
+        let ap: List[String] = c_emit_call_args(toks, p, n, env);
+        p = parse_int(list_get(ap, 0));
+        margs = list_get(ap, 1);
+        a0 = list_get(ap, 2);
+        a1 = list_get(ap, 3);
+        a2 = list_get(ap, 4);
+        call = recv + acc + mname + "(" + margs + ")";
+    }
+    // CRIT 2.2: method sinks must run the same secret guard as free calls
+    c_secret_emit_guard(env, mname, a0, a1, a2, margs);
+    if has_parens && mname == "to_string" { call = "oo_int_to_str(" + recv + ")";
+    }
+    if has_parens && mname == "contains" { call = "oo_str_contains(" + recv + ", " + margs + ")";
+    }
+    if has_parens && mname == "trim" { call = "oo_str_trim(" + recv + ")";
+    }
+    if has_parens && mname == "to_lowercase" { call = "oo_str_to_lowercase(" + recv + ")";
+    }
+    if has_parens && mname == "to_uppercase" { call = "oo_str_to_uppercase(" + recv + ")";
+    }
+    if has_parens && mname == "len" {
+        let rk: String = c_env_get(env, recv);
+        if rk == "S" || rk == "I" { call = c_list_c_name("list_len", rk) + "(" + recv + ")";
+        }
+        else { call = "oo_chars_len(" + recv + ")";
+        }
+    }
+    if has_parens && mname == "push" {
+        let rk: String = c_env_get(env, recv);
+        call = c_list_c_name("list_push", rk) + "(" + recv + ", " + margs + ")";
+    }
+    if mname == "is_ok" { call = "(" + recv + acc + "ok)";
+    }
+    if mname == "is_err" { call = "(!" + recv + acc + "ok)";
+    }
+    if mname == "unwrap" {
+        let rk: String = c_env_get(env, recv);
+        if rk == "V" {
+            call = "((" + recv + acc + "ok) ? (oo_str_lit(\"\")) : (oo_print_str(oo_str_lit(\"ERR\\tunwrap\")), oo_println(), oo_process_exit(1), oo_str_lit(\"\")))";
+        } else {
+            call = "((" + recv + acc + "ok) ? (" + recv + acc + "val) : (oo_print_str(oo_str_lit(\"ERR\\tunwrap\")), oo_println(), oo_process_exit(1), " + recv + acc + "val))";
+        }
+    }
+    if has_parens && mname != "push" && mname != "to_string" && mname != "contains" && mname != "len" && mname != "is_ok" && mname != "is_err" && mname != "unwrap" && mname != "trim" && mname != "to_lowercase" && mname != "to_uppercase" {
+        if trait_method_defined(toks, mname) {
+            if margs == "" { call = mname + "()";
+            } else { call = mname + "(" + margs + ")";
+            }
+        } else {
+            let mangled: String = c_env_get(env, "__cname__" + mname);
+            let has_fn: Bool = mangled != "" || c_env_get(env, "__fr__" + mname) != "";
+            if has_fn {
+                let mut fn_tgt: String = mname;
+                if mangled != "" { fn_tgt = mangled;
+                }
+                if margs == "" { call = fn_tgt + "(" + recv + ")";
+                } else { call = fn_tgt + "(" + recv + ", " + margs + ")";
+                }
+            } else {
+                println("ERR\tc_emit\tunresolved method '." + mname + "' on receiver");
+                process_exit(1);
+            }
+        }
+    }
+    if p < n && c_tokk(toks, p) == "DOT" {
+        return c_emit_method(toks, p, n, env, call);
+    }
+    let mut out: List[String] = list_new();
+    out = list_push(out, p.to_string());
+    out = list_push(out, call);
+    return out;
+}
+
+// M166 path A: IDENT [ expr ] → list_get lower (array index sugar; not pointer arith).
+// pos at LBRACKET; base is the list C expression (usually IDENT name).
+pub fn c_emit_index_get(toks: List[String], pos: Int, n: Int, env: String, base: String) -> List[String] {
+    let mut p = pos + 1;
+    let pr: List[String] = c_emit_expr_c(toks, p, n, env);
+    p = parse_int(list_get(pr, 0));
+    let idx = list_get(pr, 1);
+    if p < n && c_tokk(toks, p) == "RBRACKET" { p = p + 1;
+    }
+    let lk: String = c_infer_list_kind(env, "list_get", base, idx);
+    let cname: String = c_list_c_name("list_get", lk);
+    let call = c_bind_str_temp_if("index_get", cname + "(" + base + ", " + idx + ")");
+    if p < n && c_tokk(toks, p) == "DOT" {
+        return c_emit_method(toks, p, n, env, call);
+    }
+    let mut out: List[String] = list_new();
+    out = list_push(out, p.to_string());
+    out = list_push(out, call);
+    return out;
+}

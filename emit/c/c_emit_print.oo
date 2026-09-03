@@ -1,0 +1,120 @@
+// # Emit println as C print calls
+//
+// Logline: Walks println arguments, refuses secret idents, and emits typed oo_print_* calls plus a trailing newline.
+//
+// Setup: toks start at the println ident; env carries types and __sec__ marks; c_emit_expr_c, c_rhs_call_name, and c_secret_refuse_println_ident are in scope.
+//
+// Beats:
+//   1. Skip the opening paren and scan each argument span for secret idents marked __sec__.
+//   2. Emit the argument and choose oo_print_str, oo_print_bool, oo_print_double, or oo_print_int.
+//   3. Advance past commas, close paren, and optional semi; emit oo_println(); return the new pos.
+
+import "c_emit_ops.oo";
+import "c_emit_ty_ext.oo";
+import "c_emit_env.oo";
+import "c_emit_secret.oo";
+import "c_emit_secret_alias.oo";
+import "c_emit_secret_prop.oo";
+
+pub fn c_emit_println(toks: List[String], pos: Int, n: Int, env: String) -> Int {
+    let mut p = pos + 1;
+    if p < n && c_tokk(toks, p) == "LPAREN" { p = p + 1; }
+    let mut cont = true;
+    while cont {
+        if p >= n || c_tokk(toks, p) == "RPAREN" {
+            cont = false;
+            break;
+        }
+        let mut sp = p;
+        let mut d = 0;
+        while sp < n {
+            let sk: String = c_tokk(toks, sp);
+            if sk == "LPAREN" {
+                d = d + 1;
+            } else if sk == "RPAREN" {
+                if d <= 0 {
+                    break;
+                }
+                d = d - 1;
+            } else if sk == "COMMA" || sk == "SEMI" {
+                if d <= 0 {
+                    break;
+                }
+            }
+            if sk == "IDENT" {
+                let mut full_path: String = c_tokt(toks, sp);
+                let mut q: Int = sp + 1;
+                while q + 1 < n && c_tokk(toks, q) == "DOT"
+                    && c_tokk(toks, q + 1) == "IDENT" {
+                    full_path = full_path + "." + c_tokt(toks, q + 1);
+                    q = q + 2;
+                }
+                if full_path != c_tokt(toks, sp) {
+                    if c_env_get(env, "__sec__" + full_path) == "1" {
+                        c_secret_refuse_println_ident(env, full_path);
+                    }
+                } else {
+                    if c_env_get(env, "__sec__" + full_path) == "1" {
+                        c_secret_refuse_println_ident(env, full_path);
+                    }
+                }
+                sp = q - 1;
+            }
+            sp = sp + 1;
+        }
+        let pr: List[String] = c_emit_expr_c(toks, p, n, env);
+        p = parse_int(list_get(pr, 0));
+        let arg = list_get(pr, 1);
+        let mut is_str: Bool = c_expr_is_str_env(arg, env);
+        let mut is_bool = false;
+        if chars_len(arg) >= 10 && char_at(arg, 3) == "c" && char_at(arg, 4) == "h" && char_at(arg, 5) == "a" {
+            if char_at(arg, 8) == "i" { is_bool = true; is_str = false; }
+        }
+        // M166: double Float / oo_* math / float lits → %g
+        let mut is_dbl: Bool = false;
+        if c_env_get(env, arg) == "F" {
+            is_dbl = true;
+        }
+        if !is_dbl {
+            let cnm: String = c_rhs_call_name(arg);
+            if cnm != "" {
+                if c_call_result_ty(cnm) == "double" {
+                    is_dbl = true;
+                }
+            }
+        }
+        if !is_dbl {
+            let c0 = char_at(arg, 0);
+            if c0 == "-" || char_is_digit(c0) {
+                let mut di = 1;
+                let an = chars_len(arg);
+                while di < an {
+                    if char_at(arg, di) == "." {
+                        is_dbl = true;
+                    }
+                    di = di + 1;
+                }
+            }
+        }
+        if is_str {
+            println("  oo_print_str(" + arg + ");");
+        } else if is_bool {
+            println("  oo_print_bool(" + arg + ");");
+        } else if is_dbl {
+            println("  oo_print_double(" + arg + ");");
+        } else {
+            println("  oo_print_int(" + arg + ");");
+        }
+        if p < n && c_tokk(toks, p) == "COMMA" {
+            p = p + 1;
+        } else {
+            cont = false;
+        }
+    }
+    if p < n && c_tokk(toks, p) == "RPAREN" { p = p + 1; }
+    if p < n && c_tokk(toks, p) == "SEMI" { p = p + 1; }
+    println("  oo_println();");
+    return p;
+}
+
+

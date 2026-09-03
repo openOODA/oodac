@@ -1,0 +1,94 @@
+// # Lower NetCap free-name calls
+//
+// Logline: Maps a net free name and its args to a C call snippet, or returns empty when the name is not a net op.
+//
+// Setup: c_arg_is_cap_ident, println, and process_exit exist; the first arg must be a NetCap ident; a1 is the second arg; args is the joined C arg list.
+//
+// Beats:
+//   1. tcp_bind, tcp_connect, bind_udp, and tls_connect require a1 and a NetCap ident, then emit oo_* with a0, a1 or args.
+//   2. tcp_write, tcp_read, udp_recv, and tcp_close require NetCap and emit the matching oo_* call.
+//   3. sock_raw or raw_socket emit oo_sock_raw(args); any other name returns empty.
+//
+// residual: sock_raw and raw_socket lower to oo_sock_raw; raw sockets stay residual.
+
+import "c_emit_args.oo";
+
+pub fn c_emit_netio_call(t: String, a0: String, a1: String, args: String) -> String {
+    if t == "tcp_bind" { if a1 == "" || !c_arg_is_cap_ident(a0) { println("ERR\tc_emit\ttcp_bind requires &BindCap first arg");
+process_exit(1);
+}
+        return "oo_tcp_bind(" + a0 + ", " + a1 + ")";
+    }
+    if t == "tcp_connect" {
+        if a1 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\ttcp_connect requires &TcpCap first arg");
+            process_exit(1);
+        }
+        return "oo_tcp_connect(" + args + ")";
+    }
+    if t == "tcp_accept" {
+        if a1 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\ttcp_accept requires &TcpCap first arg");
+            process_exit(1);
+        }
+        return "oo_tcp_accept(" + a0 + ", " + a1 + ")";
+    }
+    if t == "bind_udp" {
+        if a1 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tbind_udp requires &UdpCap first arg");
+            process_exit(1);
+        }
+        return "oo_bind_udp(" + a0 + ", " + a1 + ")";
+    }
+    if t == "tls_connect" {
+        if a1 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\ttls_connect requires &TcpCap first arg");
+            process_exit(1);
+        }
+        return "oo_tls_connect(" + args + ")";
+    }
+    // process-local fd slots: connect/bind → Ok("fd:N"); IO by Int slot
+    if t == "tcp_write" {
+        if !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\ttcp_write requires &TcpCap first arg");
+            process_exit(1);
+        }
+        return "oo_tcp_write(" + args + ")";
+    }
+    if t == "tcp_read" {
+        if a1 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\ttcp_read requires &TcpCap first arg");
+            process_exit(1);
+        }
+        return "oo_tcp_read(" + args + ")";
+    }
+    if t == "udp_recv" {
+        if a1 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tudp_recv requires &UdpCap first arg");
+            process_exit(1);
+        }
+        return "oo_udp_recv(" + args + ")";
+    }
+    if t == "udp_send" {
+        if a1 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tudp_send requires &UdpCap first arg");
+            process_exit(1);
+        }
+        return "oo_udp_send(" + args + ")";
+    }
+    if t == "tcp_close" {
+        if a1 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\ttcp_close requires &TcpCap first arg");
+            process_exit(1);
+        }
+        return "oo_tcp_close(" + a0 + ", " + a1 + ")";
+    }
+    if t == "sock_raw" || t == "raw_socket" {
+        if !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tsock_raw requires &NetCap first arg");
+            process_exit(1);
+        }
+        return "oo_sock_raw(" + args + ")";
+    }
+    return "";
+}

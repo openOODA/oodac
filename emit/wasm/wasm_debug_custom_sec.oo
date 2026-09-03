@@ -1,0 +1,64 @@
+// # WebAssembly Debug Custom Sections Emitter
+//
+// Logline: Custom section framing for DWARF 5 (.debug_line, .debug_info) and sourceMappingURL DevTools sections.
+//
+// Setup: Import wasm_leb128.oo for custom section length and name encoding.
+//
+// Beats:
+//   1. Encode custom section ID (0x00) with section name and payload.
+//   2. Emit .debug_line and .debug_info DWARF 5 custom sections.
+//   3. Emit sourceMappingURL custom section for browser DevTools auto-discovery.
+//   4. Package complete debug payload into WebAssembly binary module.
+
+import "wasm_leb128.oo";
+
+
+pub fn wasm_str_to_byte_list(s: String) -> List[Int] {
+    let mut out: List[Int] = list_new();
+    let n: Int = bytes_len(s);
+    let mut i: Int = 0;
+    while i < n { out = list_push(out, byte_at(s, i));
+    i = i + 1;
+    }
+    return out;
+}
+
+pub fn emit_custom_section(name: String, payload: List[Int]) -> List[Int] {
+    let mut sec: List[Int] = list_new();
+    sec = list_push(sec, 0);
+    // Section ID 0
+    let mut body: List[Int] = list_new();
+    let name_bytes: List[Int] = wasm_str_to_byte_list(name);
+    let n_leb: List[Int] = encode_u32_leb128(list_len(name_bytes));
+    let mut i: Int = 0;
+    while i < list_len(n_leb) { body = list_push(body, list_get(n_leb, i));
+    i = i + 1;
+    }
+    i = 0;
+    while i < list_len(name_bytes) { body = list_push(body, list_get(name_bytes, i));
+    i = i + 1;
+    }
+    let mut j: Int = 0;
+    while j < list_len(payload) { body = list_push(body, list_get(payload, j));
+    j = j + 1;
+    }
+    let len_leb: List[Int] = encode_u32_leb128(list_len(body));
+    i = 0;
+    while i < list_len(len_leb) { sec = list_push(sec, list_get(len_leb, i));
+    i = i + 1;
+    }
+    i = 0;
+    while i < list_len(body) { sec = list_push(sec, list_get(body, i));
+    i = i + 1;
+    }
+    return sec;
+}
+
+pub fn emit_dwarf_debug_line_section(payload: List[Int]) -> List[Int] {
+    return emit_custom_section(".debug_line", payload);
+}
+
+pub fn emit_sourcemap_url_section(url: String) -> List[Int] {
+    let url_bytes: List[Int] = wasm_str_to_byte_list(url);
+    return emit_custom_section("sourceMappingURL", url_bytes);
+}

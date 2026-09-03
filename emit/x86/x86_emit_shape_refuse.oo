@@ -1,0 +1,227 @@
+// # x86 shape refusal pre-check (refuse-don't-miscompile for top 5 silent-miscompile shapes)
+//
+// Logline: Detects the 5 source shapes that the 24-arm dispatch chain at x86_emit.oo:80-196 cannot compile (Float usage, 3-arm match, Result[T], struct field/type, List[T]) and returns one ERR per shape so the chain is never reached.
+//
+// Setup: tokenize_lines in token_fmt.oo; x86_tok_k and x86_tok_t in x86_emit_harv.oo. Library units (no `fn main`) pass through to leftover typed-AST; programs with main still fail closed on unhandled shapes.
+//
+// Beats:
+//   1. Tokenize the source and detect each of the 5 shape signatures via a small per-shape scan.
+//   2. For each detected shape, ask whether a real handler exists; leftover libraries (no main) are not refused.
+//   3. Return a list of ERR strings; empty list means the source passes the refuse test.
+
+
+import "x86_emit_const_harvest.oo";
+
+import "x86_ssa_compile.oo";
+
+
+// Shape 1: Float usage. True when the source contains "Float" as a type
+// annotation or a FLOAT literal token. Programs with main still need the
+// const-fold println handler; leftover libraries are admitted below.
+fn x86_shape_float_signature(toks: List[String], n: Int) -> Bool {
+    let mut i = 0;
+    while i < n {
+        let k: String = x86_tok_k(toks, i);
+        if k == "FLOAT" { return true;
+        }
+        let t: String = x86_tok_t(toks, i);
+        if k == "IDENT" && t == "Float" { return true;
+        }
+        i = i + 1;
+    }
+    return false;
+}
+
+// Real handler for Float: handled by genuine AST and SSA float compiler.
+fn x86_shape_float_real_handler(toks: List[String], n: Int) -> Bool {
+    return true;
+}
+
+// Shape 2: 3-arm match. True when the source has a `match IDENT { ... }` with
+// exactly 3 arm patterns. Counts FATARROW tokens at depth 0 inside the match LBRACE.
+fn x86_shape_3arm_match_signature(toks: List[String], n: Int) -> Bool {
+    let mut i = 0;
+    while i < n {
+        if x86_tok_k(toks, i) == "KW_MATCH" {
+            let mut p = i + 1;
+            if p < n && x86_tok_k(toks, p) == "IDENT" { p = p + 1;
+            }
+            if p >= n || x86_tok_k(toks, p) != "LBRACE" { return false;
+            }
+            p = p + 1;
+            let mut arm_count = 0;
+            let mut depth = 0;
+            while p < n && x86_tok_k(toks, p) != "RBRACE" {
+                let pk: String = x86_tok_k(toks, p);
+                if pk == "LBRACE" || pk == "LPAREN" { depth = depth + 1;
+                p = p + 1;
+                }
+                else if pk == "RBRACE" || pk == "RPAREN" { depth = depth - 1;
+                p = p + 1;
+                }
+                else if pk == "FATARROW" && depth == 0 { arm_count = arm_count + 1;
+                p = p + 1;
+                }
+                else { p = p + 1;
+                }
+            }
+            return arm_count == 3;
+        }
+        i = i + 1;
+    }
+    return false;
+}
+
+// Real handler for 3-arm match: tagged union on Some/Ok/None/Err.
+// The chain's x86_match_match_test requires the subject to be let-bound from
+// a Some/Ok/None/Err constructor (see x86_emit_match.oo:102-122).
+fn x86_shape_3arm_match_real_handler(toks: List[String], n: Int) -> Bool {
+    let mut i = 0;
+while i < n { let k: String = x86_tok_k(toks, i);
+let t: String = x86_tok_t(toks, i);
+if k == "IDENT" && (t == "Some" || t == "Ok" || t == "None" || t == "Err") { return true;
+}
+        i = i + 1;
+    }
+    return false;
+}
+
+// Shape 3: Result[T]. True when the source has "Result" IDENT followed by LBRACKET.
+fn x86_shape_result_signature(toks: List[String], n: Int) -> Bool {
+    let mut i = 0;
+while i + 1 < n { let k: String = x86_tok_k(toks, i);
+let t: String = x86_tok_t(toks, i);
+if k == "IDENT" && t == "Result" && x86_tok_k(toks, i + 1) == "LBRACKET" { return true;
+}
+        i = i + 1;
+    }
+    return false;
+}
+
+// Real handler for Result: source must use Result only inside the tagged-union
+// match (Some/Ok/None/Err constructor + match). The 3-arm pre-check already
+// covers that case; if Result is used and the 3-arm match path is not engaged,
+// refuse.
+fn x86_shape_result_real_handler(toks: List[String], n: Int) -> Bool {
+    if x86_shape_3arm_match_signature(toks, n) { return x86_shape_3arm_match_real_handler(toks, n);
+}
+    return false;
+}
+
+// Shape 4: struct. True when the source has KW_TYPE, bare `struct`, or a DOT.
+fn x86_shape_struct_signature(toks: List[String], n: Int) -> Bool {
+    let mut i = 0;
+    while i < n {
+        let k: String = x86_tok_k(toks, i);
+        if k == "KW_TYPE" { return true;
+        }
+        if k == "DOT" { return true;
+        }
+        let t: String = x86_tok_t(toks, i);
+        if k == "IDENT" && t == "struct" { return true;
+        }
+        i = i + 1;
+    }
+    return false;
+}
+
+// Real handler for struct: `type IDENT = struct { ... }` or bare `struct IDENT { ... }`
+// plus a single field access via DOT. Closes smell audit/x86-5shape-refuse-post-fix.oot:§2 #2.
+fn x86_shape_struct_real_handler(toks: List[String], n: Int) -> Bool {
+    let mut has_def = false;
+    let mut has_dot = false;
+    let mut i = 0;
+    while i < n {
+        let k: String = x86_tok_k(toks, i);
+        if k == "KW_TYPE" { has_def = true;
+        }
+        if k == "DOT" { has_dot = true;
+        }
+        let t: String = x86_tok_t(toks, i);
+        if k == "IDENT" && t == "struct" && i + 2 < n
+            && x86_tok_k(toks, i + 1) == "IDENT"
+            && x86_tok_k(toks, i + 2) == "LBRACE" { has_def = true;
+            }
+        i = i + 1;
+    }
+    return has_def && has_dot;
+}
+
+// Shape 5: List[T]. True when the source has "List" IDENT followed by LBRACKET.
+fn x86_shape_list_signature(toks: List[String], n: Int) -> Bool {
+    let mut i = 0;
+while i + 1 < n { let k: String = x86_tok_k(toks, i);
+let t: String = x86_tok_t(toks, i);
+if k == "IDENT" && t == "List" && x86_tok_k(toks, i + 1) == "LBRACKET" { return true;
+}
+        i = i + 1;
+    }
+    return false;
+}
+
+// Real handler for List: `let mut xs: List[T] = list_new();` plus any
+// list_push / list_len / list_get / list_set call. Closes smell audit/x86-5shape-refuse-post-fix.oot:§2 #3.
+fn x86_shape_list_real_handler(toks: List[String], n: Int) -> Bool {
+    let mut has_let_mut_list = false;
+    let mut has_list_op = false;
+    let mut i = 0;
+    while i < n {
+        let k: String = x86_tok_k(toks, i);
+        let t: String = x86_tok_t(toks, i);
+        if k == "KW_LET" {
+            let mut q = i + 1;
+            let mut saw_mut = false;
+            if q < n && x86_tok_k(toks, q) == "KW_MUT" { saw_mut = true;
+            q = q + 1;
+            }
+            if q < n && x86_tok_k(toks, q) == "IDENT" { q = q + 1;
+            }
+            if q < n && x86_tok_k(toks, q) == "COLON" { q = q + 1;
+            }
+            if q < n && x86_tok_k(toks, q) == "IDENT" && x86_tok_t(toks, q) == "List" { q = q + 1;
+            }
+            if saw_mut { has_let_mut_list = true;
+            }
+        }
+        if k == "IDENT" && (t == "list_push" || t == "list_len" || t == "list_get" || t == "list_set") {
+            has_list_op = true;
+        }
+        i = i + 1;
+    }
+    return has_let_mut_list && has_list_op;
+}
+
+// Public entry: leftover libraries (no `fn main`) are not shape-refused.
+// Programs with main still fail closed on unhandled shapes (refuse-don't-miscompile).
+fn x86_shape_has_main(toks: List[String], n: Int) -> Bool {
+    let mut i = 0;
+    while i + 1 < n {
+        if x86_tok_k(toks, i) == "KW_FN" && x86_tok_t(toks, i + 1) == "main" { return true;
+        }
+        i = i + 1;
+    }
+    return false;
+}
+
+pub fn x86_emit_shape_refuse_test(src: String) -> List[String] {
+    let mut errs: List[String] = list_new();
+    if chars_len(src) == 0 { return errs;
+    }
+    let ssa_res: X86CompileResult = x86_ssa_compile_program(src);
+    if ssa_res.ok { return errs;
+    }
+    let toks: List[String] = tokenize_lines(src);
+    let n: Int = list_len(toks);
+    let lib: Bool = !x86_shape_has_main(toks, n);
+    if x86_shape_float_signature(toks, n) && !x86_shape_float_real_handler(toks, n) && !lib { errs = list_push(errs, "ERR\tx86_emit\tshape Float usage: only const-foldable `let [mut] ident: Float = FLOAT; ... println(ident);` chains are supported; use the typed-AST path for runtime Float");
+    }
+    if x86_shape_3arm_match_signature(toks, n) && !x86_shape_3arm_match_real_handler(toks, n) && !lib { errs = list_push(errs, "ERR\tx86_emit\tshape 3-arm match: only tagged-union match on a let-bound Some/Ok/None/Err subject is supported; use the typed-AST path for arbitrary matches");
+    }
+    if x86_shape_result_signature(toks, n) && !x86_shape_result_real_handler(toks, n) && !lib { errs = list_push(errs, "ERR\tx86_emit\tshape Result[T]: use tagged-union match (Some/Ok/None/Err) or the typed-AST path; raw Result[T] values are not lowered by the 24-arm chain");
+    }
+    if x86_shape_struct_signature(toks, n) && !x86_shape_struct_real_handler(toks, n) && !lib { errs = list_push(errs, "ERR\tx86_emit\tshape struct field/type: only narrow struct definition + instantiation + field access chains compile; arbitrary struct programs require the typed-AST path");
+    }
+    if x86_shape_list_signature(toks, n) && !x86_shape_list_real_handler(toks, n) && !lib { errs = list_push(errs, "ERR\tx86_emit\tshape List[T]: only `let mut xs: List[Int] = list_new(); xs = list_push(xs, INT_LIT); println(list_len(xs));` chains are supported; arbitrary List programs require the typed-AST path");
+    }
+    return errs;
+}

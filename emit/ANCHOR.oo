@@ -1,0 +1,17 @@
+// # Compiler Backend Registry
+//
+// Logline: Re-export the six machine-code backends: aarch64, c, gpu, llvm, wasm, x86.
+//
+// Setup: The compiler dispatch table reads this module to discover which backend to lower IR to.
+//
+// Beats:
+//   1. Each backend owns its own ANCHOR.oo and lowers IR to one machine model.
+//   2. The c backend is the canonical portable path; x86 and aarch64 emit real object files.
+//   3. The gpu and wasm backends handle the accelerated and sandboxed targets.
+
+import "aarch64/ANCHOR.oo";
+import "c/ANCHOR.oo";
+import "gpu/ANCHOR.oo";
+import "llvm/ANCHOR.oo";
+import "wasm/ANCHOR.oo";
+import "x86/ANCHOR.oo";

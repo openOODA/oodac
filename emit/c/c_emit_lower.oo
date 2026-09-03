@@ -1,0 +1,253 @@
+// # Lower a C primary
+//
+// Logline: Primary token -> C snippet [new_pos, text] (lits, group, unary, IDENT).
+//
+// Setup: toks/env ready. Empty () is unit (void); pos>=n is empty.
+//
+// Beats:
+//   1. INT/FLOAT/STRING/true/false.
+//   2. Group, including Ok(()).
+//   3. IDENT method/call/index.
+
+import "c_emit_env.oo";
+import "c_emit_ops_str.oo";
+import "c_emit_call.oo";
+import "c_emit_olist.oo";
+import "check/check_cap_util.oo";
+pub fn c_emit_pack2(pos_s: String, text: String) -> List[String] {
+    let mut o: List[String] = list_new();
+    o = list_push(o, pos_s);
+    o = list_push(o, text);
+    return o;
+}
+pub fn c_emit_primary_c(toks: List[String], pos: Int, n: Int, env: String) -> List[String] {
+    let mut p = pos;
+    if p >= n { return c_emit_pack2(n.to_string(), ""); }
+    let k: String = c_tokk(toks, p);
+    let t: String = c_tokt(toks, p);
+    let p1 = p + 1;
+    if k == "INT" { return c_emit_pack2(p1.to_string(), t + "LL"); }
+    if k == "FLOAT" { return c_emit_pack2(p1.to_string(), t); }
+    if k == "STRING" {
+        if c_env_get(env, "__sec_rhs__") == "1" {
+            return c_emit_pack2(p1.to_string(), c_emit_secret_str_lit(t));
+        }
+        return c_emit_pack2(p1.to_string(), "oo_str_lit(\"" + c_escape_str_text(t) + "\")");
+    }
+    if k == "KW_TRUE" { return c_emit_pack2(p1.to_string(), "1"); }
+    if k == "KW_FALSE" { return c_emit_pack2(p1.to_string(), "0"); }
+    if k == "KW_IF" { return c_emit_if_expr(toks, p, n, env); }
+    if k == "LPAREN" {
+        p = p + 1;
+        if p >= n { return c_emit_pack2(p.to_string(), "void"); }
+        if c_tokk(toks, p) == "RPAREN" {
+            p = p + 1;
+            return c_emit_pack2(p.to_string(), "void");
+        }
+        let pr: List[String] = c_emit_expr_c(toks, p, n, env);
+        p = parse_int(list_get(pr, 0));
+        let inner = list_get(pr, 1);
+        if c_tokk(toks, p) == "RPAREN" {
+            p = p + 1;
+        }
+        let grouped: String = "(" + inner + ")";
+        if c_tokk(toks, p) == "DOT" {
+            return c_emit_method(toks, p, n, env, grouped);
+        }
+        return c_emit_pack2(p.to_string(), grouped);
+    }
+    if k == "BANG" || t == "!" || k == "AMP" || k == "STAR" {
+        return c_emit_unary_c(toks, p, n, env, k);
+    }
+    if k == "MINUS" || t == "-" {
+        p = p + 1;
+        let prm: List[String] = c_emit_primary_c(toks, p, n, env);
+        p = parse_int(list_get(prm, 0));
+        return c_emit_pack2(p.to_string(), "(-" + list_get(prm, 1) + ")");
+    }
+    if k == "IDENT" {
+        p = p + 1;
+        if p < n && c_tokk(toks, p) == "DOT" {
+            return c_emit_method(toks, p, n, env, c_bare_ctor_or_name(t, env));
+        }
+        if c_is_struct_lit_lbrace(toks, p, n) {
+            p = p + 1;
+            let mut fields = "";
+            let mut first_f = true;
+            while p < n && c_tokk(toks, p) != "RBRACE" {
+                if c_tokk(toks, p) == "COMMA" { p = p + 1; }
+                if p >= n { break; }
+                if c_tokk(toks, p) != "IDENT" { break; }
+                let fname: String = c_tokt(toks, p);
+                p = p + 1;
+                if p < n && c_tokk(toks, p) == "COLON" { p = p + 1; }
+                let fkind: String = c_struct_fld_list_kind(toks, n, t, fname);
+                let mut fval: String = "";
+                if fkind != "" && c_tokk(toks, p) == "IDENT" && c_tokt(toks, p) == "list_new" && c_tokk(toks, p + 1) == "LPAREN" {
+                    p = p + 2;
+                    fval = c_list_c_name("list_new", fkind) + "()"; if p < n && c_tokk(toks, p) == "RPAREN" { p = p + 1; }
+                } else {
+                    let fenv: String = if fkind != "" { c_env_put(env, "__ann__", fkind); } else { env; };
+                    let prf: List[String] = c_emit_expr_c(toks, p, n, fenv);
+                    p = parse_int(list_get(prf, 0));
+                    fval = list_get(prf, 1);
+                }
+                if first_f { fields = "." + fname + " = " + fval; first_f = false; } else {
+                    fields = fields + ", ." + fname + " = " + fval;
+                }
+            }
+            if p < n && c_tokk(toks, p) == "RBRACE" { p = p + 1; }
+            return c_emit_pack2(p.to_string(), "((" + t + "){ " + fields + " })");
+        }
+        if p < n && c_tokk(toks, p) == "LPAREN" {
+            p = p + 1;
+            let ap: List[String] = c_emit_call_args(toks, p, n, env);
+            p = parse_int(list_get(ap, 0));
+            let args = list_get(ap, 1);
+            let a0 = list_get(ap, 2);
+            let a1 = list_get(ap, 3);
+            let a2g = list_get(ap, 4);
+            c_secret_emit_guard(env, t, a0, a1, a2g, args);
+            let mut cname: String = c_lower_call_name(t);
+            if t == "list_new" || t == "list_push" || t == "list_get" || t == "list_len" || t == "list_set" {
+                cname = c_list_c_name(t, c_infer_list_kind(env, t, a0, a1));
+            }
+            let mangled: String = c_env_get(env, "__cname__" + t);
+            let mut fn_target: String = t;
+            if mangled != "" { fn_target = mangled; }
+            let mut call = fn_target + "(" + args + ")";
+            if t == "Ok" || t == "Err" || t == "Some" || t == "None" {
+                call = c_lower_ok_err(t, args, env);
+            } else if c_env_get(env, "__ctor__" + t) != "" {
+                call = c_lower_sum_ctor(t, args, env);
+            } else if t == "meta_epoch" {
+                // Path-A metamorphic floor: process-local epoch (0-arg).
+                call = "oo_meta_epoch()";
+            } else if t == "meta_mix" {
+                call = "oo_meta_mix(" + args + ")";
+            } else if t == "meta_is_path_a" {
+                call = "oo_meta_is_path_a()";
+            } else if t == "meta_decoy_touch" {
+                call = "(oo_meta_decoy_touch(), 0)";
+            } else if t == "process_exit" {
+                // process_exit(code) → oo_process_exit(code)
+                call = "oo_process_exit(" + args + ")";
+            } else if t == "read_file" {
+                if a1 == "" || !c_arg_is_cap_ident(a0) {
+                    println("ERR\tc_emit\tread_file requires &FsReadCap as first arg (not int/lit)");
+                    process_exit(1);
+                }
+                call = "oo_read_file(" + a0 + ", " + a1 + ")";
+            } else if t == "write_file" {
+                // write_file(fs, path, content) — pass cap IDENT only
+                if !c_arg_is_cap_ident(a0) {
+                    println("ERR\tc_emit\twrite_file requires &FsWriteCap as first arg (not int/lit)");
+                    process_exit(1);
+                }
+                call = "oo_write_file(" + args + ")";
+            } else if t == "path_exists" {
+                if a1 == "" || !c_arg_is_cap_ident(a0) {
+                    println("ERR\tc_emit\tpath_exists requires &FsReadCap as first arg (not int/lit)");
+                    process_exit(1);
+                }
+                call = "oo_path_exists(" + a0 + ", " + a1 + ")";
+            } else if t == "file_size" {
+                if a1 == "" || !c_arg_is_cap_ident(a0) {
+                    println("ERR\tc_emit\tfile_size requires &FsReadCap as first arg (not int/lit)");
+                    process_exit(1);
+                }
+                call = "oo_file_size(" + a0 + ", " + a1 + ")";
+            } else if t == "env_get" {
+                if a1 == "" || !c_arg_is_cap_ident(a0) {
+                    println("ERR\tc_emit\tenv_get requires &EnvCap as first arg (not int/lit)");
+                    process_exit(1);
+                }
+                call = "oo_env_get(" + a0 + ", " + a1 + ")";
+            } else if t == "sys_exec" {
+                if !c_arg_is_cap_ident(a0) {
+                    println("ERR\tc_emit\tsys_exec requires &ProcessCap as first arg (not int/lit)");
+                    process_exit(1);
+                }
+                let rest: String = c_args_drop_first(args);
+                if rest == "" {
+                    println("ERR\tc_emit\tsys_exec requires program argv");
+                    process_exit(1);
+                }
+                call = "oo_sys_exec(" + a0 + ", (int)(sizeof((OoStr[]){" + c_args_strip_cr(rest)
+                    + "})/sizeof(OoStr)), (OoStr[]){" + c_args_strip_cr(rest) + "})";
+            } else if t == "fetch" {
+                if a1 == "" || !c_arg_is_cap_ident(a0) {
+                    println("ERR\tc_emit\tfetch requires &HttpCap as first arg (not int/lit)");
+                    process_exit(1);
+                }
+                call = "oo_fetch(" + a0 + ", " + a1 + ")";
+            } else if t == "now_ms" {
+                if !c_arg_is_cap_ident(a0) {
+                    println("ERR\tc_emit\tnow_ms requires &TimeCap as first arg (not int/lit)");
+                    process_exit(1);
+                }
+                call = "oo_now_ms(" + a0 + ")";
+            } else if t == "sleep_ms" {
+                if a1 == "" || !c_arg_is_cap_ident(a0) {
+                    println("ERR\tc_emit\tsleep_ms requires &TimeCap as first arg (not int/lit)");
+                    process_exit(1);
+                }
+                call = "oo_sleep_ms(" + a0 + ", " + a1 + ")";
+            } else if t == "random" {
+                if !c_arg_is_cap_ident(a0) {
+                    println("ERR\tc_emit\trandom requires &RandCap as first arg (not int/lit)");
+                    process_exit(1);
+                }
+                call = "oo_random(" + a0 + ")";
+            } else if t == "seed" {
+                if a1 == "" || !c_arg_is_cap_ident(a0) {
+                    println("ERR\tc_emit\tseed requires &RandCap as first arg (not int/lit)");
+                    process_exit(1);
+                }
+                call = "(oo_seed(" + a0 + ", " + a1 + "), 0)";
+            } else if t == "alloc_bytes" || t == "malloc" {
+                // M17/M166: alloc_bytes|malloc(alloc, n) — cap IDENT first; process-local only
+                if a1 == "" || !c_arg_is_cap_ident(a0) {
+                    println("ERR\tc_emit\t" + t + " requires &AllocCap as first arg (not int/lit)");
+                    process_exit(1);
+                }
+                call = "oo_alloc_bytes(" + a0 + ", " + a1 + ")";
+            } else if t == "free_bytes" || t == "free" {
+                // M166: free(alloc, p) aliases free_bytes → oo_free_bytes
+                if a1 == "" || !c_arg_is_cap_ident(a0) {
+                    println("ERR\tc_emit\t" + t + " requires &AllocCap as first arg (not int/lit)");
+                    process_exit(1);
+                }
+                call = "(oo_free_bytes(" + a0 + ", " + a1 + "), 0)";
+            } else if t == "realloc" {
+                // M166 path A: realloc(alloc, p, n) = free p then alloc n (quota token, not OS realloc)
+                if a1 == "" || a2g == "" || !c_arg_is_cap_ident(a0) {
+                    println("ERR\tc_emit\trealloc requires &AllocCap as first arg (not int/lit)");
+                    process_exit(1);
+                }
+                call = "(oo_free_bytes(" + a0 + ", " + a1 + "), oo_alloc_bytes(" + a0 + ", " + a2g + "))";
+            } else if is_sealed_net(t) && c_emit_libfloor_call(t, a0, a1, args) == "" {
+                // residual net free names only; libfloor path A handled next
+                println("ERR\tc_emit\tnet residual: sealed op '" + t + "' not lowered (fail-closed)");
+                process_exit(1);
+            } else if c_emit_libfloor_call(t, a0, a1, args) != "" {
+                call = c_emit_libfloor_call(t, a0, a1, args);
+            } else if is_sealed_ffi(t) {
+                println("ERR\tc_emit\tffi residual: sealed op '" + t + "' not lowered (no host/C TCB lower)");
+                process_exit(1);
+            } else if cname != "" {
+                call = cname + "(" + args + ")";
+            }
+            if p < n && c_tokk(toks, p) == "DOT" {
+                return c_emit_method(toks, p, n, env, c_bind_str_temp_if(t, call));
+            }
+            if p < n && c_tokk(toks, p) == "QUESTION" { p = p + 1; return c_emit_pack2(p.to_string(), c_try_unwrap(call, env, t)); }
+            return c_emit_pack2(p.to_string(), c_bind_str_temp_if(t, call));
+        }
+        if p < n && c_tokk(toks, p) == "LBRACKET" {
+            return c_emit_index_get(toks, p, n, env, c_bare_ctor_or_name(t, env));
+        }
+        return c_emit_pack2(p.to_string(), c_bare_ctor_or_name(t, env));
+    }
+    return c_emit_pack2((p + 1).to_string(), t);
+}

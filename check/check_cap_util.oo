@@ -1,0 +1,207 @@
+// # Resolve sealed names to Cap kinds
+//
+// Logline: Maps a sealed free-name to its preferred Cap kind and walks __alias__ so a rebind still resolves.
+//
+// Setup: check_cap_grant.oo is imported; no legacy supersede — callers must use the granular preferred kind; alias walk depth is 32.
+//
+// Beats:
+//   1. sealed_net_kind_of, sealed_fs_kind_of, and sealed_sys_kind_of return Http/Tcp/Udp/Bind/Net, FsRead/FsWrite, or Process/Sys kinds.
+//   2. is_sealed_* predicates cover env, time, rand, arena, alloc, ffi, thread, and gpu names.
+//   3. sealed_kind_of picks the first matching kind; c_arg_cap_type_resolved follows __alias__ up to depth 32.
+
+import "check_cap_grant.oo";
+
+
+
+// CAP-G1 Path-A: preferred Cap kind for sealed net op (not always NetCap).
+// HttpCap: fetch/http_get/net_get/downloadData/query_remote_api/net_connect
+// TcpCap:  tcp_connect/tcp_write/tcp_read/tcp_close/tls_connect
+// BindCap: tcp_bind
+// UdpCap:  bind_udp/udp_recv/udp_send
+// NetCap:  sock_raw/raw_socket only (no soft granular)
+// No legacy supersede: callers must use the granular preferred kind (HttpCap/TcpCap/UdpCap/BindCap). &NetCap does NOT satisfy these.
+pub fn sealed_net_kind_of(name: String) -> String {
+    if name == "fetch" || name == "http_get" || name == "net_get" || name == "downloadData" || name == "query_remote_api" || name == "net_connect" { return "HttpCap";
+}
+    if name == "tcp_connect" || name == "tcp_write" || name == "tcp_read" || name == "tcp_close" || name == "tls_connect" || name == "tcp_accept" {
+        return "TcpCap";
+    }
+    if name == "tcp_bind" { return "BindCap";
+    }
+    if name == "bind_udp" || name == "udp_recv" || name == "udp_send" { return "UdpCap";
+    }
+    if name == "sock_raw" || name == "raw_socket" { return "NetCap";
+    }
+    return "";
+}
+
+pub fn is_sealed_net(name: String) -> Bool {
+    return sealed_net_kind_of(name) != "";
+}
+
+// CAP-G2 Path-A: preferred fs kind (not always FsCap). Fail-closed: FsReadCap ↛ write.
+// FsReadCap: read_file/fs_read/path_exists/file_size; FsWriteCap: write_file/fs_write.
+// No legacy supersede: callers must use the granular preferred kind (FsReadCap/FsWriteCap). &FsCap does NOT satisfy either.
+pub fn sealed_fs_kind_of(name: String) -> String {
+    if name == "read_file" || name == "fs_read" || name == "path_exists" || name == "file_size" { return "FsReadCap";
+}
+    if name == "write_file" || name == "fs_write" {
+        return "FsWriteCap";
+    }
+    return "";
+}
+
+pub fn is_sealed_fs(name: String) -> Bool {
+    return sealed_fs_kind_of(name) != "";
+}
+
+// CAP-G4: preferred Cap kind for sealed process/sys ops.
+// ProcessCap: spawn/exec/wait/kill family (least privilege).
+// SysCap: residual OS (python_embed, epoll, inotify, prctl) — hard SysCap only.
+// Live-RAM RASP: proc_mem_read is SysCap (real-RAM /proc/self/mem, not TimeCap).
+// No legacy supersede: callers must use the granular preferred kind (ProcessCap). &SysCap does NOT satisfy ProcessCap.
+pub fn sealed_sys_kind_of(name: String) -> String {
+    if name == "sys_exec" || name == "process_exec" { return "ProcessCap";
+    }
+    if name == "exec" { return "ProcessCap";
+    }
+    if name == "spawn_process" { return "ProcessCap";
+    }
+    if name == "sys_spawn" { return "ProcessCap";
+    }
+    if name == "sys_wait" { return "ProcessCap";
+    }
+    if name == "sys_kill" { return "ProcessCap";
+    }
+    if name == "proc_mem_read" || name == "oo_proc_mem_read" { return "SysCap";
+    }
+    if name == "python_embed" { return "SysCap";
+    }
+    if name == "python_embed_internal" { return "SysCap";
+    }
+    if name == "sys_epoll_create" { return "SysCap";
+    }
+    if name == "sys_inotify_init" { return "SysCap";
+    }
+    if name == "sys_prctl" { return "SysCap";
+    }
+    if name == "oo_rlimit_set_mem_mb" { return "SysCap";
+    }
+    if name == "oo_rlimit_set_nofile" { return "SysCap";
+    }
+    if name == "oo_rlimit_set_cpu_sec" { return "SysCap";
+    }
+    if name == "landlock_restrict" || name == "oo_landlock_restrict" { return "SysCap";
+    }
+    if name == "oo_cap_kernel_seal" || name == "cap_kernel_seal" { return "SysCap";
+    }
+    if name == "oo_enclave_enter" || name == "enclave_enter" { return "SysCap";
+    }
+    if name == "lto_xlang_link" || name == "oo_lto_xlang_link" { return "ProcessCap";
+    }
+    return "";
+}
+
+pub fn is_sealed_sys(name: String) -> Bool {
+    return sealed_sys_kind_of(name) != "";
+}
+
+pub fn is_sealed_thread(name: String) -> Bool {
+    return name == "mutex_lock" || name == "mutex_unlock" || name == "thread_spawn" || name == "thread_join" || name == "channel_new" || name == "channel_send" || name == "channel_recv" || name == "actor_spawn" || name == "actor_send" || name == "actor_recv" || name == "actor_restart" || name == "oo_actor_restart" || name == "otp_supervise" || name == "oo_otp_supervise" || name == "cap_rpc_send" || name == "oo_cap_rpc_send" || name == "cap_rpc_recv" || name == "oo_cap_rpc_recv";
+}
+
+pub fn is_sealed_gpu(name: String) -> Bool {
+    return name == "gpu_init" || name == "gpu_probe_device" || name == "gpu_launch" || name == "gpu_launch_kernel" || name == "gpu_sync" || name == "gpu_copy_h2d" || name == "gpu_copy_d2h" || name == "gpu_copy_h2d_async" || name == "gpu_copy_d2h_async" || name == "gpu_stream_create" || name == "gpu_stream_destroy" || name == "gpu_stream_sync" || name == "gpu_event_create" || name == "gpu_event_destroy" || name == "gpu_event_record" || name == "gpu_event_sync" || name == "gpu_event_elapsed_ms" || name == "gpu_buffer_alloc" || name == "oo_gpu_alloc" || name == "gpu_buffer_free" || name == "oo_gpu_free" || name == "gpu_buffer_get_ptr" || name == "gpu_buffer_get_size" || name == "gpu_pool_purge" || name == "gpu_hip_vec_add" || name == "gpu_hip_sgemm" || name == "gpu_hip_rmsnorm" || name == "gpu_hip_attention" || name == "gpu_hip_reduce_sum" || name == "gpu_hip_rope" || name == "gpu_hip_stencil_3d" || name == "gpu_hip_try_launch";
+}
+
+pub fn is_sealed_env(name: String) -> Bool {
+    return name == "env_get" || name == "env_set" || name == "getenv";
+}
+
+// M12: wall clock / sleep (TimeCap) — proc_mem_read is SysCap, not TimeCap
+pub fn is_sealed_time(name: String) -> Bool {
+    return name == "now_ms" || name == "monotonic_us" || name == "sleep_ms";
+}
+
+// M12: OS entropy (RandCap)
+pub fn is_sealed_rand(name: String) -> Bool {
+    return name == "random" || name == "seed";
+}
+
+// OPEN-84: arena_* prefer &ArenaCap; no legacy supersede — &AllocCap does NOT satisfy arena_*.
+// Callers must use the granular preferred kind: &ArenaCap for arena_*, &AllocCap for alloc_bytes/free_bytes/malloc/free.
+pub fn is_sealed_arena(name: String) -> Bool {
+    return name == "oo_arena_create" || name == "arena_create" || name == "oo_arena_alloc" || name == "arena_alloc" || name == "oo_arena_reset" || name == "arena_reset";
+}
+
+// M17: explicit alloc helpers only (AllocCap) — not list_new / ambient CHS
+// M166: malloc/free/realloc product aliases (same seal)
+// RFC 0026: 32-byte aligned SIMD memory access gated by &AllocCap
+pub fn is_sealed_alloc(name: String) -> Bool {
+    return name == "alloc_bytes" || name == "free_bytes" || name == "malloc" || name == "free" || name == "realloc" || name == "f32x8_load_aligned" || name == "f32x8_store_aligned" || name == "f64x4_load_aligned" || name == "f64x4_store_aligned";
+}
+
+// M152 Cap vs FFI path A: raw dlopen / host-FFI free names need &UnsafeFFICap
+pub fn is_sealed_ffi(name: String) -> Bool {
+    return name == "dlopen" || name == "dlsym" || name == "dlclose" || name == "chs_build" || name == "host_ast_dump" || name == "host_check" || name == "host_token_dump" || name == "host_free" || name == "ooda_host_ast_dump" || name == "ooda_host_check" || name == "ooda_host_token_dump" || name == "ooda_host_chs_build" || name == "ooda_host_free" || name == "import_c" || name == "oo_import_c" || name == "ffi_gen" || name == "oo_ffi_gen";
+}
+
+// Cap type names accepted after COLON+AMP in param lists
+// M174 / Round 2.12: HitlCap + AuditCap first-class.
+// V2 granular 2026-08-12: accept all CAPS.oot 27 caps (CAP-G1 needs Http/Tcp/Udp/Bind).
+// Phase2-A: CompilerReadCap for LSP symbol table (minimal narrow, no supersede).
+pub fn is_cap_type(t: String) -> Bool {
+    return t == "NetCap" || t == "FsCap" || t == "FsReadCap" || t == "FsWriteCap" || t == "GpuCap" || t == "ThreadCap" || t == "SysCap" || t == "EnvCap" || t == "TimeCap" || t == "RandCap" || t == "AllocCap" || t == "MemCap" || t == "ArenaCap" || t == "UnsafeFFICap" || t == "FfiCap" || t == "HitlCap" || t == "AuditCap" || t == "SignCap" || t == "HttpCap" || t == "TcpCap" || t == "UdpCap" || t == "BindCap" || t == "ProcessCap" || t == "SyncCap" || t == "AudioCap" || t == "CameraCap" || t == "UsbCap" || t == "HidCap" || t == "WindowCap" || t == "FrameCap" || t == "CompilerReadCap";
+}
+
+// F02 / Round 2.4: walk __alias__ chain so rebinds resolve to sealed name.
+pub fn c_arg_cap_type_resolved(env: String, name: String, param_types: String) -> String {
+    let max_depth = 32;
+let mut cur = name;
+let mut depth = 0;
+while depth < max_depth { let kind: String = sealed_kind_of(cur);
+if kind != "" { return kind;
+}
+        let next: String = type_env_get(env, "__alias__" + cur);
+        if next == "" {
+            return "";
+        }
+        cur = next;
+        depth = depth + 1;
+    }
+    return "";
+}
+
+// Sealed free-call name → preferred Cap kind, or "" if not sealed.
+// CAP-G1: net → HttpCap/TcpCap/UdpCap/BindCap/NetCap (sealed_net_kind_of).
+// CAP-G2: fs  → FsReadCap/FsWriteCap (sealed_fs_kind_of).
+// CAP-G4: sys → ProcessCap for exec/spawn/wait/kill; SysCap for residual OS.
+// check_caps: exact preferred kind only — no legacy supersede; callers must declare the granular cap.
+pub fn sealed_kind_of(name: String) -> String {
+    let nk: String = sealed_net_kind_of(name);
+    if nk != "" { return nk;
+    }
+    let fk: String = sealed_fs_kind_of(name);
+    if fk != "" { return fk;
+    }
+    let sk: String = sealed_sys_kind_of(name);
+    if sk != "" { return sk;
+    }
+    if is_sealed_env(name) { return "EnvCap";
+    }
+    if is_sealed_time(name) { return "TimeCap";
+    }
+    if is_sealed_rand(name) { return "RandCap";
+    }
+    if is_sealed_arena(name) { return "ArenaCap";
+    }
+    if is_sealed_alloc(name) { return "AllocCap";
+    }
+    if is_sealed_ffi(name) { return "UnsafeFFICap";
+    }
+    if is_sealed_thread(name) { return "ThreadCap";
+    }
+    if is_sealed_gpu(name) { return "GpuCap";
+    }
+    return "";
+}

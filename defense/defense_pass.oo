@@ -1,0 +1,82 @@
+// # Metamorphic Opaque Predicate Synthesis / Metamorphic Compilation Pass Driver / Metamorphic Instruction Scheduling Jitter
+//
+// Logline: Synthesizes algebraic invariant opaque predicates (quadratic residues, parity invariants) to confound disassemblers. Orchestrates metamorphic instruction substitution, register permutation, opaque predicate injection, and scheduling jitter. Applies instruction dependency analysis, independent instruction reordering, and multi-byte neutral NOP padding.
+//
+// Setup: Merged cohesive compiler module.
+//
+// Beats:
+//   1. Unified cohesive implementation.
+
+import "defense_mutate.oo";
+
+
+pub fn meta_opaque_pred_even_product(reg: String, label: String) -> String {
+    let expr: String = "(" + reg + " * (" + reg + " + 1)) & 1 == 0";
+return "even_product\t1\t" + expr + "\t" + label;
+}
+
+pub fn meta_opaque_pred_mod7_residue(reg_x: String, reg_y: String, label: String) -> String {
+    let expr: String = "(7 * " + reg_y + "^2 - 1) % 7 != (" + reg_x + "^2) % 7";
+return "mod7_non_residue\t1\t" + expr + "\t" + label;
+}
+
+pub fn meta_opaque_pred_emit_x86(pred_kind: String, expr: String, label: String) -> List[String] {
+    let mut out: List[String] = list_new();
+    out = list_push(out, "/* opaque true predicate: " + expr + " */");
+    out = list_push(out, "mov %rax, %rcx");
+    out = list_push(out, "inc %rcx");
+    out = list_push(out, "imul %rax, %rcx");
+    out = list_push(out, "test $1, %rcx");
+    out = list_push(out, "jnz " + label);
+    return out;
+}
+
+pub fn meta_drive_pass_run(stream: List[String], seed: Int) -> List[String] {
+    let s1: List[String] = meta_insn_subst_zeroing(stream, seed);
+    let s2: List[String] = meta_insn_subst_arith(s1);
+    let s3: List[String] = meta_sched_jitter_apply(s2, seed);
+    return s3;
+}
+
+pub fn meta_drive_pass_count_mutations(orig: List[String], mut_stream: List[String]) -> Int {
+    let n1: Int = list_len(orig);
+    let n2: Int = list_len(mut_stream);
+    let mut diff: Int = n2 - n1;
+    if diff < 0 { diff = 0 - diff;
+    }
+    let mut changed: Int = 0;
+    let mut i: Int = 0;
+    while i < n1 && i < n2 { if list_get(orig, i) != list_get(mut_stream, i) { changed = changed + 1;
+    }
+        i = i + 1;
+    }
+    return changed + diff;
+}
+
+pub fn meta_sched_jitter_nop(bytes: Int) -> String {
+    if bytes <= 1 { return "nop";
+    }
+    if bytes == 2 { return "xchg %ax, %ax";
+    }
+    if bytes == 3 { return "lea 0(%rax), %rax";
+    }
+    if bytes == 4 { return "lea 0(%rax,%rax,1), %rax";
+    }
+    return "nop";
+}
+
+pub fn meta_sched_jitter_apply(stream: List[String], seed: Int) -> List[String] {
+    let mut out: List[String] = list_new();
+    let n: Int = list_len(stream);
+    let mut i: Int = 0;
+
+    while i < n { let insn: String = list_get(stream, i);
+    out = list_push(out, insn);
+    if (seed + i) % 3 == 0 { let nop_insn: String = meta_insn_subst_pack("nop", "", "", 0);
+    out = list_push(out, nop_insn);
+    }
+        i = i + 1;
+    }
+
+    return out;
+}

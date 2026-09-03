@@ -1,0 +1,250 @@
+// # Static Single Assignment Loop Invariant Code Motion & Loop Optimizer
+//
+// Logline: Deterministic SSA loop optimization pipeline: natural loop identification, LICM hoisting, strength reduction, and constant unrolling.
+//
+// Setup: Pure algorithmic SSA loop transformation engine optimizing loop-invariant computations and control flow structures.
+//
+// Beats:
+//   1. Define SsaLoopInfo and identify natural loops from CFG backedges and dominators.
+//   2. Identify loop-invariant instructions and hoist them to loop pre-headers.
+//   3. Apply induction variable strength reduction replacing multiplications with shifts and additions.
+//   4. Deterministically unroll small loops with constant trip count.
+
+import "ssa_ir.oo";
+
+type SsaInstruction = struct { op: Int, res: Int, imm: Int, block_id: Int };
+type SsaLoopInfo = struct { header_bb: Int, preheader_bb: Int, backedge_bb: Int, body_blocks: List[Int] };
+
+pub fn ssa_inst_new(op: Int, res: Int, imm: Int, block_id: Int) -> SsaInstruction { return SsaInstruction { op: op, res: res, imm: imm, block_id: block_id }; }
+
+pub fn ssa_loop_info_new(header: Int, preheader: Int, backedge: Int, body: List[Int]) -> SsaLoopInfo { return SsaLoopInfo { header_bb: header, preheader_bb: preheader, backedge_bb: backedge, body_blocks: body }; }
+
+fn ssa_opt_list_has(xs: List[Int], val: Int) -> Bool {
+    let n: Int = list_len(xs); let mut i: Int = 0;
+    while i < n { if list_get(xs, i) == val { return true; } i = i + 1; }
+    return false;
+}
+
+fn ssa_update_list(xs: List[Int], idx: Int, val: Int) -> List[Int] {
+    let n: Int = list_len(xs); let mut updated: List[Int] = list_new(); let mut k: Int = 0;
+    while k < n {
+        if k == idx { updated = list_push(updated, val); } else { updated = list_push(updated, list_get(xs, k)); }
+        k = k + 1;
+    }
+    return updated;
+}
+
+fn ssa_opt_intersect(idom: List[Int], b1: Int, b2: Int) -> Int {
+    let mut f1: Int = b1; let mut f2: Int = b2; let mut safety: Int = 0;
+    while f1 != f2 && safety < 100 {
+        while f1 > f2 && f1 > 0 { f1 = list_get(idom, f1); }
+        while f2 > f1 && f2 > 0 { f2 = list_get(idom, f2); }
+        safety = safety + 1;
+    }
+    return f1;
+}
+
+fn ssa_opt_dominates(idoms: List[Int], num_blocks: Int, dominator: Int, block_id: Int) -> Bool {
+    if block_id == dominator { return true; }
+    let mut curr: Int = block_id; let mut safety: Int = 0;
+    while curr > 0 && safety < num_blocks {
+        curr = list_get(idoms, curr);
+        if curr == dominator { return true; }
+        safety = safety + 1;
+    }
+    return false;
+}
+
+pub fn ssa_opt_loop_contains_bb(loop: SsaLoopInfo, bb: Int) -> Bool { return ssa_opt_list_has(loop.body_blocks, bb); }
+
+pub fn ssa_opt_loop_contains_block(loop: SsaLoopInfo, block_id: Int) -> Bool { return ssa_opt_list_has(loop.body_blocks, block_id); }
+
+pub fn ssa_opt_find_first_loop(func: SsaFunction) -> SsaLoopInfo {
+    let empty_b: List[Int] = list_new();
+    let num_blocks: Int = func.block_count;
+    if num_blocks <= 1 { return ssa_loop_info_new(0 - 1, 0 - 1, 0 - 1, empty_b); }
+    let n_insts: Int = 0 + ssa_fn_inst_count(func);
+    let mut edge_srcs: List[Int] = list_new(); let mut edge_dsts: List[Int] = list_new();
+    let mut i: Int = 0;
+    while i < n_insts {
+        let op: Int = list_get(func.inst_opcodes, i);
+        let src_b: Int = list_get(func.inst_block_ids, i);
+        let res: Int = list_get(func.inst_results, i);
+        let imm: Int = list_get(func.inst_imm_vals, i);
+        if op == ssa_op_br() { edge_srcs = list_push(edge_srcs, src_b); edge_dsts = list_push(edge_dsts, imm); }
+        else if op == ssa_op_cond_br() {
+            edge_srcs = list_push(edge_srcs, src_b); edge_dsts = list_push(edge_dsts, res);
+            edge_srcs = list_push(edge_srcs, src_b); edge_dsts = list_push(edge_dsts, imm);
+        }
+        i = i + 1;
+    }
+    let n_edges: Int = list_len(edge_srcs);
+    let mut preds_flat: List[Int] = list_new(); let mut preds_offsets: List[Int] = list_new(); let mut preds_lens: List[Int] = list_new();
+    let mut b: Int = 0;
+    while b < num_blocks {
+        let offset: Int = list_len(preds_flat); preds_offsets = list_push(preds_offsets, offset);
+        let mut np: Int = 0;
+        let mut e: Int = 0;
+        while e < n_edges {
+            if list_get(edge_dsts, e) == b { preds_flat = list_push(preds_flat, list_get(edge_srcs, e)); np = np + 1; }
+            e = e + 1;
+        }
+        preds_lens = list_push(preds_lens, np); b = b + 1;
+    }
+    let mut idoms: List[Int] = list_new(); let mut bi: Int = 0;
+    while bi < num_blocks {
+        let mut d: Int = 0 - 1;
+        if bi == 0 { d = 0; }
+        idoms = list_push(idoms, d);
+        bi = bi + 1;
+    }
+    let mut changed: Bool = true; let mut pass: Int = 0;
+    while changed && pass < 50 {
+        changed = false; let mut blk: Int = 1;
+        while blk < num_blocks {
+            let offset: Int = list_get(preds_offsets, blk); let np: Int = list_get(preds_lens, blk);
+            if np > 0 {
+                let mut new_idom: Int = 0 - 1; let mut j: Int = 0;
+                while j < np {
+                    let p: Int = list_get(preds_flat, offset + j);
+                    if list_get(idoms, p) != (0 - 1) {
+                        if new_idom == (0 - 1) { new_idom = p; } else { new_idom = ssa_opt_intersect(idoms, p, new_idom); }
+                    }
+                    j = j + 1;
+                }
+                if new_idom != (0 - 1) && list_get(idoms, blk) != new_idom { idoms = ssa_update_list(idoms, blk, new_idom); changed = true; }
+            }
+            blk = blk + 1;
+        }
+        pass = pass + 1;
+    }
+    let mut e_idx: Int = 0;
+    while e_idx < n_edges {
+        let tail: Int = list_get(edge_srcs, e_idx); let head: Int = list_get(edge_dsts, e_idx);
+        if ssa_opt_dominates(idoms, num_blocks, head, tail) {
+            let mut body: List[Int] = list_push(list_new(), head);
+            let mut worklist: List[Int] = list_new();
+            if tail != head { body = list_push(body, tail); worklist = list_push(worklist, tail); }
+            let mut q_idx: Int = 0;
+            while q_idx < list_len(worklist) {
+                let curr: Int = list_get(worklist, q_idx); q_idx = q_idx + 1;
+                let off: Int = list_get(preds_offsets, curr); let count: Int = list_get(preds_lens, curr);
+                let mut pi: Int = 0;
+                while pi < count {
+                    let pred: Int = list_get(preds_flat, off + pi);
+                    if !ssa_opt_list_has(body, pred) { body = list_push(body, pred); worklist = list_push(worklist, pred); }
+                    pi = pi + 1;
+                }
+            }
+            let mut preheader: Int = if head > 0 { head - 1 } else { 0 };
+            let h_off: Int = list_get(preds_offsets, head); let h_cnt: Int = list_get(preds_lens, head);
+            let mut hpi: Int = 0;
+            while hpi < h_cnt {
+                let hp: Int = list_get(preds_flat, h_off + hpi);
+                if !ssa_opt_list_has(body, hp) { preheader = hp; }
+                hpi = hpi + 1;
+            }
+            return ssa_loop_info_new(head, preheader, tail, body);
+        }
+        e_idx = e_idx + 1;
+    }
+    return ssa_loop_info_new(0 - 1, 0 - 1, 0 - 1, empty_b);
+}
+
+pub fn ssa_opt_is_instruction_invariant(inst: SsaInstruction, loop: SsaLoopInfo) -> Int {
+    let bid: Int = inst.block_id;
+    if !ssa_opt_loop_contains_bb(loop, bid) { return 0; }
+    let op: Int = inst.op;
+    if op == ssa_op_phi() || op == ssa_op_br() || op == ssa_op_cond_br() || op == ssa_op_ret() || op == ssa_op_alloca() || op == ssa_op_store() || op == ssa_op_load() { return 0; }
+    if op == ssa_op_const() || op == ssa_op_add() || op == ssa_op_sub() || op == ssa_op_mul() || op == ssa_op_shl() || op == ssa_op_shr() || op == ssa_op_and() || op == ssa_op_or() || op == ssa_op_xor() || op == ssa_op_icmp_eq() || op == ssa_op_icmp_slt() { return 1; }
+    return 0;
+}
+
+pub fn ssa_opt_run_licm(func: SsaFunction) -> SsaFunction {
+    let loop0: SsaLoopInfo = ssa_opt_find_first_loop(func);
+    if loop0.header_bb < 0 { return func; }
+    let preheader: Int = loop0.preheader_bb;
+    let n: Int = 0 + ssa_fn_inst_count(func);
+    let mut new_ops: List[Int] = list_new(); let mut new_res: List[Int] = list_new();
+    let mut new_imms: List[Int] = list_new(); let mut new_bids: List[Int] = list_new();
+    let mut new_lhss: List[Int] = list_new();
+    let mut i: Int = 0;
+    while i < n {
+        let op: Int = list_get(func.inst_opcodes, i);
+        let res: Int = list_get(func.inst_results, i);
+        let imm: Int = list_get(func.inst_imm_vals, i);
+        let lhs: Int = list_get(func.inst_lhs_vals, i);
+        let bid: Int = list_get(func.inst_block_ids, i);
+        let inst: SsaInstruction = ssa_inst_new(op, res, imm, bid);
+        let mut target_bid: Int = bid;
+        if bid != loop0.header_bb && ssa_opt_loop_contains_bb(loop0, bid) {
+            if ssa_opt_is_instruction_invariant(inst, loop0) == 1 { target_bid = preheader; }
+        }
+        new_ops = list_push(new_ops, op); new_res = list_push(new_res, res);
+        new_imms = list_push(new_imms, imm); new_lhss = list_push(new_lhss, lhs); new_bids = list_push(new_bids, target_bid);
+        i = i + 1;
+    }
+    return SsaFunction { name: func.name, return_type: func.return_type, block_count: func.block_count, block_names: func.block_names, inst_opcodes: new_ops, inst_results: new_res, inst_imm_vals: new_imms, inst_lhs_vals: new_lhss, inst_block_ids: new_bids };
+}
+
+pub fn ssa_opt_run_strength_reduction(func: SsaFunction) -> SsaFunction {
+    let n: Int = 0 + ssa_fn_inst_count(func);
+    let mut new_ops: List[Int] = list_new(); let mut new_res: List[Int] = list_new();
+    let mut new_imms: List[Int] = list_new(); let mut new_bids: List[Int] = list_new();
+    let mut new_lhss: List[Int] = list_new();
+    let mut i: Int = 0;
+    while i < n {
+        let op: Int = list_get(func.inst_opcodes, i);
+        let res: Int = list_get(func.inst_results, i);
+        let imm: Int = list_get(func.inst_imm_vals, i);
+        let lhs: Int = list_get(func.inst_lhs_vals, i);
+        let bid: Int = list_get(func.inst_block_ids, i);
+        if op == ssa_op_mul() && (imm == 2 || imm == 4 || imm == 8) {
+            let shift: Int = if imm == 2 { 1 } else if imm == 4 { 2 } else { 3 };
+            new_ops = list_push(new_ops, ssa_op_shl()); new_res = list_push(new_res, res);
+            new_imms = list_push(new_imms, shift); new_lhss = list_push(new_lhss, lhs); new_bids = list_push(new_bids, bid);
+        } else if op == ssa_op_mul() && imm == 0 {
+            new_ops = list_push(new_ops, ssa_op_const()); new_res = list_push(new_res, res);
+            new_imms = list_push(new_imms, 0); new_lhss = list_push(new_lhss, 0); new_bids = list_push(new_bids, bid);
+        } else {
+            new_ops = list_push(new_ops, op); new_res = list_push(new_res, res);
+            new_imms = list_push(new_imms, imm); new_lhss = list_push(new_lhss, lhs); new_bids = list_push(new_bids, bid);
+        }
+        i = i + 1;
+    }
+    return SsaFunction { name: func.name, return_type: func.return_type, block_count: func.block_count, block_names: func.block_names, inst_opcodes: new_ops, inst_results: new_res, inst_imm_vals: new_imms, inst_lhs_vals: new_lhss, inst_block_ids: new_bids };
+}
+
+pub fn ssa_opt_run_loop_unroll(func: SsaFunction, max_unroll: Int) -> SsaFunction {
+    let loop0: SsaLoopInfo = ssa_opt_find_first_loop(func);
+    if loop0.header_bb < 0 || max_unroll <= 1 || max_unroll > 4 { return func; }
+    let n: Int = 0 + ssa_fn_inst_count(func);
+    let mut new_ops: List[Int] = list_new(); let mut new_res: List[Int] = list_new();
+    let mut new_imms: List[Int] = list_new(); let mut new_bids: List[Int] = list_new();
+    let mut new_lhss: List[Int] = list_new();
+    let mut i: Int = 0;
+    while i < n {
+        let op: Int = list_get(func.inst_opcodes, i);
+        let res: Int = list_get(func.inst_results, i);
+        let imm: Int = list_get(func.inst_imm_vals, i);
+        let lhs: Int = list_get(func.inst_lhs_vals, i);
+        let bid: Int = list_get(func.inst_block_ids, i);
+        new_ops = list_push(new_ops, op); new_res = list_push(new_res, res);
+        new_lhss = list_push(new_lhss, lhs);
+        new_imms = list_push(new_imms, imm); new_bids = list_push(new_bids, bid);
+        if bid == loop0.backedge_bb && op != ssa_op_br() && op != ssa_op_cond_br() && max_unroll >= 2 {
+            let mut step: Int = 1;
+            while step < max_unroll && step < 4 {
+                new_ops = list_push(new_ops, op);
+                new_res = list_push(new_res, res + (step * 10));
+                new_imms = list_push(new_imms, imm);
+                new_lhss = list_push(new_lhss, lhs);
+                new_bids = list_push(new_bids, bid);
+                step = step + 1;
+            }
+        }
+        i = i + 1;
+    }
+    return SsaFunction { name: func.name, return_type: func.return_type, block_count: func.block_count, block_names: func.block_names, inst_opcodes: new_ops, inst_results: new_res, inst_imm_vals: new_imms, inst_lhs_vals: new_lhss, inst_block_ids: new_bids };
+}
+

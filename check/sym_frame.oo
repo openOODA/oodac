@@ -1,0 +1,252 @@
+// # Structured lexical symbol frame table
+//
+// Logline: Tracks nested lexical block frames, CFG borrow analysis, and emits reverse-order ARC destruction hooks.
+//
+// Setup: Lexical frames manage variable lifetimes; integrates with C emitter for ARC elision.
+//
+// Beats:
+//   1. SymVar tracks variable name, AST type, C type, formal status, managed status, and borrow root.
+//   2. FrameTable manages stack of lexical scopes with enter and leave operations using primitive list vectors.
+//   3. CFG borrow analysis checks static reference count invariants and elides redundant retain/release calls.
+
+import "tc_parse_int.oo";
+
+pub type SymVar = struct {
+    name: String, ty_ast: String, c_ty: String, is_formal: Bool, is_managed: Bool, is_borrow: Bool, borrow_root: String
+};
+
+pub type FrameTable = struct {
+    levels: List[Int], parents: List[Int], frame_vars: List[String], active_frame: Int
+};
+
+pub fn c_is_managed_type(c_ty: String) -> Bool {
+    if c_ty == "" || c_ty == "long long" || c_ty == "int" || c_ty == "double" || c_ty == "void" || c_ty == "float" || c_ty == "bool" { return false; }
+    if c_ty == "OoStr" || c_ty == "OoSList" || c_ty == "OoIList" || c_ty == "OoFList" { return true; }
+    if c_ty == "T" || c_ty == "S" || c_ty == "LI" || c_ty == "LF" || c_ty == "R" || c_ty == "RI" || c_ty == "RLI" || c_ty == "RLS" || c_ty == "RLF" || c_ty == "V" || c_ty == "RB" || c_ty == "RF" { return true; }
+    let n: Int = chars_len(c_ty);
+    if n >= 4 && (str_slice(c_ty, 0, 4) == "OoL_" || str_slice(c_ty, 0, 4) == "LLL_") { return true; }
+    if n >= 5 && (str_slice(c_ty, 0, 5) == "OoLL_" || str_slice(c_ty, 0, 5) == "LLLL_") { return true; }
+    if n >= 6 && (str_slice(c_ty, 0, 6) == "OoLLL_" || str_slice(c_ty, 0, 6) == "OoOpt_" || str_slice(c_ty, 0, 6) == "OoRes_") { return true; }
+    if n >= 7 && (str_slice(c_ty, 0, 7) == "OoLLLL_" || str_slice(c_ty, 0, 7) == "OoRes2_") { return true; }
+    if n >= 3 && str_slice(c_ty, 0, 3) == "LL_" { return true; }
+    let first_b: Int = byte_at(c_ty, 0);
+    return first_b >= 65 && first_b <= 90;
+}
+
+pub fn c_frame_var_new(name: String, ty_ast: String, c_ty: String, is_formal: Bool) -> SymVar {
+    return SymVar { name: name, ty_ast: ty_ast, c_ty: c_ty, is_formal: is_formal, is_managed: c_is_managed_type(c_ty), is_borrow: false, borrow_root: "" };
+}
+
+pub fn c_frame_var_borrow_new(name: String, ty_ast: String, c_ty: String, is_formal: Bool, is_borrow: Bool, borrow_root: String) -> SymVar {
+    return SymVar { name: name, ty_ast: ty_ast, c_ty: c_ty, is_formal: is_formal, is_managed: c_is_managed_type(c_ty), is_borrow: is_borrow, borrow_root: borrow_root };
+}
+
+fn c_symvar_encode(v: SymVar) -> String {
+    let f: String = if v.is_formal { "1" } else { "0" };
+    let m: String = if v.is_managed { "1" } else { "0" };
+    let b: String = if v.is_borrow { "1" } else { "0" };
+    return v.name + "\t" + v.ty_ast + "\t" + v.c_ty + "\t" + f + "\t" + m + "\t" + b + "\t" + v.borrow_root;
+}
+
+fn c_symvar_decode(s: String) -> SymVar {
+    let parts: List[String] = str_split(s, "\t");
+    if list_len(parts) < 7 { return SymVar { name: "", ty_ast: "", c_ty: "", is_formal: false, is_managed: false, is_borrow: false, borrow_root: "" }; }
+    return SymVar { name: list_get(parts, 0), ty_ast: list_get(parts, 1), c_ty: list_get(parts, 2), is_formal: list_get(parts, 3) == "1", is_managed: list_get(parts, 4) == "1", is_borrow: list_get(parts, 5) == "1", borrow_root: list_get(parts, 6) };
+}
+
+pub fn c_frame_table_new() -> FrameTable {
+    let mut levels: List[Int] = list_new(); levels = list_push(levels, 0);
+    let mut parents: List[Int] = list_new(); parents = list_push(parents, -1);
+    let mut fvars: List[String] = list_new(); fvars = list_push(fvars, "");
+    return FrameTable { levels: levels, parents: parents, frame_vars: fvars, active_frame: 0 };
+}
+
+pub fn c_frame_enter(tbl: FrameTable) -> FrameTable {
+    let p_idx: Int = tbl.active_frame;
+    let mut levels: List[Int] = tbl.levels; levels = list_push(levels, list_get(tbl.levels, p_idx) + 1);
+    let mut parents: List[Int] = tbl.parents; parents = list_push(parents, p_idx);
+    let mut fvars: List[String] = tbl.frame_vars; fvars = list_push(fvars, "");
+    return FrameTable { levels: levels, parents: parents, frame_vars: fvars, active_frame: list_len(levels) - 1 };
+}
+
+pub fn c_frame_leave(tbl: FrameTable) -> FrameTable {
+    let cur_idx: Int = tbl.active_frame;
+    if cur_idx <= 0 { return tbl; }
+    return FrameTable { levels: tbl.levels, parents: tbl.parents, frame_vars: tbl.frame_vars, active_frame: list_get(tbl.parents, cur_idx) };
+}
+
+pub fn c_frame_bind(tbl: FrameTable, name: String, ty_ast: String, c_ty: String, is_formal: Bool) -> FrameTable {
+    return c_frame_bind_borrow(tbl, name, ty_ast, c_ty, is_formal, false, "");
+}
+
+pub fn c_frame_bind_borrow(tbl: FrameTable, name: String, ty_ast: String, c_ty: String, is_formal: Bool, is_borrow: Bool, borrow_root: String) -> FrameTable {
+    let cur_idx: Int = tbl.active_frame;
+    let enc: String = c_symvar_encode(c_frame_var_borrow_new(name, ty_ast, c_ty, is_formal, is_borrow, borrow_root));
+    let tbl_fvars: List[String] = tbl.frame_vars;
+    let cur_v: String = list_get(tbl_fvars, cur_idx);
+    let new_v: String = if cur_v == "" { enc } else { cur_v + "\n" + enc };
+    let mut fvars: List[String] = list_new();
+    let nf: Int = list_len(tbl_fvars);
+    let mut i: Int = 0;
+    while i < nf {
+        if i == cur_idx { fvars = list_push(fvars, new_v); }
+        else { fvars = list_push(fvars, list_get(tbl_fvars, i)); }
+        i = i + 1;
+    }
+    return FrameTable { levels: tbl.levels, parents: tbl.parents, frame_vars: fvars, active_frame: cur_idx };
+}
+
+pub fn c_frame_lookup(tbl: FrameTable, name: String) -> SymVar {
+    let mut cur: Int = tbl.active_frame;
+    let tbl_fvars: List[String] = tbl.frame_vars;
+    while cur >= 0 {
+        let vstr: String = list_get(tbl_fvars, cur);
+        if vstr != "" {
+            let lines: List[String] = str_split(vstr, "\n");
+            let mut i: Int = list_len(lines) - 1;
+            while i >= 0 {
+                let v: SymVar = c_symvar_decode(list_get(lines, i));
+                if v.name == name { return v; }
+                i = i - 1;
+            }
+        }
+        cur = list_get(tbl.parents, cur);
+    }
+    return SymVar { name: "", ty_ast: "", c_ty: "", is_formal: false, is_managed: false, is_borrow: false, borrow_root: "" };
+}
+
+pub fn c_frame_borrow_check(table: FrameTable, var_name: String, scope_id: Int) -> Bool {
+    if var_name == "" { return false; }
+    let mut clean_name: String = var_name;
+    if chars_len(clean_name) > 1 && char_at(clean_name, 0) == "&" { clean_name = str_slice(clean_name, 1, chars_len(clean_name)); }
+    let n: Int = chars_len(clean_name);
+    let mut di: Int = 0;
+    let mut dot_idx: Int = -1;
+    while di < n {
+        if char_at(clean_name, di) == "." {
+            if dot_idx < 0 { dot_idx = di; }
+        }
+        di = di + 1;
+    }
+    if dot_idx > 0 { clean_name = str_slice(clean_name, 0, dot_idx); }
+    let v: SymVar = c_frame_lookup(table, clean_name);
+    if v.name == "" { return false; }
+    if v.is_formal || v.is_borrow { return true; }
+    let mut cur: Int = table.active_frame;
+    let tbl_fvars: List[String] = table.frame_vars;
+    while cur >= 0 {
+        let vstr: String = list_get(tbl_fvars, cur);
+        if vstr != "" {
+            let lines: List[String] = str_split(vstr, "\n");
+            let mut i: Int = list_len(lines) - 1;
+            while i >= 0 {
+                let cv: SymVar = c_symvar_decode(list_get(lines, i));
+                if cv.name == clean_name { return cur >= 0 && cur <= scope_id; }
+                i = i - 1;
+            }
+        }
+        cur = list_get(table.parents, cur);
+    }
+    return false;
+}
+
+pub fn c_frame_elide_retain_release(table: FrameTable, expr: String) -> String {
+    let n: Int = chars_len(expr);
+    if n < 4 { return expr; }
+    let mut lp: Int = -1;
+    let mut rp: Int = -1;
+    let mut i: Int = 0;
+    while i < n {
+        let ch: String = char_at(expr, i);
+        if ch == "(" && lp < 0 { lp = i; }
+        if ch == ")" { rp = i; }
+        i = i + 1;
+    }
+    if lp < 0 || rp <= lp { return expr; }
+    let arg: String = str_slice(expr, lp + 1, rp);
+    if c_frame_borrow_check(table, arg, table.active_frame) { return ""; }
+    return expr;
+}
+
+pub fn c_frame_emit_exit(tbl: FrameTable) -> String {
+    let cur_idx: Int = tbl.active_frame;
+    if cur_idx < 0 { return ""; }
+    let fvars: List[String] = tbl.frame_vars;
+    let vstr: String = list_get(fvars, cur_idx);
+    if vstr == "" { return ""; }
+    let lines: List[String] = str_split(vstr, "\n");
+    let mut out: String = "";
+    let mut i: Int = list_len(lines) - 1;
+    while i >= 0 {
+        let v: SymVar = c_symvar_decode(list_get(lines, i));
+        if v.is_managed && !v.is_formal && !v.is_borrow { out = out + c_arc_kind_release_sym(v.c_ty, v.name); }
+        i = i - 1;
+    }
+    return out;
+}
+
+pub fn c_frame_emit_all_exits(tbl: FrameTable) -> String {
+    let mut cur: Int = tbl.active_frame;
+    let mut out: String = "";
+    while cur >= 0 {
+        let sub_tbl: FrameTable = FrameTable { levels: tbl.levels, parents: tbl.parents, frame_vars: tbl.frame_vars, active_frame: cur };
+        out = out + c_frame_emit_exit(sub_tbl);
+        cur = list_get(tbl.parents, cur);
+    }
+    return out;
+}
+
+pub fn c_frame_emit_local_exits(tbl: FrameTable) -> String {
+    let mut cur: Int = tbl.active_frame;
+    let mut out: String = "";
+    while cur > 0 {
+        let sub_tbl: FrameTable = FrameTable { levels: tbl.levels, parents: tbl.parents, frame_vars: tbl.frame_vars, active_frame: cur };
+        out = out + c_frame_emit_exit(sub_tbl);
+        cur = list_get(tbl.parents, cur);
+    }
+    return out;
+}
+
+pub fn c_arc_kind_release_sym(k: String, name: String) -> String {
+    if k == "T" || k == "OoStr" { return "oo_str_release(" + name + "); "; }
+    if k == "S" || k == "OoSList" || k == "OoL_S" { return "oo_slist_release(" + name + "); "; }
+    if k == "LF" || k == "OoFList" || k == "OoL_F" { return "oo_flist_release(" + name + "); "; }
+    if k == "LI" || k == "OoIList" || k == "OoL_I" { return "oo_ilist_release(" + name + "); "; }
+    if k == "I" || k == "F" || k == "B" || k == "V" || k == "long long" || k == "double" || k == "int" { return ""; }
+    if k == "R" || k == "OoResS" || k == "OoRes_S" { return "if (" + name + ".ok) { oo_str_release(" + name + ".val); } "; }
+    if k == "RI" || k == "OoResI" || k == "OoRes_I" || k == "OoResV" || k == "RB" || k == "OoResB" || k == "OoRes_B" || k == "RF" || k == "OoResF" || k == "OoRes_F" { return "if (!" + name + ".ok) { oo_str_release(" + name + ".err); } "; }
+    if k == "RLI" || k == "OoResLI" || k == "OoRes_OoL_I" { return "if (" + name + ".ok) { oo_ilist_release(" + name + ".val); } else { oo_str_release(" + name + ".err); } "; }
+    if k == "RLS" || k == "OoResLS" || k == "OoRes_OoL_S" { return "if (" + name + ".ok) { oo_slist_release(" + name + ".val); } else { oo_str_release(" + name + ".err); } "; }
+    if k == "RLF" || k == "OoResLF" || k == "OoRes_OoL_F" { return "if (" + name + ".ok) { oo_flist_release(" + name + ".val); } else { oo_str_release(" + name + ".err); } "; }
+    let kn: Int = bytes_len(k);
+    if kn >= 4 && str_slice(k, 0, 4) == "OoL_" { return "oo_release_" + k + "(" + name + "); "; }
+    if kn >= 6 && (str_slice(k, 0, 6) == "OoOpt_" || str_slice(k, 0, 6) == "OoRes_") { return "oo_release_" + k + "(" + name + "); "; }
+    if kn >= 7 && (str_slice(k, 0, 7) == "OoRes2_" || str_slice(k, 0, 7) == "OoLLLL_") { return "oo_release_" + k + "(" + name + "); "; }
+    if kn >= 6 && str_slice(k, 0, 6) == "OoLLL_" { return "oo_lll_" + str_slice(k, 6, kn) + "_release(" + name + "); "; }
+    if kn >= 5 && (str_slice(k, 0, 5) == "OoLL_" || str_slice(k, 0, 5) == "LLLL_") { return "oo_release_" + k + "(" + name + "); "; }
+    if kn >= 4 && str_slice(k, 0, 4) == "LLL_" { return "oo_lll_" + str_slice(k, 4, kn) + "_release(" + name + "); "; }
+    if kn >= 3 && str_slice(k, 0, 3) == "LL_" { return "oo_ll_" + str_slice(k, 3, kn) + "_release(" + name + "); "; }
+    if kn > 1 && byte_at(k, 0) >= 65 && byte_at(k, 0) <= 90 { return "oo_release_" + k + "(" + name + "); "; }
+    return "";
+}
+
+pub fn c_arc_kind_retain_sym(k: String, name: String) -> String {
+    if k == "T" || k == "OoStr" { return "oo_str_retain(" + name + "); "; }
+    if k == "S" || k == "OoSList" || k == "OoL_S" { return "oo_slist_retain(" + name + "); "; }
+    if k == "LF" || k == "OoFList" || k == "OoL_F" { return "oo_flist_retain(" + name + "); "; }
+    if k == "I" || k == "F" || k == "B" || k == "V" || k == "long long" || k == "double" || k == "int" { return ""; }
+    if k == "R" || k == "OoResS" || k == "OoRes_S" { return "if (" + name + ".ok) { oo_str_retain(" + name + ".val); } "; }
+    if k == "RI" || k == "OoResI" || k == "OoRes_I" || k == "OoResV" || k == "RB" || k == "OoResB" || k == "OoRes_B" || k == "RF" || k == "OoResF" || k == "OoRes_F" { return "if (!" + name + ".ok) { oo_str_retain(" + name + ".err); } "; }
+    if k == "RLI" || k == "OoResLI" || k == "OoRes_OoL_I" { return "if (" + name + ".ok) { oo_ilist_retain(" + name + ".val); } else { oo_str_retain(" + name + ".err); } "; }
+    if k == "RLS" || k == "OoResLS" || k == "OoRes_OoL_S" { return "if (" + name + ".ok) { oo_slist_retain(" + name + ".val); } else { oo_str_retain(" + name + ".err); } "; }
+    if k == "RLF" || k == "OoResLF" || k == "OoRes_OoL_F" { return "if (" + name + ".ok) { oo_flist_retain(" + name + ".val); } else { oo_str_retain(" + name + ".err); } "; }
+    let kn: Int = bytes_len(k);
+    if kn >= 4 && (str_slice(k, 0, 4) == "OoL_" || str_slice(k, 0, 4) == "LLL_") { return "oo_retain_" + k + "(" + name + "); "; }
+    if kn >= 6 && (str_slice(k, 0, 6) == "OoOpt_" || str_slice(k, 0, 6) == "OoRes_") { return "oo_retain_" + k + "(" + name + "); "; }
+    if kn >= 7 && (str_slice(k, 0, 7) == "OoRes2_" || str_slice(k, 0, 7) == "OoLLLL_") { return "oo_retain_" + k + "(" + name + "); "; }
+    if kn >= 6 && str_slice(k, 0, 6) == "OoLLL_" { return "oo_lll_" + str_slice(k, 6, kn) + "_retain(" + name + "); "; }
+    if kn >= 5 && (str_slice(k, 0, 5) == "OoLL_" || str_slice(k, 0, 5) == "LLLL_") { return "oo_retain_" + k + "(" + name + "); "; }
+    if kn >= 3 && str_slice(k, 0, 3) == "LL_" { return "oo_ll_" + str_slice(k, 3, kn) + "_retain(" + name + "); "; }
+    if kn > 1 && byte_at(k, 0) >= 65 && byte_at(k, 0) <= 90 { return "oo_retain_" + k + "(" + name + "); "; }
+    return "";
+}

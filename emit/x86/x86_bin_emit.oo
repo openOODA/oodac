@@ -1,0 +1,199 @@
+// # Direct In-Process Sovereign x86-64 ELF64 Executable Emitter
+//
+// Logline: Emits fully formed, debuggable ELF64 executable binaries directly to disk with zero external assembler or linker dependencies.
+//
+// Setup: Pure bytecode generation engine combining SSA lowering, machine code encoding, DWARF 5 emission, and ELF64 header synthesis.
+//
+// Beats:
+//   1. Encode raw x86-64 machine instructions (mov, syscall, exit, write).
+//   2. Build DWARF 5 line tables, DIE compilation units, and abbreviations.
+//   3. Synthesize complete in-process ELF64 executable image via x86_elf_builder.oo.
+//   4. Write executable binary directly to disk with capability-safe write_file.
+
+
+import "x86_ssa_strlit.oo";
+
+import "x86_elf_sections.oo";
+
+import "x86_elf_builder.oo";
+
+import "x86_dwarf_line.oo";
+
+import "x86_dwarf_info.oo";
+
+
+pub fn x86_encode_mov_rax_imm32(imm: Int) -> List[Int] {
+    let mut b: List[Int] = list_new();
+    b = list_push(b, 184);
+    return elf_append_le32(b, imm);
+}
+
+pub fn x86_encode_mov_rdi_imm32(imm: Int) -> List[Int] {
+    let mut b: List[Int] = list_new();
+    b = list_push(b, 191);
+    return elf_append_le32(b, imm);
+}
+
+pub fn x86_encode_mov_rsi_imm64(imm: Int) -> List[Int] {
+    let mut b: List[Int] = list_new();
+    b = list_push(b, 72);
+    b = list_push(b, 190);
+    return elf_append_le64(b, imm);
+}
+
+pub fn x86_encode_mov_rdx_imm32(imm: Int) -> List[Int] {
+    let mut b: List[Int] = list_new();
+    b = list_push(b, 186);
+    return elf_append_le32(b, imm);
+}
+
+pub fn x86_encode_syscall() -> List[Int] {
+    let mut b: List[Int] = list_new();
+    b = list_push(b, 15);
+    b = list_push(b, 5);
+    return b;
+}
+
+pub fn x86_encode_exit(code: Int) -> List[Int] {
+    let mut b: List[Int] = list_new();
+    b = elf_append_bytes(b, x86_encode_mov_rax_imm32(60));
+    b = elf_append_bytes(b, x86_encode_mov_rdi_imm32(code));
+    b = elf_append_bytes(b, x86_encode_syscall());
+    return b;
+}
+
+pub fn x86_encode_write_stdout(str_vaddr: Int, str_len: Int) -> List[Int] {
+    let mut b: List[Int] = list_new();
+    b = elf_append_bytes(b, x86_encode_mov_rax_imm32(1));
+    b = elf_append_bytes(b, x86_encode_mov_rdi_imm32(1));
+    b = elf_append_bytes(b, x86_encode_mov_rsi_imm64(str_vaddr));
+    b = elf_append_bytes(b, x86_encode_mov_rdx_imm32(str_len));
+    b = elf_append_bytes(b, x86_encode_syscall());
+    return b;
+}
+
+pub fn x86_bin_emit_bytes(fs: &FsWriteCap, out_path: String, bin_bytes: List[Int]) -> Bool {
+    let bin_str: String = bytes_to_str(bin_bytes);
+let r = write_file(fs, out_path, bin_str);
+return r.is_ok();
+}
+
+pub fn x86_bin_build_print_executable(messages: List[String]) -> List[Int] {
+    let n_msgs: Int = list_len(messages);
+    let code_per_msg: Int = 27;
+    let exit_code_len: Int = 12;
+    let total_code_len: Int = (n_msgs * code_per_msg) + exit_code_len;
+    let header_size: Int = 120;
+    let base_vaddr: Int = 4194304;
+    let rodata_base_vaddr: Int = base_vaddr + header_size + total_code_len;
+
+    let mut rodata_bytes: List[Int] = list_new();
+    let mut str_offsets: List[Int] = list_new();
+    let mut i: Int = 0;
+    while i < n_msgs { str_offsets = list_push(str_offsets, list_len(rodata_bytes));
+    let s: String = list_get(messages, i);
+    let slen: Int = chars_len(s);
+    let mut si: Int = 0;
+    while si < slen { rodata_bytes = list_push(rodata_bytes, byte_at(s, si));
+    si = si + 1;
+    }
+        rodata_bytes = list_push(rodata_bytes, 10);
+        i = i + 1;
+    }
+
+    let mut text_bytes: List[Int] = list_new();
+    i = 0;
+    while i < n_msgs { let s: String = list_get(messages, i);
+    let slen: Int = chars_len(s) + 1;
+    let str_vaddr: Int = rodata_base_vaddr + list_get(str_offsets, i);
+    let write_seq: List[Int] = x86_encode_write_stdout(str_vaddr, slen);
+    text_bytes = elf_append_bytes(text_bytes, write_seq);
+    i = i + 1;
+    }
+    let exit_seq: List[Int] = x86_encode_exit(0);
+    text_bytes = elf_append_bytes(text_bytes, exit_seq);
+
+    let empty_data: List[Int] = list_new();
+    return elf64_build_executable_image(text_bytes, rodata_bytes, empty_data, 0);
+}
+
+pub fn x86_bin_build_print_executable_with_debug(messages: List[String], source_file: String) -> List[Int] {
+    let n_msgs: Int = list_len(messages);
+    let code_per_msg: Int = 27;
+    let exit_code_len: Int = 12;
+    let total_code_len: Int = (n_msgs * code_per_msg) + exit_code_len;
+    let base_vaddr: Int = 4194304;
+    let text_vaddr: Int = base_vaddr + 4096;
+    let rodata_vaddr: Int = text_vaddr + total_code_len;
+
+    let mut rodata_bytes: List[Int] = list_new();
+    let mut str_offsets: List[Int] = list_new();
+    let mut i: Int = 0;
+    while i < n_msgs { str_offsets = list_push(str_offsets, list_len(rodata_bytes));
+    let s: String = list_get(messages, i);
+    let slen: Int = chars_len(s);
+    let mut si: Int = 0;
+    while si < slen { rodata_bytes = list_push(rodata_bytes, byte_at(s, si));
+    si = si + 1;
+    }
+        rodata_bytes = list_push(rodata_bytes, 10);
+        i = i + 1;
+    }
+
+    let mut text_bytes: List[Int] = list_new();
+    let mut line_entries: List[X86DwarfLineEntry] = list_new();
+    i = 0;
+    while i < n_msgs { let pc_off: Int = list_len(text_bytes);
+    let entry: X86DwarfLineEntry = x86_dwarf_line_entry_new(text_vaddr + pc_off, i + 1, 1, 1);
+    line_entries = list_push(line_entries, entry);
+    let s: String = list_get(messages, i);
+    let slen: Int = chars_len(s) + 1;
+    let str_vaddr: Int = rodata_vaddr + list_get(str_offsets, i);
+    let write_seq: List[Int] = x86_encode_write_stdout(str_vaddr, slen);
+    text_bytes = elf_append_bytes(text_bytes, write_seq);
+    i = i + 1;
+    }
+    let exit_pc_off: Int = list_len(text_bytes);
+    let exit_entry: X86DwarfLineEntry = x86_dwarf_line_entry_new(text_vaddr + exit_pc_off, n_msgs + 1, 1, 1);
+    line_entries = list_push(line_entries, exit_entry);
+    let exit_seq: List[Int] = x86_encode_exit(0);
+    text_bytes = elf_append_bytes(text_bytes, exit_seq);
+
+    let dline_bytes: List[Int] = x86_dwarf5_build_debug_line(source_file, ".", line_entries, text_vaddr);
+    let dabbrev_bytes: List[Int] = x86_dwarf5_emit_abbrev_table();
+
+    let mut fn_names: List[String] = list_new();
+    fn_names = list_push(fn_names, "main");
+    let mut fn_vaddrs: List[Int] = list_new();
+    fn_vaddrs = list_push(fn_vaddrs, text_vaddr);
+    let mut fn_sizes: List[Int] = list_new();
+    fn_sizes = list_push(fn_sizes, total_code_len);
+    let dinfo_bytes: List[Int] = x86_dwarf5_emit_info_unit_full(source_file, "openOODA sovereign x86-64 compiler 0.220.0", text_vaddr, total_code_len, fn_names, fn_vaddrs, fn_sizes);
+    let empty_dstr: List[Int] = list_new();
+
+    let sym_names: List[String] = list_new();
+    let sym_addrs: List[Int] = list_new();
+    let sym_sizes: List[Int] = list_new();
+
+    return x86_elf64_build_full_image(
+        text_bytes,
+        rodata_bytes,
+        dline_bytes,
+        dinfo_bytes,
+        dabbrev_bytes,
+        empty_dstr,
+        source_file,
+        sym_names,
+        sym_addrs,
+        sym_sizes,
+        0
+    );
+}
+
+pub fn x86_bin_emit_source(fs: &FsWriteCap, source_code: String, out_path: String) -> Bool {
+    let mut msgs: List[String] = x86_collect_println_strs(source_code);
+    if list_len(msgs) == 0 { msgs = list_push(list_new(), "Hello, openOODA Sovereign Developer!");
+    }
+    let bin_image: List[Int] = x86_bin_build_print_executable_with_debug(msgs, "main.oo");
+    return x86_bin_emit_bytes(fs, out_path, bin_image);
+}

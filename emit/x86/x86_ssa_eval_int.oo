@@ -1,0 +1,217 @@
+// # Const-eval of integer, float, struct field, and bitwise println args
+//
+// Logline: Turns AST expressions into the program's actual decimal/text so emit-x86 interns that value, not a canned 22.00 or greet template.
+//
+// Setup: ast.oo tags. Called from x86_ssa_ast_fold when string concat misses. Float uses 1e6 scale of source digits (3.14*2*2 → 12.56).
+//
+// Beats:
+//   1. Int arith and bitwise & | ^ << >>.
+//   2. Float * + - / at 1e6 scale.
+//   3. Detect int-shaped vs float-shaped text.
+
+
+
+fn x86_eval_is_int(s: String) -> Bool {
+    let n: Int = chars_len(s);
+    if n == 0 { return false;
+    }
+    let mut i: Int = 0;
+    if char_at(s, 0) == "-" { i = 1;
+    if n == 1 { return false;
+    } }
+    while i < n { let b: Int = byte_at(s, i);
+    if b < 48 || b > 57 { return false;
+    } i = i + 1;
+    }
+    return true;
+}
+
+fn x86_eval_parse_int(s: String) -> Int {
+    let n: Int = chars_len(s);
+    let mut v: Int = 0;
+    let mut i: Int = 0;
+    let mut sign: Int = 1;
+    if n > 0 && char_at(s, 0) == "-" { sign = -1;
+    i = 1;
+    }
+    while i < n { let b: Int = byte_at(s, i);
+    if b >= 48 && b <= 57 { v = v * 10 + (b - 48);
+    } i = i + 1;
+    }
+    return v * sign;
+}
+
+pub fn x86_eval_has_dot(s: String) -> Bool {
+    let n: Int = chars_len(s);
+    let mut i: Int = 0;
+    while i < n { if char_at(s, i) == "." { return true;
+    } i = i + 1;
+    }
+    return false;
+}
+
+fn x86_eval_parse_scale(s: String) -> Int {
+    let n: Int = chars_len(s);
+    if n <= 0 { return 0;
+    }
+    let mut i: Int = 0;
+    let mut neg: Bool = false;
+    if char_at(s, 0) == "-" { neg = true;
+    i = 1;
+    }
+    let mut w: Int = 0;
+    while i < n && char_at(s, i) != "." {
+        let b: Int = byte_at(s, i);
+        if b < 48 || b > 57 { return 0;
+        }
+        w = w * 10 + (b - 48);
+        i = i + 1;
+    }
+    let mut f: Int = 0;
+    let mut d: Int = 1;
+    if i < n && char_at(s, i) == "." {
+        i = i + 1;
+        while i < n && d < 1000000 {
+            let b: Int = byte_at(s, i);
+            if b < 48 || b > 57 { return 0;
+            }
+            f = f * 10 + (b - 48);
+            d = d * 10;
+            i = i + 1;
+        }
+        while d < 1000000 { f = f * 10;
+        d = d * 10;
+        }
+    }
+    let mut v: Int = w * 1000000 + f;
+    if neg { v = 0 - v;
+    } return v;
+}
+
+fn x86_eval_fmt_scale(v: Int) -> String {
+    if v < 0 { return "-" + x86_eval_fmt_scale(0 - v);
+    }
+    let whole: Int = v / 1000000;
+    let mut frac: Int = v - (whole * 1000000);
+    let digits: String = "0123456789";
+    let mut fs: String = "";
+    let mut i: Int = 0;
+    while i < 6 { fs = char_at(digits, frac % 10) + fs;
+    frac = frac / 10;
+    i = i + 1;
+    }
+    let mut trail: Int = 6;
+    while trail > 1 && char_at(fs, trail - 1) == "0" { trail = trail - 1;
+    }
+    let mut trimmed: String = "";
+    i = 0;
+    while i < trail { trimmed = trimmed + char_at(fs, i);
+    i = i + 1;
+    }
+    return whole.to_string() + "." + trimmed;
+}
+
+pub fn x86_eval_apply_binop(op: String, ls: String, rs: String) -> List[String] {
+    let mut out: List[String] = list_new();
+    if x86_eval_has_dot(ls) || x86_eval_has_dot(rs) {
+        let a: Int = x86_eval_parse_scale(ls);
+        let b: Int = x86_eval_parse_scale(rs);
+        let sc: Int = 1000000;
+        let mut v: Int = 0;
+        if op == "Add" { v = a + b;
+        } else if op == "Sub" { v = a - b;
+        }
+        else if op == "Mul" { v = (a * b) / sc;
+        } else if op == "Div" { if b == 0 { return out;
+        } v = (a * sc) / b;
+        }
+        else { return out;
+        }
+        return list_push(out, x86_eval_fmt_scale(v));
+    }
+    if !x86_eval_is_int(ls) || !x86_eval_is_int(rs) { return out;
+    }
+    let a: Int = x86_eval_parse_int(ls);
+    let b: Int = x86_eval_parse_int(rs);
+    let mut v: Int = 0;
+    if op == "Add" { v = a + b;
+    }
+    else if op == "Sub" { v = a - b;
+    }
+    else if op == "Mul" { v = a * b;
+    }
+    else if op == "Div" { if b == 0 { return out;
+    } v = a / b;
+    }
+    else if op == "Mod" { if b == 0 { return out;
+    } v = a % b;
+    }
+    else if op == "BitAnd" { v = a & b;
+    }
+    else if op == "BitOr" { v = a | b;
+    }
+    else if op == "Xor" { v = a ^ b;
+    }
+    else if op == "Shl" { v = a << b;
+    }
+    else if op == "Shr" { v = a >> b;
+    }
+    else if op == "Eq" { if a == b { v = 1;
+    } else { v = 0;
+    } }
+    else if op == "Lt" { if a < b { v = 1;
+    } else { v = 0;
+    } }
+    else if op == "Lte" { if a <= b { v = 1;
+    } else { v = 0;
+    } }
+    else if op == "Gt" { if a > b { v = 1;
+    } else { v = 0;
+    } }
+    else if op == "Gte" { if a >= b { v = 1;
+    } else { v = 0;
+    } }
+    else if op == "Neq" || op == "Ne" { if a != b { v = 1;
+    } else { v = 0;
+    } }
+    else { return out;
+    }
+    return list_push(out, v.to_string());
+}
+
+pub fn x86_eval_field_get(pack: String, fname: String) -> List[String] {
+    let mut out: List[String] = list_new();
+    let needle: String = fname + "=";
+    let n: Int = chars_len(pack);
+    let nn: Int = chars_len(needle);
+    let mut i: Int = 0;
+    while i + nn <= n {
+        let mut ok: Bool = true;
+        let mut j: Int = 0;
+        while j < nn { if char_at(pack, i + j) != char_at(needle, j) { ok = false;
+        } j = j + 1;
+        }
+        if ok {
+            let mut k: Int = i + nn;
+            let mut v: String = "";
+            while k < n && char_at(pack, k) != ";" { v = v + char_at(pack, k);
+            k = k + 1;
+            }
+            return list_push(out, v);
+        }
+        i = i + 1;
+    }
+    return out;
+}
+
+pub fn x86_eval_is_int_text(s: String) -> Bool {
+    return x86_eval_is_int(s);
+}
+pub fn x86_eval_lit_int(args: String) -> List[String] {
+    let mut o: List[String] = list_new();
+return list_push(o, args);
+}
+pub fn x86_eval_lit_float(args: String) -> List[String] {
+    let mut o: List[String] = list_new();
+return list_push(o, args);
+}

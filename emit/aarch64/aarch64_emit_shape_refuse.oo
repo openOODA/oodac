@@ -1,0 +1,231 @@
+// # AArch64 shape refusal pre-check (refuse-don't-miscompile for top 5 silent-miscompile shapes)
+//
+// Logline: Detects the 5 source shapes that the 25-arm dispatch chain at aarch64_emit.oo:127-175 cannot compile (Float usage, 3-arm match, Result[T], struct field/type, List[T]) and returns one ERR per shape so the chain is never reached.
+//
+// Setup: tokenize_lines in token_fmt.oo; a64_tok_k and a64_tok_t in aarch64_emit_harv.oo. Unlike x86 leftover typed-AST, the 25-arm chain has no library lowerer: leftover units (no fn main) still refuse. Falls-through would emit a no-op _start or a hollow struct main; this pre-check fails closed instead.
+//
+// Beats:
+//   1. Tokenize the source and detect each of the 5 shape signatures via a small per-shape scan.
+//   2. For each detected shape, ask whether the chain has a real handler for this specific instance (a narrow supported pattern).
+//   3. Return a list of ERR strings; empty list means the source passes the refuse test.
+//
+// residual: leftover libraries stay refused (no typed-AST leftover). x86 admits !fn-main; copying that here would hollow-emit. Token helpers only.
+
+
+import "aarch64_emit_const_harvest.oo";
+
+
+// Shape 1: Float usage. True when the source contains "Float" as a type
+// annotation or a FLOAT literal token. The chain's aarch64_collect_and_emit_float
+// only handles a narrow const-foldable pattern; arbitrary Float programs silently
+// miscompile via the linux fallthrough.
+fn aarch64_shape_float_signature(toks: List[String], n: Int) -> Bool {
+    let mut i = 0;
+    while i < n {
+        let k: String = a64_tok_k(toks, i);
+        if k == "FLOAT" { return true; }
+        let t: String = a64_tok_t(toks, i);
+        if k == "IDENT" && t == "Float" { return true; }
+        i = i + 1;
+    }
+    return false;
+}
+
+// Real handler for Float: const-foldable `let [mut] ident: Float = FLOAT;` ... `println(<expr>);`.
+// Single scan: looks for a println whose arg is an IDENT, a FLOAT, or a 3-token
+// binop (STAR/PLUS/MINUS/SLASH) on let-bound Float idents and FLOAT literals.
+fn aarch64_shape_float_real_handler(toks: List[String], n: Int) -> Bool {
+    let mut let_name = "";
+    let mut let_seen = false;
+    let mut i = 0;
+    while i < n {
+        let k: String = a64_tok_k(toks, i);
+        let t: String = a64_tok_t(toks, i);
+        if k == "KW_LET" {
+            let mut q = i + 1;
+            if q < n && a64_tok_k(toks, q) == "KW_MUT" { q = q + 1; }
+            if q < n && a64_tok_k(toks, q) == "IDENT" { let_name = a64_tok_t(toks, q); q = q + 1; }
+            if q < n && a64_tok_k(toks, q) == "COLON" { q = q + 1; }
+            if q < n && a64_tok_t(toks, q) == "Float" { let_seen = true; }
+        }
+        if k == "IDENT" && t == "println" {
+            let mut q = i + 1;
+            if q < n && a64_tok_k(toks, q) == "LPAREN" { q = q + 1; }
+            let mut ok1 = false;
+            if q < n && a64_tok_k(toks, q) == "IDENT" && a64_tok_t(toks, q) == let_name && let_seen { ok1 = true; }
+            if q < n && a64_tok_k(toks, q) == "FLOAT" { ok1 = true; }
+            if !ok1 { i = i + 1; continue; }
+            q = q + 1;
+            if q < n && a64_tok_k(toks, q) == "RPAREN" { return true; }
+            let opk: String = a64_tok_k(toks, q);
+            if opk != "STAR" && opk != "PLUS" && opk != "MINUS" && opk != "SLASH" { i = i + 1; continue; }
+            q = q + 1;
+            let mut ok2 = false;
+            if q < n && a64_tok_k(toks, q) == "IDENT" && a64_tok_t(toks, q) == let_name && let_seen { ok2 = true; }
+            if q < n && a64_tok_k(toks, q) == "FLOAT" { ok2 = true; }
+            if !ok2 { i = i + 1; continue; }
+            q = q + 1;
+            if q < n && a64_tok_k(toks, q) == "RPAREN" { return true; }
+        }
+        i = i + 1;
+    }
+    return false;
+}
+
+// Shape 2: 3-arm match. True when the source has a `match IDENT { ... }` with
+// exactly 3 arm patterns. Counts FATARROW tokens at depth 0 inside the match
+// LBRACE.
+fn aarch64_shape_3arm_match_signature(toks: List[String], n: Int) -> Bool {
+    let mut i = 0;
+    while i < n {
+        if a64_tok_k(toks, i) == "KW_MATCH" {
+            let mut p = i + 1;
+            if p < n && a64_tok_k(toks, p) == "IDENT" { p = p + 1; }
+            if p >= n || a64_tok_k(toks, p) != "LBRACE" { return false; }
+            p = p + 1;
+            let mut arm_count = 0;
+            let mut depth = 0;
+            while p < n {
+                let pk: String = a64_tok_k(toks, p);
+                if pk == "LBRACE" || pk == "LPAREN" { depth = depth + 1; p = p + 1; }
+                else if pk == "RBRACE" {
+                    if depth == 0 { break; }
+                    depth = depth - 1;
+                    p = p + 1;
+                }
+                else if pk == "RPAREN" { depth = depth - 1; p = p + 1; }
+                else if pk == "FATARROW" && depth == 0 { arm_count = arm_count + 1; p = p + 1; }
+                else { p = p + 1; }
+            }
+            return arm_count == 3;
+        }
+        i = i + 1;
+    }
+    return false;
+}
+
+// Real handler for 3-arm match: tagged union on Some/Ok/None/Err.
+fn aarch64_shape_3arm_match_real_handler(toks: List[String], n: Int) -> Bool {
+    let mut i = 0; while i < n { let k: String = a64_tok_k(toks, i); let t: String = a64_tok_t(toks, i); if k == "IDENT" && (t == "Some" || t == "Ok" || t == "None" || t == "Err") { return true;
+}
+        i = i + 1;
+    }
+    return false;
+}
+
+// Shape 3: Result[T]. True when the source has "Result" IDENT followed by LBRACKET.
+fn aarch64_shape_result_signature(toks: List[String], n: Int) -> Bool {
+    let mut i = 0; while i + 1 < n { let k: String = a64_tok_k(toks, i); let t: String = a64_tok_t(toks, i); if k == "IDENT" && t == "Result" && a64_tok_k(toks, i + 1) == "LBRACKET" { return true;
+}
+        i = i + 1;
+    }
+    return false;
+}
+
+// Real handler for Result: source must use Result only inside the tagged-union match.
+fn aarch64_shape_result_real_handler(toks: List[String], n: Int) -> Bool {
+    if aarch64_shape_3arm_match_signature(toks, n) { return aarch64_shape_3arm_match_real_handler(toks, n);
+}
+    return false;
+}
+
+// Shape 4: struct. True when the source has KW_TYPE or the bare `struct`
+// keyword. DOT is not a signature by itself (paths/method calls). The
+// 25-arm chain's aarch64_emit_struct only writes when main does
+// println(ident.field); library type-defs without that are a refuse,
+// not a hollow _start.
+fn aarch64_shape_struct_signature(toks: List[String], n: Int) -> Bool {
+    let mut i = 0;
+    while i < n {
+        let k: String = a64_tok_k(toks, i);
+        if k == "KW_TYPE" { return true; }
+        let t: String = a64_tok_t(toks, i);
+        if k == "IDENT" && t == "struct" { return true; }
+        i = i + 1;
+    }
+    return false;
+}
+
+// Real handler: a struct/type def AND println(ident.field) that
+// aarch64_emit_struct actually lowers to a write syscall.
+fn aarch64_shape_struct_real_handler(toks: List[String], n: Int) -> Bool {
+    let mut has_def = false;
+    let mut has_print_field = false;
+    let mut i = 0;
+    while i < n {
+        let k: String = a64_tok_k(toks, i);
+        let t: String = a64_tok_t(toks, i);
+        if k == "KW_TYPE" { has_def = true; }
+        if k == "IDENT" && t == "struct" && i + 2 < n
+            && a64_tok_k(toks, i + 1) == "IDENT"
+            && a64_tok_k(toks, i + 2) == "LBRACE" { has_def = true; }
+        if k == "IDENT" && t == "println" && i + 4 < n
+            && a64_tok_k(toks, i + 1) == "LPAREN"
+            && a64_tok_k(toks, i + 2) == "IDENT"
+            && a64_tok_k(toks, i + 3) == "DOT"
+            && a64_tok_k(toks, i + 4) == "IDENT" { has_print_field = true; }
+        i = i + 1;
+    }
+    return has_def && has_print_field;
+}
+
+// Shape 5: List[T]. True when the source has "List" IDENT followed by LBRACKET.
+fn aarch64_shape_list_signature(toks: List[String], n: Int) -> Bool {
+    let mut i = 0; while i + 1 < n { let k: String = a64_tok_k(toks, i); let t: String = a64_tok_t(toks, i); if k == "IDENT" && t == "List" && a64_tok_k(toks, i + 1) == "LBRACKET" { return true;
+}
+        i = i + 1;
+    }
+    return false;
+}
+
+// Real handler for List: `let mut xs: List[T] = list_new();` plus any list op call.
+fn aarch64_shape_list_real_handler(toks: List[String], n: Int) -> Bool {
+    let mut has_let_mut_list = false;
+    let mut has_list_op = false;
+    let mut i = 0;
+    while i < n {
+        let k: String = a64_tok_k(toks, i);
+        let t: String = a64_tok_t(toks, i);
+        if k == "KW_LET" {
+            let mut q = i + 1;
+            let mut saw_mut = false;
+            if q < n && a64_tok_k(toks, q) == "KW_MUT" { saw_mut = true; q = q + 1; }
+            if q < n && a64_tok_k(toks, q) == "IDENT" { q = q + 1; }
+            if q < n && a64_tok_k(toks, q) == "COLON" { q = q + 1; }
+            if q < n && a64_tok_k(toks, q) == "IDENT" && a64_tok_t(toks, q) == "List" { q = q + 1; }
+            if saw_mut { has_let_mut_list = true; }
+        }
+        if k == "IDENT" && (t == "list_push" || t == "list_len" || t == "list_get" || t == "list_set") {
+            has_list_op = true;
+        }
+        i = i + 1;
+    }
+    return has_let_mut_list && has_list_op;
+}
+
+// Public entry point the dispatch in aarch64_emit.oo calls after the contract,
+// secret, diag, and if gates and before the dispatch ladder. Empty list means the
+// source passes the shape refusal test; non-empty list means the dispatch
+// prints each message and process_exits(1).
+pub fn aarch64_emit_shape_refuse_test(src: String) -> List[String] {
+    let mut errs: List[String] = list_new();
+    if chars_len(src) == 0 { return errs; }
+    let toks: List[String] = tokenize_lines(src);
+    let n: Int = list_len(toks);
+    if aarch64_shape_float_signature(toks, n) && !aarch64_shape_float_real_handler(toks, n) {
+        errs = list_push(errs, "ERR\taarch64_emit\tshape Float usage: only const-foldable `let [mut] ident: Float = FLOAT; ... println(ident);` chains are supported; use the typed-AST path for runtime Float");
+    }
+    if aarch64_shape_3arm_match_signature(toks, n) && !aarch64_shape_3arm_match_real_handler(toks, n) {
+        errs = list_push(errs, "ERR\taarch64_emit\tshape 3-arm match: only tagged-union match on a let-bound Some/Ok/None/Err subject is supported; use the typed-AST path for arbitrary matches");
+    }
+    if aarch64_shape_result_signature(toks, n) && !aarch64_shape_result_real_handler(toks, n) {
+        errs = list_push(errs, "ERR\taarch64_emit\tshape Result[T]: use tagged-union match (Some/Ok/None/Err) or the typed-AST path; raw Result[T] values are not lowered by the 25-arm chain");
+    }
+    if aarch64_shape_struct_signature(toks, n) && !aarch64_shape_struct_real_handler(toks, n) {
+        errs = list_push(errs, "ERR\taarch64_emit\tshape struct field/type: only narrow struct definition + instantiation + field access chains compile; arbitrary struct programs require the typed-AST path");
+    }
+    if aarch64_shape_list_signature(toks, n) && !aarch64_shape_list_real_handler(toks, n) {
+        errs = list_push(errs, "ERR\taarch64_emit\tshape List[T]: only `let mut xs: List[Int] = list_new(); xs = list_push(xs, INT_LIT); println(list_len(xs));` chains are supported; arbitrary List programs require the typed-AST path");
+    }
+    return errs;
+}

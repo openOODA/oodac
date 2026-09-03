@@ -1,0 +1,217 @@
+// # Infer an untyped let bind type
+//
+// Logline: From an untyped RHS string and env, pick a C type and bind kind using symbol table and AST types.
+//
+// Setup: Uses environment symbol table (__frty__, __ty__, __fr__) and known built-in signatures.
+//
+// Beats:
+//   1. Detect numeric literals and string literal/concatenation expressions.
+//   2. Lookup function return types from symbol table (__frty__, __fr__) and built-in registry.
+//   3. Lookup identifier types from lexical environment (__ty__, env kind).
+
+import "c_emit_let_ext_crt.oo";
+import "c_emit_env.oo";
+import "c_emit_ty.oo";
+import "c_emit_temps.oo";
+
+
+pub fn c_emit_let_untyped_ty(rhs: String, e: String) -> List[String] {
+    let mut lty: String = "long long";
+    let mut bind_kind: String = "";
+    let mut crt: String = "";
+    let mut is_num: Bool = false;
+    if chars_len(rhs) > 0 { let c0: String = char_at(rhs, 0);
+    if c0 == "-" || c0 == "0" || c0 == "1" || c0 == "2" || c0 == "3" || c0 == "4" { is_num = true;
+    }
+        if c0 == "5" || c0 == "6" || c0 == "7" || c0 == "8" || c0 == "9" {
+            is_num = true;
+        }
+    }
+    let mut is_bool_expr: Bool = false;
+    if chars_len(rhs) >= 8 && str_slice(rhs, 0, 8) == "oo_str_e" {
+        is_bool_expr = true;
+    }
+    if !is_bool_expr && chars_len(rhs) >= 10 && str_slice(rhs, 0, 10) == "(!oo_str_e" {
+        is_bool_expr = true;
+    }
+    if !is_bool_expr && chars_len(rhs) >= 10 && str_slice(rhs, 0, 10) == "oo_bytes_e" {
+        is_bool_expr = true;
+    }
+    let mut is_str_expr: Bool = false;
+    if !is_bool_expr && chars_len(rhs) >= 11 && str_slice(rhs, 0, 7) == "oo_str_" {
+        is_str_expr = true;
+    }
+    if !is_bool_expr && !is_str_expr && chars_len(rhs) >= 13 && rhs.contains("oo_str_concat") {
+        is_str_expr = true;
+    }
+    if is_bool_expr { lty = "int";
+    bind_kind = "B";
+    } else if is_num && rhs.contains(".") {
+        lty = "double";
+        bind_kind = "F";
+    } else if is_num { lty = "long long";
+    } else if is_str_expr { lty = "OoStr";
+    bind_kind = "T";
+    } else if c_expr_is_emit_tmp(rhs) {
+        lty = "OoStr";
+        bind_kind = "T";
+    } else {
+        let cnm: String = c_rhs_call_name(rhs);
+        if cnm == "oo_str_eq" || cnm == "oo_str_starts_with" || cnm == "oo_str_ends_with"
+            || cnm == "oo_str_contains" || cnm == "oo_bytes_eq" || cnm == "oo_path_exists"
+            || cnm == "oo_fs_is_dir" || cnm == "str_eq" || cnm == "starts_with"
+            || cnm == "ends_with" || cnm == "contains" {
+            crt = "int";
+        }
+        if cnm == "list_new" || cnm == "oo_ilist_new"
+            || cnm == "bytes_new" || cnm == "oo_bytes_new"
+            || cnm == "list_push" || cnm == "oo_ilist_push"
+            || cnm == "bytes_push" || cnm == "oo_bytes_push" {
+            crt = "OoIList";
+        }
+        if cnm == "bytes_get" || cnm == "oo_bytes_get" {
+            crt = "long long";
+        }
+        if cnm == "bytes_to_str" || cnm == "oo_bytes_to_str"
+            || cnm == "bytes_from_str" || cnm == "oo_bytes_from_str"
+            || cnm == "bytes_concat" || cnm == "oo_bytes_concat" {
+            crt = "OoStr";
+        }
+        if cnm == "oo_slist_new" || cnm == "oo_slist_push" {
+            crt = "OoSList";
+        }
+        if cnm == "oo_ilist_get" {
+            crt = "long long";
+        }
+        if cnm == "oo_slist_get" {
+            crt = "OoStr";
+        }
+        if cnm == "list_get" || cnm == "oo_flist_get" {
+            crt = c_list_get_result_ty(e, rhs);
+        }
+        if chars_len(cnm) > 8 && str_slice(cnm, 0, 5) == "oo_l_" && str_slice(cnm, chars_len(cnm) - 4, chars_len(cnm)) == "_get" {
+            crt = c_list_get_result_ty(e, rhs);
+        }
+        if cnm == "list_len" || cnm == "oo_ilist_len" || cnm == "oo_slist_len" || cnm == "oo_flist_len" {
+            crt = "long long";
+        }
+        if cnm == "chars_len" || cnm == "oo_chars_len" || cnm == "parse_int" || cnm == "ts_skip_ws" || cnm == "ts_skip_braces" || cnm == "ts_find_lbrace" || cnm == "ts_if_end" || cnm == "ts_skip_semi" || cnm == "ts_after_ident" {
+            crt = "long long";
+        }
+        if cnm == "len" || cnm == "byte_at" || cnm == "oo_byte_at" || cnm == "ord" || cnm == "meta_epoch"
+            || cnm == "oo_meta_epoch" || cnm == "meta_mix" || cnm == "oo_meta_mix"
+            || cnm == "meta_is_path_a" || cnm == "oo_meta_is_path_a"
+            || cnm == "bit_xor" || cnm == "bytes_len" || cnm == "oo_bytes_len"
+            || cnm == "alloc_bytes" || cnm == "oo_alloc_bytes" || cnm == "malloc"
+            || cnm == "realloc" || cnm == "now_ms" || cnm == "oo_now_ms"
+            || cnm == "random" || cnm == "oo_random" {
+            crt = "long long";
+        }
+        if cnm == "sin" || cnm == "cos" || cnm == "ln" || cnm == "exp"
+            || cnm == "sqrt" || cnm == "pow"
+            || cnm == "oo_sin" || cnm == "oo_cos" || cnm == "oo_ln"
+            || cnm == "oo_exp" || cnm == "oo_sqrt" || cnm == "oo_pow" {
+            crt = "double";
+        }
+        if cnm == "char_at" || cnm == "str_slice" || cnm == "int_to_str" || cnm == "to_string" {
+            crt = "OoStr";
+        }
+        if cnm == "oo_char_at" || cnm == "oo_str_slice" || cnm == "oo_int_to_str" {
+            crt = "OoStr";
+        }
+        if cnm == "oo_str_concat" || cnm == "oo_str_lit" {
+            crt = "OoStr";
+        }
+        if cnm == "try_scan_ws" || cnm == "try_scan_string" || cnm == "try_scan_number"
+            || cnm == "try_scan_ident" || cnm == "try_scan_punct" {
+            crt = "OoSList";
+        }
+        if crt == "" {
+            crt = c_emit_let_untyped_crt(cnm, rhs);
+        }
+        if cnm != "" && crt == "" {
+            let frty: String = c_env_get(e, "__frty__" + cnm);
+            if frty != "" {
+                crt = frty;
+            } else {
+                let fr: String = c_env_get(e, "__fr__" + cnm);
+                if fr == "T" { crt = "OoStr";
+                }
+                else if fr == "S" { crt = "OoSList";
+                }
+                else if fr == "I" { crt = "OoIList";
+                }
+            }
+        }
+        if cnm == "" {
+            let ek: String = c_env_get(e, rhs);
+            if chars_len(ek) > 1 && ek != "T" && ek != "R" && ek != "V" {
+                crt = ek;
+            }
+            let ety: String = c_env_get(e, "__ty__" + rhs);
+            if ety != "" {
+                crt = ety;
+            }
+        }
+        if cnm != "" && crt == "" {
+            crt = "long long";
+        }
+        if crt == "long long" || crt == "" {
+            if rhs.contains("OoResS __q") {
+                crt = "OoStr";
+            }
+        }
+        if crt != "" {
+            lty = crt;
+            if crt == "OoSList" || crt == "OoL_S" { bind_kind = "S";
+            }
+            else if crt == "OoIList" || crt == "OoL_I" { bind_kind = "I";
+            }
+            else if crt == "double" { bind_kind = "F";
+            }
+            else if crt == "OoFList" || crt == "OoL_F" || crt == "LF" { lty = "OoFList";
+            bind_kind = "LF";
+            }
+            else if crt == "OoResS" { bind_kind = "R";
+            }
+            else if crt == "OoResV" { bind_kind = "V";
+            }
+            else if crt == "OoStr" { bind_kind = "T";
+            }
+            else if bind_kind == "" && crt != "long long" && crt != "int" && crt != "void" {
+                bind_kind = crt;
+            }
+        } else {
+            let ek: String = c_env_get(e, rhs);
+            if ek == "T" { lty = "OoStr";
+            bind_kind = "T";
+            }
+            else if ek == "S" { lty = "OoSList";
+            bind_kind = "S";
+            }
+            else if ek == "I" { lty = "OoIList";
+            bind_kind = "I";
+            }
+            else if ek == "R" { lty = "OoResS";
+            bind_kind = "R";
+            }
+            else if ek == "V" { lty = "OoResV";
+            bind_kind = "V";
+            }
+            else if ek == "F" { lty = "double";
+            bind_kind = "F";
+            }
+            else if ek == "LF" { lty = "OoFList";
+            bind_kind = "LF";
+            }
+            else if ek != "" {
+                lty = ek;
+                bind_kind = ek;
+            }
+        }
+    }
+    let mut res: List[String] = list_new();
+    res = list_push(res, lty);
+    res = list_push(res, bind_kind);
+    return res;
+}

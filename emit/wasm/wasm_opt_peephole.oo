@@ -1,0 +1,95 @@
+// # WebAssembly Multi-Pass Peephole Optimizer
+//
+// Logline: Multi-pass sliding window optimizer for algebraic simplifications, local register forwarding, and dead stack elimination.
+//
+// Setup: Import wasm_opt_ir.oo for instruction stream manipulation.
+//
+// Beats:
+//   1. Eliminate algebraic identity operations (add 0, mul 1, sub 0).
+//   2. Fold constant arithmetic pairs (i32.const A + i32.const B + op).
+//   3. Forward local store/load pairs (local.set X + local.get X -> local.tee X).
+//   4. Strip dead stack pushes (const X + drop -> nop).
+
+import "wasm_opt_ir.oo";
+
+import "wasm_binary_builder.oo";
+
+
+pub fn wasm_opt_peephole_stream(st: WasmOptStream) -> WasmOptStream {
+    let mut cur: WasmOptStream = st;
+    let n: Int = list_len(cur.opcodes);
+    if n <= 1 { return cur;
+    }
+    let mut changed: Bool = true;
+    let mut pass: Int = 0;
+    while changed && pass < 4 { changed = false;
+    pass = pass + 1;
+    let mut i: Int = 0;
+    while i < n - 1 { let d1: Int = list_get(cur.is_dead, i);
+    let d2: Int = list_get(cur.is_dead, i + 1);
+    if d1 == 0 && d2 == 0 { let op1: Int = list_get(cur.opcodes, i);
+    let imm1_1: Int = list_get(cur.imm1, i);
+    let op2: Int = list_get(cur.opcodes, i + 1);
+    let imm1_2: Int = list_get(cur.imm1, i + 1);
+    if op1 == 65 && imm1_1 == 0 && op2 == 106 { cur.is_dead = wasm_ilist_set(cur.is_dead, i, 1);
+    cur.is_dead = wasm_ilist_set(cur.is_dead, i + 1, 1);
+    changed = true;
+    }
+                // Rule 2: i32.const 1 + i32.mul (65, 1 + 108)
+                else if op1 == 65 && imm1_1 == 1 && op2 == 108 { cur.is_dead = wasm_ilist_set(cur.is_dead, i, 1);
+                cur.is_dead = wasm_ilist_set(cur.is_dead, i + 1, 1);
+                changed = true;
+                }
+                // Rule 3: i32.const X + drop (65 + 26)
+                else if op1 == 65 && op2 == 26 { cur.is_dead = wasm_ilist_set(cur.is_dead, i, 1);
+                cur.is_dead = wasm_ilist_set(cur.is_dead, i + 1, 1);
+                changed = true;
+                }
+                // Rule 4: local.set X + local.get X (33 + 32) -> local.tee X (34)
+                else if op1 == 33 && op2 == 32 && imm1_1 == imm1_2 { cur.opcodes = wasm_ilist_set(cur.opcodes, i, 34);
+                cur.is_dead = wasm_ilist_set(cur.is_dead, i + 1, 1);
+                changed = true;
+                }
+            }
+            // Rule 5: 3-instruction constant folding (i32.const A + i32.const B + i32.add/sub/mul)
+            if i < n - 2 {
+                let d1: Int = list_get(cur.is_dead, i);
+                let d2: Int = list_get(cur.is_dead, i + 1);
+                let d3: Int = list_get(cur.is_dead, i + 2);
+                if d1 == 0 && d2 == 0 && d3 == 0 {
+                    let op1: Int = list_get(cur.opcodes, i);
+                    let op2: Int = list_get(cur.opcodes, i + 1);
+                    let op3: Int = list_get(cur.opcodes, i + 2);
+                    if op1 == 65 && op2 == 65 {
+                        let a: Int = list_get(cur.imm1, i);
+                        let b: Int = list_get(cur.imm1, i + 1);
+                        let mut folded: Bool = false;
+                        let mut res: Int = 0;
+                        if op3 == 106 { res = a + b;
+                        folded = true;
+                        }
+                        else if op3 == 107 { res = a - b;
+                        folded = true;
+                        }
+                        else if op3 == 108 { res = a * b;
+                        folded = true;
+                        }
+                        if folded { cur.imm1 = wasm_ilist_set(cur.imm1, i, res);
+                        cur.is_dead = wasm_ilist_set(cur.is_dead, i + 1, 1);
+                        cur.is_dead = wasm_ilist_set(cur.is_dead, i + 2, 1);
+                        changed = true;
+                        }
+                    }
+                }
+            }
+            i = i + 1;
+        }
+    }
+    return cur;
+}
+
+pub fn wasm_opt_peephole_func(func: WasmOptFunc) -> WasmOptFunc {
+    let mut out: WasmOptFunc = func;
+out.stream = wasm_opt_peephole_stream(func.stream);
+return out;
+}

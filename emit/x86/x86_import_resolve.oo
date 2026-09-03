@@ -1,0 +1,194 @@
+// # Import resolver for emit-x86 (cycle / missing / concat)
+//
+// Logline: Walks import "path" from an entry file, fail-closed on cycles and missing units with --> / ^, concatenates imported bodies then the entry.
+//
+// Setup: load_import_parse path helpers + tokenize for caret. Called from run_emit_x86_c.
+//
+// Beats:
+//   1. Resolve imports relative to the importer directory.
+//   2. Cycle and missing emit typed ERR at the import site.
+//   3. Concatenate lib sources then the entry (import lines dropped).
+
+
+import "x86_emit_diag.oo";
+
+
+import "x86_emit_const_harvest.oo";
+
+
+fn x86_imp_line_col(src: String, needle: String) -> List[Int] {
+    let n: Int = chars_len(src);
+    let nn: Int = chars_len(needle);
+    let mut line: Int = 1;
+    let mut col: Int = 0;
+    let mut i: Int = 0;
+    while i < n {
+        let c: String = char_at(src, i);
+        if c == "\n" { line = line + 1;
+        col = 0;
+        } else { col = col + 1;
+        }
+        if i + nn <= n {
+            let mut ok: Bool = true;
+            let mut j: Int = 0;
+            while j < nn { if char_at(src, i + j) != char_at(needle, j) { ok = false;
+            } j = j + 1;
+            }
+            if ok { let mut o: List[Int] = list_new();
+            o = list_push(o, line);
+            o = list_push(o, col);
+            return o;
+            }
+        }
+        i = i + 1;
+    }
+    let mut z: List[Int] = list_new();
+    z = list_push(z, 1);
+    z = list_push(z, 0);
+    return z;
+}
+
+fn x86_imp_src_line(src: String, line: Int) -> String {
+    return x86_diag_src_line(src, line);
+}
+
+fn x86_imp_diag(kind: String, path: String, src: String, needle: String, msg: String) -> String {
+    let lc: List[Int] = x86_imp_line_col(src, needle);
+let line: Int = list_get(lc, 0);
+let col: Int = list_get(lc, 1);
+let sl: String = x86_imp_src_line(src, line);
+return x86_diag_emit_with_src(kind, path, line, col, msg, sl);
+}
+
+fn x86_imp_strip(src: String) -> String {
+    let n: Int = chars_len(src);
+    let mut out: String = "";
+    let mut i: Int = 0;
+    let mut ls: Int = 0;
+    while i <= n {
+        let at_end: Bool = i == n;
+        let mut c: String = "\n";
+        if !at_end { c = char_at(src, i);
+        }
+        if c == "\n" || at_end {
+            let line: String = if i > ls { str_slice(src, ls, i) } else { "" };
+            if parse_import_line(line) == "" {
+                if chars_len(out) > 0 { out = out + "\n";
+                }
+                out = out + line;
+            }
+            ls = i + 1;
+        }
+        i = i + 1;
+    }
+    return out;
+}
+
+fn x86_imp_list_has(xs: List[String], v: String) -> Bool {
+    let n: Int = list_len(xs);
+    let mut i: Int = 0;
+    while i < n { if list_get(xs, i) == v { return true;
+    } i = i + 1;
+    }
+    return false;
+}
+
+fn x86_imp_err(d: String) -> List[String] {
+    let mut o: List[String] = list_new();
+    o = list_push(o, "__ERR__");
+    o = list_push(o, d);
+    return o;
+}
+
+fn x86_imp_is_err(xs: List[String]) -> Bool {
+    return list_len(xs) >= 1 && list_get(xs, 0) == "__ERR__";
+}
+
+fn x86_imp_walk(fs: &FsReadCap, path: String, stack: List[String], acc: List[String]) -> List[String] {
+    let np: String = path_normalize(path);
+    if x86_imp_list_has(acc, np) { return acc;
+    }
+    let src_r: Result[String, String] = read_file(fs, np);
+    if src_r.is_err() {
+        return x86_imp_err("ERR  import  " + np + ": missing file\n--> " + np + ":1:1\n   <source>\n   ^");
+    }
+    let src: String = match src_r { Ok(s) => s, Err(e) => e };
+    let dir: String = path_dirname(np);
+    let n: Int = chars_len(src);
+    let mut i: Int = 0;
+    let mut ls: Int = 0;
+    let mut cur_acc: List[String] = acc;
+    let mut stack2: List[String] = list_new();
+    let mut si: Int = 0;
+    while si < list_len(stack) { stack2 = list_push(stack2, list_get(stack, si));
+    si = si + 1;
+    }
+    stack2 = list_push(stack2, np);
+    while i <= n {
+        let at_end: Bool = i == n;
+        let mut c: String = "\n";
+        if !at_end { c = char_at(src, i);
+        }
+        if c == "\n" || at_end {
+            let line: String = if i > ls { str_slice(src, ls, i) } else { "" };
+            let imp: String = parse_import_line(line);
+            if imp != "" {
+                reject_bad_import_name(imp);
+                let child: String = path_normalize(path_join(dir, imp));
+                if x86_imp_list_has(stack2, child) {
+                    let d: String = x86_imp_diag("import", np, src, "import \"" + imp + "\"", "import cycle: " + np + " -> " + child);
+                    return x86_imp_err(d);
+                }
+                let cr: Result[String, String] = read_file(fs, child);
+                if cr.is_err() {
+                    let d2: String = x86_imp_diag("import", np, src, "import \"" + imp + "\"", "unknown import: " + imp);
+                    return x86_imp_err(d2);
+                }
+                let wr: List[String] = x86_imp_walk(fs, child, stack2, cur_acc);
+                if x86_imp_is_err(wr) { return wr;
+                }
+                cur_acc = wr;
+            }
+            ls = i + 1;
+        }
+        i = i + 1;
+    }
+    cur_acc = list_push(cur_acc, np);
+    return cur_acc;
+}
+
+pub fn x86_src_has_main_e(src: String) -> Bool {
+    let toks: List[String] = tokenize_lines(src);
+let n: Int = list_len(toks);
+let mut i: Int = 0;
+while i + 1 < n { if x86_tok_k(toks, i) == "KW_FN" && x86_tok_k(toks, i + 1) == "IDENT" && x86_tok_t(toks, i + 1) == "main" { return true;
+}
+        i = i + 1;
+    }
+    return false;
+}
+
+pub fn x86_import_concat_e(fs: &FsReadCap, path: String) -> Result[String, String] {
+    let empty_s: List[String] = list_new();
+    let empty_a: List[String] = list_new();
+    let files: List[String] = x86_imp_walk(fs, path, empty_s, empty_a);
+    if x86_imp_is_err(files) {
+        return Err(list_get(files, 1));
+    }
+    let mut out: String = "";
+    let nf: Int = list_len(files);
+    let mut i: Int = 0;
+    while i < nf {
+        let fp: String = list_get(files, i);
+        let sr: Result[String, String] = read_file(fs, fp);
+        if sr.is_err() { return Err("ERR  import  " + fp + ": missing file\n--> " + fp + ":1:1\n   <source>\n   ^");
+        }
+        let raw: String = match sr { Ok(s) => s, Err(e) => e };
+        let body: String = x86_imp_strip(raw);
+        if chars_len(out) > 0 { out = out + "\n";
+        }
+        out = out + body;
+        i = i + 1;
+    }
+    return Ok(out);
+}

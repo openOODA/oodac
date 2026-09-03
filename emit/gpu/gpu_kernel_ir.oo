@@ -1,0 +1,126 @@
+// # GPU SIMT Kernel Intermediate Representation
+//
+// Logline: Abstract SIMT kernel representation decoupling AST lowering from vendor code emitters.
+//
+// Setup: Pure data structures for parameters, grid dimensions, shared memory, and instruction trees.
+//
+// Beats:
+//   1. Define GpuDim3, GpuParamIR, GpuSmemIR, and GpuKernelIR types.
+//   2. Provide constructors for 1D, 2D, and 3D thread and block geometries.
+//   3. Implement builder methods to construct unified kernel descriptions targeting gfx1100 and gfx942.
+//   4. Export summary serializers and target architecture introspection helpers.
+
+type GpuDim3 = struct {
+    x: Int,
+    y: Int,
+    z: Int
+};
+
+type GpuParamIR = struct {
+    name: String,
+    type_name: String,
+    binding_idx: Int,
+    is_pointer: Bool,
+    is_const: Bool
+};
+
+type GpuSmemIR = struct {
+    name: String,
+    elem_type: String,
+    elem_count: Int,
+    align_bytes: Int
+};
+
+type GpuKernelIR = struct {
+    name: String,
+    target_arch: String,
+    grid_dim: GpuDim3,
+    block_dim: GpuDim3,
+    params: List[String],
+    smem_allocs: List[String],
+    body_ops: List[String]
+};
+
+fn gpu_int_str(n: Int) -> String {
+    if n == 0 { return "0"; }
+    let mut val: Int = n;
+    let mut sign: String = "";
+    if val < 0 { sign = "-"; val = 0 - val; }
+    let digits: String = "0123456789";
+    let mut s: String = "";
+    while val > 0 {
+        let d: Int = val % 10;
+        s = char_at(digits, d) + s;
+        val = val / 10;
+    }
+    return sign + s;
+}
+
+fn gpu_dim_clamp(v: Int) -> Int {
+    if v <= 0 { return 1; }
+    return v;
+}
+
+pub fn gpu_dim3_create(x: Int, y: Int, z: Int) -> GpuDim3 {
+    return GpuDim3 { x: gpu_dim_clamp(x), y: gpu_dim_clamp(y), z: gpu_dim_clamp(z) };
+}
+
+pub fn gpu_dim3_1d(x: Int) -> GpuDim3 {
+    return gpu_dim3_create(x, 1, 1);
+}
+
+pub fn gpu_dim3_2d(x: Int, y: Int) -> GpuDim3 {
+    return gpu_dim3_create(x, y, 1);
+}
+
+pub fn gpu_dim3_3d(x: Int, y: Int, z: Int) -> GpuDim3 {
+    return gpu_dim3_create(x, y, z);
+}
+
+pub fn gpu_param_ir_create(name: String, type_name: String, binding_idx: Int, is_pointer: Bool, is_const: Bool) -> String {
+    let b_str: String = gpu_int_str(binding_idx);
+    let mut ptr_tag: String = "val";
+    if is_pointer { ptr_tag = "ptr"; }
+    let mut const_tag: String = "mut";
+    if is_const { const_tag = "const"; }
+    return name + ":" + type_name + ":" + b_str + ":" + ptr_tag + ":" + const_tag;
+}
+
+pub fn gpu_smem_ir_create(name: String, elem_type: String, elem_count: Int, align_bytes: Int) -> String {
+    let mut ab: Int = align_bytes;
+    if ab <= 0 { ab = 16; }
+    let c_str: String = gpu_int_str(elem_count);
+    let a_str: String = gpu_int_str(ab);
+    return name + ":" + elem_type + ":" + c_str + ":" + a_str;
+}
+
+pub fn gpu_kernel_ir_new(name: String, arch: String, g: GpuDim3, b: GpuDim3, params: List[String], smems: List[String], ops: List[String]) -> GpuKernelIR {
+    let mut target: String = "gfx1100";
+    if arch != "" && arch != "default" { target = arch; }
+    return GpuKernelIR { name: name, target_arch: target, grid_dim: g, block_dim: b, params: params, smem_allocs: smems, body_ops: ops };
+}
+
+pub fn gpu_kernel_ir_is_rdna3(ir: GpuKernelIR) -> Bool {
+    return ir.target_arch == "gfx1100";
+}
+
+pub fn gpu_kernel_ir_is_cdna3(ir: GpuKernelIR) -> Bool {
+    return ir.target_arch == "gfx942";
+}
+
+pub fn gpu_kernel_ir_warp_size(ir: GpuKernelIR) -> Int {
+    if ir.target_arch == "gfx942" { return 64; }
+    return 32;
+}
+
+pub fn gpu_kernel_ir_summary(ir: GpuKernelIR) -> String {
+    let g: GpuDim3 = ir.grid_dim;
+    let b: GpuDim3 = ir.block_dim;
+    let params: List[String] = ir.params;
+    let ops: List[String] = ir.body_ops;
+    return "Kernel: " + ir.name + " [arch=" + ir.target_arch + "]"
+        + " Grid: (" + gpu_int_str(g.x) + "," + gpu_int_str(g.y) + "," + gpu_int_str(g.z) + ")"
+        + " Block: (" + gpu_int_str(b.x) + "," + gpu_int_str(b.y) + "," + gpu_int_str(b.z) + ")"
+        + " Params: " + gpu_int_str(list_len(params))
+        + " Ops: " + gpu_int_str(list_len(ops));
+}

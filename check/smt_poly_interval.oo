@@ -1,0 +1,238 @@
+// # Saturated Multiplicative Interval Arithmetic
+//
+// Logline: Sound interval arithmetic with saturated multiplication and dedicated square non-negativity.
+//
+// Setup: Int min/max bounds and 64-bit safe saturating arithmetic for polynomial ranges.
+//
+// Beats:
+//   1. Define Interval struct and constant bounds.
+//   2. Implement addition, subtraction, saturated multiplication, and squaring.
+//   3. Implement meet, join, and relational evaluation.
+
+pub type Interval = struct {
+    low: Int,
+    high: Int,
+    is_bottom: Bool
+};
+
+pub fn interval_inf_min() -> Int {
+    return 0 - 2147483647;
+}
+
+pub fn interval_inf_max() -> Int {
+    return 2147483647;
+}
+
+pub fn interval_bottom() -> Interval {
+    let res: Interval = Interval { low: 0, high: 0, is_bottom: true };
+    return res;
+}
+
+pub fn interval_top() -> Interval {
+    let res: Interval = Interval { low: 0 - 2147483647, high: 2147483647, is_bottom: false };
+    return res;
+}
+
+pub fn interval_const(c: Int) -> Interval {
+    let res: Interval = Interval { low: c, high: c, is_bottom: false };
+    return res;
+}
+
+pub fn interval_range(l: Int, h: Int) -> Interval {
+    if l > h { return interval_bottom();
+}
+    let res: Interval = Interval { low: l, high: h, is_bottom: false };
+    return res;
+}
+
+pub fn int_min2(a: Int, b: Int) -> Int {
+    if a < b { return a;
+    }
+    return b;
+}
+
+pub fn int_max2(a: Int, b: Int) -> Int {
+    if a > b { return a;
+    }
+    return b;
+}
+
+pub fn int_min4(a: Int, b: Int, c: Int, d: Int) -> Int {
+    return 0 + int_min2(0 + int_min2(a, b), 0 + int_min2(c, d));
+}
+
+pub fn int_max4(a: Int, b: Int, c: Int, d: Int) -> Int {
+    return 0 + int_max2(0 + int_max2(a, b), 0 + int_max2(c, d));
+}
+
+pub fn sat_add(a: Int, b: Int) -> Int {
+    let sum: Int = a + b;
+    let imax: Int = 2147483647;
+    let imin: Int = 0 - 2147483647;
+    if a > 0 && b > 0 && sum < 0 { return imax;
+    }
+    if a < 0 && b < 0 && sum > 0 { return imin;
+    }
+    if sum > imax { return imax;
+    }
+    if sum < imin { return imin;
+    }
+    return sum;
+}
+
+pub fn sat_sub(a: Int, b: Int) -> Int {
+    let diff: Int = a - b;
+    let imax: Int = 2147483647;
+    let imin: Int = 0 - 2147483647;
+    if a > 0 && b < 0 && diff < 0 { return imax;
+    }
+    if a < 0 && b > 0 && diff > 0 { return imin;
+    }
+    if diff > imax { return imax;
+    }
+    if diff < imin { return imin;
+    }
+    return diff;
+}
+
+pub fn sat_mul(a: Int, b: Int) -> Int {
+    if a == 0 || b == 0 { return 0;
+    }
+    let imax: Int = 2147483647;
+    let imin: Int = 0 - 2147483647;
+    if a > 0 {
+        if b > 0 {
+            if a > imax / b { return imax;
+            }
+        } else {
+            if b < imin / a { return imin;
+            }
+        }
+    } else {
+        if b > 0 {
+            if a < imin / b { return imin;
+            }
+        } else {
+            if a != 0 && b < imax / a { return imax;
+            }
+        }
+    }
+    let p: Int = a * b;
+    if p > imax { return imax;
+    }
+    if p < imin { return imin;
+    }
+    return p;
+}
+
+pub fn interval_add(a: Interval, b: Interval) -> Interval {
+    if a.is_bottom || b.is_bottom { return interval_bottom();
+    }
+    let res: Interval = Interval { low: 0 + sat_add(a.low, b.low), high: 0 + sat_add(a.high, b.high), is_bottom: false };
+    return res;
+}
+
+pub fn interval_sub(a: Interval, b: Interval) -> Interval {
+    if a.is_bottom || b.is_bottom { return interval_bottom();
+    }
+    let res: Interval = Interval { low: 0 + sat_sub(a.low, b.high), high: 0 + sat_sub(a.high, b.low), is_bottom: false };
+    return res;
+}
+
+pub fn interval_mul(a: Interval, b: Interval) -> Interval {
+    if a.is_bottom || b.is_bottom { return interval_bottom();
+    }
+    let p1: Int = 0 + sat_mul(a.low, b.low);
+    let p2: Int = 0 + sat_mul(a.low, b.high);
+    let p3: Int = 0 + sat_mul(a.high, b.low);
+    let p4: Int = 0 + sat_mul(a.high, b.high);
+    let res: Interval = Interval { low: 0 + int_min4(p1, p2, p3, p4), high: 0 + int_max4(p1, p2, p3, p4), is_bottom: false };
+    return res;
+}
+
+pub fn interval_sqr(a: Interval) -> Interval {
+    if a.is_bottom { return interval_bottom();
+    }
+    if a.low >= 0 { let res: Interval = Interval { low: 0 + sat_mul(a.low, a.low), high: 0 + sat_mul(a.high, a.high), is_bottom: false };
+        return res;
+    }
+    if a.high <= 0 { let res: Interval = Interval { low: 0 + sat_mul(a.high, a.high), high: 0 + sat_mul(a.low, a.low), is_bottom: false };
+        return res;
+    }
+    let s1: Int = 0 + sat_mul(a.low, a.low);
+    let s2: Int = 0 + sat_mul(a.high, a.high);
+    let res: Interval = Interval { low: 0, high: 0 + int_max2(s1, s2), is_bottom: false };
+    return res;
+}
+
+pub fn interval_meet(a: Interval, b: Interval) -> Interval {
+    if a.is_bottom || b.is_bottom { return interval_bottom();
+    }
+    let l: Int = 0 + int_max2(a.low, b.low);
+    let h: Int = 0 + int_min2(a.high, b.high);
+    if l > h { return interval_bottom();
+    }
+    let res: Interval = Interval { low: l, high: h, is_bottom: false };
+    return res;
+}
+
+pub fn interval_join(a: Interval, b: Interval) -> Interval {
+    if a.is_bottom { return b;
+    }
+    if b.is_bottom { return a;
+    }
+    let res: Interval = Interval { low: 0 + int_min2(a.low, b.low), high: 0 + int_max2(a.high, b.high), is_bottom: false };
+    return res;
+}
+
+pub fn interval_eval_rel(op: String, a: Interval, b: Interval) -> Int {
+    if a.is_bottom || b.is_bottom { return 0;
+    }
+    let al: Int = a.low;
+    let ah: Int = a.high;
+    let bl: Int = b.low;
+    let bh: Int = b.high;
+    if op == "==" {
+        if al == ah && bl == bh && al == bl { return 1;
+        }
+        if ah < bl || al > bh { return 0;
+        }
+        return 0 - 1;
+    }
+    if op == "!=" {
+        if ah < bl || al > bh { return 1;
+        }
+        if al == ah && bl == bh && al == bl { return 0;
+        }
+        return 0 - 1;
+    }
+    if op == ">=" {
+        if al >= bh { return 1;
+        }
+        if ah < bl { return 0;
+        }
+        return 0 - 1;
+    }
+    if op == ">" {
+        if al > bh { return 1;
+        }
+        if ah <= bl { return 0;
+        }
+        return 0 - 1;
+    }
+    if op == "<=" {
+        if ah <= bl { return 1;
+        }
+        if al > bh { return 0;
+        }
+        return 0 - 1;
+    }
+    if op == "<" {
+        if ah < bl { return 1;
+        }
+        if al >= bh { return 0;
+        }
+        return 0 - 1;
+    }
+    return 0 - 1;
+}

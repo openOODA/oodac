@@ -1,0 +1,71 @@
+// # WebAssembly DWARF 5 Line Number Program Engine
+//
+// Logline: DWARF 5 line table state machine mapping AST source lines and columns to WebAssembly code section byte offsets.
+//
+// Setup: Import wasm_dwarf_header.oo and wasm_leb128.oo for line bytecode emission.
+//
+// Beats:
+//   1. Track virtual line state machine registers (address, file, line, column, is_stmt).
+//   2. Advance program counter (DW_LNS_advance_pc) and source line (DW_LNS_advance_line).
+//   3. Compute special DWARF line opcodes for combined (pc + line) deltas.
+//   4. Emit end-of-sequence markers (DW_LNE_end_sequence).
+
+import "wasm_dwarf_header.oo";
+
+import "wasm_leb128.oo";
+
+
+pub type Dwarf5LineState = struct {
+    address: Int,
+    file_idx: Int,
+    line: Int,
+    column: Int,
+    is_stmt: Int
+};
+
+pub fn dwarf5_line_state_new() -> Dwarf5LineState {
+    let res: Dwarf5LineState = Dwarf5LineState { address: 0, file_idx: 1, line: 1, column: 0, is_stmt: 1 };
+    return res;
+}
+
+pub fn dwarf5_emit_advance_pc(addr_delta: Int) -> List[Int] {
+    let mut out: List[Int] = list_new();
+    out = list_push(out, 2);
+    // DW_LNS_advance_pc
+    let leb: List[Int] = encode_u32_leb128(addr_delta);
+    let mut i: Int = 0;
+    while i < list_len(leb) { out = list_push(out, list_get(leb, i));
+    i = i + 1;
+    }
+    return out;
+}
+
+pub fn dwarf5_emit_advance_line(line_delta: Int) -> List[Int] {
+    let mut out: List[Int] = list_new();
+    out = list_push(out, 3);
+    // DW_LNS_advance_line
+    let leb: List[Int] = encode_i32_leb128(line_delta);
+    let mut i: Int = 0;
+    while i < list_len(leb) { out = list_push(out, list_get(leb, i));
+    i = i + 1;
+    }
+    return out;
+}
+
+pub fn dwarf5_emit_copy() -> List[Int] {
+    let mut out: List[Int] = list_new();
+    out = list_push(out, 1);
+    // DW_LNS_copy
+    return out;
+}
+
+pub fn dwarf5_emit_end_sequence() -> List[Int] {
+    let mut out: List[Int] = list_new();
+    out = list_push(out, 0);
+    // Extended opcode prefix
+    out = list_push(out, 1);
+    // Length = 1 byte
+    out = list_push(out, 1);
+    // DW_LNE_end_sequence
+    return out;
+}

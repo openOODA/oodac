@@ -1,0 +1,147 @@
+// # WebAssembly Bytecode Opcodes & Section IDs
+//
+// Logline: WebAssembly 1.0 binary opcode and section ID definitions for stack-based code generation.
+//
+// Setup: Pure numerical constants adhering to WebAssembly 1.0 binary specification.
+//
+// Beats:
+//   1. Define binary section identifiers.
+//   2. Define control flow, variable, and memory access opcodes.
+//   3. Define typed arithmetic, bitwise, and comparison opcodes.
+//   4. Define type conversion and truncation opcodes.
+
+pub fn wasm_sec_custom() -> Int { return 0; }
+pub fn wasm_sec_type() -> Int { return 1; }
+pub fn wasm_sec_import() -> Int { return 2; }
+pub fn wasm_sec_function() -> Int { return 3; }
+pub fn wasm_sec_table() -> Int { return 4; }
+pub fn wasm_sec_memory() -> Int { return 5; }
+pub fn wasm_sec_global() -> Int { return 6; }
+pub fn wasm_sec_export() -> Int { return 7; }
+pub fn wasm_sec_start() -> Int { return 8; }
+pub fn wasm_sec_element() -> Int { return 9; }
+pub fn wasm_sec_code() -> Int { return 10; }
+pub fn wasm_sec_data() -> Int { return 11; }
+pub fn wasm_sec_data_count() -> Int { return 12; }
+
+pub fn wasm_external_func() -> Int { return 0; }
+pub fn wasm_external_table() -> Int { return 1; }
+pub fn wasm_external_memory() -> Int { return 2; }
+pub fn wasm_external_global() -> Int { return 3; }
+
+pub fn op_unreachable() -> Int { return 0; }
+pub fn op_nop() -> Int { return 1; }
+pub fn op_block() -> Int { return 2; }
+pub fn op_loop() -> Int { return 3; }
+pub fn op_if() -> Int { return 4; }
+pub fn op_else() -> Int { return 5; }
+pub fn op_end() -> Int { return 11; }
+pub fn op_br() -> Int { return 12; }
+pub fn op_br_if() -> Int { return 13; }
+pub fn op_br_table() -> Int { return 14; }
+pub fn op_return() -> Int { return 15; }
+pub fn op_call() -> Int { return 16; }
+pub fn op_call_indirect() -> Int { return 17; }
+pub fn op_drop() -> Int { return 26; }
+pub fn op_select() -> Int { return 27; }
+
+pub fn op_local_get() -> Int { return 32; }
+pub fn op_local_set() -> Int { return 33; }
+pub fn op_local_tee() -> Int { return 34; }
+pub fn op_global_get() -> Int { return 35; }
+pub fn op_global_set() -> Int { return 36; }
+
+pub fn op_i32_load() -> Int { return 40; }
+pub fn op_i64_load() -> Int { return 41; }
+pub fn op_f32_load() -> Int { return 42; }
+pub fn op_f64_load() -> Int { return 43; }
+pub fn op_i32_load8_s() -> Int { return 44; }
+pub fn op_i32_load8_u() -> Int { return 45; }
+pub fn op_i32_load16_s() -> Int { return 46; }
+pub fn op_i32_load16_u() -> Int { return 47; }
+pub fn op_i64_load8_s() -> Int { return 48; }
+pub fn op_i64_load8_u() -> Int { return 49; }
+pub fn op_i64_load16_s() -> Int { return 50; }
+pub fn op_i64_load16_u() -> Int { return 51; }
+pub fn op_i64_load32_s() -> Int { return 52; }
+pub fn op_i64_load32_u() -> Int { return 53; }
+pub fn op_i32_store() -> Int { return 54; }
+pub fn op_i64_store() -> Int { return 55; }
+pub fn op_f32_store() -> Int { return 56; }
+pub fn op_f64_store() -> Int { return 57; }
+pub fn op_i32_store8() -> Int { return 58; }
+pub fn op_i32_store16() -> Int { return 59; }
+pub fn op_i64_store8() -> Int { return 60; }
+pub fn op_i64_store16() -> Int { return 61; }
+pub fn op_i64_store32() -> Int { return 62; }
+pub fn op_memory_size() -> Int { return 63; }
+pub fn op_memory_grow() -> Int { return 64; }
+
+pub fn op_i32_const() -> Int { return 65; }
+pub fn op_i64_const() -> Int { return 66; }
+pub fn op_f32_const() -> Int { return 67; }
+pub fn op_f64_const() -> Int { return 68; }
+
+pub fn op_i32_eqz() -> Int { return 69; }
+pub fn op_i32_eq() -> Int { return 70; }
+pub fn op_i32_ne() -> Int { return 71; }
+pub fn op_i32_lt_s() -> Int { return 72; }
+pub fn op_i32_lt_u() -> Int { return 73; }
+pub fn op_i32_gt_s() -> Int { return 74; }
+pub fn op_i32_gt_u() -> Int { return 75; }
+pub fn op_i32_le_s() -> Int { return 76; }
+pub fn op_i32_le_u() -> Int { return 77; }
+pub fn op_i32_ge_s() -> Int { return 78; }
+pub fn op_i32_ge_u() -> Int { return 79; }
+
+pub fn op_i64_eqz() -> Int { return 80; }
+pub fn op_i64_eq() -> Int { return 81; }
+pub fn op_i64_ne() -> Int { return 82; }
+pub fn op_i64_lt_s() -> Int { return 83; }
+pub fn op_i64_gt_s() -> Int { return 85; }
+pub fn op_i64_le_s() -> Int { return 87; }
+pub fn op_i64_ge_s() -> Int { return 89; }
+
+pub fn op_f64_eq() -> Int { return 97; }
+pub fn op_f64_ne() -> Int { return 98; }
+pub fn op_f64_lt() -> Int { return 99; }
+pub fn op_f64_gt() -> Int { return 100; }
+pub fn op_f64_le() -> Int { return 101; }
+pub fn op_f64_ge() -> Int { return 102; }
+
+pub fn op_i32_add() -> Int { return 106; }
+pub fn op_i32_sub() -> Int { return 107; }
+pub fn op_i32_mul() -> Int { return 108; }
+pub fn op_i32_div_s() -> Int { return 109; }
+pub fn op_i32_rem_s() -> Int { return 111; }
+pub fn op_i32_and() -> Int { return 113; }
+pub fn op_i32_or() -> Int { return 114; }
+pub fn op_i32_xor() -> Int { return 115; }
+pub fn op_i32_shl() -> Int { return 116; }
+pub fn op_i32_shr_s() -> Int { return 117; }
+pub fn op_i32_shr_u() -> Int { return 118; }
+
+pub fn op_i64_add() -> Int { return 124; }
+pub fn op_i64_sub() -> Int { return 125; }
+pub fn op_i64_mul() -> Int { return 126; }
+pub fn op_i64_div_s() -> Int { return 127; }
+pub fn op_i64_div_u() -> Int { return 128; }
+pub fn op_i64_rem_s() -> Int { return 129; }
+pub fn op_i64_and() -> Int { return 131; }
+pub fn op_i64_or() -> Int { return 132; }
+pub fn op_i64_xor() -> Int { return 133; }
+pub fn op_i64_shl() -> Int { return 134; }
+pub fn op_i64_shr_s() -> Int { return 135; }
+pub fn op_i64_shr_u() -> Int { return 136; }
+
+pub fn op_f64_neg() -> Int { return 154; }
+pub fn op_f64_add() -> Int { return 160; }
+pub fn op_f64_sub() -> Int { return 161; }
+pub fn op_f64_mul() -> Int { return 162; }
+pub fn op_f64_div() -> Int { return 163; }
+
+pub fn op_i32_div_u() -> Int { return 110; }
+pub fn op_i32_rem_u() -> Int { return 112; }
+pub fn op_i32_wrap_i64() -> Int { return 167; }
+pub fn op_i32_trunc_f64_s() -> Int { return 170; }
+pub fn op_f64_convert_i32_s() -> Int { return 183; }

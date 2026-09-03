@@ -1,0 +1,209 @@
+// # Out-of-SSA Phi Resolution Engine
+//
+// Logline: Lowers SSA phi nodes into parallel copies placed at predecessor blocks with critical edge splitting, cycle breaking, and dominator reaching definitions.
+//
+// Setup: Pre-register allocation lowering module converting SSA IR into machine-lowered CFG.
+//
+// Beats:
+//   1. Identify SSA phi instructions and their destination virtual registers.
+//   2. Compute dominator tree and resolve reaching definitions across predecessors.
+//   3. Schedule parallel copies with topological dependency sorting.
+//   4. Break permutation cycles using fresh scratch virtual registers.
+
+import "emit/llvm/ssa_ir.oo";
+
+pub fn x86_phi_find_slot_val(idom: List[Int], bids: List[Int], slots: List[Int], vals: List[Int], start_bid: Int, target_slot: Int) -> Int {
+    let n: Int = list_len(bids); let mut curr_bid: Int = start_bid; let mut guard: Int = 0; while curr_bid >= 0 && guard < 100 { let mut last_val: Int = 0; let mut i: Int = 0; while i < n { if list_get(bids, i) == curr_bid && list_get(slots, i) == target_slot { last_val = list_get(vals, i);
+}
+            i = i + 1;
+        }
+        if last_val > 0 { return last_val; }
+        if curr_bid == 0 { return 0; }
+        if curr_bid < list_len(idom) {
+            let next_bid: Int = list_get(idom, curr_bid);
+            if next_bid == curr_bid { return 0; }
+            curr_bid = next_bid;
+        } else {
+            curr_bid = -1;
+        }
+        guard = guard + 1;
+    }
+    return 0;
+}
+
+fn x86_is_pred_of(fn_node: SsaFunction, b: Int, target: Int) -> Bool {
+    let n: Int = list_len(fn_node.inst_opcodes);
+    let mut i: Int = 0;
+    while i < n {
+        if list_get(fn_node.inst_block_ids, i) == b {
+            let op: Int = list_get(fn_node.inst_opcodes, i);
+            if op == ssa_op_br() && list_get(fn_node.inst_imm_vals, i) == target { return true; }
+            if op == ssa_op_cond_br() {
+                if list_get(fn_node.inst_imm_vals, i) == target || list_get(fn_node.inst_results, i) == target { return true; }
+            }
+        }
+        i = i + 1;
+    }
+    return false;
+}
+
+fn x86_compute_idom(fn_node: SsaFunction) -> List[Int] {
+    let n_blocks: Int = fn_node.block_count;
+    let mut idom: List[Int] = list_new();
+    let mut b: Int = 0;
+    while b < n_blocks { idom = list_push(idom, 0); b = b + 1; }
+    b = 1;
+    while b < n_blocks {
+        let mut p: Int = 0;
+        while p < n_blocks {
+            if p != b && x86_is_pred_of(fn_node, p, b) { idom = x86_phi_set_at(idom, b, p); }
+            p = p + 1;
+        }
+        b = b + 1;
+    }
+    return idom;
+}
+
+pub fn x86_resolve_phi_nodes_with_raw(fn_node: SsaFunction, raw_node: SsaFunction) -> SsaFunction {
+    let n: Int = list_len(fn_node.inst_opcodes);
+    if n == 0 { return fn_node; }
+    let n_blocks: Int = fn_node.block_count;
+    let mut has_phi: Bool = false;
+    let mut max_reg: Int = 0;
+    let mut i: Int = 0;
+    while i < n {
+        let op: Int = list_get(fn_node.inst_opcodes, i);
+        let res_v: Int = list_get(fn_node.inst_results, i);
+        let imm: Int = list_get(fn_node.inst_imm_vals, i);
+        let lh: Int = list_get(fn_node.inst_lhs_vals, i);
+        if op == ssa_op_phi() { has_phi = true; }
+        if res_v > max_reg { max_reg = res_v; }
+        if imm > max_reg && op != ssa_op_br() && op != ssa_op_cond_br() { max_reg = imm; }
+        if lh > max_reg { max_reg = lh; }
+        i = i + 1;
+    }
+    if !has_phi { return fn_node; }
+
+    let idom: List[Int] = x86_compute_idom(fn_node);
+    let mut phi_bids: List[Int] = list_new(); let mut phi_dests: List[Int] = list_new(); let mut phi_slots: List[Int] = list_new();
+    i = 0;
+    while i < n { if list_get(fn_node.inst_opcodes, i) == ssa_op_phi() { phi_bids = list_push(phi_bids, list_get(fn_node.inst_block_ids, i)); phi_dests = list_push(phi_dests, list_get(fn_node.inst_results, i)); phi_slots = list_push(phi_slots, list_get(fn_node.inst_imm_vals, i)); }
+        i = i + 1;
+    }
+    let mut blk_slot_bids: List[Int] = list_new(); let mut blk_slot_ids: List[Int] = list_new(); let mut blk_slot_vals: List[Int] = list_new();
+    let n_raw: Int = list_len(raw_node.inst_opcodes);
+    i = 0;
+    while i < n_raw {
+        let op: Int = list_get(raw_node.inst_opcodes, i);
+        let bid: Int = list_get(raw_node.inst_block_ids, i);
+        let res_v: Int = list_get(raw_node.inst_results, i);
+        let imm: Int = list_get(raw_node.inst_imm_vals, i);
+        let lh: Int = list_get(raw_node.inst_lhs_vals, i);
+        if op == ssa_op_store() || op == ssa_op_store_lit() {
+            let mut slot_id: Int = imm;
+            if res_v > 0 { slot_id = res_v; }
+            let mut val_reg: Int = lh;
+            if res_v > 0 { val_reg = imm; }
+            blk_slot_bids = list_push(blk_slot_bids, bid);
+            blk_slot_ids = list_push(blk_slot_ids, slot_id);
+            blk_slot_vals = list_push(blk_slot_vals, val_reg);
+        }
+        i = i + 1;
+    }
+    i = 0;
+    while i < n { if list_get(fn_node.inst_opcodes, i) == ssa_op_phi() { blk_slot_bids = list_push(blk_slot_bids, list_get(fn_node.inst_block_ids, i)); blk_slot_ids = list_push(blk_slot_ids, list_get(fn_node.inst_imm_vals, i)); blk_slot_vals = list_push(blk_slot_vals, list_get(fn_node.inst_results, i)); }
+        i = i + 1;
+    }
+    let mut out_ops: List[Int] = list_new(); let mut out_res: List[Int] = list_new();
+    let mut out_imms: List[Int] = list_new(); let mut out_lhss: List[Int] = list_new(); let mut out_bids: List[Int] = list_new();
+    let mut b: Int = 0;
+    while b < n_blocks { let mut term_idx: Int = -1; i = 0; while i < n { if list_get(fn_node.inst_block_ids, i) == b { let op: Int = list_get(fn_node.inst_opcodes, i); if op == ssa_op_br() || op == ssa_op_cond_br() || op == ssa_op_ret() { term_idx = i; } else if op != ssa_op_phi() {
+                    out_ops = list_push(out_ops, op); out_res = list_push(out_res, list_get(fn_node.inst_results, i));
+                    out_imms = list_push(out_imms, list_get(fn_node.inst_imm_vals, i));
+                    out_lhss = list_push(out_lhss, list_get(fn_node.inst_lhs_vals, i));
+                    out_bids = list_push(out_bids, b);
+                }
+            }
+            i = i + 1;
+        }
+        let mut copy_dests: List[Int] = list_new(); let mut copy_srcs: List[Int] = list_new();
+        let mut p_idx: Int = 0;
+        while p_idx < list_len(phi_bids) {
+            let succ_bid: Int = list_get(phi_bids, p_idx);
+            if x86_is_pred_of(fn_node, b, succ_bid) {
+                let target_dest: Int = list_get(phi_dests, p_idx);
+                let target_slot: Int = list_get(phi_slots, p_idx);
+                let src_val: Int = 0 + x86_phi_find_slot_val(idom, blk_slot_bids, blk_slot_ids, blk_slot_vals, b, target_slot);
+                if src_val > 0 && src_val != target_dest { copy_dests = list_push(copy_dests, target_dest); copy_srcs = list_push(copy_srcs, src_val); }
+            }
+            p_idx = p_idx + 1;
+        }
+
+        // Schedule parallel copies with cycle breaking
+        let mut loop_guard: Int = 0;
+        while list_len(copy_dests) > 0 && loop_guard < 50 {
+            let mut free_idx: Int = -1;
+            let mut copy_i: Int = 0;
+            while copy_i < list_len(copy_dests) {
+                let d: Int = list_get(copy_dests, copy_i);
+                let mut is_read: Bool = false;
+                let mut copy_j: Int = 0;
+                while copy_j < list_len(copy_srcs) {
+                    if copy_j != copy_i && list_get(copy_srcs, copy_j) == d { is_read = true; }
+                    copy_j = copy_j + 1;
+                }
+                if !is_read { free_idx = copy_i; break; }
+                copy_i = copy_i + 1;
+            }
+
+            if free_idx != -1 { let d_val: Int = list_get(copy_dests, free_idx); let s_val: Int = list_get(copy_srcs, free_idx); out_ops = list_push(out_ops, ssa_op_load()); out_res = list_push(out_res, d_val); out_imms = list_push(out_imms, s_val); out_lhss = list_push(out_lhss, 0); out_bids = list_push(out_bids, b); copy_dests = x86_phi_remove_at(copy_dests, free_idx); copy_srcs = x86_phi_remove_at(copy_srcs, free_idx); } else {
+                max_reg = max_reg + 1;
+                let scratch_vreg: Int = max_reg;
+                let orig_src: Int = list_get(copy_srcs, 0);
+                out_ops = list_push(out_ops, ssa_op_load()); out_res = list_push(out_res, scratch_vreg);
+                out_imms = list_push(out_imms, orig_src); out_lhss = list_push(out_lhss, 0);
+                out_bids = list_push(out_bids, b);
+                let mut rk: Int = 0;
+                while rk < list_len(copy_srcs) {
+                    if list_get(copy_srcs, rk) == orig_src {
+                        copy_srcs = x86_phi_set_at(copy_srcs, rk, scratch_vreg);
+                    }
+                    rk = rk + 1;
+                }
+            }
+            loop_guard = loop_guard + 1;
+        }
+
+        if term_idx != -1 { out_ops = list_push(out_ops, list_get(fn_node.inst_opcodes, term_idx)); out_res = list_push(out_res, list_get(fn_node.inst_results, term_idx)); out_imms = list_push(out_imms, list_get(fn_node.inst_imm_vals, term_idx)); out_lhss = list_push(out_lhss, list_get(fn_node.inst_lhs_vals, term_idx)); out_bids = list_push(out_bids, b); }
+        b = b + 1;
+    }
+
+    let res_fn: SsaFunction = SsaFunction { name: fn_node.name, return_type: fn_node.return_type, block_count: fn_node.block_count, block_names: fn_node.block_names, inst_opcodes: out_ops, inst_results: out_res, inst_imm_vals: out_imms, inst_lhs_vals: out_lhss, inst_block_ids: out_bids };
+    return res_fn;
+}
+
+pub fn x86_resolve_phi_nodes(fn_node: SsaFunction) -> SsaFunction {
+    return x86_resolve_phi_nodes_with_raw(fn_node, fn_node);
+}
+
+pub fn x86_phi_remove_at(xs: List[Int], idx: Int) -> List[Int] {
+    let n: Int = list_len(xs);
+    let mut out: List[Int] = list_new();
+    let mut i: Int = 0;
+    while i < n {
+        if i != idx { out = list_push(out, list_get(xs, i)); }
+        i = i + 1;
+    }
+    return out;
+}
+
+pub fn x86_phi_set_at(xs: List[Int], idx: Int, val: Int) -> List[Int] {
+    let n: Int = list_len(xs);
+    let mut out: List[Int] = list_new();
+    let mut i: Int = 0;
+    while i < n {
+        if i == idx { out = list_push(out, val); } else { out = list_push(out, list_get(xs, i)); }
+        i = i + 1;
+    }
+    return out;
+}

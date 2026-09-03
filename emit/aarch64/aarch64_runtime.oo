@@ -1,0 +1,86 @@
+// # Canonical aarch64 emit-side runtime registry
+//
+// Logline: One source of truth for the emit-aarch64 zero-libc runtime surface. aarch64_runtime_text returns the canonical GAS source for the list runtime + page allocator, aarch64_runtime_globls lists every .globl symbol the emit-aarch64 path may reference, and aarch64_runtime_count is the registry length. Mirrors oodac/x86_runtime.oo (Tier 7 #33) translated to AAPCS64 calling convention.
+//
+// Setup: oodac/ helper module. Text return is concatenated into a generated .s file at the start. The list runtime (_oo_heap_alloc + list_new/push/get/set/len) uses AAPCS64 callee-saved regs (x19-x28) and mmap syscall 222 on AArch64 Linux.
+//
+// Beats:
+//   1. aarch64_runtime_text returns one canonical GAS .rodata + .bss + .text blob.
+//   2. aarch64_runtime_globls returns the .globl surface (8 names: heap, list ops, _println_int).
+//   3. aarch64_runtime_count returns the registry length (8).
+//   4. aarch64_emit_list.oo forwards to this single source of truth.
+
+pub fn aarch64_runtime_text() -> String {
+    let mut s: String = "";
+s = s + "    .section .rodata\n.Llist_oob_msg:\n    .ascii \"ERR\\tolist_get OOB\\n\"\n";
+s = s + "    .section .bss\n    .p2align 3\n.Lheap_cur:\n    .quad 0\n.Lheap_end:\n    .quad 0\n";
+s = s + "    .section .text\n";
+s = s + ".globl _oo_heap_alloc\n.p2align 2\n_oo_heap_alloc:\n";
+s = s + "    stp x29, x30, [sp, #-16]!\n    mov x29, sp\n";
+s = s + "    add x0, x0, #15\n    and x0, x0, #-16\n    mov x9, x0\n";
+s = s + "    ldr x0, =.Lheap_cur\n    ldr x0, [x0]\n    cbnz x0, .Lalloc_check\n";
+s = s + "    mov x8, #222\n    mov x0, #0\n    mov x1, #65536\n";
+s = s + "    mov x2, #3\n    mov x3, #34\n    mov x4, #-1\n    mov x5, #0\n    svc #0\n";
+s = s + "    ldr x1, =.Lheap_cur\n    str x0, [x1]\n    add x0, x0, #65536\n";
+s = s + "    ldr x1, =.Lheap_end\n    str x0, [x1]\n";
+s = s + "    ldr x0, =.Lheap_cur\n    ldr x0, [x0]\n";
+s = s + ".Lalloc_check:\n    ldr x1, =.Lheap_end\n    ldr x1, [x1]\n    add x2, x0, x9\n";
+s = s + "    cmp x1, x2\n    b.ge .Lalloc_done\n";
+s = s + "    mov x8, #222\n    mov x0, #0\n    mov x1, #65536\n";
+s = s + "    mov x2, #3\n    mov x3, #34\n    mov x4, #-1\n    mov x5, #0\n    svc #0\n";
+s = s + "    ldr x1, =.Lheap_end\n    str x0, [x1]\n";
+s = s + ".Lalloc_done:\n    ldr x1, =.Lheap_cur\n    ldr x2, [x1]\n    add x2, x2, x9\n    str x2, [x1]\n";
+s = s + "    ldp x29, x30, [sp], #16\n    ret\n";
+s = s + ".globl list_new\n.p2align 2\nlist_new:\n";
+s = s + "    stp x29, x30, [sp, #-16]!\n    mov x29, sp\n";
+s = s + "    mov x0, #24\n    bl _oo_heap_alloc\n    mov x19, x0\n";
+s = s + "    mov x0, #16\n    str x0, [x19, #0]\n    mov x0, #0\n    str x0, [x19, #8]\n";
+s = s + "    mov x0, #128\n    bl _oo_heap_alloc\n    str x0, [x19, #16]\n";
+s = s + "    mov x0, x19\n    ldp x29, x30, [sp], #16\n    ret\n";
+s = s + ".globl list_push\n.p2align 2\nlist_push:\n";
+s = s + "    stp x29, x30, [sp, #-16]!\n    mov x29, sp\n";
+s = s + "    mov x19, x0\n    mov x20, x1\n";
+s = s + "    ldr x0, [x19, #0]\n    ldr x1, [x19, #8]\n    cmp x0, x1\n";
+s = s + "    b.ne .Lpush_store\n    lsl x0, x0, #1\n    str x0, [x19, #0]\n    mov x21, x0\n";
+s = s + "    lsl x0, x0, #3\n    bl _oo_heap_alloc\n    mov x22, x0\n";
+s = s + "    ldr x0, [x19, #8]\n    cbz x0, .Lpush_cpydone\n    ldr x1, [x19, #16]\n";
+s = s + ".Lpush_cpyloop:\n    ldr x2, [x1], #8\n    str x2, [x22], #8\n    sub x0, x0, #1\n    cbnz x0, .Lpush_cpyloop\n";
+s = s + ".Lpush_cpydone:\n    str x22, [x19, #16]\n";
+s = s + ".Lpush_store:\n    ldr x0, [x19, #8]\n    ldr x1, [x19, #16]\n";
+s = s + "    str x20, [x1, x0, lsl #3]\n    add x0, x0, #1\n    str x0, [x19, #8]\n";
+s = s + "    mov x0, x19\n    ldp x29, x30, [sp], #16\n    ret\n";
+s = s + ".globl list_get\n.p2align 2\nlist_get:\n";
+s = s + "    stp x29, x30, [sp, #-16]!\n    mov x29, sp\n";
+s = s + "    cmp x1, #0\n    b.lt .Llist_get_oob\n    ldr x2, [x0, #8]\n    cmp x1, x2\n";
+s = s + "    b.ge .Llist_get_oob\n    ldr x0, [x0, #16]\n    ldr x0, [x0, x1, lsl #3]\n";
+s = s + "    ldp x29, x30, [sp], #16\n    ret\n";
+s = s + ".Llist_get_oob:\n    adrp x0, .Llist_oob_msg\n    add x0, x0, :lo12:.Llist_oob_msg\n";
+s = s + "    mov x1, #18\n    mov x2, #1\n    mov x8, #64\n    svc #0\n";
+s = s + "    mov x8, #93\n    mov x0, #1\n    svc #0\n";
+s = s + ".globl list_len\n.p2align 2\nlist_len:\n    ldr x0, [x0, #8]\n    ret\n";
+s = s + ".globl list_set\n.p2align 2\nlist_set:\n";
+s = s + "    stp x29, x30, [sp, #-16]!\n    mov x29, sp\n";
+s = s + "    mov x19, x2\n";
+s = s + "    cmp x1, #0\n    b.lt .Llist_get_oob\n    ldr x2, [x0, #8]\n    cmp x1, x2\n";
+s = s + "    b.ge .Llist_get_oob\n    ldr x0, [x0, #16]\n    str x19, [x0, x1, lsl #3]\n";
+s = s + "    ldp x29, x30, [sp], #16\n    ret\n";
+return s;
+}
+
+pub fn aarch64_runtime_globls() -> List[String] {
+    let mut g: List[String] = list_new();
+    g = list_push(g, "_oo_heap_alloc");
+    g = list_push(g, "list_new");
+    g = list_push(g, "list_push");
+    g = list_push(g, "list_get");
+    g = list_push(g, "list_set");
+    g = list_push(g, "list_len");
+    g = list_push(g, "_println_int");
+    g = list_push(g, "main");
+    return g;
+}
+
+pub fn aarch64_runtime_count() -> Int {
+    let g: List[String] = aarch64_runtime_globls();
+return list_len(g);
+}

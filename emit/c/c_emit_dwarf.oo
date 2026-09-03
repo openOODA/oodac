@@ -1,0 +1,199 @@
+// # Emit DWARF 5 debug metadata and lexical source mapping
+//
+// Logline: Generates rich DWARF 5 debug symbol aliases, lexical variable scope tags, and column-aware line mappings directly from openOODA ASTs.
+//
+// Setup: Receives AST token rows and environment state; outputs structured debug attributes, DWARF type typedefs, and source directives.
+//
+// Beats:
+//   1. Emits column-aware and file-aware #line directives from token positions.
+//   2. Generates canonical DWARF type aliases linking mangled C structs back to openOODA types.
+//   3. Emits lexical block scope markers and variable identity preservation tags for debuggers.
+//   4. Provides helper utilities for nodebug attributes on compiler temporaries and scope entry/exit.
+
+
+import "c_emit_env.oo";
+
+
+pub fn c_dwarf_emit_src_line(toks: List[String], pos: Int, env: String) {
+    if pos < 0 { return;
+    }
+    let fl: String = c_tokf(toks, pos, 1);
+    let fp: String = c_env_get(env, "__file__");
+    if fl == "" || fp == "" {
+        return;
+    }
+    let fc: String = c_tokf(toks, pos, 2);
+    if fc != "" && fc != "0" {
+        println("#line " + fl + " \"" + fp + "\" /* col " + fc + " */");
+    } else {
+        println("#line " + fl + " \"" + fp + "\"");
+    }
+}
+
+pub fn c_dwarf_emit_loc(file: String, line: Int, col: Int) {
+    if file == "" || line <= 0 { return;
+    }
+    let ls: String = line.to_string();
+    if col > 0 { println("#line " + ls + " \"" + file + "\" /* col " + col.to_string() + " */");
+    } else {
+        println("#line " + ls + " \"" + file + "\"");
+    }
+}
+
+pub fn c_dwarf_nodebug_attr() -> String {
+    return "__attribute__((nodebug))";
+}
+
+pub fn c_dwarf_emit_scope_enter(scope_name: String, depth: Int, file: String, line: Int) {
+    let mut s: String = "/* __oo_scope_enter: name=" + scope_name;
+    s = s + " depth=" + depth.to_string();
+    if file != "" {
+        s = s + " file=" + file;
+    }
+    if line > 0 { s = s + " line=" + line.to_string();
+    }
+    s = s + " */";
+    println(s);
+}
+
+pub fn c_dwarf_emit_scope_exit(scope_name: String, depth: Int) {
+    println("/* __oo_scope_exit: name=" + scope_name + " depth=" + depth.to_string() + " */");
+}
+
+pub fn c_dwarf_emit_var_debug(orig_name: String, c_var: String, c_ty: String, line: Int) {
+    let mut tag: String = "/* __oo_var_debug: " + orig_name + " -> " + c_var;
+    tag = tag + " ty=" + c_ty;
+    if line > 0 { tag = tag + " line=" + line.to_string();
+    }
+    tag = tag + " */";
+    println("  " + tag);
+}
+
+pub fn c_dwarf_fn_tag(c_fn: String, orig_fn: String, file: String, line: Int) {
+    let mut tag: String = "/* __oo_fn_debug: " + orig_fn + " -> " + c_fn;
+    if file != "" {
+        tag = tag + " file=" + file;
+    }
+    if line > 0 { tag = tag + " line=" + line.to_string();
+    }
+    tag = tag + " */";
+    println(tag);
+}
+
+pub fn c_dwarf_emit_type_aliases() {
+    println("#ifndef OO_DWARF_DEBUG_TYPES");
+    println("#define OO_DWARF_DEBUG_TYPES");
+    println("typedef OoStr String;");
+    println("typedef OoIList List_Int;");
+    println("typedef OoSList List_String;");
+    println("typedef OoFList List_Float;");
+    println("typedef OoResS Result_String;");
+    println("typedef OoResV Result_Void;");
+    println("typedef OoResI Result_Int;");
+    println("typedef OoResB Result_Bool;");
+    println("typedef OoResF Result_Float;");
+    println("typedef OoResLI Result_List_Int;");
+    println("typedef OoResLS Result_List_String;");
+    println("typedef OoResLF Result_List_Float;");
+    println("typedef OoOpt_I Option_Int;");
+    println("typedef OoOpt_S Option_String;");
+    println("typedef OoOpt_B Option_Bool;");
+    println("typedef OoOpt_F Option_Float;");
+    println("typedef OoOpt_LI Option_List_Int;");
+    println("typedef OoOpt_LS Option_List_String;");
+    println("typedef OoOpt_LF Option_List_Float;");
+    println("typedef OoWeakRef Weak_Ref;");
+    println("typedef OoClosure Closure_Env;");
+    println("typedef OoFlatEnvHeader Flat_Env_Header;");
+    println("#ifndef OO_TY_OoOpt_OoL_SsaLoopInfo");
+    println("#define OO_TY_OoOpt_OoL_SsaLoopInfo");
+    println("typedef struct OoOpt_OoL_SsaLoopInfo { int has_val; OoL_SsaLoopInfo val; } OoOpt_OoL_SsaLoopInfo;");
+    println("#endif");
+    println("#endif");
+}
+
+pub fn c_dwarf_emit_opt_struct_alias(opt_ty: String, val_ty: String) {
+    if opt_ty == "" || val_ty == "" { return;
+    }
+    println("#ifndef OO_TY_" + opt_ty);
+    println("#define OO_TY_" + opt_ty);
+    println("typedef struct " + opt_ty + " { int has_val; " + val_ty + " val; } " + opt_ty + ";");
+    println("#endif");
+}
+
+pub fn c_dwarf_emit_custom_type_alias(c_ty: String, alias_name: String) {
+    if c_ty == "" || alias_name == "" {
+        return;
+    }
+    println("#ifndef OO_DBG_TY_" + alias_name);
+    println("#define OO_DBG_TY_" + alias_name);
+    println("typedef " + c_ty + " " + alias_name + ";");
+    println("#endif");
+}
+
+pub fn c_dwarf_type_to_oo_name(c_ty: String) -> String {
+    if c_ty == "OoStr" { return "String";
+    }
+    if c_ty == "OoIList" { return "List[Int]";
+    }
+    if c_ty == "OoSList" { return "List[String]";
+    }
+    if c_ty == "OoFList" { return "List[Float]";
+    }
+    if c_ty == "long long" || c_ty == "int64_t" { return "Int";
+    }
+    if c_ty == "int" || c_ty == "bool" { return "Bool";
+    }
+    if c_ty == "double" { return "Float";
+    }
+    if c_ty == "OoResS" { return "Result[String, String]";
+    }
+    if c_ty == "OoResV" { return "Result[Void, String]";
+    }
+    if c_ty == "OoResI" { return "Result[Int, String]";
+    }
+    if c_ty == "OoResB" { return "Result[Bool, String]";
+    }
+    if c_ty == "OoResF" { return "Result[Float, String]";
+    }
+    if c_ty == "OoResLI" { return "Result[List[Int], String]";
+    }
+    if c_ty == "OoResLS" { return "Result[List[String], String]";
+    }
+    if c_ty == "OoResLF" { return "Result[List[Float], String]";
+    }
+    if c_ty == "OoOpt_I" { return "Option[Int]";
+    }
+    if c_ty == "OoOpt_S" { return "Option[String]";
+    }
+    if c_ty == "OoOpt_B" { return "Option[Bool]";
+    }
+    if c_ty == "OoOpt_F" { return "Option[Float]";
+    }
+    if c_ty == "OoOpt_LI" { return "Option[List[Int]]";
+    }
+    if c_ty == "OoOpt_LS" { return "Option[List[String]]";
+    }
+    if c_ty == "OoOpt_LF" { return "Option[List[Float]]";
+    }
+    if c_ty == "OoWeakRef" { return "Weak[T]";
+    }
+    if c_ty == "OoClosure" { return "Closure";
+    }
+    if c_ty == "OoFlatEnvHeader" { return "FlatEnvHeader";
+    }
+    let n: Int = chars_len(c_ty);
+    if n > 4 && str_slice(c_ty, 0, 4) == "OoL_" {
+        let elem: String = str_slice(c_ty, 4, n);
+        return "List[" + c_dwarf_type_to_oo_name(elem) + "]";
+    }
+    if n > 6 && str_slice(c_ty, 0, 6) == "OoOpt_" {
+        let elem2: String = str_slice(c_ty, 6, n);
+        return "Option[" + c_dwarf_type_to_oo_name(elem2) + "]";
+    }
+    if n > 6 && str_slice(c_ty, 0, 6) == "OoRes_" {
+        let elem3: String = str_slice(c_ty, 6, n);
+        return "Result[" + c_dwarf_type_to_oo_name(elem3) + ", String]";
+    }
+    return c_ty;
+}

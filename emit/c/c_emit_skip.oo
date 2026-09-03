@@ -1,0 +1,229 @@
+// # Skip types and map C types
+//
+// Logline: Map type tokens to C names and skip types, contracts, and type expressions.
+//
+// Setup: Type expressions and contract blocks are ready for emission skipping.
+//
+// Beats:
+//   1. Map c_ty_at for primitives, lists, options, and results.
+//   2. Skip type expressions and contract blocks.
+//   3. Handle C reference and result types.
+
+import "c_emit_skip_grant.oo";
+
+import "c_emit_skip_peek.oo";
+
+
+import "c_emit_list_ty.oo";
+
+
+// Map type token at pos → C type (params / returns / let ann).
+pub fn c_ty_at(toks: List[String], pos: Int, n: Int) -> String {
+    if pos >= n { return "void";
+}
+    if field_at(list_get(toks, pos), 0) == "AMP" {
+        // &List[T] / &String / &Int / &Result is the inner C type, not `List*`.
+        let mut inner: Int = pos;
+        if inner < n && field_at(list_get(toks, inner), 0) == "AMP" { inner = inner + 1;
+        }
+        if inner < n && field_at(list_get(toks, inner), 0) == "KW_MUT" { inner = inner + 1;
+        }
+        if inner < n { if field_at(list_get(toks, inner), 0) == "IDENT" { let tn: String = field_at(list_get(toks, inner), 3);
+        if tn == "List" || tn == "String" || tn == "Int" || tn == "Bool" || tn == "Float" || tn == "f64" || tn == "Result" || tn == "Option" { return c_ty_at(toks, inner, n);
+        }
+            }
+        }
+        return c_ref_c_ty(toks, pos, n);
+    }
+    if field_at(list_get(toks, pos), 0) != "IDENT" {
+        return "void";
+    }
+    let tn: String = field_at(list_get(toks, pos), 3);
+    if tn == "String" {
+        return "OoStr";
+    }
+    if tn == "Int" {
+        return "long long";
+    }
+    if tn == "Bool" {
+        return "int";
+    }
+    if tn == "Float" || tn == "f64" {
+        return "double";
+    }
+    if tn == "List" {
+        let e: String = c_peek_list_elem2(toks, pos, n);
+        if e == "I" { return "OoIList";
+        }
+        if e == "F" || e == "LF" { return "OoFList";
+        }
+        if e == "S" || e == "" { return "OoSList";
+        }
+        if e == "LL_I" { return "OoLL_I";
+        }
+        if e == "LL_S" { return "OoLL_S";
+        }
+        if e == "LL_F" { return "OoLL_F";
+        }
+        if e == "LLL_I" { return "OoLLL_I";
+        }
+        if e == "LLL_S" { return "OoLLL_S";
+        }
+        if e == "LLL_F" { return "OoLLL_F";
+        }
+        if e == "LLLL_I" { return "OoLLLL_I";
+        }
+        if e == "LLLL_S" { return "OoLLLL_S";
+        }
+        if e == "LLLL_F" { return "OoLLLL_F";
+        }
+        return "OoL_" + e;
+    }
+    if tn == "Option" {
+        return c_option_c_ty(toks, pos, n);
+    }
+    if tn == "Result" {
+        return c_result_c_ty(toks, pos, n);
+    }
+    if tn == "ProcessCap" || tn == "FsCap" || tn == "FsReadCap" || tn == "FsWriteCap"
+        || tn == "NetCap" || tn == "EnvCap" || tn == "TimeCap" || tn == "RandCap"
+        || tn == "AllocCap" || tn == "FfiCap" || tn == "ThreadCap" || tn == "GpuCap"
+        || tn == "AudioCap" || tn == "CameraCap" || tn == "UsbCap" || tn == "HidCap"
+        || tn == "WindowCap" || tn == "FrameCap" || tn == "HttpCap" || tn == "TcpCap"
+        || tn == "UdpCap" || tn == "BindCap" || tn == "SyncCap" || tn == "MemCap"
+        || tn == "SignCap" || tn == "SysCap" {
+        return "long long";
+    }
+    if tn == "HitlCap" || tn == "AuditCap" || tn == "IoCap" {
+        return "long long";
+    }
+    return tn;
+}
+
+pub fn c_emit_skip_type(toks: List[String], pos: Int, n: Int) -> Int {
+    let mut p: Int = pos;
+    if p < n && field_at(list_get(toks, p), 0) == "AMP" { p = p + 1;
+    }
+    if p < n && field_at(list_get(toks, p), 0) == "KW_MUT" { p = p + 1;
+    }
+    if p < n && field_at(list_get(toks, p), 0) == "IDENT" {
+        p = p + 1;
+    }
+    if p < n && field_at(list_get(toks, p), 0) == "LBRACKET" {
+        let mut depth: Int = 1;
+        p = p + 1;
+        while p < n && depth > 0 { let k: String = field_at(list_get(toks, p), 0);
+        if k == "LBRACKET" { depth = depth + 1;
+        }
+            if k == "RBRACKET" {
+                depth = depth - 1;
+            }
+            p = p + 1;
+        }
+    }
+    return p;
+}
+
+// Skip requires/ensures until LBRACE. Fail-closed on mid-clause item / missing brace.
+pub fn c_emit_skip_contracts(toks: List[String], pos: Int, n: Int) -> Int {
+    let mut p: Int = pos;
+let mut cont: Bool = true;
+while cont { if p >= n { println("ERR\tc_emit\tcontract: missing LBRACE after fn header");
+process_exit(1);
+}
+        let k: String = field_at(list_get(toks, p), 0);
+        if k == "LBRACE" {
+            cont = false;
+        } else if k == "IDENT" && field_at(list_get(toks, p), 3) == "caps" {
+            p = p + 1;
+            if p < n && field_at(list_get(toks, p), 0) == "EQ" { p = p + 1;
+            }
+            if p < n && field_at(list_get(toks, p), 0) == "IDENT" { p = p + 1;
+            }
+        } else if k == "KW_REQUIRES" || k == "KW_ENSURES" || (k == "IDENT" && field_at(list_get(toks, p), 3) == "spec") {
+            p = p + 1;
+            let mut in_clause: Bool = true;
+            while in_clause { if p >= n { println("ERR\tc_emit\tcontract clause truncated before LBRACE");
+            process_exit(1);
+            }
+                let k2: String = field_at(list_get(toks, p), 0);
+                if k2 == "KW_REQUIRES" || k2 == "KW_ENSURES" || k2 == "LBRACE" {
+                    in_clause = false;
+                } else if k2 == "IDENT" && (field_at(list_get(toks, p), 3) == "spec" || field_at(list_get(toks, p), 3) == "caps") {
+                    in_clause = false;
+                } else if k2 == "KW_FN" || k2 == "KW_PUB" || k2 == "KW_VERIFY"
+                    || k2 == "KW_TYPE" || k2 == "EOF"
+                {
+                    println("ERR\tc_emit\tcontract clause garbage before body");
+                    process_exit(1);
+                } else {
+                    p = p + 1;
+                }
+            }
+        } else if k == "KW_FN" || k == "KW_PUB" || k == "KW_VERIFY"
+            || k == "KW_TYPE" || k == "EOF"
+        {
+            println("ERR\tc_emit\texpected LBRACE after fn header");
+            process_exit(1);
+        } else if k == "LT" || k == "GT" || k == "COMMA" || k == "RPAREN" || k == "LPAREN" || k == "ARROW" || k == "COLON" {
+            // Skip generic type parameter punctuation and signature punctuation
+            // on the way to LBRACE. See c_emit_contract.oo for full rationale.
+            p = p + 1;
+        } else {
+            // Skip any other token on the way to LBRACE; do not abort.
+            p = p + 1;
+        }
+    }
+    return p;
+}
+
+// Moved from c_emit_result_ty.oo to break the import cycle. These
+// three helpers are called by c_emit_skip.oo (line 73+) and also
+// re-used by c_emit_result_ty.oo (which imports this file).
+pub fn c_result_c_ty(toks: List[String], pos: Int, n: Int) -> String {
+    if pos >= n { return "OoResS";
+}
+    let parsed: List[String] = ty_parse_at(toks, pos, n);
+    let ty_ast: String = list_get(parsed, 1);
+    return ty_to_c_typedef(ty_ast);
+}
+
+pub fn c_option_c_ty(toks: List[String], pos: Int, n: Int) -> String {
+    if pos >= n { return "OoOpt_I";
+}
+    let parsed: List[String] = ty_parse_at(toks, pos, n);
+    let ty_ast: String = list_get(parsed, 1);
+    return ty_to_c_typedef(ty_ast);
+}
+
+pub fn c_ref_c_ty(toks: List[String], pos: Int, n: Int) -> String {
+    let mut p: Int = pos;
+if p >= n { return "long long";
+}
+    if c_tokk(toks, p) != "AMP" {
+        return "long long";
+    }
+    p = p + 1;
+    if p < n { if c_tokk(toks, p) == "KW_MUT" { p = p + 1;
+    }
+    }
+    if p >= n { return "long long";
+    }
+    if c_tokk(toks, p) != "IDENT" {
+        return "long long";
+    }
+    let tn: String = c_tokt(toks, p);
+    if c_cap_grant_suffix(tn) != "" {
+        return "long long";
+    }
+    if tn == "HitlCap" || tn == "IoCap" {
+        return "long long";
+    }
+    if tn == "AuditCap" {
+        return "long long";
+    }
+    if tn == "List" {
+        return c_ty_at(toks, p, n);
+    }
+    return tn + "*";
+}

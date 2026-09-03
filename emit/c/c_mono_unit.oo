@@ -1,0 +1,89 @@
+// # Unified whole-program monomorphization translation unit
+//
+// Logline: Generates and links deduplicated C translation units for all generic type instances across modules with hidden symbol visibility.
+//
+// Setup: Parses AST types, collects whole-program generic applications, and coordinates chunked and unified compilation unit writes.
+//
+// Beats:
+//   1. Whole-program token collector discovering generic instances across all imported modules.
+//   2. Generates in-process deterministic cryptographic SHA-256 fingerprint for monomorphization units.
+//   3. Emits unified or multi-core chunked translation units (.pb_types_chunk_<n>.c) with hidden visibility.
+//   4. Provides linking and command generation for compilation pipelines.
+
+
+
+
+import "c_mono_registry.oo";
+
+import "c_mono_unit_emit.oo";
+
+import "c_mono_chunk.oo";
+
+
+fn c_mono_shell_sq(s: String) -> String {
+    let n: Int = chars_len(s);
+let mut i: Int = 0;
+let mut out: String = "'";
+while i < n { let c: String = char_at(s, i);
+if c == "'" { out = out + "'\\''";
+} else {
+            out = out + c;
+        }
+        i = i + 1;
+    }
+    return out + "'";
+}
+
+pub fn c_mono_unit_collect_modules(fs: &FsReadCap, mods: List[String]) -> List[String] {
+    let mut reg: List[String] = c_mono_reg_new();
+    let n: Int = list_len(mods);
+    let mut i: Int = 0;
+    while i < n {
+        let m: String = list_get(mods, i);
+        let src_r: Result[String, String] = read_file(fs, m);
+        if src_r.is_ok() {
+            let src: String = match src_r { Ok(s) => s, Err(_) => "" };
+            let toks: List[String] = tokenize_lines(src);
+            reg = c_mono_collect_tokens(toks, reg);
+        }
+        i = i + 1;
+    }
+    return reg;
+}
+
+pub fn c_mono_unit_hash(sys: &ProcessCap, reg: List[String]) -> String {
+    let n: Int = list_len(reg);
+if n == 0 { return "0000000000000000";
+}
+    let mut s: String = "";
+    let mut i: Int = 0;
+    while i < n { s = s + list_get(reg, i) + ",";
+    i = i + 1;
+    }
+    let h: String = crypto_sha256_internal(s);
+    if chars_len(h) > 0 { return h;
+    }
+    return "types_tu";
+}
+
+pub fn c_mono_emit_chunks_tu(fs: &FsWriteCap, sys: &ProcessCap, reg: List[String], out_dir: String, max_workers: Int) -> List[String] {
+    return c_mono_emit_all_chunks(fs, sys, reg, out_dir, max_workers);
+}
+
+pub fn c_mono_emit_unified_tu_sys(fs: &FsWriteCap, sys: &ProcessCap, reg: List[String], out_path: String) {
+    let src: String = c_mono_unit_emit_source(reg);
+    let r_w: Result[Void, String] = write_file(fs, out_path, src);
+    if r_w.is_err() {
+        let cmd: String = "mkdir -p $(dirname " + c_mono_shell_sq(out_path) + ") && cat << 'EOF_OO_TYPES' > " + c_mono_shell_sq(out_path) + "\n" + src + "\nEOF_OO_TYPES\n";
+        let _r: Result[String, String] = sys_exec(sys, "sh", "-c", cmd);
+    }
+}
+
+pub fn c_mono_emit_unified_tu(fs: &FsWriteCap, reg: List[String], out_path: String) {
+    let src: String = c_mono_unit_emit_source(reg);
+    let _w: Result[Void, String] = write_file(fs, out_path, src);
+}
+
+pub fn cli_build_link_unified_tu(tu_path: String, obj_path: String) -> String {
+    return "compile " + tu_path + " -> " + obj_path;
+}

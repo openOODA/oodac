@@ -1,0 +1,123 @@
+// # Fail closed on field methods and field access
+//
+// Logline: At each DOT IDENT, type the receiver and either check a method call or reject an unknown field.
+//
+// Setup: build_pure_lit_env, build_fn_ret_table, build_struct_field_table, lit_token_type, field_chain_type, atom_type_with_env, resolve_type_alias, method_expected_args, count_paren_args, check_method_on_recv, is_known_struct_type, struct_has_field, is_list_type_name, and tc_err_at exist; toks rows are kind, line, col, text.
+//
+// Beats:
+//   1. On DOT IDENT, resolve the receiver from a lit, a field chain, a bound name, or a call result.
+//   2. If LPAREN follows, check method arity then check_method_on_recv.
+//   3. Otherwise unknown struct fields and field access on Int, Bool, Float, String, or List fail closed.
+
+pub fn typecheck_field_method(toks: List[String]) {
+    let n = list_len(toks);
+    let lit_env: String = build_pure_lit_env(toks);
+    let mut ret_table: String = "";
+    let struct_table: String = build_struct_field_table(toks);
+    let mut i = 0;
+    while i < n { if field_at(list_get(toks, i), 0) == "DOT" { if i + 1 < n { if field_at(list_get(toks, i + 1), 0) == "IDENT" { let mname: String = field_at(list_get(toks, i + 1), 3);
+    let mut is_call = false;
+    if i + 2 < n { if field_at(list_get(toks, i + 2), 0) == "LPAREN" { is_call = true;
+    }
+                    }
+                    // Receiver type
+                    let mut rty = "";
+                    if i > 0 { let pk: String = field_at(list_get(toks, i - 1), 0);
+                    let lit: String = lit_token_type(pk);
+                    if lit != "" { rty = lit;
+                    }
+                        if rty == "" {
+                            if pk == "IDENT" {
+                                // Nested field chain receiver: o.inner . v — walk chain
+                                // ending at this DOT (span [recv_start, i)).
+                                let mut recv_start = i - 1;
+                                let mut walk = true;
+                                while walk { if recv_start >= 2 { if field_at(list_get(toks, recv_start - 1), 0) == "DOT" { if field_at(list_get(toks, recv_start - 2), 0) == "IDENT" { recv_start = recv_start - 2;
+                                } else {
+                                                walk = false;
+                                            }
+                                        } else {
+                                            walk = false;
+                                        }
+                                    } else {
+                                        walk = false;
+                                    }
+                                }
+                                if recv_start < i - 1 { let chain_ty = field_chain_type( toks, recv_start, i, lit_env, struct_table );
+                                if chain_ty != "" { rty = chain_ty;
+                                }
+                                }
+                                if rty == "" {
+                                    rty = atom_type_with_env(toks, i - 1, lit_env);
+                                }
+                            }
+                        }
+                        // g().foo — RPAREN before DOT
+                        if rty == "" {
+                            if pk == "RPAREN" {
+                                if i >= 3 { if field_at(list_get(toks, i - 3), 0) == "IDENT" { if field_at(list_get(toks, i - 2), 0) == "LPAREN" { let cname: String = field_at(list_get(toks, i - 3), 3);
+                                if ret_table == "" { ret_table = build_fn_ret_table(toks);
+                                }
+                                            let got: String = resolve_type_alias(ret_table, cname);
+                                            if got != cname { rty = got;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if rty != "" {
+                        if is_call { let exp = 0 + method_expected_args(mname);
+                        if exp >= 0 { let got_n = 0 + count_paren_args(toks, i + 2);
+                        if got_n != exp { let exp_s: String = exp.to_string();
+                        let got_s: String = got_n.to_string();
+                        tc_err_at( toks, i, "method '." + mname + "' expects " + exp_s + " argument(s), found " + got_s );
+                        }
+                            }
+                            // Method vs receiver (len/List/Result/to_string/…); fail-closed.
+                            // OPEN-83: impl methods are product (monomorphized).
+                            if !trait_method_defined(toks, mname) {
+                                check_method_on_recv(mname, rty, struct_table, toks, i);
+                            }
+                        } else {
+                            // Struct field access when receiver type is a known struct.
+                            if is_known_struct_type(struct_table, rty) {
+                                if !struct_has_field(struct_table, rty, mname) {
+                                    tc_err_at(
+                                        toks,
+                                        i + 1,
+                                        "struct '"
+                                            + rty
+                                            + "' has no field '"
+                                            + mname
+                                            + "'"
+                                    );
+                                }
+                            } else {
+                                // Field access on primitives is never valid in R1.
+                                if rty == "Int" || rty == "Bool" || rty == "Float" || rty == "String" {
+                                    tc_err_at(
+                                        toks,
+                                        i,
+                                        "unknown method '." + mname + "' on " + rty
+                                    );
+                                }
+                                if is_list_type_name(rty) {
+                                    tc_err_at(
+                                        toks,
+                                        i,
+                                        "unknown method '." + mname + "' on " + rty
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        i = i + 1;
+    }
+}
+
+// True if name was bound with `let mut` somewhere in the token stream.

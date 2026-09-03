@@ -1,0 +1,73 @@
+// # Collect token lines from source
+//
+// Logline: Walk source with lex_step and append tok_line rows until EOF or an error pack.
+//
+// Setup: chars_len, list_new, list_push, list_len, list_get, parse_int, lex_step, tok_line, println, and process_exit exist; tokenize_lines calls this after lex_all succeeds.
+//
+// Beats:
+//   1. Seed an empty list and a cursor at index 0, line 1, column 1.
+//   2. Cap at 1048576 rows: print ERR lex and process_exit(1). Past the end, push an EOF row and stop.
+//   3. SKIP updates the cursor; ERR stops; TOK unpacks kind, text, and start, pushes tok_line, and stops on EOF.
+
+import "token_next.oo";
+import "token_parse_int.oo";
+
+
+pub fn collect_tokens(src: String) -> List[String] {
+    let mut out: List[String] = list_new();
+    let n = chars_len(src);
+    let mut i = 0;
+    let mut line = 1;
+    let mut col = 1;
+    let mut cont = true;
+    while cont { if list_len(out) >= 1048576 { println("ERR\tlex\ttoo many tokens");
+    process_exit(1);
+    }
+        if i >= n { out = list_push(out, tok_line("EOF", line, col, ""));
+        cont = false;
+        } else {
+            let p: List[String] = lex_step(src, i, line, col);
+            let plen: Int = list_len(p);
+            if plen < 1 {
+                println("ERR\tlex\tempty pack");
+                process_exit(1);
+            }
+            let st = list_get(p, 0);
+            if st == "ERR" {
+                if plen < 2 { println("ERR\tlex\tERR pack short");
+                process_exit(1);
+                }
+                println("ERR\tlex\t" + list_get(p, 1));
+                process_exit(1);
+            } else if st == "SKIP" {
+                if plen < 4 { println("ERR\tlex\tSKIP pack short");
+                process_exit(1);
+                }
+                i = parse_int(list_get(p, 1));
+                line = parse_int(list_get(p, 2));
+                col = parse_int(list_get(p, 3));
+            } else if st == "TOK" {
+                if plen < 8 { println("ERR\tlex\tTOK pack short len=" + plen.to_string());
+                process_exit(1);
+                }
+                i = parse_int(list_get(p, 1));
+                line = parse_int(list_get(p, 2));
+                col = parse_int(list_get(p, 3));
+                let kind = list_get(p, 4);
+                let text = list_get(p, 5);
+                let sl = 0 + parse_int(list_get(p, 6));
+                let sc = 0 + parse_int(list_get(p, 7));
+                if kind == "EOF" {
+                    out = list_push(out, tok_line("EOF", sl, sc, ""));
+                    cont = false;
+                } else {
+                    out = list_push(out, tok_line(kind, sl, sc, text));
+                }
+            } else {
+                println("ERR\tlex\tunknown pack st");
+                process_exit(1);
+            }
+        }
+    }
+    return out;
+}

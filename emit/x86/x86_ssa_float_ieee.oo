@@ -1,0 +1,167 @@
+// # IEEE-754 Binary64 Float Lowerer for emit-x86
+//
+// Logline: Emits IEEE-754 double precision machine assembly with scalar SSE2 instructions, XMM registers, and _println_float.
+//
+// Setup: Pure assembly lowerer for single and multi-function float programs.
+//
+// Beats:
+//   1. Parse input tokens into AST functions and statements.
+//   2. Lower AST functions to scalar SSE2 instructions with dynamic frames.
+//   3. Lower multi-function float calls using System V AMD64 XMM parameter and return registers.
+//   4. Emit .rodata float constant pool and standalone _println_float routine.
+//
+
+
+import "x86_emit_const_harvest.oo";
+
+import "x86_ssa_emit_float.oo";
+
+import "x86_ssa_float_eval.oo";
+
+
+pub fn x86_ssa_float_ieee_asm_d(src: String) -> String {
+    if !str_contains(src, "Float") && !str_contains(src, "_println_float") { return "";
+    }
+    let toks: List[String] = tokenize_lines(src);
+    let ast_str: String = ast_parse_b(toks);
+    if chars_len(ast_str) == 0 { return "";
+    }
+    let items: String = ssa_args_of(ast_str);
+    let n_items: Int = list_len_str(items);
+    if n_items == 0 { return "";
+    }
+
+    let mut cur_lits: List[String] = list_new();
+    let mut fns_code: String = "";
+    let mut it: Int = 0;
+
+    while it < n_items {
+        let item: String = list_get_str(items, it);
+        if ast_is(item, "AstFn") {
+            let fn_args: String = ssa_args_of(item);
+            let n_fa: Int = list_len_str(fn_args);
+            let fn_name: String = list_get_str(fn_args, 0);
+
+            let mut vnames: List[String] = list_new();
+            let max_p: Int = n_fa - 3;
+            let mut p: Int = 1;
+            while p < max_p {
+                let p_item: String = list_get_str(fn_args, p);
+                if p_item != "" && !ast_is(p_item, "SEmpty") {
+                    let p_args: String = ssa_args_of(p_item);
+                    let pname: String = if ast_is(p_item, "AstParam") { list_get_str(p_args, 0) } else { p_item };
+                    if pname != "" { vnames = list_push(vnames, pname);
+                    }
+                }
+                p = p + 1;
+            }
+            let num_params: Int = list_len(vnames);
+
+            let body_ast: String = if n_fa >= 1 { list_get_str(fn_args, n_fa - 1) } else { "" };
+            let b_args: String = ssa_args_of(body_ast);
+            let n_stmts: Int = list_len_str(b_args);
+
+            let mut s: Int = 0;
+            while s < n_stmts { let stmt: String = list_get_str(b_args, s);
+            if stmt != "" && !ast_is(stmt, "SEmpty") { let stag: String = ast_tag(stmt);
+            let sargs: String = ssa_args_of(stmt);
+            if stag == "SLet" || stag == "SLetMut" { let vname: String = list_get_str(sargs, 0);
+            let rhs_n: String = list_get_str(sargs, 2);
+            if vname != "" && x86_bind_idx(vnames, vname) < 0 { vnames = list_push(vnames, vname);
+            if ast_is(rhs_n, "EStructLit") { let rargs_n: String = ssa_args_of(rhs_n);
+            let n_fields: Int = list_len_str(rargs_n) - 1;
+            let mut fi: Int = 1;
+            while fi < n_fields { vnames = list_push(vnames, vname + "_f" + fi.to_string());
+            fi = fi + 1;
+            }
+                            }
+                        }
+                    }
+                }
+                s = s + 1;
+            }
+
+            let num_vars: Int = list_len(vnames);
+            let frame_size: Int = ((num_vars + 32) * 8 + 15) & -16;
+
+            let mut fn_body: String = "";
+            if fn_name == "main" {
+                fn_body = "    .text\n    .globl main\n    .globl _start\n    .p2align 4\nmain:\n_start:\n    push %rbp\n    mov %rsp, %rbp\n    subq $" + frame_size.to_string() + ", %rsp\n";
+            } else {
+                fn_body = "    .text\n    .globl " + fn_name + "\n    .p2align 4\n" + fn_name + ":\n    push %rbp\n    mov %rsp, %rbp\n    subq $" + frame_size.to_string() + ", %rsp\n";
+                let mut pi: Int = 0;
+                while pi < num_params {
+                    fn_body = fn_body + "    movsd %xmm" + pi.to_string() + ", " + x86_fe_slot(pi) + "\n";
+                    pi = pi + 1;
+                }
+            }
+
+            let mut had_ret: Bool = false;
+            s = 0;
+            while s < n_stmts { let stmt: String = list_get_str(b_args, s);
+            if stmt != "" && !ast_is(stmt, "SEmpty") { let stag: String = ast_tag(stmt);
+            let sargs: String = ssa_args_of(stmt);
+            if stag == "SLet" || stag == "SLetMut" { let vname: String = list_get_str(sargs, 0);
+            let vidx: Int = x86_bind_idx(vnames, vname);
+            let rhs: String = list_get_str(sargs, 2);
+            if ast_is(rhs, "EStructLit") { let rargs: String = ssa_args_of(rhs);
+            let n_ra: Int = list_len_str(rargs);
+            let mut fi: Int = 1;
+            while fi < n_ra { let fld: String = list_get_str(rargs, fi);
+            if ast_is(fld, "AstField") { let fa: String = ssa_args_of(fld);
+            let f_expr: String = list_get_str(fa, 1);
+            let r_f: FloatEvalRes = x86_fe_eval_expr(f_expr, vnames, cur_lits, 0);
+            cur_lits = r_f.lits;
+            fn_body = fn_body + r_f.code + "    movsd %xmm0, " + x86_fe_slot(vidx + fi - 1) + "\n";
+            }
+                                fi = fi + 1;
+                            }
+                        } else {
+                            let r_rhs: FloatEvalRes = x86_fe_eval_expr(rhs, vnames, cur_lits, 0);
+                            cur_lits = r_rhs.lits;
+                            fn_body = fn_body + r_rhs.code + "    movsd %xmm0, " + x86_fe_slot(vidx) + "\n";
+                        }
+                    } else if stag == "SAssign" {
+                        let vname: String = list_get_str(sargs, 0);
+                        let vidx: Int = x86_bind_idx(vnames, vname);
+                        let rhs: String = list_get_str(sargs, 1);
+                        let r_rhs: FloatEvalRes = x86_fe_eval_expr(rhs, vnames, cur_lits, 0);
+                        cur_lits = r_rhs.lits;
+                        fn_body = fn_body + r_rhs.code + "    movsd %xmm0, " + x86_fe_slot(vidx) + "\n";
+                    } else if stag == "SReturn" {
+                        let expr: String = list_get_str(sargs, 0);
+                        if expr != "" && !ast_is(expr, "SEmpty") {
+                            let r_ret: FloatEvalRes = x86_fe_eval_expr(expr, vnames, cur_lits, 0);
+                            cur_lits = r_ret.lits;
+                            fn_body = fn_body + r_ret.code;
+                        }
+                        fn_body = fn_body + "    leave\n    ret\n";
+                        had_ret = true;
+                    } else if stag == "SExpr" {
+                        let expr: String = list_get_str(sargs, 0);
+                        let r_e: FloatEvalRes = x86_fe_eval_expr(expr, vnames, cur_lits, 0);
+                        cur_lits = r_e.lits;
+                        fn_body = fn_body + r_e.code;
+                    }
+                }
+                s = s + 1;
+            }
+
+            if fn_name == "main" {
+                fn_body = fn_body + "    leave\n    mov $60, %rax\n    xor %rdi, %rdi\n    syscall\n";
+            } else if !had_ret { fn_body = fn_body + "    leave\n    ret\n";
+            }
+            fns_code = fns_code + fn_body;
+        }
+        it = it + 1;
+    }
+
+    let mut pool: String = "    .section .rodata\n    .p2align 3\n.Lconst_100:\n    .double 100.0\n.Lconst_half:\n    .double 0.5\n";
+    let n_lits: Int = list_len(cur_lits);
+    let mut li: Int = 0;
+    while li < n_lits { let f_str: String = list_get(cur_lits, li);
+    pool = pool + ".Lf" + li.to_string() + ":\n    .double " + f_str + "\n";
+    li = li + 1;
+    }
+    return fns_code + pool + x86_ssa_emit_float_routine_text();
+}

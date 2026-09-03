@@ -1,0 +1,236 @@
+// # Unified whole-program monomorphization C source emitter
+//
+// Logline: Emits C structs, prototypes, and hidden-visibility retain/release and collection bodies for monomorphized generic types.
+//
+// Setup: Receives monomorphized type terms from the registry and formats corresponding C code strings.
+//
+// Beats:
+//   1. Generates retain and release helper expressions for generic elements.
+//   2. Formats struct prototypes and headers for List, Option, and Result generic instances.
+//   3. Emits hidden-visibility implementation bodies for memory management and collection methods.
+//   4. Assembles complete .pb_types.c source code combining prototypes and implementation bodies.
+
+
+
+fn c_mono_elem_retain(m: String, expr: String) -> String {
+    if m == "I" || m == "B" || m == "F" || m == "V" { return "";
+    }
+    if m == "S" { return "oo_str_retain(" + expr + ");";
+    }
+    if m == "LI" || m == "OoL_I" { return "oo_ilist_retain(" + expr + ");";
+    }
+    if m == "LS" || m == "OoL_S" { return "oo_slist_retain(" + expr + ");";
+    }
+    if m == "LF" || m == "OoL_F" { return "oo_flist_retain(" + expr + ");";
+    }
+    return "oo_retain_" + m + "(" + expr + ");";
+}
+
+fn c_mono_elem_release(m: String, expr: String) -> String {
+    if m == "I" || m == "B" || m == "F" || m == "V" { return "";
+    }
+    if m == "S" { return "oo_str_release(" + expr + ");";
+    }
+    if m == "LI" || m == "OoL_I" { return "oo_ilist_release(" + expr + ");";
+    }
+    if m == "LS" || m == "OoL_S" { return "oo_slist_release(" + expr + ");";
+    }
+    if m == "LF" || m == "OoL_F" { return "oo_flist_release(" + expr + ");";
+    }
+    return "oo_release_" + m + "(" + expr + ");";
+}
+
+fn c_mono_proto_list(m: String, elem_c: String) -> String {
+    let list_ty: String = "OoL_" + m;
+    let mut s: String = "#ifndef OO_TY_" + list_ty + "\n#define OO_TY_" + list_ty + "\n";
+    s = s + "#ifndef OO_HAVE_" + list_ty + "\n#define OO_HAVE_" + list_ty + "\n";
+    s = s + "typedef struct " + list_ty + " { " + elem_c + " *data; long long len; long long cap; } " + list_ty + ";\n#endif\n";
+    s = s + "#endif\n";
+    return s;
+}
+
+fn c_mono_body_list(m: String, elem_c: String) -> String {
+    let list_ty: String = "OoL_" + m;
+    let ret_e: String = c_mono_elem_retain(m, "l.data[i]");
+    let rel_e: String = c_mono_elem_release(m, "v.data[i]");
+    let mut s: String = "#ifndef OO_RETAIN_" + list_ty + "\n#define OO_RETAIN_" + list_ty + "\n";
+    s = s + "static inline void oo_retain_" + list_ty + "(" + list_ty + " v) {\n";
+    s = s + "  if (v.data) { OoListHeader *hdr = ((OoListHeader*)v.data) - 1; __atomic_fetch_add(&hdr->ref_count, 1, __ATOMIC_ACQ_REL); }\n}\n";
+    s = s + "static inline void oo_release_" + list_ty + "(" + list_ty + " v) {\n  if (v.data) {\n";
+    s = s + "    OoListHeader *hdr = ((OoListHeader*)v.data) - 1;\n    uint32_t prev = __atomic_fetch_sub(&hdr->ref_count, 1, __ATOMIC_ACQ_REL);\n";
+    s = s + "    if (prev == 1) {\n";
+    if rel_e != "" { s = s + "      for (long long i = 0; i < v.len; i++) { " + rel_e + " }\n";
+    }
+    s = s + "      __atomic_store_n(&hdr->flags, 0xFFFFFFFFu, __ATOMIC_RELEASE);\n      __atomic_thread_fence(__ATOMIC_RELEASE);\n";
+    s = s + "      oo_list_quota_release_bytes(v.cap, sizeof(" + elem_c + "));\n      oo_payload_free(v.data);\n    }\n  }\n}\n#endif\n";
+    s = s + "#ifndef OO_FNS_" + list_ty + "\n#define OO_FNS_" + list_ty + "\n";
+    s = s + "static inline " + list_ty + " oo_l_" + m + "_new(void) { " + list_ty + " l; l.data = 0; l.len = 0; l.cap = 0; return l; }\n";
+    s = s + "static inline long long oo_l_" + m + "_len(" + list_ty + " l) { return l.len; }\n";
+    s = s + "static inline " + elem_c + " oo_l_" + m + "_get(" + list_ty + " l, long long i) {\n";
+    s = s + "  if (i < 0 || i >= l.len) { fprintf(stderr, \"ERR\\tolist_get OOB\\n\"); exit(1); }\n";
+    if ret_e != "" { s = s + "  " + ret_e + "\n";
+    }
+    s = s + "  return l.data[i];\n}\n";
+    s = s + "static inline " + list_ty + " oo_l_" + m + "_set(" + list_ty + " l, long long i, " + elem_c + " v) {\n";
+    s = s + "  if (i < 0 || i >= l.len) { fprintf(stderr, \"ERR\\tolist_set OOB\\n\"); exit(1); }\n  if (l.data) {\n";
+    s = s + "    OoListHeader *h = ((OoListHeader*)l.data) - 1;\n    if (__atomic_load_n(&h->ref_count, __ATOMIC_ACQUIRE) == 1) {\n";
+    s = s + "      " + elem_c + " old = l.data[i]; l.data[i] = v;\n";
+    let ret_v: String = c_mono_elem_retain(m, "v");
+    let rel_old: String = c_mono_elem_release(m, "old");
+    if ret_v != "" { s = s + "      " + ret_v + "\n";
+    }
+    if rel_old != "" { s = s + "      " + rel_old + "\n";
+    }
+    s = s + "      oo_retain_" + list_ty + "(l); return l;\n    }\n  }\n";
+    s = s + "  " + list_ty + " n; long long ncap = l.cap ? l.cap : l.len;\n  n.data = (" + elem_c + "*)oo_list_alloc_payload(sizeof(" + elem_c + "), (size_t)ncap);\n";
+    s = s + "  if (l.data && l.len > 0) {\n    memcpy(n.data, l.data, (size_t)l.len * sizeof(" + elem_c + "));\n";
+    let ret_nd: String = c_mono_elem_retain(m, "n.data[j]");
+    if ret_nd != "" { s = s + "    for (long long j = 0; j < l.len; j++) { if (j != i) " + ret_nd + " }\n";
+    }
+    s = s + "  }\n  n.data[i] = v;\n";
+    if ret_v != "" { s = s + "  " + ret_v + "\n";
+    }
+    s = s + "  n.len = l.len; n.cap = ncap;\n  OoListHeader *hdr = ((OoListHeader*)n.data) - 1;\n";
+    s = s + "  __atomic_store_n(&hdr->ref_count, 1, __ATOMIC_RELEASE); return n;\n}\n";
+    s = s + "static inline " + list_ty + " oo_l_" + m + "_push(" + list_ty + " l, " + elem_c + " v) {\n";
+    s = s + "  if (l.data && l.len < l.cap) {\n    OoListHeader *h = ((OoListHeader*)l.data) - 1;\n";
+    s = s + "    if (__atomic_load_n(&h->ref_count, __ATOMIC_ACQUIRE) == 1) {\n";
+    if ret_v != "" { s = s + "      " + ret_v + "\n";
+    }
+    s = s + "      l.data[l.len] = v; l.len = l.len + 1; oo_retain_" + list_ty + "(l); return l;\n    }\n  }\n";
+    s = s + "  " + list_ty + " n; long long ncap = l.cap ? l.cap : 8;\n  while (ncap < l.len + 1) ncap = ncap * 2;\n";
+    s = s + "  n.data = (" + elem_c + "*)oo_list_alloc_payload(sizeof(" + elem_c + "), (size_t)ncap);\n  if (l.data && l.len > 0) {\n";
+    let ret_ni: String = c_mono_elem_retain(m, "n.data[i]");
+    if ret_ni != "" { s = s + "    for (long long i = 0; i < l.len; i++) { n.data[i] = l.data[i]; " + ret_ni + " }\n";
+    }
+    s = s + "  }\n";
+    if ret_v != "" { s = s + "  " + ret_v + "\n";
+    }
+    s = s + "  n.data[l.len] = v; n.len = l.len + 1; n.cap = ncap;\n";
+    s = s + "  OoListHeader *hdr = ((OoListHeader*)n.data) - 1; __atomic_store_n(&hdr->ref_count, 1, __ATOMIC_RELEASE); return n;\n}\n#endif\n";
+    return s;
+}
+
+fn c_mono_proto_option(m: String, elem_c: String) -> String {
+    let opt_ty: String = "OoOpt_" + m;
+    let mut s: String = "#ifndef OO_TY_" + opt_ty + "\n#define OO_TY_" + opt_ty + "\n";
+    s = s + "typedef struct " + opt_ty + " { int has_val; " + elem_c + " val; } " + opt_ty + ";\n#endif\n";
+    return s;
+}
+
+fn c_mono_body_option(m: String, elem_c: String) -> String {
+    let opt_ty: String = "OoOpt_" + m;
+    let ret_v: String = c_mono_elem_retain(m, "v.val");
+    let rel_v: String = c_mono_elem_release(m, "v.val");
+    let mut s: String = "#ifndef OO_FNS_" + opt_ty + "\n#define OO_FNS_" + opt_ty + "\n";
+    s = s + "static inline " + opt_ty + " oo_opt_" + m + "_some(" + elem_c + " v) { " + opt_ty + " o; o.has_val = 1; o.val = v; return o; }\n";
+    s = s + "static inline " + opt_ty + " oo_opt_" + m + "_none(void) { " + opt_ty + " o; o.has_val = 0; memset(&o.val, 0, sizeof(" + elem_c + ")); return o; }\n";
+    s = s + "static inline void oo_retain_" + opt_ty + "(" + opt_ty + " v) {\n";
+    if ret_v != "" { s = s + "  if (v.has_val) { " + ret_v + " }\n";
+    }
+    s = s + "}\nstatic inline void oo_release_" + opt_ty + "(" + opt_ty + " v) {\n";
+    if rel_v != "" { s = s + "  if (v.has_val) { " + rel_v + " }\n";
+    }
+    s = s + "}\n#endif\n";
+    return s;
+}
+
+fn c_is_preamble_res_ty(res_ty: String) -> Bool {
+    if res_ty == "OoRes_I" || res_ty == "OoRes_S" || res_ty == "OoRes_B" || res_ty == "OoRes_F" { return true;
+    }
+    if res_ty == "OoRes_LI" || res_ty == "OoRes_LS" || res_ty == "OoRes_LF" || res_ty == "OoRes_V" || res_ty == "OoRes_Void" || res_ty == "OoRes_void" || res_ty == "OoRes2_I_I" { return true;
+    }
+    if res_ty == "OoRes_OoOpt_I" || res_ty == "OoRes_OoOpt_S" || res_ty == "OoRes_OoOpt_B" || res_ty == "OoRes_OoOpt_F" { return true;
+    }
+    if res_ty == "OoRes_OoOpt_LI" || res_ty == "OoRes_OoOpt_LS" || res_ty == "OoRes_OoOpt_LF" { return true;
+    }
+    return false;
+}
+
+fn c_mono_skip_result(err_m: String, res_ty: String) -> Bool {
+    if c_is_preamble_res_ty(res_ty) { return true;
+    }
+    if err_m == "S" || err_m == "String" || err_m == "OoStr" || err_m == "" { return true;
+    }
+    return false;
+}
+
+fn c_mono_proto_result(ok_m: String, err_m: String, ok_c: String, err_c: String) -> String {
+    let mut res_ty: String = "OoRes_" + ok_m;
+let mut err_suf: String = "S";
+if err_m != "S" && err_m != "String" && err_m != "OoStr" && err_m != "" { res_ty = "OoRes2_" + ok_m + "_" + err_m;
+err_suf = err_m;
+}
+    if c_mono_skip_result(err_m, res_ty) { return "";
+    }
+    let mut s: String = "#ifndef OO_TY_" + res_ty + "\n#define OO_TY_" + res_ty + "\n";
+    s = s + "typedef struct " + res_ty + " { int ok; " + ok_c + " val; " + err_c + " err; } " + res_ty + ";\n#endif\n";
+    return s;
+}
+
+fn c_mono_body_result(ok_m: String, err_m: String, ok_c: String, err_c: String) -> String {
+    let mut res_ty: String = "OoRes_" + ok_m;
+let mut err_suf: String = "S";
+if err_m != "S" && err_m != "String" && err_m != "OoStr" && err_m != "" { res_ty = "OoRes2_" + ok_m + "_" + err_m;
+err_suf = err_m;
+}
+    if c_mono_skip_result(err_m, res_ty) { return "";
+    }
+    let ret_ok: String = c_mono_elem_retain(ok_m, "v.val");
+    let rel_ok: String = c_mono_elem_release(ok_m, "v.val");
+    let ret_err: String = c_mono_elem_retain(err_m, "v.err");
+    let rel_err: String = c_mono_elem_release(err_m, "v.err");
+    let mut s: String = "#ifndef OO_FNS_" + res_ty + "\n#define OO_FNS_" + res_ty + "\n";
+    s = s + "static inline " + res_ty + " oo_res_" + ok_m + "_" + err_suf + "_ok(" + ok_c + " v) { " + res_ty + " r; r.ok = 1; r.val = v; memset(&r.err, 0, sizeof(" + err_c + ")); return r; }\n";
+    s = s + "static inline " + res_ty + " oo_res_" + ok_m + "_" + err_suf + "_err(" + err_c + " e) { " + res_ty + " r; r.ok = 0; memset(&r.val, 0, sizeof(" + ok_c + ")); r.err = e; return r; }\n";
+    s = s + "static inline void oo_retain_" + res_ty + "(" + res_ty + " v) {\n";
+    if ret_ok != "" { s = s + "  if (v.ok) { " + ret_ok + " }\n";
+    }
+    if ret_err != "" { s = s + "  if (!v.ok) { " + ret_err + " }\n";
+    }
+    s = s + "}\nstatic inline void oo_release_" + res_ty + "(" + res_ty + " v) {\n";
+    if rel_ok != "" { s = s + "  if (v.ok) { " + rel_ok + " }\n";
+    }
+    if rel_err != "" { s = s + "  if (!v.ok) { " + rel_err + " }\n";
+    }
+    s = s + "}\n#endif\n";
+    return s;
+}
+
+pub fn c_mono_unit_emit_source(reg: List[String]) -> String {
+    let mut protos: String = "// OpenOODA Unified Whole-Program Monomorphization Unit (Prototypes)\n";
+    let mut bodies: String = "\n#line 1 \".pb_types.c\"\n// OpenOODA Unified Whole-Program Monomorphization Unit (Implementations)\n";
+    bodies = bodies + "__attribute__((visibility(\"hidden\"), weak)) void oo_pb_types_hidden(void) {}\n";
+    let n: Int = list_len(reg);
+    let mut i: Int = 0;
+    while i < n { let t: String = list_get(reg, i);
+    let tag: String = ty_tag(t);
+    if tag == "TyList" { let elem: String = ty_arg(t, 0);
+    let m: String = ty_mangle(elem);
+    let elem_c: String = ty_to_c_typedef(elem);
+    protos = protos + c_mono_proto_list(m, elem_c);
+    bodies = bodies + c_mono_body_list(m, elem_c);
+    } else if tag == "TyOption" {
+            let elem: String = ty_arg(t, 0);
+            let m: String = ty_mangle(elem);
+            let elem_c: String = ty_to_c_typedef(elem);
+            protos = protos + c_mono_proto_option(m, elem_c);
+            bodies = bodies + c_mono_body_option(m, elem_c);
+        } else if tag == "TyResult" {
+            let ok: String = ty_arg(t, 0);
+            let err: String = ty_arg(t, 1);
+            let ok_m: String = ty_mangle(ok);
+            let ok_c: String = ty_to_c_typedef(ok);
+            let mut err_m: String = "S";
+            let mut err_c: String = "OoStr";
+            if err != "" && err != "TyStr" && err != "String" {
+                err_m = ty_mangle(err);
+                err_c = ty_to_c_typedef(err);
+            }
+            protos = protos + c_mono_proto_result(ok_m, err_m, ok_c, err_c);
+            bodies = bodies + c_mono_body_result(ok_m, err_m, ok_c, err_c);
+        }
+        i = i + 1;
+    }
+    return protos + bodies;
+}

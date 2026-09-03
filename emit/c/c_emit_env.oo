@@ -1,0 +1,156 @@
+// # Map list-kind names in the C emit env
+//
+// Logline: Gets and puts last-wins name=kind bindings in a semicolon env, scoped to the topmost {; frame on put.
+//
+// Setup: Backend-C emit floor. env is "name=S;name2=I;" (S=List[String] I=List[Int] T=OoStr R/V=Result F=Float; also __asgn__=ident).
+//
+// Beats:
+//   1. c_env_get returns the last name= value that starts at the string start or after a semicolon.
+//   2. c_env_put replaces name only inside the topmost {; frame, or appends when the name is new in that frame.
+//   3. c_env_put_last rewrites the last binding of name in any frame so a reassign does not append into an inner scope.
+
+// Last match at start or after ';' ("s=" must not hit inside "xs=S;").
+// Put replaces, so usually one binding; last-wins get is belt-and-suspenders.
+pub fn c_env_get(env: String, name: String) -> String {
+    let key = name + "=";
+let kn = bytes_len(key);
+let en = bytes_len(env);
+let mut i = 0;
+let mut found = "";
+while i + kn <= en { let mut at_bound = false;
+if i == 0 { at_bound = true;
+} else if byte_at(env, i - 1) == 59 { at_bound = true;
+}
+        if at_bound { let mut ok = true;
+        let mut j = 0;
+        while j < kn { if byte_at(env, i + j) != byte_at(key, j) { ok = false;
+        j = kn;
+        } else {
+                    j = j + 1;
+                }
+            }
+            if ok { let start = i + kn;
+            let mut k = start;
+            while k < en && byte_at(env, k) != 59 { k = k + 1;
+            }
+                found = str_slice(env, start, k);
+            }
+        }
+        i = i + 1;
+    }
+    return found;
+}
+
+// Replace only inside the topmost `{;` frame. Outer same-name bindings stay
+// so nested shadow (`let x` in bare block) appends and scope_exit frees inner only.
+// Same-frame re-put still replaces in place (keeps kind for list push etc.).
+pub fn c_env_put(env: String, name: String, kind: String) -> String {
+    let key = name + "=";
+let kn = bytes_len(key);
+let en = bytes_len(env);
+let mut last_scope = 0;
+let mut si = 0;
+while si + 1 < en { if byte_at(env, si) == 123 && byte_at(env, si + 1) == 59 { last_scope = si + 2;
+}
+        si = si + 1;
+    }
+    let mut i = last_scope;
+    let mut match_start = -1;
+    let mut match_end = -1;
+    while i + kn <= en { let mut at_bound = false;
+    if i == 0 || byte_at(env, i - 1) == 59 { at_bound = true;
+    }
+        if at_bound { let mut ok = true;
+        let mut j = 0;
+        while j < kn { if byte_at(env, i + j) != byte_at(key, j) { ok = false;
+        j = kn;
+        } else {
+                    j = j + 1;
+                }
+            }
+            if ok { match_start = i;
+            let mut k = i + kn;
+            while k < en { if byte_at(env, k) == 59 { match_end = k + 1;
+            break;
+            }
+                    k = k + 1;
+                }
+                if match_end < 0 { match_end = en;
+                }
+                break;
+            }
+        }
+        i = i + 1;
+    }
+    if match_start >= 0 { return str_slice(env, 0, match_start) + name + "=" + kind + ";" + str_slice(env, match_end, en);
+    }
+    return env + name + "=" + kind + ";";
+}
+
+// Reassign: update the last binding of name in any frame (matches c_env_get).
+// Must not append into the top frame when name is outer — that made while/if
+// bodies scope_exit-release mut vars each iteration (UAF under free).
+pub fn c_env_put_last(env: String, name: String, kind: String) -> String {
+    let key = name + "=";
+let kn = bytes_len(key);
+let en = bytes_len(env);
+let mut last_i = -1;
+let mut i = 0;
+while i + kn <= en { let mut at_bound = false;
+if i == 0 { at_bound = true;
+} else if byte_at(env, i - 1) == 59 { at_bound = true;
+}
+        if at_bound { let mut ok = true;
+        let mut j = 0;
+        while j < kn { if byte_at(env, i + j) != byte_at(key, j) { ok = false;
+        j = kn;
+        } else {
+                    j = j + 1;
+                }
+            }
+            if ok { last_i = i;
+            }
+        }
+        i = i + 1;
+    }
+    if last_i < 0 { return env + name + "=" + kind + ";";
+    }
+    let mut out = str_slice(env, 0, last_i);
+    out = out + name + "=" + kind + ";";
+    let mut k = last_i + kn;
+    while k < en { let b = byte_at(env, k);
+    k = k + 1;
+    if b == 59 { break;
+    }
+    }
+    if k < en { out = out + str_slice(env, k, en);
+    }
+    return out;
+}
+
+pub fn c_env_scope_depth(env: String) -> Int {
+    let en: Int = bytes_len(env);
+let mut d: Int = 0;
+let mut i: Int = 0;
+while i + 1 < en { if byte_at(env, i) == 123 && byte_at(env, i + 1) == 59 { d = d + 1;
+}
+        i = i + 1;
+    }
+    return d;
+}
+
+pub fn c_env_cvar(env: String, name: String) -> String {
+    let cv: String = c_env_get(env, "__cvar__" + name);
+if cv != "" { return cv;
+}
+    return name;
+}
+
+pub fn c_pack_pos_env(p: Int, e: String) -> List[String] {
+    let mut o: List[String] = list_new();
+    o = list_push(o, p.to_string());
+    o = list_push(o, e);
+    return o;
+}
+
+

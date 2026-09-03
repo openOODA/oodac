@@ -1,0 +1,14 @@
+// # oodac Compiler QA Anchor
+//
+// Logline: Subsystem front door for oodac compiler QA probes.
+//
+// Setup: Pure compute. Re-exports probe functions for validation.
+//
+// Beats:
+//   1. Re-export probe_api_surface validation probe.
+
+import "probe_api_surface.oo";
+
+pub fn qa_main() -> Int {
+    return probe_api_surface_run();
+}

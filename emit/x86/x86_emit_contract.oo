@@ -1,0 +1,239 @@
+// # x86 contract enforcement (requires / ensures / spec / verify)
+//
+// Logline: Mirrors the C emit's contract lower for the x86 path: collect every requires/ensures/spec/verify clause as "<fn>:<kind>:<body>", const-fold the literal-int-comparison subset, and return error messages for anything we can't fold. The full SMT proof is out of scope here; only the const-fold case is checked in this pass.
+//
+// Setup: tokenize_lines in token_fmt.oo; x86_tok_k / x86_tok_t in x86_emit_harv.oo.
+//
+// Beats:
+//   1. x86_collect_contracts walks the source and returns one "<fn>:<kind>:<body>" record per clause; refuses (returns []) if any requires/ensures is not a const-foldable literal INT OP INT.
+//   2. x86_check_contracts const-folds the literal-int-comparison subset and returns one error per non-passing clause.
+//   3. x86_refine_check_fn_call, x86_refine_check_return, x86_refine_check_let, x86_refine_check_while, and x86_refine_check_if each walk the source for their feature's shape and return one error per non-conforming site.
+//   4. x86_emit_contract_test is the public entry point the dispatch in x86_emit.oo will call before any matcher; non-empty list prints each message and exits.
+
+
+import "x86_emit_const_harvest.oo";
+
+
+// Find the first relation-op in [start, end). Returns its index, or -1.
+fn x86_contract_find_rel_op(toks: List[String], start: Int, end: Int) -> Int {
+    let mut i: Int = start; while i < end { let k: String = x86_tok_k(toks, i); if k == "GT" || k == "GTE" || k == "LT" || k == "LTE" || k == "EQEQ" || k == "NEQ" { return i;
+}
+        i = i + 1;
+    }
+    return -1;
+}
+
+// Evaluate a const-foldable literal-int comparison in [start, end). Returns "TRUE"/"FALSE"/"".
+fn x86_contract_eval_literal_cmp(toks: List[String], start: Int, end: Int) -> String {
+    let op_i: Int = 0 + x86_contract_find_rel_op(toks, start, end);
+    if op_i <= start || op_i + 1 >= end { return ""; }
+    let lk: String = x86_tok_k(toks, op_i - 1);
+    let rk: String = x86_tok_k(toks, op_i + 1);
+    if lk != "INT" || rk != "INT" { return ""; }
+    let lv: Int = parse_int(x86_tok_t(toks, op_i - 1));
+    let rv: Int = parse_int(x86_tok_t(toks, op_i + 1));
+    let op: String = x86_tok_k(toks, op_i);
+    let mut ok: Bool = false;
+    if op == "GT" { ok = lv > rv; } else if op == "GTE" { ok = lv >= rv; }
+    if op == "LT" { ok = lv < rv; } else if op == "LTE" { ok = lv <= rv; }
+    if op == "EQEQ" { ok = lv == rv; } else if op == "NEQ" { ok = lv != rv; }
+    if ok { return "TRUE"; }
+    return "FALSE";
+}
+
+// Concatenate token text in [start, end) with single-space separators.
+fn x86_contract_body_concat(toks: List[String], start: Int, end: Int) -> String {
+    let mut body: String = "";
+    let mut i: Int = start;
+    while i < end {
+        let t: String = x86_tok_t(toks, i);
+        if chars_len(t) > 0 {
+            if chars_len(body) > 0 { body = body + " "; }
+            body = body + t;
+        }
+        i = i + 1;
+    }
+    return body;
+}
+
+// Walk the source and return one record per clause ("fn\tkind\tbody\teval").
+fn x86_contract_walk_records(src: String) -> List[String] {
+    let toks: List[String] = tokenize_lines(src);
+    let n: Int = list_len(toks);
+    let mut out: List[String] = list_new();
+    let mut fn_name: String = "";
+    let mut i: Int = 0;
+    while i < n {
+        let k: String = x86_tok_k(toks, i);
+        let t: String = x86_tok_t(toks, i);
+        if k == "KW_FN" {
+            fn_name = "";
+            if i + 1 < n && x86_tok_k(toks, i + 1) == "IDENT" { fn_name = x86_tok_t(toks, i + 1); }
+            i = i + 1;
+        } else if k == "KW_REQUIRES" || k == "KW_ENSURES" {
+            let mut kind_eff: String = "requires";
+            if k == "KW_ENSURES" { kind_eff = "ensures"; }
+            let start: Int = i + 1;
+            let mut j: Int = start;
+            while j < n {
+                let jk: String = x86_tok_k(toks, j);
+                if jk == "SEMI" || jk == "LBRACE" || jk == "KW_REQUIRES" || jk == "KW_ENSURES" || jk == "KW_FN" { break; }
+                j = j + 1;
+            }
+            let body: String = x86_contract_body_concat(toks, start, j);
+            let ev: String = x86_contract_eval_literal_cmp(toks, start, j);
+            out = list_push(out, fn_name + "\t" + kind_eff + "\t" + body + "\t" + ev);
+            i = j;
+        } else if k == "IDENT" && t == "spec" {
+            let start: Int = i + 1;
+            let mut j: Int = start;
+            while j < n {
+                let jk: String = x86_tok_k(toks, j);
+                if jk == "SEMI" || jk == "LBRACE" || jk == "KW_FN" || jk == "KW_REQUIRES" || jk == "KW_ENSURES" { break; }
+                j = j + 1;
+            }
+            let body: String = x86_contract_body_concat(toks, start, j);
+            out = list_push(out, fn_name + "\tspec\t" + body + "\t");
+            i = j;
+        } else if k == "KW_VERIFY" {
+            let start: Int = i + 1;
+            let mut j: Int = i + 1;
+            let mut depth: Int = 0;
+            let mut saw_open: Bool = false;
+            while j < n {
+                let jk: String = x86_tok_k(toks, j);
+                if jk == "LBRACE" { depth = depth + 1; saw_open = true; }
+                if jk == "RBRACE" { depth = depth - 1; }
+                j = j + 1;
+                if jk == "RBRACE" && depth == 0 && saw_open { break; }
+            }
+            let body: String = x86_contract_body_concat(toks, start, j);
+            out = list_push(out, fn_name + "\tverify\t" + body + "\t");
+            i = j;
+        } else {
+            i = i + 1;
+        }
+    }
+    return out;
+}
+
+// Walk and return one "<fn>:<kind>:<body>" string per clause.
+pub fn x86_collect_contracts(src: String) -> List[String] {
+    let records: List[String] = x86_contract_walk_records(src);
+    let rn: Int = list_len(records);
+    let mut out: List[String] = list_new();
+    let mut i: Int = 0;
+    while i < rn {
+        let r: String = list_get(records, i);
+        let kind: String = field_at(r, 1);
+        if (kind == "requires" || kind == "ensures") && chars_len(field_at(r, 3)) == 0 { return list_new(); }
+        out = list_push(out, field_at(r, 0) + ":" + kind + ":" + field_at(r, 2));
+        i = i + 1;
+    }
+    return out;
+}
+
+// Try to verify every requires / ensures clause. Verify and spec blocks
+// are runtime assertions; they run on `ooda test` and do not gate emit.
+// We skip them here so a program with a verify { ... } block does not
+// fail the contract gate.
+pub fn x86_check_contracts_b(src: String) -> List[String] {
+    let records: List[String] = x86_contract_walk_records(src);
+    let rn: Int = list_len(records);
+    let mut errs: List[String] = list_new();
+    let mut i: Int = 0;
+    while i < rn { let r: String = list_get(records, i); let fn_name: String = field_at(r, 0); let kind: String = field_at(r, 1); let body: String = field_at(r, 2); let ev: String = field_at(r, 3); if (kind == "requires" || kind == "ensures") && ev == "FALSE" { errs = list_push(errs, "ERR\tx86_emit\trequires violated: " + fn_name + ":" + kind + ":" + body); }
+        i = i + 1;
+    }
+    return errs;
+}
+
+// True iff tokens include requires/ensures/verify/spec (not the substring "verify" in a fn name).
+fn x86_has_spec_clause(src: String) -> Bool {
+    let toks: List[String] = tokenize_lines(src); let n: Int = list_len(toks); let mut i: Int = 0;
+    while i < n {
+        let k: String = x86_tok_k(toks, i);
+        if k == "KW_REQUIRES" || k == "KW_ENSURES" || k == "KW_VERIFY" { return true; }
+        if k == "IDENT" && x86_tok_t(toks, i) == "spec" { return true; }
+        i = i + 1;
+    }
+    return false;
+}
+
+// Build a known-fn list and flag unknown call sites. RFC 0016 §2.4.
+fn x86_refine_check_fn_call(src: String) -> List[String] {
+    if !x86_has_spec_clause(src) { return list_new(); }
+    let toks: List[String] = tokenize_lines(src); let n: Int = list_len(toks); let mut known: List[String] = list_new();
+    known = list_push(known, "println");
+    known = list_push(known, "assert_eq!");
+    known = list_push(known, "assert!");
+    let mut i: Int = 0;
+    while i < n { if x86_tok_k(toks, i) == "KW_FN" && i + 1 < n && x86_tok_k(toks, i + 1) == "IDENT" { known = list_push(known, x86_tok_t(toks, i + 1)); } i = i + 1; }
+    let mut errs: List[String] = list_new(); let mut j: Int = 0;
+    while j < n { if x86_tok_k(toks, j) == "IDENT" && j + 1 < n && x86_tok_k(toks, j + 1) == "LPAREN" { let name: String = x86_tok_t(toks, j); if name == "spec" { j = j + 1; continue; } let klen: Int = list_len(known); let mut k_idx: Int = 0; while k_idx < klen { if list_get(known, k_idx) == name { break; } k_idx = k_idx + 1; } if k_idx == klen { errs = list_push(errs, "ERR\tx86_emit\tcontract not folded: call " + name); } } j = j + 1; }
+    return errs;
+}
+
+// Flag a bare `return;` (KW_RETURN followed immediately by SEMI or RBRACE). RFC 0016 §2.4.
+fn x86_refine_check_return(src: String) -> List[String] {
+    if !x86_has_spec_clause(src) { return list_new(); }
+    let toks: List[String] = tokenize_lines(src); let n: Int = list_len(toks); let mut errs: List[String] = list_new(); let mut i: Int = 0;
+    while i < n { if x86_tok_k(toks, i) == "KW_RETURN" && i + 1 < n && (x86_tok_k(toks, i + 1) == "SEMI" || x86_tok_k(toks, i + 1) == "RBRACE") { errs = list_push(errs, "ERR\tx86_emit\tcontract not folded: bare return"); } i = i + 1; }
+    return errs;
+}
+
+// Flag malformed KW_LET. Accept annotated or inferred. RFC 0016 §2.4.
+fn x86_refine_check_let(src: String) -> List[String] {
+    if !x86_has_spec_clause(src) { return list_new(); }
+    let toks: List[String] = tokenize_lines(src); let n: Int = list_len(toks); let mut errs: List[String] = list_new(); let mut i: Int = 0;
+    while i < n {
+        if x86_tok_k(toks, i) == "KW_LET" {
+            // Skip optional 'mut' keyword so 'let mut ident: T = ...' and
+            // 'let mut ident = ...' both pass the refine check.
+            let mut q: Int = i + 1;
+            if q < n && x86_tok_k(toks, q) == "KW_MUT" { q = q + 1; }
+            if q + 1 < n && x86_tok_k(toks, q) == "IDENT" && x86_tok_k(toks, q + 1) == "COLON" && q + 3 < n && x86_tok_k(toks, q + 3) == "EQ" { }
+            else if q + 1 < n && x86_tok_k(toks, q) == "IDENT" && x86_tok_k(toks, q + 1) == "EQ" { }
+            else { errs = list_push(errs, "ERR\tx86_emit\tcontract not folded: let"); }
+        }
+        i = i + 1;
+    }
+    return errs;
+}
+
+// Flag KW_WHILE not followed by LPAREN or IDENT. Self-audit 2026-08-26: the While fast path
+// at x86_ssa_emit_while.oo uses `while x <op> <limit> { ... }` (IDENT, not LPAREN). The
+// previous check only accepted LPAREN, making the While fast path's coverage unreachable.
+fn x86_refine_check_while(src: String) -> List[String] {
+    if !x86_has_spec_clause(src) { return list_new(); }
+    let toks: List[String] = tokenize_lines(src); let n: Int = list_len(toks); let mut errs: List[String] = list_new(); let mut i: Int = 0;
+    while i < n { if x86_tok_k(toks, i) == "KW_WHILE" && i + 1 < n && x86_tok_k(toks, i + 1) != "LPAREN" && x86_tok_k(toks, i + 1) != "IDENT" { errs = list_push(errs, "ERR\tx86_emit\tcontract not folded: while"); } i = i + 1; }
+    return errs;
+}
+
+fn x86_refine_check_if(src: String) -> List[String] {
+    if !x86_has_spec_clause(src) { return list_new(); }
+    let toks: List[String] = tokenize_lines(src); let n: Int = list_len(toks); let mut errs: List[String] = list_new(); let mut i: Int = 0;
+    // Self-audit 2026-08-26: also accept KW_TRUE and KW_FALSE (the If fast path at
+    // x86_ssa_emit_if.oo supports these as conditions). Without this, `if true { ... }`
+    // (x86_if_true) and `if false { ... }` would be falsely refused.
+    while i < n { if x86_tok_k(toks, i) == "KW_IF" && i + 1 < n && x86_tok_k(toks, i + 1) != "INT" && x86_tok_k(toks, i + 1) != "IDENT" && x86_tok_k(toks, i + 1) != "KW_TRUE" && x86_tok_k(toks, i + 1) != "KW_FALSE" { errs = list_push(errs, "ERR\tx86_emit\tcontract not folded: if"); } i = i + 1; }
+    return errs; }
+
+fn append_errs(into: List[String], from: List[String]) -> List[String] {
+    let n: Int = list_len(from);
+    let mut k: Int = 0;
+    while k < n { into = list_push(into, list_get(from, k)); k = k + 1; }
+    return into;
+}
+
+// Public entry point: if non-empty, dispatch prints each and exits.
+pub fn x86_emit_contract_test_b(src: String) -> List[String] {
+    let mut errs: List[String] = x86_check_contracts_b(src);
+    errs = append_errs(errs, x86_refine_check_fn_call(src));
+    errs = append_errs(errs, x86_refine_check_return(src));
+    errs = append_errs(errs, x86_refine_check_let(src));
+    errs = append_errs(errs, x86_refine_check_while(src));
+    errs = append_errs(errs, x86_refine_check_if(src));
+    return errs;
+}

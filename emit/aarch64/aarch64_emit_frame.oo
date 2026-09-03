@@ -1,0 +1,94 @@
+// # AAPCS64 stack frame for aarch64 callees
+//
+// Logline: Emits the AAPCS64 stp/ldp x29,x30 prologue and the matching ldp/ret epilogue, with a dispatch floor that fires for a function-with-body source shape.
+//
+// Setup: println and tokenize_lines exist. AAPCS64 prescribes the stp x29, x30, [sp, #-16]! / mov x29, sp / ldp x29, x30, [sp], #16 / ret sequence for callee entry and exit. x86_emit_frame.oo is the source port.
+//
+// Beats:
+//   1. Enter: stp x29, x30, [sp, #-16]! then mov x29, sp.
+//   2. Leave: ldp x29, x30, [sp], #16 then ret.
+//   3. Match: detect a fn NAME(PARAMS) { BODY } shape; return ["ok"] on match and empty on shape mismatch.
+//   4. Emit test: print a complete program whose _start and callee are wrapped in the AAPCS64 frame.
+//
+// residual: red-zone use, large frame splits, and vararg spills stay later.
+
+
+import "aarch64_emit_const_harvest.oo";
+
+
+// AAPCS64 prologue. Saves the frame pointer (x29) and link register (x30) into the
+// 16-byte frame header and sets the new frame pointer. Mirrors x86_emit_frame_enter.
+pub fn aarch64_emit_frame_enter() {
+    println("    stp x29, x30, [sp, #-16]!");
+    println("    mov x29, sp");
+}
+
+// AAPCS64 epilogue. Restores the frame pointer and link register from the 16-byte
+// frame header and returns to the caller. Mirrors x86_emit_frame_leave.
+pub fn aarch64_emit_frame_leave() {
+    println("    ldp x29, x30, [sp], #16");
+    println("    ret");
+}
+
+// Walk the token stream and look for a single function definition of the shape
+// fn NAME(LPAREN [PARAMS] RPAREN) LBRACE BODY RBRACE. Returns ["ok"] on the first
+// match, or an empty list on any shape mismatch (no KW_FN, no IDENT, no LBRACE).
+fn aarch64_walk_fn(toks: List[String], n: Int) -> List[String] {
+    let empty: List[String] = list_new();
+    let mut i = 0;
+    while i < n { if a64_tok_k(toks, i) == "KW_FN" { if i + 1 < n && a64_tok_k(toks, i + 1) == "IDENT" { if i + 2 < n && a64_tok_k(toks, i + 2) == "LPAREN" { let mut p = i + 3;
+    while p < n && a64_tok_k(toks, p) != "RPAREN" && a64_tok_k(toks, p) != "LBRACE" { p = p + 1;
+    }
+                    if p < n && a64_tok_k(toks, p) == "RPAREN" {
+                        p = p + 1;
+                        if p < n && a64_tok_k(toks, p) == "LBRACE" {
+                            let mut out: List[String] = list_new();
+                            out = list_push(out, "ok");
+                            return out;
+                        }
+                    }
+                }
+            }
+        }
+        i = i + 1;
+    }
+    return empty;
+}
+
+// Public entry point. Returns ["ok"] when the source contains a function definition
+// suitable for the AAPCS64 frame emitter, and an empty list on shape mismatch.
+pub fn aarch64_match_frame_test(src: String) -> List[String] {
+    let empty: List[String] = list_new();
+    if chars_len(src) == 0 { return empty;
+    }
+    let toks: List[String] = tokenize_lines(src);
+    let n = list_len(toks);
+    if n < 5 { return empty;
+    }
+    return aarch64_walk_fn(toks, n);
+}
+
+// Emit a complete program that demonstrates the AAPCS64 frame: a tiny callee
+// (oo_aarch64_frame_callee) and a _start/main wrapper. The callee is wrapped in
+// enter/leave; the wrapper calls the callee, drops the return, and exits 0.
+pub fn aarch64_emit_frame_test() {
+    println("# openOODA aarch64 product floor (GAS, Linux, clang -target aarch64-linux-gnu)");
+    println("    .arch armv8-a");
+    println("    .section .text");
+    println("    .globl oo_aarch64_frame_callee");
+    println("    .p2align 4");
+    println("oo_aarch64_frame_callee:");
+    aarch64_emit_frame_enter();
+    println("    mov x0, #0");
+    aarch64_emit_frame_leave();
+    println("    .globl _start");
+    println("    .globl main");
+    println("main:");
+    println("_start:");
+    aarch64_emit_frame_enter();
+    println("    bl oo_aarch64_frame_callee");
+    println("    mov x0, #0");
+    println("    mov x8, #93");
+    println("    svc #0");
+    aarch64_emit_frame_leave();
+}

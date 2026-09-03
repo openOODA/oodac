@@ -1,0 +1,88 @@
+// # Const-eval of struct literals, constructors, and Option/Result match
+//
+// Logline: Packs const struct/ctor values and selects a match arm so emit-x86 prints the bound arm value.
+//
+// Setup: ast.oo. Callers pass an eval_str callback by evaluating children first; this module only packs and selects.
+//
+// Beats:
+//   1. Pack AstField lists as name=val;
+//   2. Pack Some/Ok/None/Err as tag=Name;v=...
+//   3. Select matching AstArm by constructor tag.
+
+
+import "x86_ssa_eval_int.oo";
+
+
+fn x86_match_inner(node: String) -> String {
+    let n: Int = chars_len(node);
+    let mut depth: Int = 0;
+    let mut start: Int = 0;
+    let mut i: Int = 0;
+    let mut hit: Bool = false;
+    while i < n {
+        let c: String = char_at(node, i);
+        if c == "(" { if depth == 0 { start = i + 1;
+        hit = true;
+        } depth = depth + 1;
+        }
+        if c == ")" { depth = depth - 1;
+        if depth == 0 && hit { return str_slice(node, start, i);
+        } }
+        i = i + 1;
+    }
+    return "";
+}
+
+pub fn x86_eval_ctor_name(expr: String) -> String {
+    if ast_is(expr, "EVar") { return list_get_str(x86_match_inner(expr), 0);
+    }
+    if ast_is(expr, "ECall") { return x86_eval_ctor_name(list_get_str(x86_match_inner(expr), 0));
+    }
+    return ast_tag(expr);
+}
+
+pub fn x86_eval_pack_ctor(cname: String, payload: String) -> String {
+    if payload == "" { return "tag=" + cname + ";";
+    }
+    return "tag=" + cname + ";v=" + payload + ";";
+}
+
+pub fn x86_eval_pack_fields(pairs: List[String]) -> String {
+    let n: Int = list_len(pairs);
+    let mut p: String = "";
+    let mut i: Int = 0;
+    while i + 1 < n { p = p + list_get(pairs, i) + "=" + list_get(pairs, i + 1) + ";";
+    i = i + 2;
+    }
+    return p;
+}
+
+pub fn x86_eval_arm_pat_name(arm: String) -> String {
+    if !ast_is(arm, "AstArm") { return "";
+    }
+    let pat: String = list_get_str(x86_match_inner(arm), 0);
+    return x86_eval_ctor_name(pat);
+}
+
+pub fn x86_eval_arm_bind_name(arm: String) -> String {
+    if !ast_is(arm, "AstArm") { return "";
+    }
+    let pat: String = list_get_str(x86_match_inner(arm), 0);
+    if !ast_is(pat, "ECall") { return "";
+    }
+    let arg_str: String = list_get_str(x86_match_inner(pat), 1);
+    let a0: String = list_get_str(arg_str, 0);
+    if ast_is(a0, "EVar") { return list_get_str(x86_match_inner(a0), 0);
+    }
+    return "";
+}
+
+pub fn x86_eval_arm_body(arm: String) -> String {
+    if !ast_is(arm, "AstArm") { return "";
+    }
+    return list_get_str(x86_match_inner(arm), 1);
+}
+
+pub fn x86_eval_is_ctor(name: String) -> Bool {
+    return name == "Some" || name == "None" || name == "Ok" || name == "Err";
+}

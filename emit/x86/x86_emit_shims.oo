@@ -1,0 +1,50 @@
+// # x86 capability token gate / Typed-AST dispatch shim for emit-x86
+//
+// Logline: Refuses ambient I/O and unconstrained memory operations on emit-x86 unless valid capability tokens are provided. Returns canonical asm text plus runtime blob via x86_ssa_compile_program.
+//
+// Setup: Merged cohesive compiler module.
+//
+// Beats:
+//   1. Validate required capability tokens before code generation.
+//   2. Compile and emit assembly with runtime text.
+//   3. Maintain <= 256 lines limit.
+
+import "x86_emit_const_harvest.oo";
+import "x86_ssa_compile.oo";
+import "x86_runtime.oo";
+
+pub fn x86_emit_cap_test(src: String) -> List[String] {
+    let mut errs: List[String] = list_new();
+    let toks: List[String] = tokenize_lines(src);
+    let n: Int = list_len(toks);
+    let mut has_cap: Bool = false;
+    let mut has_sink: Bool = false;
+    let mut i: Int = 0;
+    while i < n {
+        let k: String = x86_tok_k(toks, i);
+        let t: String = x86_tok_t(toks, i);
+        if k == "IDENT" && (t == "SysCap" || t == "FsCap" || t == "AllocCap" || t == "ThreadCap") { has_cap = true;
+        }
+        if k == "IDENT" && (t == "write_file" || t == "process_exec" || t == "sys_exec" || t == "fetch" || t == "env_get" || t == "alloc_bytes" || t == "heap_alloc") {
+            if i + 1 < n && x86_tok_k(toks, i + 1) == "LPAREN" { has_sink = true;
+            }
+        }
+        i = i + 1;
+    }
+    if has_sink && !has_cap { errs = list_push(errs, "ERR\tx86_emit\tcap: ambient I/O requires &SysCap (residual), &FsReadCap/&FsWriteCap, &AllocCap, or &ThreadCap");
+    }
+    return errs;
+}
+
+pub fn x86_emit_stream_typed_b(src: String) -> Result[String, String] {
+    if chars_len(src) == 0 { return Err("ERR\tx86_ast_typed\tempty_source");
+    }
+    let toks: List[String] = tokenize_lines(src);
+    if list_len(toks) == 0 { return Err("ERR\tx86_ast_typed\ttoken_collection_failed");
+    }
+    let r: X86CompileResult = x86_ssa_compile_program(src);
+    if !r.ok { return Err(r.err_msg);
+    }
+    let asm_code: String = r.asm_code;
+    return Ok(asm_code + "\n" + x86_runtime_text());
+}

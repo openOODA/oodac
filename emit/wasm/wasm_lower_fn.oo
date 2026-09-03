@@ -1,0 +1,249 @@
+// # WebAssembly Function & Module Lowering Engine
+//
+// Logline: Lowers top-level function declarations, signatures, parameters, locals, and entry points.
+//
+// Setup: Import wasm_opcodes.oo, wasm_types.oo, wasm_binary_builder.oo, wasm_lower_expr.oo, ast.oo.
+//
+// Beats: signatures, locals, calls, WASI _start. Fail closed on stub modules.
+
+import "wasm_opcodes.oo";
+
+import "wasm_types.oo";
+
+import "wasm_binary_builder.oo";
+
+import "wasm_lower_expr.oo";
+
+import "wasm_lower_stmt.oo";
+
+import "wasm_lower_control.oo";
+
+import "wasm_opt_transforms.oo";
+
+
+
+pub fn wasm_lower_fn_def(b: &mut WasmModuleBuilder, env_globals: &mut WasmEnv, fn_node: String, default_int: Int, import_offset: Int) -> Int {
+    let args: String = wasm_ast_args(fn_node);
+    let n_args: Int = (0 + list_len_str(args));
+    let fn_name: String = list_get_str(args, 0);
+    let body_str: String = if n_args >= 1 { list_get_str(args, n_args - 1) } else { "" };
+    let ret_str: String = if n_args >= 3 { list_get_str(args, n_args - 3) } else { "" };
+    let max_param_idx: Int = if n_args >= 3 { n_args - 3 } else { 1 };
+
+    let mut param_types: List[Int] = list_new();
+    let mut param_names: List[String] = list_new();
+    let mut i: Int = 1;
+    while i < max_param_idx {
+        let p_item: String = list_get_str(args, i);
+        if p_item != "" && !ast_is(p_item, "SEmpty") {
+            let p_args: String = wasm_ast_args(p_item);
+            let p_name: String = if ast_is(p_item, "AstParam") { list_get_str(p_args, 0) } else { p_item };
+            let p_ty_str: String = if ast_is(p_item, "AstParam") { list_get_str(p_args, 1) } else { "" };
+            let mut vt: Int = (0 + wasm_map_type_str(p_ty_str, default_int));
+            if vt == wasm_block_type_empty() { vt = wasm_val_type_i32();
+            }
+            param_types = list_push(param_types, vt);
+            param_names = list_push(param_names, p_name);
+        }
+        i = i + 1;
+    }
+
+    let ret_type: Int = (0 + wasm_map_type_str(ret_str, default_int));
+    let mut result_types: List[Int] = list_new();
+    if ret_type != wasm_block_type_empty() { result_types = list_push(result_types, ret_type);
+    }
+
+    let ty_idx: Int = (0 + wasm_builder_add_type(b, param_types, result_types));
+    let func_idx: Int = (0 + wasm_builder_add_func(b, ty_idx));
+
+    let mut fn_env: WasmEnv = wasm_env_new((*env_globals).target_mode, default_int);
+    fn_env.func_names = (*env_globals).func_names;
+    fn_env.func_indices = (*env_globals).func_indices;
+    fn_env.func_count = (*env_globals).func_count;
+    fn_env.field_names = (*env_globals).field_names;
+    fn_env.field_offsets = (*env_globals).field_offsets;
+    fn_env.field_types = (*env_globals).field_types;
+
+    let n_p: Int = list_len(param_names);
+    i = 0;
+    while i < n_p { let _v: Int = (0 + wasm_env_bind_var(&mut fn_env, list_get(param_names, i), list_get(param_types, i)));
+    i = i + 1;
+    }
+
+    wasm_lower_any(&mut fn_env, body_str);
+
+    let bn: Int = list_len(fn_env.bytecode);
+    let last_op: Int = if bn > 0 { list_get(fn_env.bytecode, bn - 1) } else { -1 };
+    if wasm_ast_last_is_expr(body_str) {
+        if list_len(result_types) > 0 && last_op != op_return() {
+            wasm_env_emit(&mut fn_env, op_return());
+        }
+    } else {
+        if list_len(result_types) == 0 {
+            if last_op != op_return() && last_op != op_unreachable() {
+                wasm_env_emit(&mut fn_env, op_return());
+            }
+        } else {
+            if last_op != op_return() && last_op != op_unreachable() {
+                wasm_env_emit(&mut fn_env, op_unreachable());
+            }
+        }
+    }
+    wasm_env_emit(&mut fn_env, op_end());
+
+    let n_tot_locals: Int = list_len(fn_env.local_types);
+    let mut extra_locals: List[Int] = list_new();
+    let mut j: Int = n_p;
+    while j < n_tot_locals { let l_ty: Int = list_get(fn_env.local_types, j);
+    extra_locals = list_push(extra_locals, l_ty);
+    j = j + 1;
+    }
+
+    if list_len(fn_env.bytecode) > 262144 { println("ERR\twasm_emit\tbody_too_large");
+    process_exit(1);
+    }
+    wasm_builder_set_code(b, func_idx, extra_locals, fn_env.bytecode);
+    wasm_builder_add_export(b, fn_name, wasm_external_func(), func_idx + import_offset);
+    return func_idx;
+}
+
+import "wasm_target_wasi.oo";
+
+
+pub fn wasm_emit_wasi_start(b: &mut WasmModuleBuilder, main_idx: Int, param_count: Int, returns_val: Bool, is_i64: Bool) {
+    let mut code: List[Int] = list_new();
+    let mut p_i: Int = 0;
+    while p_i < param_count { code = list_push(code, op_i32_const());
+    code = list_push(code, 0);
+    p_i = p_i + 1;
+    }
+    code = list_push(code, op_call());
+    code = wasm_append(code, encode_u32_leb128(main_idx));
+    if returns_val {
+        if is_i64 { code = list_push(code, op_i32_wrap_i64());
+        }
+    } else {
+        code = list_push(code, op_i32_const());
+        code = list_push(code, 0);
+    }
+    code = list_push(code, op_call());
+    code = wasm_append(code, encode_u32_leb128(4));
+    code = list_push(code, op_end());
+    let ty_start: Int = (0 + wasm_builder_add_type(b, list_new(), list_new()));
+    let start_idx: Int = (0 + wasm_builder_add_func(b, ty_start));
+    wasm_builder_set_code(b, start_idx, list_new(), code);
+    wasm_builder_add_export(b, "_start", wasm_external_func(), start_idx + 5);
+}
+
+pub fn wasm_compile_ast_module(ast_node: String, target_mode: String, default_int: Int) -> List[Int] {
+    if bytes_len(ast_node) > 1048576 { println("ERR\twasm_emit\tast_too_large");
+    process_exit(1);
+    }
+    let mut b: WasmModuleBuilder = wasm_builder_new();
+    wasm_builder_set_memory(&mut b, 256, 1024);
+    wasm_builder_add_export(&mut b, "memory", wasm_external_memory(), 0);
+
+    let mut env_globals: WasmEnv = wasm_env_new(target_mode, default_int);
+    let is_wasi: Bool = (target_mode == "wasi");
+    let mut import_offset: Int = 0;
+    if is_wasi { let wasi_tgt: WasiTarget = wasm_target_wasi_init(&mut b);
+    wasm_wasi_bind_env(&mut env_globals, wasi_tgt);
+    import_offset = 5;
+    }
+
+    let tag: String = ast_tag(ast_node);
+    let mut fn_list: List[String] = list_new();
+    if tag == "AstFile" {
+        let items: String = wasm_ast_args(ast_node);
+        let item_list: List[String] = wasm_ast_split_items(items);
+        let n: Int = list_len(item_list);
+        let mut i: Int = 0;
+        while i < n {
+            let item: String = list_get(item_list, i);
+            if ast_is(item, "AstFn") { fn_list = list_push(fn_list, item);
+            }
+            if ast_is(item, "AstType") {
+                let targs: String = wasm_ast_args(item);
+                let tname: String = list_get_str(targs, 0);
+                let n_targs: Int = (0 + list_len_str(targs));
+                let mut k: Int = 1;
+                while k < n_targs {
+                    let fitem: String = list_get_str(targs, k);
+                    if fitem != "" && !ast_is(fitem, "SEmpty") {
+                        let fargs: String = wasm_ast_args(fitem);
+                        let fname: String = if ast_is(fitem, "AstField") { list_get_str(fargs, 0) } else { fitem };
+                        let fty_str: String = if ast_is(fitem, "AstField") { list_get_str(fargs, 1) } else { "" };
+                        let fty: Int = (0 + wasm_map_type_str(fty_str, default_int));
+                        let offset: Int = 8 + ((k - 1) * 8);
+                        wasm_env_reg_field(&mut env_globals, tname + "." + fname, offset, fty);
+                        wasm_env_reg_field(&mut env_globals, fname, offset, fty);
+                    }
+                    k = k + 1;
+                }
+            }
+            i = i + 1;
+        }
+    } else if tag == "AstFn" {
+        fn_list = list_push(fn_list, ast_node);
+    }
+
+    let n_fns: Int = list_len(fn_list);
+    if n_fns > 4096 { println("ERR\twasm_emit\ttoo_many_fns");
+    process_exit(1);
+    }
+    let mut i: Int = 0;
+    let mut main_idx: Int = -1;
+    let mut main_param_count: Int = 0;
+    let mut main_has_ret: Bool = false;
+    let mut main_is_i64: Bool = false;
+
+    while i < n_fns {
+        let fn_item: String = list_get(fn_list, i);
+        let fn_args: String = wasm_ast_args(fn_item);
+        let n_item_args: Int = (0 + list_len_str(fn_args));
+        let fn_name: String = list_get_str(fn_args, 0);
+        let ret_str: String = if n_item_args >= 3 { list_get_str(fn_args, n_item_args - 3) } else { "" };
+        let ret_ty: Int = (0 + wasm_map_type_str(ret_str, default_int));
+        let max_p_idx: Int = if n_item_args >= 3 { n_item_args - 3 } else { 1 };
+        let f_idx: Int = import_offset + i;
+        wasm_env_bind_func(&mut env_globals, fn_name, f_idx);
+        if fn_name == "main" {
+            main_idx = f_idx;
+            let mut p_cnt: Int = 0;
+            let mut p_k: Int = 1;
+            while p_k < max_p_idx {
+                let p_chk: String = list_get_str(fn_args, p_k);
+                if p_chk != "" && !ast_is(p_chk, "SEmpty") { p_cnt = p_cnt + 1;
+                }
+                p_k = p_k + 1;
+            }
+            main_param_count = p_cnt;
+            if ret_ty != wasm_block_type_empty() {
+                main_has_ret = true;
+                if ret_ty == wasm_val_type_i64() { main_is_i64 = true;
+                }
+            }
+        }
+        i = i + 1;
+    }
+
+    i = 0;
+    while i < n_fns { let fn_item: String = list_get(fn_list, i);
+    wasm_lower_fn_def(&mut b, &mut env_globals, fn_item, default_int, import_offset);
+    i = i + 1;
+    }
+
+    if is_wasi && main_idx >= 0 { wasm_emit_wasi_start(&mut b, main_idx, main_param_count, main_has_ret, main_is_i64);
+    }
+
+    let bin: List[Int] = wasm_builder_emit(b);
+    if list_len(bin) <= 28 { println("ERR\twasm_emit\tstub_module");
+    process_exit(1);
+    }
+    return bin;
+}
+
+pub fn wasm_compile_ast_to_binary(ast_str: String, target_mode: String) -> List[Int] {
+    return wasm_compile_ast_module(ast_str, target_mode, wasm_val_type_i32());
+}
+

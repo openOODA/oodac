@@ -1,0 +1,83 @@
+// # WebAssembly TypeScript & JavaScript Glue Generator
+//
+// Logline: Auto-generated TypeScript (.d.ts) type definitions and dual-mode JavaScript ESM loader with GC feature probe.
+//
+// Setup: Inspects exported function signatures and builds unified ESM loaders for GC and linear targets.
+//
+// Beats:
+//   1. Generate TypeScript interface definitions for exports and imports.
+//   2. Embed lightweight 13-byte Wasm-GC feature probe.
+//   3. Auto-select between GC and linear WebAssembly binaries at runtime.
+//   4. Auto-wire WASI Preview 1 and browser host bindings.
+
+pub fn js_glue_generate_dts(module_name: String, fn_names: List[String]) -> String {
+    let mut out: String = "/** openOODA Auto-Generated TypeScript Definitions for " + module_name + " */\n\n";
+out = out + "export interface " + module_name + "Exports {\n";
+out = out + "  memory?: WebAssembly.Memory;\n";
+let n: Int = list_len(fn_names);
+let mut i: Int = 0;
+while i < n { let fn_name: String = list_get(fn_names, i);
+out = out + "  " + fn_name + "(...args: number[]): number;\n";
+i = i + 1;
+}
+    out = out + "}\n\n";
+    out = out + "export declare const GC_PROBE: Uint8Array;\n";
+    out = out + "export declare const supportsGc: boolean;\n";
+    out = out + "export function load" + module_name + "(customUrl?: string, imports?: Record<string, any>): Promise<" + module_name + "Exports>;\n";
+    return out;
+}
+
+pub fn js_glue_generate_dual_esm(module_name: String, gc_filename: String, linear_filename: String) -> String {
+    let mut out: String = "/** openOODA Auto-Generated Dual-Mode ESM WebAssembly Loader for " + module_name + " */\n\n";
+    out = out + "export const GC_PROBE = new Uint8Array([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x03, 0x01, 0x5f, 0x00]);\n";
+    out = out + "export const supportsGc = typeof WebAssembly !== \"undefined\" && typeof WebAssembly.validate === \"function\" && WebAssembly.validate(GC_PROBE);\n\n";
+    out = out + "export async function load" + module_name + "(customUrl, imports = {}) {\n";
+    out = out + "  const wasiEnv = {\n";
+    out = out + "    proc_exit: (code) => { if (typeof process !== \"undefined\" && process.exit) process.exit(code); else console.log(\"Exit:\", code); },\n";
+    out = out + "    fd_write: (fd, iovs, len, nwritten) => 0,\n";
+    out = out + "    fd_read: () => 0,\n";
+    out = out + "    clock_time_get: () => 0,\n";
+    out = out + "    random_get: () => 0\n";
+    out = out + "  };\n";
+    out = out + "  const finalImports = {\n";
+    out = out + "    wasi_snapshot_preview1: wasiEnv,\n";
+    out = out + "    ...imports\n";
+    out = out + "  };\n";
+    out = out + "  let wasmUrl = customUrl;\n";
+    out = out + "  if (!wasmUrl) {\n";
+    out = out + "    wasmUrl = supportsGc ? \"./" + gc_filename + "\" : \"./" + linear_filename + "\";\n";
+    out = out + "  }\n";
+    out = out + "  const isNode = typeof process !== \"undefined\" && process.versions && process.versions.node;\n";
+    out = out + "  if (isNode) {\n";
+    out = out + "    const fs = await import(\"node:fs/promises\");\n";
+    out = out + "    const { fileURLToPath } = await import(\"node:url\");\n";
+    out = out + "    let targetPath = wasmUrl;\n";
+    out = out + "    if (targetPath.startsWith(\"file://\")) targetPath = fileURLToPath(targetPath);\n";
+    out = out + "    else if (targetPath.startsWith(\"./\") || targetPath.startsWith(\"../\")) {\n";
+    out = out + "      const url = new URL(targetPath, import.meta.url);\n";
+    out = out + "      targetPath = fileURLToPath(url);\n";
+    out = out + "    }\n";
+    out = out + "    const bytes = await fs.readFile(targetPath);\n";
+    out = out + "    const { instance } = await WebAssembly.instantiate(bytes, finalImports);\n";
+    out = out + "    return instance.exports;\n";
+    out = out + "  }\n";
+    out = out + "  if (typeof fetch === \"function\") {\n";
+    out = out + "    const response = await fetch(wasmUrl);\n";
+    out = out + "    if (typeof WebAssembly.instantiateStreaming === \"function\") {\n";
+    out = out + "      try {\n";
+    out = out + "        const { instance } = await WebAssembly.instantiateStreaming(response, finalImports);\n";
+    out = out + "        return instance.exports;\n";
+    out = out + "      } catch (e) {}\n";
+    out = out + "    }\n";
+    out = out + "    const bytes = await response.arrayBuffer();\n";
+    out = out + "    const { instance } = await WebAssembly.instantiate(bytes, finalImports);\n";
+    out = out + "    return instance.exports;\n";
+    out = out + "  }\n";
+    out = out + "  throw new Error(\"Unable to load WebAssembly module in current environment\");\n";
+    out = out + "}\n";
+    return out;
+}
+
+pub fn js_glue_generate_esm(module_name: String) -> String {
+    return js_glue_generate_dual_esm(module_name, module_name + ".gc.wasm", module_name + ".linear.wasm");
+}

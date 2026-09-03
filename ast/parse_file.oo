@@ -1,0 +1,18 @@
+// # File parse wrapper
+//
+// Logline: Provides parse_file entry for AST barrier.
+//
+// Setup: parse_and_print_ast exists via siblings.
+//
+// Beats:
+//   1. Dump file AST, return src.
+//   2. Fail closed on empty.
+//   3. Keeps private walk hidden.
+
+import "parse_drive.oo";
+
+
+pub fn parse_file_inner(src: String) -> String {
+    parse_and_print_ast(src);
+return src;
+}

@@ -1,0 +1,242 @@
+// # Emit monomorphized collections and ADTs
+//
+// Logline: Emit typed List[T], Option[T], and Result[T, E] for non-primitive payloads.
+//
+// Setup: Backend-C floor. Generates unique typedefs and helpers per monomorphized type.
+//
+// Beats:
+//   1. Generate unique typedefs for Option[T], Result[T, E], and List[T].
+//   2. Emit atomic retain/release functions for monomorphized instances.
+//   3. Monomorphize constructor and collection methods.
+
+import "c_emit_env.oo";
+
+import "c_emit_ops.oo";
+
+import "c_emit_helpers.oo";
+
+
+pub fn c_emit_mono_list(m: String) {
+    if m == "I" || m == "S" || m == "F" || m == "LI" || m == "LS" || m == "LF" || m == "LL_I" || m == "LL_S" || m == "LL_F" || m == "LLL_I" || m == "LLL_S" || m == "LLL_F" || m == "LLLL_I" || m == "LLLL_S" || m == "LLLL_F" { return; }
+    let list_ty: String = "OoL_" + m;
+    let elem_c: String = m;
+    println("#ifndef OO_TY_" + list_ty);
+    println("#define OO_TY_" + list_ty);
+    println("#ifndef OO_HAVE_" + list_ty);
+    println("#define OO_HAVE_" + list_ty);
+    println("typedef struct " + list_ty + " { " + elem_c + " *data; long long len; long long cap; } " + list_ty + ";");
+    println("#endif");
+    println("#ifndef OO_RETAIN_" + list_ty);
+    println("#define OO_RETAIN_" + list_ty);
+    println("static inline void oo_retain_" + list_ty + "(" + list_ty + " v) {");
+    println("  if (v.data) { OoListHeader *hdr = ((OoListHeader*)v.data) - 1; __atomic_fetch_add(&hdr->ref_count, 1, __ATOMIC_ACQ_REL); }");
+    println("}");
+    println("static inline void oo_release_" + list_ty + "(" + list_ty + " v) {");
+    println("  if (v.data) {");
+    println("    OoListHeader *hdr = ((OoListHeader*)v.data) - 1;");
+    println("    uint32_t prev = __atomic_fetch_sub(&hdr->ref_count, 1, __ATOMIC_ACQ_REL);");
+    println("    if (prev == 1) {");
+    println("      for (long long i = 0; i < v.len; i++) { oo_release_" + m + "(v.data[i]); }");
+    println("      __atomic_store_n(&hdr->flags, 0xFFFFFFFFu, __ATOMIC_RELEASE);");
+    println("      __atomic_thread_fence(__ATOMIC_RELEASE);");
+    println("      oo_list_quota_release_bytes(v.cap, sizeof(" + elem_c + "));");
+    println("      oo_payload_free(v.data);");
+    println("    }");
+    println("  }");
+    println("}");
+    println("#endif");
+    println("#ifndef OO_FNS_" + list_ty);
+    println("#define OO_FNS_" + list_ty);
+    println("static inline " + list_ty + " oo_l_" + m + "_new(void) { " + list_ty + " l; l.data = 0; l.len = 0; l.cap = 0; return l; }");
+    println("static inline long long oo_l_" + m + "_len(" + list_ty + " l) { return l.len; }");
+    println("static inline " + elem_c + " oo_l_" + m + "_get(" + list_ty + " l, long long i) {");
+    println("  if (i < 0 || i >= l.len) { fprintf(stderr, \"ERR\\tolist_get OOB\\n\"); exit(1); }");
+    println("  oo_retain_" + m + "(l.data[i]);");
+    println("  return l.data[i];");
+    println("}");
+    println("static inline " + list_ty + " oo_l_" + m + "_set(" + list_ty + " l, long long i, " + elem_c + " v) {");
+    println("  if (i < 0 || i >= l.len) { fprintf(stderr, \"ERR\\tolist_set OOB\\n\"); exit(1); }");
+    println("  if (l.data) {");
+    println("    OoListHeader *h = ((OoListHeader*)l.data) - 1;");
+    println("    if (__atomic_load_n(&h->ref_count, __ATOMIC_ACQUIRE) == 1) {");
+    println("      " + elem_c + " old = l.data[i];");
+    println("      l.data[i] = v;");
+    println("      oo_retain_" + m + "(v);");
+    println("      oo_release_" + m + "(old);");
+    println("      oo_retain_" + list_ty + "(l);");
+    println("      return l;");
+    println("    }");
+    println("  }");
+    println("  " + list_ty + " n;");
+    println("  long long ncap = l.cap ? l.cap : l.len;");
+    println("  n.data = (" + elem_c + "*)oo_list_alloc_payload(sizeof(" + elem_c + "), (size_t)ncap);");
+    println("  if (l.data && l.len > 0) {");
+    println("    memcpy(n.data, l.data, (size_t)l.len * sizeof(" + elem_c + "));");
+    println("    for (long long j = 0; j < l.len; j++) { if (j != i) oo_retain_" + m + "(n.data[j]); }");
+    println("  }");
+    println("  n.data[i] = v;");
+    println("  oo_retain_" + m + "(v);");
+    println("  n.len = l.len; n.cap = ncap;");
+    println("  OoListHeader *hdr = ((OoListHeader*)n.data) - 1;");
+    println("  __atomic_store_n(&hdr->ref_count, 1, __ATOMIC_RELEASE);");
+    println("  return n;");
+    println("}");
+    println("static inline " + list_ty + " oo_l_" + m + "_push(" + list_ty + " l, " + elem_c + " v) {");
+    println("  if (l.data && l.len < l.cap) {");
+    println("    OoListHeader *h = ((OoListHeader*)l.data) - 1;");
+    println("    if (__atomic_load_n(&h->ref_count, __ATOMIC_ACQUIRE) == 1) {");
+    println("      oo_retain_" + m + "(v);");
+    println("      l.data[l.len] = v;");
+    println("      l.len = l.len + 1;");
+    println("      oo_retain_" + list_ty + "(l);");
+    println("      return l;");
+    println("    }");
+    println("  }");
+    println("  " + list_ty + " n;");
+    println("  long long ncap = l.cap ? l.cap : 8;");
+    println("  while (ncap < l.len + 1) ncap = ncap * 2;");
+    println("  n.data = (" + elem_c + "*)oo_list_alloc_payload(sizeof(" + elem_c + "), (size_t)ncap);");
+    println("  if (l.data && l.len > 0) {");
+    println("    for (long long i = 0; i < l.len; i++) { n.data[i] = l.data[i]; oo_retain_" + m + "(n.data[i]); }");
+    println("  }");
+    println("  oo_retain_" + m + "(v);");
+    println("  n.data[l.len] = v; n.len = l.len + 1; n.cap = ncap;");
+    println("  OoListHeader *hdr = ((OoListHeader*)n.data) - 1;");
+    println("  __atomic_store_n(&hdr->ref_count, 1, __ATOMIC_RELEASE);");
+    println("  return n;");
+    println("}");
+    println("#endif");
+    println("#endif");
+}
+
+pub fn c_emit_mono_option(m: String) {
+    if m == "I" || m == "S" || m == "B" || m == "F" || m == "LI" || m == "LS" || m == "LF" || m == "OoL_I" || m == "OoL_S" || m == "OoL_F" || m == "OoRes_S" || m == "OoResS" { return; }
+    let opt_ty: String = "OoOpt_" + m;
+    let mut elem_c: String = m;
+    if m == "I" { elem_c = "long long"; }
+    else if m == "S" { elem_c = "OoStr"; }
+    else if m == "B" { elem_c = "int"; }
+    else if m == "F" { elem_c = "double"; }
+    else if m == "LI" || m == "OoL_I" { elem_c = "OoIList"; }
+    else if m == "LS" || m == "OoL_S" { elem_c = "OoSList"; }
+    else if m == "LF" || m == "OoL_F" { elem_c = "OoFList"; }
+    println("#ifndef OO_TY_" + opt_ty);
+    println("#define OO_TY_" + opt_ty);
+    println("typedef struct " + opt_ty + " { int has_val; " + elem_c + " val; } " + opt_ty + ";");
+    println("#endif");
+    println("#ifndef OO_FNS_" + opt_ty);
+    println("#define OO_FNS_" + opt_ty);
+    println("static inline " + opt_ty + " oo_opt_" + m + "_some(" + elem_c + " v) { " + opt_ty + " o; o.has_val = 1; o.val = v; return o; }");
+    println("static inline " + opt_ty + " oo_opt_" + m + "_none(void) { " + opt_ty + " o; o.has_val = 0; memset(&o.val, 0, sizeof(" + elem_c + ")); return o; }");
+    println("static inline void oo_retain_" + opt_ty + "(" + opt_ty + " v) {");
+    if m == "S" { println("  if (v.has_val) { oo_str_retain(v.val); }"); }
+    else if m == "LS" || m == "OoL_S" { println("  if (v.has_val) { oo_slist_retain(v.val); }"); }
+    else if m == "LI" || m == "OoL_I" { println("  if (v.has_val) { oo_ilist_retain(v.val); }"); }
+    else if m == "LF" || m == "OoL_F" { println("  if (v.has_val) { oo_flist_retain(v.val); }"); }
+    else if m == "I" || m == "B" || m == "F" { println("  (void)v;"); }
+    else { println("  if (v.has_val) { oo_retain_" + m + "(v.val); }"); }
+    println("}");
+    println("static inline void oo_release_" + opt_ty + "(" + opt_ty + " v) {");
+    if m == "S" { println("  if (v.has_val) { oo_str_release(v.val); }"); }
+    else if m == "LS" || m == "OoL_S" { println("  if (v.has_val) { oo_slist_release(v.val); }"); }
+    else if m == "LI" || m == "OoL_I" { println("  if (v.has_val) { oo_ilist_release(v.val); }"); }
+    else if m == "LF" || m == "OoL_F" { println("  if (v.has_val) { oo_flist_release(v.val); }"); }
+    else if m == "I" || m == "B" || m == "F" { println("  (void)v;"); }
+    else { println("  if (v.has_val) { oo_release_" + m + "(v.val); }"); }
+    println("}");
+    println("#endif");
+}
+
+pub fn c_emit_mono_result(ok_m: String, err_m: String) {
+    if (ok_m == "I" || ok_m == "S" || ok_m == "B" || ok_m == "F" || ok_m == "V" || ok_m == "LI" || ok_m == "LS" || ok_m == "LF" || ok_m == "OoL_I" || ok_m == "OoL_S" || ok_m == "OoL_F" || ok_m == "LLL_I" || ok_m == "OoLLL_I" || ok_m == "OoOpt_I" || ok_m == "OoOpt_S" || ok_m == "OoOpt_B" || ok_m == "OoOpt_F" || ok_m == "OoOpt_LI" || ok_m == "OoOpt_LS" || ok_m == "OoOpt_LF" || ok_m == "OoOpt_OoL_I" || ok_m == "OoOpt_OoL_S" || ok_m == "OoOpt_OoL_F") && (err_m == "S" || err_m == "String" || err_m == "OoStr" || err_m == "") { return; }
+    let mut res_ty: String = "OoRes_" + ok_m;
+    if err_m != "S" && err_m != "String" && err_m != "OoStr" {
+        res_ty = "OoRes2_" + ok_m + "_" + err_m;
+    }
+    let mut ok_c: String = ok_m;
+    if ok_m == "I" { ok_c = "long long"; }
+    else if ok_m == "S" { ok_c = "OoStr"; }
+    else if ok_m == "B" { ok_c = "int"; }
+    else if ok_m == "F" { ok_c = "double"; }
+    else if ok_m == "LI" || ok_m == "OoL_I" { ok_c = "OoIList"; }
+    else if ok_m == "LS" || ok_m == "OoL_S" { ok_c = "OoSList"; }
+    else if ok_m == "LF" || ok_m == "OoL_F" { ok_c = "OoFList"; }
+    let mut err_c: String = "OoStr";
+    if err_m != "S" && err_m != "String" && err_m != "OoStr" {
+        err_c = err_m;
+    }
+    let mut err_suffix: String = "S";
+    if err_m != "S" && err_m != "String" && err_m != "OoStr" {
+        err_suffix = err_m;
+    }
+    println("#ifndef OO_TY_" + res_ty);
+    println("#define OO_TY_" + res_ty);
+    println("typedef struct " + res_ty + " { int ok; " + ok_c + " val; " + err_c + " err; } " + res_ty + ";");
+    println("#endif");
+    println("#ifndef OO_FNS_" + res_ty);
+    println("#define OO_FNS_" + res_ty);
+    println("static inline " + res_ty + " oo_res_" + ok_m + "_" + err_suffix + "_ok(" + ok_c + " v) { " + res_ty + " r; r.ok = 1; r.val = v; memset(&r.err, 0, sizeof(" + err_c + ")); return r; }");
+    println("static inline " + res_ty + " oo_res_" + ok_m + "_" + err_suffix + "_err(" + err_c + " e) { " + res_ty + " r; r.ok = 0; memset(&r.val, 0, sizeof(" + ok_c + ")); r.err = e; return r; }");
+    println("static inline void oo_retain_" + res_ty + "(" + res_ty + " v) {");
+    if ok_m == "S" { println("  if (v.ok) { oo_str_retain(v.val); }"); }
+    else if ok_m == "LS" || ok_m == "OoL_S" { println("  if (v.ok) { oo_slist_retain(v.val); }"); }
+    else if ok_m == "LI" || ok_m == "OoL_I" { println("  if (v.ok) { oo_ilist_retain(v.val); }"); }
+    else if ok_m == "LF" || ok_m == "OoL_F" { println("  if (v.ok) { oo_flist_retain(v.val); }"); }
+    else if ok_m == "I" || ok_m == "B" || ok_m == "F" { println("  (void)v;"); }
+    else { println("  if (v.ok) { oo_retain_" + ok_m + "(v.val); }"); }
+    if err_suffix == "S" {
+        println("  if (!v.ok) { oo_retain_S(v.err); }");
+    } else {
+        println("  if (!v.ok) { oo_retain_" + err_m + "(v.err); }");
+    }
+    println("}");
+    println("static inline void oo_release_" + res_ty + "(" + res_ty + " v) {");
+    if ok_m == "S" { println("  if (v.ok) { oo_release_S(v.val); }"); }
+    else if ok_m == "LS" || ok_m == "OoL_S" { println("  if (v.ok) { oo_slist_release(v.val); }"); }
+    else if ok_m == "LI" || ok_m == "OoL_I" { println("  if (v.ok) { oo_ilist_release(v.val); }"); }
+    else if ok_m == "LF" || ok_m == "OoL_F" { println("  if (v.ok) { oo_flist_release(v.val); }"); }
+    else if ok_m == "I" || ok_m == "B" || ok_m == "F" { println("  (void)v;"); }
+    else { println("  if (v.ok) { oo_release_" + ok_m + "(v.val); }"); }
+    if err_suffix == "S" {
+        println("  if (!v.ok) { oo_release_S(v.err); }");
+    } else {
+        println("  if (!v.ok) { oo_release_" + err_m + "(v.err); }");
+    }
+    println("}");
+    println("#endif");
+}
+
+pub fn c_emit_mono_type(t: String) {
+    let tag: String = ty_tag(t);
+    if tag == "TyList" {
+        let elem: String = ty_arg(t, 0);
+        let m: String = ty_mangle(elem);
+        c_emit_mono_list(m);
+        return;
+    }
+    if tag == "TyOption" {
+        let elem: String = ty_arg(t, 0);
+        let m: String = ty_mangle(elem);
+        c_emit_mono_option(m);
+        return;
+    }
+    if tag == "TyResult" {
+        let ok: String = ty_arg(t, 0);
+        let err: String = ty_arg(t, 1);
+        let ok_m: String = ty_mangle(ok);
+        let mut err_m: String = "S";
+        if err != "" && err != "TyStr" && err != "String" { err_m = ty_mangle(err); }
+        c_emit_mono_result(ok_m, err_m);
+        return;
+    }
+    if chars_len(t) > 4 && str_slice(t, 0, 4) == "OoL_" {
+        let m: String = str_slice(t, 4, chars_len(t));
+        c_emit_mono_list(m);
+    } else if chars_len(t) > 6 && str_slice(t, 0, 6) == "OoOpt_" {
+        let m: String = str_slice(t, 6, chars_len(t));
+        c_emit_mono_option(m);
+    } else if chars_len(t) > 6 && str_slice(t, 0, 6) == "OoRes_" {
+        let m: String = str_slice(t, 6, chars_len(t));
+        c_emit_mono_result(m, "S");
+    }
+}

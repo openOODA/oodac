@@ -1,0 +1,154 @@
+// # Sovereign Vulkan SPIR-V Textual Disassembler
+//
+// Logline: Converts 32-bit SPIR-V binary word streams and hex bytecode into human-readable SPIR-V assembly.
+//
+// Setup: Decodes SPIR-V 1.5 headers, capabilities, type declarations, entry points, and compute opcodes.
+//
+// Beats:
+//   1. Validate 5-word binary header (Magic 0x07230203, Version 1.5, Generator ID, Bound, Schema).
+//   2. Decode instruction stream word counts and opcodes.
+//   3. Format opcodes into standard SPIR-V assembly representation (%id = Op...).
+//   4. Export word and hex disassembler entry points.
+
+fn spv_int_str(n: Int) -> String {
+    if n == 0 { return "0";
+    }
+    let mut val: Int = n;
+    let mut sign: String = "";
+    if val < 0 { sign = "-";
+    val = 0 - val;
+    }
+    let digits: String = "0123456789";
+    let mut s: String = "";
+    while val > 0 { let d: Int = val % 10;
+    s = char_at(digits, d) + s;
+    val = val / 10;
+    }
+    return sign + s;
+}
+
+fn spv_hex_nibble(c: Int) -> Int {
+    if c >= 48 && c <= 57 { return c - 48;
+    }
+    if c >= 97 && c <= 102 { return 10 + (c - 97);
+    }
+    if c >= 65 && c <= 70 { return 10 + (c - 65);
+    }
+    return 0;
+}
+
+pub fn spirv_hex_to_words(hex: String) -> List[Int] {
+    let mut words: List[Int] = list_new();
+    let n: Int = chars_len(hex);
+    let mut i: Int = 0;
+    while i + 7 < n { let b0: Int = ((0 + spv_hex_nibble(byte_at(hex, i))) * 16) + (0 + spv_hex_nibble(byte_at(hex, i + 1)));
+    let b1: Int = ((0 + spv_hex_nibble(byte_at(hex, i + 2))) * 16) + (0 + spv_hex_nibble(byte_at(hex, i + 3)));
+    let b2: Int = ((0 + spv_hex_nibble(byte_at(hex, i + 4))) * 16) + (0 + spv_hex_nibble(byte_at(hex, i + 5)));
+    let b3: Int = ((0 + spv_hex_nibble(byte_at(hex, i + 6))) * 16) + (0 + spv_hex_nibble(byte_at(hex, i + 7)));
+    let w: Int = b0 + (b1 * 256) + (b2 * 65536) + (b3 * 16777216);
+    words = list_push(words, w);
+    i = i + 8;
+    }
+    return words;
+}
+
+fn spv_cap_name(cap: Int) -> String {
+    if cap == 1 { return "Shader";
+    }
+    if cap == 2 { return "Matrix";
+    }
+    if cap == 6 { return "Float16";
+    }
+    if cap == 7 { return "Float64";
+    }
+    return "Cap_" + spv_int_str(cap);
+}
+
+fn spv_disasm_op(words: List[Int], idx: Int, wc: Int, op: Int) -> String {
+    if op == 1 { return "OpCapability " + spv_cap_name(list_get(words, idx + 1));
+    }
+    if op == 14 { return "OpMemoryModel Logical GLSL450";
+    }
+    if op == 15 { return "OpEntryPoint GLCompute %" + spv_int_str(list_get(words, idx + 2)) + " \"main\"";
+    }
+    if op == 16 { let eid: String = spv_int_str(list_get(words, idx + 1));
+    let lx: String = spv_int_str(list_get(words, idx + 3));
+    let ly: String = spv_int_str(list_get(words, idx + 4));
+    let lz: String = spv_int_str(list_get(words, idx + 5));
+    return "OpExecutionMode %" + eid + " LocalSize " + lx + " " + ly + " " + lz;
+    }
+    if op == 19 { return "%" + spv_int_str(list_get(words, idx + 1)) + " = OpTypeVoid";
+    }
+    if op == 20 { return "%" + spv_int_str(list_get(words, idx + 1)) + " = OpTypeBool";
+    }
+    if op == 21 { return "%" + spv_int_str(list_get(words, idx + 1)) + " = OpTypeInt " + spv_int_str(list_get(words, idx + 2)) + " 0";
+    }
+    if op == 22 { return "%" + spv_int_str(list_get(words, idx + 1)) + " = OpTypeFloat " + spv_int_str(list_get(words, idx + 2));
+    }
+    if op == 23 { return "%" + spv_int_str(list_get(words, idx + 1)) + " = OpTypeVector %" + spv_int_str(list_get(words, idx + 2)) + " " + spv_int_str(list_get(words, idx + 3));
+    }
+    if op == 24 { return "%" + spv_int_str(list_get(words, idx + 1)) + " = OpTypeMatrix %" + spv_int_str(list_get(words, idx + 2)) + " " + spv_int_str(list_get(words, idx + 3));
+    }
+    if op == 32 { return "%" + spv_int_str(list_get(words, idx + 1)) + " = OpTypePointer StorageBuffer %" + spv_int_str(list_get(words, idx + 3));
+    }
+    if op == 33 { return "%" + spv_int_str(list_get(words, idx + 1)) + " = OpTypeFunction %" + spv_int_str(list_get(words, idx + 2));
+    }
+    if op == 54 { return "%" + spv_int_str(list_get(words, idx + 2)) + " = OpFunction %" + spv_int_str(list_get(words, idx + 1)) + " None %" + spv_int_str(list_get(words, idx + 4));
+    }
+    if op == 56 { return "OpFunctionEnd";
+    }
+    if op == 61 { return "%" + spv_int_str(list_get(words, idx + 2)) + " = OpLoad %" + spv_int_str(list_get(words, idx + 1)) + " %" + spv_int_str(list_get(words, idx + 3));
+    }
+    if op == 62 { return "OpStore %" + spv_int_str(list_get(words, idx + 1)) + " %" + spv_int_str(list_get(words, idx + 2));
+    }
+    if op == 71 { return "OpDecorate %" + spv_int_str(list_get(words, idx + 1)) + " Binding " + spv_int_str(list_get(words, idx + 2));
+    }
+    if op == 129 { return "%" + spv_int_str(list_get(words, idx + 2)) + " = OpFAdd %" + spv_int_str(list_get(words, idx + 1)) + " %" + spv_int_str(list_get(words, idx + 3)) + " %" + spv_int_str(list_get(words, idx + 4));
+    }
+    if op == 131 { return "%" + spv_int_str(list_get(words, idx + 2)) + " = OpFSub %" + spv_int_str(list_get(words, idx + 1)) + " %" + spv_int_str(list_get(words, idx + 3)) + " %" + spv_int_str(list_get(words, idx + 4));
+    }
+    if op == 133 { return "%" + spv_int_str(list_get(words, idx + 2)) + " = OpFMul %" + spv_int_str(list_get(words, idx + 1)) + " %" + spv_int_str(list_get(words, idx + 3)) + " %" + spv_int_str(list_get(words, idx + 4));
+    }
+    if op == 136 { return "%" + spv_int_str(list_get(words, idx + 2)) + " = OpFDiv %" + spv_int_str(list_get(words, idx + 1)) + " %" + spv_int_str(list_get(words, idx + 3)) + " %" + spv_int_str(list_get(words, idx + 4));
+    }
+    if op == 148 { return "%" + spv_int_str(list_get(words, idx + 2)) + " = OpDot %" + spv_int_str(list_get(words, idx + 1)) + " %" + spv_int_str(list_get(words, idx + 3)) + " %" + spv_int_str(list_get(words, idx + 4));
+    }
+    if op == 224 { return "OpControlBarrier %" + spv_int_str(list_get(words, idx + 1)) + " %" + spv_int_str(list_get(words, idx + 2)) + " %" + spv_int_str(list_get(words, idx + 3));
+    }
+    if op == 248 { return "%" + spv_int_str(list_get(words, idx + 1)) + " = OpLabel";
+    }
+    if op == 253 { return "OpReturn";
+    }
+    return "OpUnknown_" + spv_int_str(op) + " (wc=" + spv_int_str(wc) + ")";
+}
+
+pub fn spirv_disassemble_words(words: List[Int]) -> String {
+    let n: Int = list_len(words);
+    if n < 5 { return "; Error: Invalid SPIR-V word count (< 5)";
+    }
+    let magic: Int = list_get(words, 0);
+    if magic != 119734787 { return "; Error: Invalid SPIR-V magic: " + spv_int_str(magic);
+    }
+    let bound: Int = list_get(words, 3);
+    let mut out: String = "; SPIR-V\n; Version: 1.5\n; Generator: openOODA (0x004F4F44)\n; Bound: "
+        + spv_int_str(bound) + "\n; Schema: 0\n\n";
+
+    let mut i: Int = 5;
+    while i < n {
+        let w: Int = list_get(words, i);
+        let wc: Int = w / 65536;
+        let op: Int = w % 65536;
+        if wc <= 0 { i = n;
+        } else {
+            let line: String = spv_disasm_op(words, i, wc, op);
+            out = out + line + "\n";
+            i = i + wc;
+        }
+    }
+    return out;
+}
+
+pub fn spirv_disassemble_hex(hex: String) -> String {
+    let words: List[Int] = spirv_hex_to_words(hex);
+return spirv_disassemble_words(words);
+}

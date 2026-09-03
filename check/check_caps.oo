@@ -1,0 +1,210 @@
+// # Check sealed caps
+//
+// Logline: A sealed call must pass a cap-typed arg, not only declare &Cap.
+//
+// Setup: Function headers and argument types are parsed for capability verification.
+//
+// Beats:
+//   1. Walk each fn item.
+//   2. Grant bags come from check_cap_grant.
+//   3. Prefer exact caps; FsCap/NetCap still supersede.
+
+import "check_cap_util.oo";
+import "lex/token_fmt.oo";
+
+
+
+pub fn skip_until_semi(toks: List[String], pos0: Int) -> Int {
+    let n = list_len(toks);
+let mut pos = pos0;
+while pos < n { if c_tokk(toks, pos) == "SEMI" { return pos + 1;
+}
+        pos = pos + 1;
+    }
+    return pos;
+}
+
+fn check_fn_trunc() {
+    println("ERR\tcheck\ttruncated fn header");
+    process_exit(1);
+}
+
+fn check_skip_braces(toks: List[String], pos: Int, n: Int) -> Int {
+    let mut p: Int = pos;
+    while p < n && c_tokk(toks, p) != "LBRACE" {
+        p = p + 1;
+    }
+    if p >= n { return p; }
+    let mut depth: Int = 0;
+    while p < n {
+        let k: String = c_tokk(toks, p);
+        if k == "LBRACE" { depth = depth + 1; }
+        if k == "RBRACE" {
+            depth = depth - 1;
+            p = p + 1;
+            if depth == 0 { return p; }
+        } else {
+            p = p + 1;
+        }
+    }
+    return p;
+}
+
+// Check one function for sealed-effect capability violations. Returns pos after fn.
+pub fn check_function(toks: List[String], pos0: Int) -> Int {
+    let n = list_len(toks);
+let mut pos = pos0;
+if pos < n { if c_tokk(toks, pos) == "KW_PUB" { pos = pos + 1;
+}
+    }
+    if pos < n { if c_tokk(toks, pos) != "KW_FN" { if pos == pos0 { check_fn_trunc();
+    }
+            return pos;
+        }
+        pos = pos + 1;
+    } else {
+        check_fn_trunc();
+    }
+    let mut fname = "";
+    if pos < n { if c_tokk(toks, pos) != "IDENT" { check_fn_trunc();
+    }
+        fname = c_tokt(toks, pos);
+        pos = pos + 1;
+    } else {
+        check_fn_trunc();
+    }
+    if pos < n { if c_tokk(toks, pos) != "LPAREN" { check_fn_trunc();
+    }
+        pos = pos + 1;
+    } else {
+        check_fn_trunc();
+    }
+    // granted kinds: "|FsCap|…|"; arg-flow names: "|FsCap:fs|…|"
+    let mut granted = "";
+    let mut names = "";
+    // Scan params: grant ONLY COLON+AMP+Cap; record param IDENT for arg-flow seal
+    let mut cont = true;
+    let mut after_colon = false;
+    let mut after_amp = false;
+    let mut bracket_depth = 0;
+    let mut last_param = "";
+    let mut saw_rparen = false;
+    while cont { if pos >= n { cont = false;
+    } else {
+            let k: String = c_tokk(toks, pos);
+            if k == "RPAREN" && bracket_depth == 0 {
+                saw_rparen = true;
+                cont = false;
+                pos = pos + 1;
+            } else if k == "LBRACE" && bracket_depth == 0 { cont = false;
+            } else if k == "COMMA" && bracket_depth == 0 { after_colon = false;
+            after_amp = false;
+            last_param = "";
+            pos = pos + 1;
+            } else if k == "COLON" && bracket_depth == 0 { after_colon = true;
+            after_amp = false;
+            pos = pos + 1;
+            } else if k == "LBRACKET" {
+                bracket_depth = bracket_depth + 1;
+                pos = pos + 1;
+            } else if k == "RBRACKET" {
+                if bracket_depth > 0 { bracket_depth = bracket_depth - 1;
+                }
+                pos = pos + 1;
+            } else if k == "AMP" {
+                if after_colon && bracket_depth == 0 { after_amp = true;
+                }
+                pos = pos + 1;
+            } else if k == "IDENT" {
+                let t: String = c_tokt(toks, pos);
+                if after_amp && bracket_depth == 0 { if is_cap_type(t) { granted = cap_bag_put(granted, t);
+                if last_param != "" { names = cap_bag_put(names, t + ":" + last_param);
+                }
+                    }
+                    after_amp = false;
+                    after_colon = false;
+                } else if after_colon && bracket_depth == 0 { after_colon = false;
+                } else if !after_colon && bracket_depth == 0 { last_param = t;
+                }
+                pos = pos + 1;
+            } else {
+                pos = pos + 1;
+            }
+        }
+    }
+    if pos < n && c_tokk(toks, pos) == "RPAREN" {
+        saw_rparen = true;
+        pos = pos + 1;
+    }
+    if !saw_rparen { check_fn_trunc();
+    }
+    while pos < n { if c_tokk(toks, pos) == "LBRACE" { let body_start = pos + 1;
+    let sb = check_skip_braces(toks, pos, n);
+    let body_end = 0 + sb - 1;
+    if sb <= pos { pos = pos + 1;
+    return pos;
+    }
+            let mut i = body_start;
+            while i < body_end && i < n { let k: String = c_tokk(toks, i);
+            let text: String = c_tokt(toks, i);
+            if k == "IDENT" { if i + 1 < n { if c_tokk(toks, i + 1) == "LPAREN" { let kind: String = sealed_kind_of(text);
+            if kind != "" { let line: String = c_tokf(toks, i, 1);
+            let col: String = c_tokf(toks, i, 2);
+            let mut grant_ok: Bool = cap_net_granted_ok(kind, granted);
+            if !grant_ok { grant_ok = cap_fs_granted_ok(kind, granted);
+            }
+                                if !grant_ok { grant_ok = cap_sys_granted_ok(kind, granted);
+                                }
+                                if !grant_ok { cap_deny( fname, text, kind, line, col, "parameter, but none was declared" );
+                                }
+                                let mut cap_id: String = "";
+                                let mut ok_form = false;
+                                if i >= 2 { if c_tokk(toks, i - 1) == "DOT" { if c_tokk(toks, i - 2) == "IDENT" { cap_id = c_tokt(toks, i - 2);
+                                ok_form = true;
+                                }
+                                    }
+                                }
+                                if !ok_form { let apos = i + 2;
+                                if apos < n { if c_tokk(toks, apos) == "IDENT" { cap_id = c_tokt(toks, apos);
+                                ok_form = true;
+                                }
+                                    }
+                                }
+                                // Arg-flow: exact preferred:id only (no legacy supersede).
+                                let mut has_name: Bool = cap_net_argflow_ok(kind, cap_id, names);
+                                if !has_name { has_name = cap_fs_argflow_ok(kind, cap_id, names);
+                                }
+                                if !has_name { has_name = cap_sys_argflow_ok(kind, cap_id, names);
+                                }
+                                if !ok_form || !has_name { cap_deny( fname, text, kind, line, col, "as first argument (or method receiver), but call does not pass a matching cap token" );
+                                }
+                            }
+                        }
+                    }
+                }
+                i = i + 1;
+            }
+            let nb = check_skip_braces(toks, pos, n);
+            if nb <= pos { pos = pos + 1;
+            } else {
+                pos = nb;
+            }
+            if pos < n && c_tokk(toks, pos) == "KW_VERIFY" {
+                pos = pos + 1;
+                if pos < n && c_tokk(toks, pos) == "IDENT" {
+                    pos = pos + 1;
+                }
+                if pos < n && c_tokk(toks, pos) == "LBRACE" {
+                    let vb = check_skip_braces(toks, pos, n);
+                    if vb <= pos { pos = pos + 1;
+                    } else {
+                        pos = vb;
+                    }
+                }
+            }
+            return pos;
+        }
+        pos = pos + 1;
+    }
+    return pos;
+}

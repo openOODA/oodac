@@ -1,0 +1,83 @@
+// # Type AST to LLVM type string
+//
+// Logline: Convert a type AST (the second element of ty_parse_at result) to the LLVM textual type used in struct fields and declarations.
+//
+// Setup: pure mapping. Falls back to "i64" for unrecognised types.
+//
+// Beats:
+//   1. Map Int / long long / i64 -> i64.
+//   2. Map Bool / bool / i32 -> i32.
+//   3. Map Float / float / f64 / double -> double.
+//   4. Map String / str / OoStr -> %OoStr.
+//   5. Map List[T] / OoIList / OoSList / OoFList to the corresponding list type.
+//   6. Map Option[T] / Result[T,E] to the matching OoRes type.
+//   7. Pass through existing LLVM type strings (those starting with %).
+
+
+
+pub fn ty_to_llvm_typedef(ty_ast: String) -> String {
+    let t: String = ty_ast;
+    if chars_len(t) == 0 { return "i64";
+    }
+    if char_at(t, 0) == "%" { return t;
+    }
+    if t == "TyInt" || t == "Int" || t == "int" || t == "long long" || t == "i64" { return "i64";
+    }
+    if t == "TyBool" || t == "Bool" || t == "bool" || t == "i32" { return "i32";
+    }
+    if t == "TyFloat" || t == "Float" || t == "float" || t == "f64" || t == "double" { return "double";
+    }
+    if t == "TyStr" || t == "String" || t == "str" || t == "OoStr" { return "%OoStr";
+    }
+    if t == "TyUnit" { return "i64";
+    }
+    if t == "TyF32x8" || t == "f32x8" { return "<8 x float>";
+    }
+    if t == "TyF64x4" || t == "f64x4" { return "<4 x double>";
+    }
+    if t == "List[Int]" || t == "OoIList" || t == "TyList(TyInt)" { return "%OoIList";
+    }
+    if t == "List[String]" || t == "OoSList" || t == "TyList(TyStr)" { return "%OoSList";
+    }
+    if t == "List[Float]" || t == "OoFList" || t == "TyList(TyFloat)" { return "%OoFList";
+    }
+    if t == "Option[Int]" { return "%OoResI";
+    }
+    if t == "Option[String]" { return "%OoResS";
+    }
+    if t == "Option[Bool]" { return "%OoResB";
+    }
+    if t == "Option[Float]" { return "%OoResF";
+    }
+    if chars_len(t) >= 8 && str_slice(t, 0, 7) == "TyName(" {
+        return "%struct." + str_slice(t, 7, chars_len(t) - 1);
+    }
+    if chars_len(t) >= 7 && str_slice(t, 0, 7) == "TyList(" {
+        let e: String = str_slice(t, 7, chars_len(t) - 1);
+        if e == "TyInt" || e == "Int" { return "%OoIList";
+        }
+        if e == "TyStr" || e == "String" { return "%OoSList";
+        }
+        if e == "TyFloat" || e == "Float" { return "%OoFList";
+        }
+        if chars_len(e) >= 8 && str_slice(e, 0, 7) == "TyName(" {
+            return "%OoL." + str_slice(e, 7, chars_len(e) - 1);
+        }
+        return "%OoSList";
+    }
+    if chars_len(t) >= 6 && str_slice(t, 0, 6) == "TyCap(" { return "i64";
+    }
+    if chars_len(t) >= 6 && str_slice(t, 0, 6) == "TyRef(" { return "i64";
+    }
+    if chars_len(t) >= 14 && str_slice(t, 0, 14) == "Result[String," { return "%OoResS";
+    }
+    if chars_len(t) >= 13 && str_slice(t, 0, 13) == "Result[Int,I" { return "%OoResII";
+    }
+    if chars_len(t) >= 14 && str_slice(t, 0, 14) == "Result[Int,S" { return "%OoResIS";
+    }
+    if chars_len(t) >= 12 && str_slice(t, 0, 12) == "Result[Int," { return "%OoResI";
+    }
+    if chars_len(t) >= 2 && str_slice(t, 0, 2) == "Ty" { return "i64";
+    }
+    return "%struct." + t;
+}

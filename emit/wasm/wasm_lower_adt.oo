@@ -1,0 +1,211 @@
+// # WebAssembly Algebraic Data Types (Result / Option) Lowering Engine
+//
+// Logline: Lowers Result[T, E] and Option[T] to tagged linear memory cells with unwrapping and matching.
+//
+// Setup: Import wasm_opcodes.oo, wasm_types.oo, wasm_leb128.oo, wasm_lower_expr.oo, ast.oo.
+//
+// Beats:
+//   1. Allocate and format Ok/Err and Some/None tagged structures in memory.
+//   2. Lower is_ok/is_err/is_some/is_none query methods.
+//   3. Lower unwrap extraction methods.
+//   4. Lower match pattern destructuring for sum types.
+
+import "wasm_opcodes.oo";
+
+import "wasm_types.oo";
+
+import "wasm_leb128.oo";
+
+import "wasm_mem_layout.oo";
+
+
+pub fn wasm_adt_alloc(env: &mut WasmEnv, size_bytes: Int) -> Int {
+    let aligned_size: Int = ((size_bytes + 7) / 8) * 8; let loc_types: List[Int] = env.local_types; let n_locs: Int = list_len(loc_types); let s_n: String = n_locs.to_string(); let vname: String = "__adt_alloc_" + s_n; let tmp_slot: Int = (0 + wasm_env_bind_var(env, vname, wasm_val_type_i32())); wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, wasm_zone_heap_ptr_addr()); wasm_env_emit(env, op_i32_load()); wasm_env_emit_u32(env, 2); wasm_env_emit_u32(env, 0); wasm_env_emit(env, op_local_set()); wasm_env_emit_u32(env, tmp_slot); wasm_env_emit(env, op_local_get()); wasm_env_emit_u32(env, tmp_slot); wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, 1024); wasm_env_emit(env, op_i32_lt_u()); wasm_env_emit(env, op_if()); wasm_env_emit_byte(env, wasm_block_type_empty()); env.current_block_depth = env.current_block_depth + 1; wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, 1024); wasm_env_emit(env, op_local_set()); wasm_env_emit_u32(env, tmp_slot); wasm_env_emit(env, op_end()); env.current_block_depth = env.current_block_depth - 1; wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, wasm_zone_heap_ptr_addr()); wasm_env_emit(env, op_local_get()); wasm_env_emit_u32(env, tmp_slot); wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, aligned_size); wasm_env_emit(env, op_i32_add()); wasm_env_emit(env, op_i32_store()); wasm_env_emit_u32(env, 2); wasm_env_emit_u32(env, 0); return tmp_slot;
+}
+
+pub fn wasm_lower_result_ok(env: &mut WasmEnv, val_expr: String) -> Int {
+    let ptr_slot: Int = (0 + wasm_adt_alloc(env, 16));
+    wasm_env_emit(env, op_local_get()); wasm_env_emit_u32(env, ptr_slot);
+    wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, 0);
+    wasm_env_emit(env, op_i32_store()); wasm_env_emit_u32(env, 2); wasm_env_emit_u32(env, 0);
+    wasm_env_emit(env, op_local_get()); wasm_env_emit_u32(env, ptr_slot);
+    let val_ty: Int = (0 + wasm_lower_expr(env, val_expr));
+    if val_ty == wasm_val_type_f64() { wasm_env_emit(env, op_f64_store()); wasm_env_emit_u32(env, 3); wasm_env_emit_u32(env, 8); }
+    else if val_ty == wasm_val_type_i64() { wasm_env_emit(env, op_i64_store()); wasm_env_emit_u32(env, 3); wasm_env_emit_u32(env, 8); }
+    else { wasm_env_emit(env, op_i32_store()); wasm_env_emit_u32(env, 2); wasm_env_emit_u32(env, 4); }
+    wasm_env_emit(env, op_local_get()); wasm_env_emit_u32(env, ptr_slot);
+    return wasm_val_type_i32();
+}
+
+pub fn wasm_lower_result_err(env: &mut WasmEnv, err_expr: String) -> Int {
+    let ptr_slot: Int = (0 + wasm_adt_alloc(env, 16));
+    wasm_env_emit(env, op_local_get()); wasm_env_emit_u32(env, ptr_slot);
+    wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, 1);
+    wasm_env_emit(env, op_i32_store()); wasm_env_emit_u32(env, 2); wasm_env_emit_u32(env, 0);
+    wasm_env_emit(env, op_local_get()); wasm_env_emit_u32(env, ptr_slot);
+    let err_ty: Int = (0 + wasm_lower_expr(env, err_expr));
+    if err_ty == wasm_val_type_f64() { wasm_env_emit(env, op_f64_store()); wasm_env_emit_u32(env, 3); wasm_env_emit_u32(env, 8); }
+    else if err_ty == wasm_val_type_i64() { wasm_env_emit(env, op_i64_store()); wasm_env_emit_u32(env, 3); wasm_env_emit_u32(env, 8); }
+    else { wasm_env_emit(env, op_i32_store()); wasm_env_emit_u32(env, 2); wasm_env_emit_u32(env, 4); }
+    wasm_env_emit(env, op_local_get()); wasm_env_emit_u32(env, ptr_slot);
+    return wasm_val_type_i32();
+}
+
+pub fn wasm_lower_option_some(env: &mut WasmEnv, val_expr: String) -> Int {
+    return wasm_lower_result_ok(env, val_expr);
+}
+
+pub fn wasm_lower_option_none(env: &mut WasmEnv) -> Int {
+    let ptr_slot: Int = (0 + wasm_adt_alloc(env, 16)); wasm_env_emit(env, op_local_get()); wasm_env_emit_u32(env, ptr_slot); wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, 1); wasm_env_emit(env, op_i32_store()); wasm_env_emit_u32(env, 2); wasm_env_emit_u32(env, 0); wasm_env_emit(env, op_local_get()); wasm_env_emit_u32(env, ptr_slot); wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, 0); wasm_env_emit(env, op_i32_store()); wasm_env_emit_u32(env, 2); wasm_env_emit_u32(env, 4); wasm_env_emit(env, op_local_get()); wasm_env_emit_u32(env, ptr_slot); return wasm_val_type_i32();
+}
+
+pub fn wasm_lower_adt_variant(env: &mut WasmEnv, tag: Int, payload_expr: String) -> Int {
+    let ptr_slot: Int = (0 + wasm_adt_alloc(env, 16)); wasm_env_emit(env, op_local_get()); wasm_env_emit_u32(env, ptr_slot); wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, tag); wasm_env_emit(env, op_i32_store()); wasm_env_emit_u32(env, 2); wasm_env_emit_u32(env, 0); wasm_env_emit(env, op_local_get()); wasm_env_emit_u32(env, ptr_slot); if payload_expr != "" && !ast_is(payload_expr, "SEmpty") { let pty: Int = (0 + wasm_lower_expr(env, payload_expr)); if pty == wasm_val_type_f64() { wasm_env_emit(env, op_f64_store()); wasm_env_emit_u32(env, 3); wasm_env_emit_u32(env, 8); } else if pty == wasm_val_type_i64() {
+            wasm_env_emit(env, op_i64_store()); wasm_env_emit_u32(env, 3); wasm_env_emit_u32(env, 8);
+        } else {
+            wasm_env_emit(env, op_i32_store()); wasm_env_emit_u32(env, 2); wasm_env_emit_u32(env, 4);
+        }
+    } else {
+        wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, 0);
+        wasm_env_emit(env, op_i32_store()); wasm_env_emit_u32(env, 2); wasm_env_emit_u32(env, 4);
+    }
+    wasm_env_emit(env, op_local_get()); wasm_env_emit_u32(env, ptr_slot);
+    return wasm_val_type_i32();
+}
+
+pub fn wasm_lower_adt_method(env: &mut WasmEnv, base_expr: String, method: String) -> Int {
+    let _b: Int = (0 + wasm_lower_expr(env, base_expr)); if method == "is_ok" || method == "is_some" { wasm_env_emit(env, op_i32_load()); wasm_env_emit_u32(env, 2); wasm_env_emit_u32(env, 0); wasm_env_emit(env, op_i32_eqz()); return wasm_val_type_i32();
+}
+    if method == "is_err" || method == "is_none" {
+        wasm_env_emit(env, op_i32_load()); wasm_env_emit_u32(env, 2); wasm_env_emit_u32(env, 0);
+        wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, 0); wasm_env_emit(env, op_i32_ne());
+        return wasm_val_type_i32();
+    }
+    if method == "unwrap" {
+        wasm_env_emit(env, op_i32_load()); wasm_env_emit_u32(env, 2); wasm_env_emit_u32(env, 4);
+        return wasm_val_type_i32();
+    }
+    return wasm_val_type_i32();
+}
+
+pub fn wasm_extract_inside_parens(s: String) -> String {
+    let n: Int = chars_len(s); let mut start: Int = -1; let mut i: Int = 0;
+    while i < n {
+        let c: String = char_at(s, i);
+        if c == "(" && start < 0 { start = i + 1; }
+        if c == ")" && start >= 0 {
+            let inner: String = str_slice(s, start, i);
+            if ast_is(inner, "EVar") { return list_get_str(wasm_ast_args(inner), 0); }
+            return inner;
+        }
+        i = i + 1;
+    }
+    return "";
+}
+
+pub fn wasm_adt_is_pattern(pat: String) -> Bool {
+    if pat == "None" || pat == "EVar(None)" { return true; }
+    if str_starts_with(pat, "Ok(") || str_starts_with(pat, "Err(") || str_starts_with(pat, "Some(") { return true; }
+    if str_starts_with(pat, "Tag0(") || str_starts_with(pat, "Tag1(") || str_starts_with(pat, "Tag2(") || str_starts_with(pat, "Tag3(") { return true; }
+    if ast_is(pat, "ECall") {
+        let args: String = wasm_ast_args(pat); let callee: String = list_get_str(args, 0);
+        let cname: String = if ast_is(callee, "EVar") { list_get_str(wasm_ast_args(callee), 0) } else { callee };
+        if cname == "Ok" || cname == "Err" || cname == "Some" || cname == "None" || cname == "Tag0" || cname == "Tag1" || cname == "Tag2" || cname == "Tag3" { return true; }
+    }
+    return false;
+}
+
+pub fn wasm_adt_pattern_tag(pat: String) -> Int {
+    if pat == "None" || pat == "EVar(None)" { return 1; }
+    if str_starts_with(pat, "Ok(") || str_starts_with(pat, "Some(") || str_starts_with(pat, "Tag0(") { return 0; }
+    if str_starts_with(pat, "Err(") || str_starts_with(pat, "Tag1(") { return 1; }
+    if str_starts_with(pat, "Tag2(") { return 2; }
+    if str_starts_with(pat, "Tag3(") { return 3; }
+    if ast_is(pat, "ECall") {
+        let args: String = wasm_ast_args(pat); let callee: String = list_get_str(args, 0);
+        let cname: String = if ast_is(callee, "EVar") { list_get_str(wasm_ast_args(callee), 0) } else { callee };
+        if cname == "Ok" || cname == "Some" || cname == "Tag0" { return 0; }
+        if cname == "Err" || cname == "None" || cname == "Tag1" { return 1; }
+        if cname == "Tag2" { return 2; } if cname == "Tag3" { return 3; }
+    }
+    return 0;
+}
+
+pub fn wasm_adt_pattern_binding(pat: String) -> String {
+    if pat == "None" || pat == "EVar(None)" { return ""; }
+    if ast_is(pat, "ECall") {
+        let args: String = wasm_ast_args(pat); let n: Int = (0 + list_len_str(args));
+        if n >= 2 {
+            let a1: String = list_get_str(args, 1);
+            if ast_is(a1, "EVar") { return list_get_str(wasm_ast_args(a1), 0); }
+            return a1;
+        }
+        return "";
+    }
+    return wasm_extract_inside_parens(pat);
+}
+
+pub fn wasm_lower_adt_destructure(env: &mut WasmEnv, scrut_slot: Int, binding_var: String, val_type: Int) -> Int {
+    let b_slot: Int = (0 + wasm_env_bind_var(env, binding_var, val_type)); wasm_env_emit(env, op_local_get()); wasm_env_emit_u32(env, scrut_slot); if val_type == wasm_val_type_f64() { wasm_env_emit(env, op_f64_load()); wasm_env_emit_u32(env, 3); wasm_env_emit_u32(env, 8); } else if val_type == wasm_val_type_i64() {
+        wasm_env_emit(env, op_i64_load()); wasm_env_emit_u32(env, 3); wasm_env_emit_u32(env, 8);
+    } else {
+        wasm_env_emit(env, op_i32_load()); wasm_env_emit_u32(env, 2); wasm_env_emit_u32(env, 4);
+    }
+    wasm_env_emit(env, op_local_set()); wasm_env_emit_u32(env, b_slot);
+    return b_slot;
+}
+
+pub fn wasm_lower_match_arm(env: &mut WasmEnv, scrut_slot: Int, arm_node: String, all_args: String, arm_idx: Int, max_arm_idx: Int, result_type: Int) {
+    let arm_args: String = wasm_ast_args(arm_node);
+    let pat_str: String = list_get_str(arm_args, 0);
+    let body_str: String = list_get_str(arm_args, 1);
+    let is_wildcard: Bool = (pat_str == "_") || (pat_str == "EVar(_)") || (pat_str == "");
+    if is_wildcard || arm_idx >= max_arm_idx - 1 {
+        if result_type == wasm_block_type_empty() { wasm_lower_stmt(env, body_str); } else { let _r: Int = (0 + wasm_lower_expr(env, body_str)); }
+        return;
+    }
+    if wasm_adt_is_pattern(pat_str) {
+        wasm_env_emit(env, op_local_get()); wasm_env_emit_u32(env, scrut_slot);
+        wasm_env_emit(env, op_i32_load()); wasm_env_emit_u32(env, 2); wasm_env_emit_u32(env, 0);
+        wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, wasm_adt_pattern_tag(pat_str)); wasm_env_emit(env, op_i32_eq());
+        wasm_env_emit(env, op_if()); wasm_env_emit_byte(env, result_type); env.current_block_depth = env.current_block_depth + 1;
+        let binding: String = wasm_adt_pattern_binding(pat_str);
+        if binding != "" && binding != "_" { let _d: Int = (0 + wasm_lower_adt_destructure(env, scrut_slot, binding, wasm_val_type_i32())); }
+        if result_type == wasm_block_type_empty() { wasm_lower_stmt(env, body_str); } else { let _r: Int = (0 + wasm_lower_expr(env, body_str)); }
+        wasm_env_emit(env, op_else());
+        let next_arm: String = list_get_str(all_args, arm_idx + 1);
+        wasm_lower_match_arm(env, scrut_slot, next_arm, all_args, arm_idx + 1, max_arm_idx, result_type);
+        wasm_env_emit(env, op_end()); env.current_block_depth = env.current_block_depth - 1;
+        return;
+    }
+    wasm_env_emit(env, op_local_get()); wasm_env_emit_u32(env, scrut_slot);
+    let _p: Int = (0 + wasm_lower_expr(env, pat_str));
+    if env.default_int_type == wasm_val_type_i64() { wasm_env_emit(env, op_i64_eq()); } else { wasm_env_emit(env, op_i32_eq()); }
+    wasm_env_emit(env, op_if()); wasm_env_emit_byte(env, result_type); env.current_block_depth = env.current_block_depth + 1;
+    if result_type == wasm_block_type_empty() { wasm_lower_stmt(env, body_str); } else { let _r: Int = (0 + wasm_lower_expr(env, body_str)); }
+    wasm_env_emit(env, op_else());
+    let next_arm: String = list_get_str(all_args, arm_idx + 1);
+    wasm_lower_match_arm(env, scrut_slot, next_arm, all_args, arm_idx + 1, max_arm_idx, result_type);
+    wasm_env_emit(env, op_end());
+    env.current_block_depth = env.current_block_depth - 1;
+}
+pub fn wasm_lower_match(env: &mut WasmEnv, match_node: String, default_ty: Int) -> Int {
+    let args: String = wasm_ast_args(match_node);
+    let n_args: Int = (0 + list_len_str(args));
+    if n_args < 2 { return wasm_block_type_empty(); }
+    let first_arm: String = list_get_str(args, 1);
+    let arm_args: String = wasm_ast_args(first_arm);
+    let body_str: String = list_get_str(arm_args, 1);
+    let is_val: Bool = wasm_ast_last_is_expr(body_str);
+    let result_type: Int = if is_val && default_ty != wasm_block_type_empty() { default_ty } else { wasm_block_type_empty() };
+    let scrutinee: String = list_get_str(args, 0);
+    let s_ty: Int = (0 + wasm_lower_expr(env, scrutinee));
+    let loc_types: List[Int] = env.local_types;
+    let n_locs: Int = list_len(loc_types);
+    let s_n: String = n_locs.to_string();
+    let vname: String = "__scrut_" + s_n;
+    let scrut_slot: Int = (0 + wasm_env_bind_var(env, vname, s_ty));
+    wasm_env_emit(env, op_local_set()); wasm_env_emit_u32(env, scrut_slot);
+    wasm_lower_match_arm(env, scrut_slot, first_arm, args, 1, n_args, result_type);
+    return result_type;
+}

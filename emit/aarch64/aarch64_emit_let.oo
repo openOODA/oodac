@@ -1,0 +1,69 @@
+// # AArch64 per-shape matcher for typed-int let with println(ident)
+//
+// Logline: Validates the let ident: Int = INT; println(ident) shape inside fn main and emits a freestanding AArch64 GAS program that prints the int literal.
+//
+// Setup: tokenize_lines, a64_tok_k, a64_tok_t exist in aarch64_emit_harv.oo; aarch64_emit_linux exists in aarch64_emit_sys.oo.
+//
+// Beats:
+//   1. Walk the token stream from the current KW_LET position.
+//   2. Validate the exact let ident: Int = INT; println(ident) shape; refuse on any token mismatch.
+//   3. Emit rodata + svc write + svc exit 0 for the int literal.
+//
+// residual: Multi-statement main bodies and let mut stay leftover until a later port.
+
+
+import "aarch64_emit_const_harvest.oo";
+
+import "aarch64_emit_sys.oo";
+
+
+// Shape checked, left-to-right, starting at token i (which must be KW_LET).
+// Returns the 2-element list [name, v1] on a full match.
+// Returns the empty list on any shape mismatch (refuse-don't-miscompile).
+pub fn aarch64_match_let(toks: List[String], n: Int, i: Int) -> List[String] {
+    let empty: List[String] = list_new();
+    if i >= n || a64_tok_k(toks, i) != "KW_LET" { return empty;
+    }
+    if i + 1 >= n || a64_tok_k(toks, i + 1) != "IDENT" { return empty;
+    }
+    if i + 2 >= n || a64_tok_k(toks, i + 2) != "COLON" { return empty;
+    }
+    if i + 3 >= n || a64_tok_k(toks, i + 3) != "IDENT" { return empty;
+    }
+    if a64_tok_t(toks, i + 3) != "Int" { return empty;
+    }
+    if i + 4 >= n || a64_tok_k(toks, i + 4) != "EQ" { return empty;
+    }
+    if i + 5 >= n || a64_tok_k(toks, i + 5) != "INT" { return empty;
+    }
+    let name: String = a64_tok_t(toks, i + 1);
+    let v1: String = a64_tok_t(toks, i + 5);
+    if i + 6 >= n || a64_tok_k(toks, i + 6) != "SEMI" { return empty;
+    }
+    if i + 7 >= n || a64_tok_k(toks, i + 7) != "IDENT" { return empty;
+    }
+    if a64_tok_t(toks, i + 7) != "println" { return empty;
+    }
+    if i + 8 >= n || a64_tok_k(toks, i + 8) != "LPAREN" { return empty;
+    }
+    if i + 9 >= n || a64_tok_k(toks, i + 9) != "IDENT" { return empty;
+    }
+    if a64_tok_t(toks, i + 9) != name { return empty;
+    }
+    if i + 10 >= n || a64_tok_k(toks, i + 10) != "RPAREN" { return empty;
+    }
+    let mut out: List[String] = list_new();
+    out = list_push(out, name);
+    out = list_push(out, v1);
+    return out;
+}
+
+// Emit a freestanding Linux AArch64 GAS program that writes the int literal v1
+// to stdout and exits with status 0. The var_name parameter is the matched
+// source ident; it is accepted for parity with x86_emit_typed_let but unused
+// because the int literal is the printed value, not the bound ident.
+pub fn aarch64_emit_let(var_name: String, v1: String) {
+    let mut msgs: List[String] = list_new();
+    msgs = list_push(msgs, v1);
+    aarch64_emit_linux(msgs);
+}

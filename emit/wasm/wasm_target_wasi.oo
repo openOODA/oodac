@@ -1,0 +1,163 @@
+// # WebAssembly WASI Preview1 Target Binding Engine
+//
+// Logline: Configures wasi_snapshot_preview1 host imports and provides WASI I/O lowering helpers.
+//
+// Setup: Import wasm_opcodes.oo, wasm_types.oo, wasm_leb128.oo, wasm_binary_builder.oo, wasm_lower_expr.oo.
+//
+// Beats:
+//   1. Configure WASI preview 1 system calls (fd_write, fd_read, clock_time_get, random_get, proc_exit).
+//   2. Bind WASI function symbols into WebAssembly lowering environment.
+//   3. Lower stdout print and string output sequences to fd_write iovec structs.
+//   4. Emit _start WASI entry point wrappers.
+
+import "wasm_opcodes.oo";
+import "wasm_types.oo";
+import "wasm_leb128.oo";
+import "wasm_binary_builder.oo";
+import "wasm_lower_expr.oo";
+
+pub type WasiTarget = struct {
+    fd_write_idx: Int,
+    fd_read_idx: Int,
+    clock_time_get_idx: Int,
+    random_get_idx: Int,
+    proc_exit_idx: Int
+};
+
+fn wasm_import_wasi_fn(b: &mut WasmModuleBuilder, name: String, p_count: Int, ret_count: Int) -> Int {
+    let mut p: List[Int] = list_new();
+    let mut i: Int = 0;
+    while i < p_count {
+        p = list_push(p, wasm_val_type_i32());
+        i = i + 1;
+    }
+    let mut r: List[Int] = list_new();
+    if ret_count > 0 {
+        r = list_push(r, wasm_val_type_i32());
+    }
+    let ty: Int = (0 + wasm_builder_add_type(b, p, r));
+    return wasm_builder_add_import_func(b, "wasi_snapshot_preview1", name, ty);
+}
+
+pub fn wasm_target_wasi_init(b: &mut WasmModuleBuilder) -> WasiTarget {
+    return WasiTarget { fd_write_idx: wasm_import_wasi_fn(b, "fd_write", 4, 1), fd_read_idx: wasm_import_wasi_fn(b, "fd_read", 4, 1), clock_time_get_idx: wasm_import_wasi_fn(b, "clock_time_get", 3, 1), random_get_idx: wasm_import_wasi_fn(b, "random_get", 2, 1), proc_exit_idx: wasm_import_wasi_fn(b, "proc_exit", 1, 0) };
+}
+
+pub fn wasm_wasi_bind_env(env: &mut WasmEnv, target: WasiTarget) {
+    wasm_env_bind_func(env, "fd_write", target.fd_write_idx);
+    wasm_env_bind_func(env, "fd_read", target.fd_read_idx);
+    wasm_env_bind_func(env, "clock_time_get", target.clock_time_get_idx);
+    wasm_env_bind_func(env, "random_get", target.random_get_idx);
+    wasm_env_bind_func(env, "proc_exit", target.proc_exit_idx);
+}
+
+fn wasm_wasi_store_i32_scratch(env: &mut WasmEnv, addr: Int, val: Int) {
+    wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, addr);
+    wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, val);
+    wasm_env_emit(env, op_i32_store()); wasm_env_emit_u32(env, 2); wasm_env_emit_u32(env, 0);
+}
+
+pub fn wasm_wasi_print_str(env: &mut WasmEnv, str_ptr: Int, str_len: Int) {
+    // IOVec at scratch 0: [iov_base at 0, iov_len at 4]
+    wasm_wasi_store_i32_scratch(env, 0, str_ptr);
+    wasm_wasi_store_i32_scratch(env, 4, str_len);
+    let write_idx: Int = (0 + wasm_env_lookup_func(env, "fd_write"));
+    let f_idx: Int = if write_idx >= 0 { write_idx } else { 0 };
+    wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, 1); // stdout
+    wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, 0); // iovs ptr
+    wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, 1); // iovs len
+    wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, 8); // nwritten ptr
+    wasm_env_emit(env, op_call()); wasm_env_emit_u32(env, f_idx);
+    wasm_env_emit(env, op_drop());
+}
+
+pub fn wasm_wasi_emit_print(env: &mut WasmEnv, write_func_idx: Int, str_ptr_expr: String, str_len: Int) {
+    wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, 0);
+    let _s: Int = (0 + wasm_lower_expr(env, str_ptr_expr));
+    wasm_env_emit(env, op_i32_store()); wasm_env_emit_u32(env, 2); wasm_env_emit_u32(env, 0);
+    wasm_wasi_store_i32_scratch(env, 4, str_len);
+    wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, 1);
+    wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, 0);
+    wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, 1);
+    wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, 8);
+    wasm_env_emit(env, op_call()); wasm_env_emit_u32(env, write_func_idx);
+    wasm_env_emit(env, op_drop());
+}
+
+pub fn wasm_wasi_read_file(env: &mut WasmEnv, path_ptr: Int, path_len: Int) {
+    wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, path_len);
+    wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, 0);
+    wasm_env_emit(env, op_i32_le_s());
+    wasm_env_emit(env, op_if()); wasm_env_emit_byte(env, wasm_val_type_i32());
+    wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, 0);
+    wasm_env_emit(env, op_else());
+    wasm_wasi_store_i32_scratch(env, 0, path_ptr);
+    wasm_wasi_store_i32_scratch(env, 4, path_len);
+    let read_idx: Int = (0 + wasm_env_lookup_func(env, "fd_read"));
+    let f_idx: Int = if read_idx >= 0 { read_idx } else { 1 };
+    wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, 0); // stdin fd 0
+    wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, 0); // iovs ptr
+    wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, 1); // iovs len
+    wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, 8); // nread ptr
+    wasm_env_emit(env, op_call()); wasm_env_emit_u32(env, f_idx);
+    wasm_env_emit(env, op_drop());
+    wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, 8);
+    wasm_env_emit(env, op_i32_load()); wasm_env_emit_u32(env, 2); wasm_env_emit_u32(env, 0);
+    wasm_env_emit(env, op_end());
+}
+
+pub fn wasm_wasi_write_file(env: &mut WasmEnv, path_ptr: Int, path_len: Int, data_ptr: Int, data_len: Int) {
+    wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, data_len);
+    wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, 0);
+    wasm_env_emit(env, op_i32_le_s());
+    wasm_env_emit(env, op_if()); wasm_env_emit_byte(env, wasm_val_type_i32());
+    wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, 0);
+    wasm_env_emit(env, op_else());
+    wasm_wasi_store_i32_scratch(env, 0, data_ptr);
+    wasm_wasi_store_i32_scratch(env, 4, data_len);
+    let write_idx: Int = (0 + wasm_env_lookup_func(env, "fd_write"));
+    let f_idx: Int = if write_idx >= 0 { write_idx } else { 0 };
+    wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, 1); // stdout fd 1
+    wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, 0);
+    wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, 1);
+    wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, 8);
+    wasm_env_emit(env, op_call()); wasm_env_emit_u32(env, f_idx);
+    wasm_env_emit(env, op_drop());
+    wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, 8);
+    wasm_env_emit(env, op_i32_load()); wasm_env_emit_u32(env, 2); wasm_env_emit_u32(env, 0);
+    wasm_env_emit(env, op_end());
+}
+
+pub fn wasm_wasi_now_ms(env: &mut WasmEnv) {
+    let clock_idx: Int = (0 + wasm_env_lookup_func(env, "clock_time_get"));
+    let f_idx: Int = if clock_idx >= 0 { clock_idx } else { 2 };
+    wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, 0); // CLOCKID_REALTIME
+    wasm_env_emit(env, op_i64_const()); wasm_env_emit_i64(env, 1000); // 1000ns precision
+    wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, 8); // time ptr
+    wasm_env_emit(env, op_call()); wasm_env_emit_u32(env, f_idx);
+    wasm_env_emit(env, op_drop());
+    wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, 8);
+    wasm_env_emit(env, op_i64_load()); wasm_env_emit_u32(env, 3); wasm_env_emit_u32(env, 0);
+    wasm_env_emit(env, op_i64_const()); wasm_env_emit_i64(env, 1000000);
+    wasm_env_emit(env, op_i64_div_u());
+    if env.default_int_type == wasm_val_type_i32() {
+        wasm_env_emit(env, op_i32_wrap_i64());
+    }
+}
+
+pub fn wasm_wasi_random_get(env: &mut WasmEnv, buf_ptr: Int, buf_len: Int) {
+    let rand_idx: Int = (0 + wasm_env_lookup_func(env, "random_get"));
+    let f_idx: Int = if rand_idx >= 0 { rand_idx } else { 3 };
+    wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, buf_ptr);
+    wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, buf_len);
+    wasm_env_emit(env, op_call()); wasm_env_emit_u32(env, f_idx);
+    wasm_env_emit(env, op_drop());
+}
+
+pub fn wasm_wasi_proc_exit(env: &mut WasmEnv, exit_code: Int) {
+    let exit_idx: Int = (0 + wasm_env_lookup_func(env, "proc_exit"));
+    let f_idx: Int = if exit_idx >= 0 { exit_idx } else { 4 };
+    wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, exit_code);
+    wasm_env_emit(env, op_call()); wasm_env_emit_u32(env, f_idx);
+    wasm_env_emit(env, op_unreachable());
+}

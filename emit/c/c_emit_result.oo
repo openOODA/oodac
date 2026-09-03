@@ -1,0 +1,247 @@
+// # Lower Ok and Err constructors
+//
+// Logline: Build an OoResS or OoResV compound from Ok or Err using the current fn return kind.
+//
+// Setup: c_env_get and c_expr_is_str_env exist. Result[Void] is V. Ok(void) has no payload.
+//
+// Beats:
+//   1. Identify current function return type and Result payload kind.
+//   2. Lower Ok constructor into C compound literal or struct return.
+//   3. Lower Err constructor with error message payload.
+
+import "c_emit_env.oo";
+import "c_emit_ops_str.oo";
+import "c_emit_result_ty.oo";
+import "c_emit_ty.oo";
+import "c_emit_ty_ext.oo";
+import "c_emit_temps.oo";
+
+import "c_emit_list_ty.oo";
+
+import "c_emit_type_helpers.oo";
+
+//
+// Beats:
+//   1. Result[Void] Ok is ok=1 and an empty err string.
+//   2. Result[Void] Err is ok=0 and the message.
+//   3. Result[String] Ok keeps the string payload. Unmatched non-string Ok is OoResI.
+// Result[T, Int] after the comma. pos sits on the Result IDENT.
+pub fn c_result_e_is_int(toks: List[String], pos: Int, n: Int) -> Bool {
+    let mut p: Int = pos + 1;
+    if p >= n || c_tokk(toks, p) != "LBRACKET" { return false; }
+    p = p + 1;
+    if p >= n || c_tokk(toks, p) != "IDENT" { return false; }
+    let first: String = c_tokt(toks, p);
+    p = p + 1;
+    if first == "List" && p < n && c_tokk(toks, p) == "LBRACKET" {
+        let mut d: Int = 1;
+        p = p + 1;
+        while p < n && d > 0 {
+            let k: String = c_tokk(toks, p);
+            if k == "LBRACKET" { d = d + 1; }
+            if k == "RBRACKET" { d = d - 1; }
+            p = p + 1;
+        }
+    }
+    if p >= n || c_tokk(toks, p) != "COMMA" { return false; }
+    p = p + 1;
+    if p >= n || c_tokk(toks, p) != "IDENT" { return false; }
+    return c_tokt(toks, p) == "Int";
+}
+pub fn c_opt_zero_val(opt_name: String) -> String {
+    if opt_name == "OoOpt_I" { return "0LL"; }
+    if opt_name == "OoOpt_B" { return "0"; }
+    if opt_name == "OoOpt_F" { return "0.0"; }
+    return "{0}";
+}
+pub fn c_res_zero_val(rct: String) -> String {
+    if rct == "OoRes_I" { return "0LL"; }
+    if rct == "OoRes_B" { return "0"; }
+    if rct == "OoRes_F" { return "0.0"; }
+    return "{0}";
+}
+pub fn c_lower_ok_err(name: String, args: String, env: String) -> String {
+    let rv: String = c_env_get(env, "__ret__");
+    let rct: String = c_env_get(env, "__ret_c_ty__");
+    let oct: String = c_env_get(env, "__opt_c_ty__");
+    let mut nm: String = name;
+    let mut ag: String = args;
+    if nm == "Some" {
+        if oct != "" { return "((" + oct + "){1, " + ag + "})"; }
+        let exp_opt: String = c_env_get(env, "__expected_opt_ty__");
+        if exp_opt != "" { return "((" + exp_opt + "){1, " + ag + "})"; }
+        if chars_len(rct) > 6 && str_slice(rct, 0, 6) == "OoOpt_" { return "((" + rct + "){1, " + ag + "})"; }
+        if chars_len(rct) > 12 && str_slice(rct, 0, 12) == "OoRes_OoOpt_" {
+            let inner_opt: String = str_slice(rct, 6, chars_len(rct));
+            return "((" + inner_opt + "){1, " + ag + "})";
+        }
+        if chars_len(rct) > 16 && str_slice(rct, 0, 16) == "OoRes_OoL_OoOpt_" {
+            let inner_opt: String = str_slice(rct, 10, chars_len(rct));
+            return "((" + inner_opt + "){1, " + ag + "})";
+        }
+        if chars_len(rct) > 10 && str_slice(rct, 0, 10) == "OoL_OoOpt_" {
+            let inner_opt: String = str_slice(rct, 4, chars_len(rct));
+            return "((" + inner_opt + "){1, " + ag + "})";
+        }
+        if chars_len(ag) >= 8 && str_slice(ag, 0, 8) == "((OoResS" { return "((OoOpt_OoRes_S){1, " + ag + "})"; }
+        if chars_len(ag) >= 3 && str_slice(ag, 0, 2) == "((" {
+            let mut opt_elem: String = "";
+            let mut si: Int = 2;
+            while si < chars_len(ag) && char_at(ag, si) != ")" {
+                opt_elem = opt_elem + char_at(ag, si);
+                si = si + 1;
+            }
+            if opt_elem != "" {
+                if chars_len(opt_elem) >= 6 && str_slice(opt_elem, 0, 6) == "OoOpt_" { return "((" + opt_elem + "){1, " + ag + "})"; }
+                c_emit_opt_typedef(opt_elem);
+                return "((OoOpt_" + opt_elem + "){1, " + ag + "})";
+            }
+        }
+        let aty: String = c_env_get(env, "__ty__" + ag);
+        if aty != "" {
+            if aty == "OoStr" || aty == "String" { return "((OoOpt_S){1, " + ag + "})"; }
+            if aty == "long long" || aty == "Int" { return "((OoOpt_I){1, " + ag + "})"; }
+            if aty == "int" || aty == "bool" || aty == "Bool" { return "((OoOpt_B){1, " + ag + "})"; }
+            if aty == "double" || aty == "Float" { return "((OoOpt_F){1, " + ag + "})"; }
+            c_emit_opt_typedef(aty);
+            return "((OoOpt_" + aty + "){1, " + ag + "})";
+        }
+        let ak: String = c_env_get(env, ag);
+        if ak != "" {
+            if ak == "T" || ak == "OoStr" { return "((OoOpt_S){1, " + ag + "})"; }
+            if ak == "I" || ak == "OoIList" { return "((OoOpt_I){1, " + ag + "})"; }
+            if ak == "B" { return "((OoOpt_B){1, " + ag + "})"; }
+            if ak == "LF" || ak == "OoFList" { return "((OoOpt_F){1, " + ag + "})"; }
+            if chars_len(ak) > 1 && byte_at(ak, 0) >= 65 && byte_at(ak, 0) <= 90 {
+                c_emit_opt_typedef(ak);
+                return "((OoOpt_" + ak + "){1, " + ag + "})";
+            }
+        }
+        return "((OoOpt_I){1, " + ag + "})";
+    }
+    if nm == "None" {
+        if oct != "" { return "((" + oct + "){0, " + c_opt_zero_val(oct) + "})"; }
+        let exp_opt: String = c_env_get(env, "__expected_opt_ty__");
+        if exp_opt != "" { return "((" + exp_opt + "){0, " + c_opt_zero_val(exp_opt) + "})"; }
+        if chars_len(rct) > 6 && str_slice(rct, 0, 6) == "OoOpt_" { return "((" + rct + "){0, " + c_opt_zero_val(rct) + "})"; }
+        if chars_len(rct) > 12 && str_slice(rct, 0, 12) == "OoRes_OoOpt_" {
+            let inner_opt: String = str_slice(rct, 6, chars_len(rct));
+            return "((" + inner_opt + "){0, " + c_opt_zero_val(inner_opt) + "})";
+        }
+        if chars_len(rct) > 16 && str_slice(rct, 0, 16) == "OoRes_OoL_OoOpt_" {
+            let inner_opt: String = str_slice(rct, 10, chars_len(rct));
+            return "((" + inner_opt + "){0, " + c_opt_zero_val(inner_opt) + "})";
+        }
+        if chars_len(rct) > 10 && str_slice(rct, 0, 10) == "OoL_OoOpt_" {
+            let inner_opt: String = str_slice(rct, 4, chars_len(rct));
+            return "((" + inner_opt + "){0, " + c_opt_zero_val(inner_opt) + "})";
+        }
+        return "{0}";
+    }
+    if nm == "Ok" {
+        if rv == "V" { return "((OoResV){1, oo_str_lit(\"\")})"; }
+        if rv == "RII" { return "((OoResII){1, " + ag + ", 0})"; }
+        if rv == "RI" { return "((OoResI){1, " + ag + ", oo_str_lit(\"\")})"; }
+        if rv == "RB" { return "((OoResB){1, " + ag + ", oo_str_lit(\"\")})"; }
+        if rv == "RF" { return "((OoResF){1, " + ag + ", oo_str_lit(\"\")})"; }
+        if rv == "RLI" { return "((OoResLI){1, " + ag + ", oo_str_lit(\"\")})"; }
+        if rv == "RLS" { return "((OoResLS){1, " + ag + ", oo_str_lit(\"\")})"; }
+        if rv == "RLF" { return "((OoResLF){1, " + ag + ", oo_str_lit(\"\")})"; }
+        if rct != "" {
+            if chars_len(rct) >= 8 && str_slice(rct, 0, 8) == "OoRes2_" { return "((" + rct + "){1, " + ag + ", {0}})"; }
+            if chars_len(rct) >= 6 && str_slice(rct, 0, 6) == "OoRes_" { return "((" + rct + "){1, " + ag + ", oo_str_lit(\"\")})"; }
+        }
+        if rv == "R" {
+            let ak2: String = c_env_get(env, ag);
+            if ak2 == "I" || c_env_get(env, "__ty__" + ag) == "long long" {
+                return "((OoResS){1, oo_int_to_str(" + ag + ")})";
+            }
+            return "((OoResS){1, " + ag + "})";
+        }
+        if ag == "void" { return "((OoResS){1, oo_str_lit(\"\")})"; }
+        if c_expr_is_str_env(ag, env) { return "((OoResS){1, " + ag + "})"; }
+        return "((OoResI){1, " + ag + ", oo_str_lit(\"\")})";
+    }
+    if nm == "Err" {
+        if rv == "V" { return "((OoResV){0, " + ag + "})"; }
+        if rv == "RII" { return "((OoResII){0, 0, " + ag + "})"; }
+        if rv == "RI" { return "((OoResI){0, 0, " + ag + "})"; }
+        if rv == "RB" { return "((OoResB){0, 0, " + ag + "})"; }
+        if rv == "RF" { return "((OoResF){0, 0.0, " + ag + "})"; }
+        if rv == "RLI" { return "((OoResLI){0, oo_ilist_new(), " + ag + "})"; }
+        if rv == "RLS" { return "((OoResLS){0, oo_slist_new(), " + ag + "})"; }
+        if rv == "RLF" { return "((OoResLF){0, oo_flist_new(), " + ag + "})"; }
+        if rct != "" {
+            if chars_len(rct) >= 8 && str_slice(rct, 0, 8) == "OoRes2_" { return "((" + rct + "){0, {0}, " + ag + "})"; }
+            if chars_len(rct) >= 6 && str_slice(rct, 0, 6) == "OoRes_" {
+                return "((" + rct + "){0, " + c_res_zero_val(rct) + ", " + ag + "})";
+            }
+        }
+        return "((OoResS){0, " + ag + "})";
+    }
+    return "";
+}
+pub fn result_ok_payload_type(rty: String) -> String {
+    let n: Int = chars_len(rty);
+    if n < 8 || str_slice(rty, 0, 7) != "Result[" { return "String"; }
+    let mut i: Int = 7;
+    let mut name: String = "";
+    while i < n {
+        let c: String = char_at(rty, i);
+        if c == "," || c == "]" { break; }
+        name = name + c;
+        i = i + 1;
+    }
+    if name == "Void" { return "Void"; }
+    if name == "List" { return str_slice(rty, 7, n - 1); }
+    if name == "" { return "String"; }
+    return name;
+}
+
+pub fn c_try_unwrap(call: String, env: String, fname: String) -> String {
+    let mut qty: String = c_env_get(env, "__frty__" + fname);
+    if qty == "" {
+        qty = "OoResS";
+        let rk: String = c_env_get(env, "__ret__");
+        if rk == "RI" { qty = "OoResI"; }
+    }
+    return "({ " + qty + " __q = " + call + "; if (!__q.ok) { exit(1); } __q.val; })";
+}
+
+// Recv of unwrap C `((name.ok) ? (name.val)`. Empty if not that shape.
+pub fn c_unwrap_recv_name(rhs: String) -> String {
+    let n: Int = chars_len(rhs);
+    if n < 8 || char_at(rhs, 0) != "(" || char_at(rhs, 1) != "(" { return ""; }
+    let mut i: Int = 2;
+    let mut name: String = "";
+    while i < n {
+        let c: String = char_at(rhs, i);
+        if c == "." { return name; }
+        if c == ")" || c == " " { return ""; }
+        name = name + c;
+        i = i + 1;
+    }
+    return "";
+}
+
+// String let of Result[Int] unwrap: oo_int_to_str so gcc is not `OoStr = long`.
+pub fn c_coerce_let_rhs(lty: String, rhs: String, env: String) -> String {
+    if lty != "OoStr" || c_expr_is_str_env(rhs, env) { return rhs; }
+    let recv: String = c_unwrap_recv_name(rhs);
+    if recv == "" { return rhs; }
+    let rk: String = c_env_get(env, recv);
+    if rk == "RI" || rk == "RII" || rk == "RB" || rk == "RF" { return "oo_int_to_str(" + rhs + ")"; }
+    return rhs;
+}
+
+// Named Result cell: payload + OoRes_Name if no type alias landed. Empty name fail-closed.
+pub fn c_emit_res_cell_ty(cty: String) {
+    if chars_len(cty) < 7 || str_slice(cty, 0, 6) != "OoRes_" { return; }
+    let name: String = str_slice(cty, 6, chars_len(cty));
+    if name == "" { return; }
+    c_emit_named_cell_ty(name);
+    println("#ifndef OO_TY_RES_" + name);
+    println("#define OO_TY_RES_" + name);
+    println("typedef struct { int ok; " + name + " val; OoStr err; } " + cty + ";");
+    println("#endif");
+}

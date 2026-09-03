@@ -1,0 +1,28 @@
+// # Integer to decimal string
+//
+// Logline: Convert Int to a decimal String without calling to_string (avoids oo_int_to_str recursion).
+//
+// Setup: Pure. Digits from a literal table. Used by AArch64 and x86 emitters and tc_drive.
+//
+// Beats:
+//   1. Zero returns "0".
+//   2. Repeated rem 10 builds digits.
+//   3. Negative values get a leading minus.
+
+pub fn i2s(n: Int) -> String {
+    if n == 0 { return "0";
+}
+    let mut x: Int = n;
+    let mut neg: Int = 0;
+    if x < 0 { neg = 1;
+    x = 0 - x;
+    }
+    let dgs: String = "0123456789";
+    let mut s: String = "";
+    while x > 0 { s = char_at(dgs, x % 10) + s;
+    x = x / 10;
+    }
+    if neg == 1 { return "-" + s;
+    }
+    return s;
+}

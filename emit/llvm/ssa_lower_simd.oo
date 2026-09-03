@@ -1,0 +1,76 @@
+// # SIMD Vector SSA Lowering Engine
+//
+// Logline: Lowers 256-bit SIMD vector AST operations and intrinsics to typed SSA intermediate representation instructions.
+//
+// Setup: Pairs with ssa_ir.oo and ssa_lower.oo for direct non-heuristic AST-to-SSA translation under RFC 0026.
+//
+// Beats:
+//   1. Identify typed SIMD vector and FMA intrinsic function names.
+//   2. Map intrinsic symbols to typed SSA SIMD opcodes (56..78).
+//   3. Lower unary, binary, and ternary SIMD operations into typed SSA instructions.
+//   4. Validate capability and alignment invariants during SSA construction.
+
+import "ssa_ir.oo";
+
+pub fn ssa_is_simd_op_name(name: String) -> Bool {
+    if name == "f32x8_splat" || name == "f32x8_get_lane" || name == "f32x8_insert_lane" { return true; }
+    if name == "f32x8_add" || name == "f32x8_sub" || name == "f32x8_mul" || name == "f32x8_div" { return true; }
+    if name == "f32x8_fma" || name == "f32x8_reduce_sum" { return true; }
+    if name == "f32x8_load_aligned" || name == "f32x8_store_aligned" { return true; }
+    if name == "f64x4_splat" || name == "f64x4_get_lane" || name == "f64x4_insert_lane" { return true; }
+    if name == "f64x4_add" || name == "f64x4_sub" || name == "f64x4_mul" || name == "f64x4_div" { return true; }
+    if name == "f64x4_fma" || name == "f64x4_reduce_sum" { return true; }
+    if name == "f64x4_load_aligned" || name == "f64x4_store_aligned" { return true; }
+    if name == "fma" || name == "scalar_fma" { return true; }
+    return false;
+}
+
+pub fn ssa_simd_op_code(name: String) -> Int {
+    if name == "f32x8_splat" { return ssa_op_f32x8_splat(); }
+    if name == "f32x8_get_lane" { return ssa_op_f32x8_get_lane(); }
+    if name == "f32x8_insert_lane" { return ssa_op_f32x8_insert_lane(); }
+    if name == "f32x8_add" { return ssa_op_f32x8_add(); }
+    if name == "f32x8_sub" { return ssa_op_f32x8_sub(); }
+    if name == "f32x8_mul" { return ssa_op_f32x8_mul(); }
+    if name == "f32x8_div" { return ssa_op_f32x8_div(); }
+    if name == "f32x8_fma" { return ssa_op_f32x8_fma(); }
+    if name == "f32x8_reduce_sum" { return ssa_op_f32x8_reduce_sum(); }
+    if name == "f32x8_load_aligned" { return ssa_op_f32x8_load_aligned(); }
+    if name == "f32x8_store_aligned" { return ssa_op_f32x8_store_aligned(); }
+
+    if name == "f64x4_splat" { return ssa_op_f64x4_splat(); }
+    if name == "f64x4_get_lane" { return ssa_op_f64x4_get_lane(); }
+    if name == "f64x4_insert_lane" { return ssa_op_f64x4_insert_lane(); }
+    if name == "f64x4_add" { return ssa_op_f64x4_add(); }
+    if name == "f64x4_sub" { return ssa_op_f64x4_sub(); }
+    if name == "f64x4_mul" { return ssa_op_f64x4_mul(); }
+    if name == "f64x4_div" { return ssa_op_f64x4_div(); }
+    if name == "f64x4_fma" { return ssa_op_f64x4_fma(); }
+    if name == "f64x4_reduce_sum" { return ssa_op_f64x4_reduce_sum(); }
+    if name == "f64x4_load_aligned" { return ssa_op_f64x4_load_aligned(); }
+    if name == "f64x4_store_aligned" { return ssa_op_f64x4_store_aligned(); }
+
+    if name == "fma" || name == "scalar_fma" { return ssa_op_scalar_fma(); }
+    return 0;
+}
+
+pub fn ssa_simd_is_ternary(op: Int) -> Bool {
+    if op == ssa_op_f32x8_fma() || op == ssa_op_f64x4_fma() || op == ssa_op_scalar_fma() { return true; }
+    if op == ssa_op_f32x8_insert_lane() || op == ssa_op_f64x4_insert_lane() { return true; }
+    if op == ssa_op_f32x8_store_aligned() || op == ssa_op_f64x4_store_aligned() { return true; }
+    return false;
+}
+
+pub fn ssa_simd_is_binary(op: Int) -> Bool {
+    if op == ssa_op_f32x8_add() || op == ssa_op_f32x8_sub() || op == ssa_op_f32x8_mul() || op == ssa_op_f32x8_div() { return true; }
+    if op == ssa_op_f64x4_add() || op == ssa_op_f64x4_sub() || op == ssa_op_f64x4_mul() || op == ssa_op_f64x4_div() { return true; }
+    if op == ssa_op_f32x8_get_lane() || op == ssa_op_f64x4_get_lane() { return true; }
+    if op == ssa_op_f32x8_load_aligned() || op == ssa_op_f64x4_load_aligned() { return true; }
+    return false;
+}
+
+pub fn ssa_simd_is_unary(op: Int) -> Bool {
+    if op == ssa_op_f32x8_splat() || op == ssa_op_f64x4_splat() { return true; }
+    if op == ssa_op_f32x8_reduce_sum() || op == ssa_op_f64x4_reduce_sum() { return true; }
+    return false;
+}

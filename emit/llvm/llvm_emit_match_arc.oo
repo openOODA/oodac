@@ -1,0 +1,122 @@
+// # Lower let x = match to LLVM / Match-expr ARC and Result gate
+//
+// Logline: Allocates the let slot, binds __asgn__, and emits a statement match that stores each arm value. Zero payload slots, move a bind-as-arm, and accept all Result cross-product scrutinees.
+//
+// Setup: Merged cohesive compiler module.
+//
+// Beats:
+//   1. Unified cohesive implementation.
+
+
+import "llvm_emit_ty.oo";
+
+import "llvm_emit_env.oo";
+
+import "llvm_emit_match_slot.oo";
+
+
+pub fn llvm_emit_let_match(name: String, ann_ty: String, toks: List[String], pos: Int, n: Int, env: List[String]) -> List[String] {
+    let mut final_ty: String = "i64";
+    if ann_ty != "" {
+        final_ty = llvm_ty_map(ann_ty);
+    } else if pos + 1 < n && field_at(list_get(toks, pos + 1), 0) == "IDENT" {
+        let sname: String = field_at(list_get(toks, pos + 1), 3);
+        let mut raw_ty: String = llvm_env_get_var_ty(env, "__fnret__" + sname);
+        if raw_ty == "" { raw_ty = llvm_env_get_var_ty(env, "__rt__" + sname);
+        }
+        if raw_ty == "" { raw_ty = llvm_env_get_var_ty(env, sname);
+        }
+        let rty: String = llvm_ty_map(raw_ty);
+        if llvm_match_is_res(rty) {
+            let pay_ty: String = llvm_match_pay_ty(rty, true);
+            if pay_ty != "" && pay_ty != "void" { final_ty = pay_ty;
+            }
+        }
+    }
+    if final_ty == "void" || final_ty == "" { final_ty = "i64";
+    }
+    let mut cur_env: List[String] = env;
+    let irc: Int = parse_int(list_get(cur_env, 0));
+    let inrc: Int = irc + 1;
+    let slot: String = name + "." + irc.to_string();
+    let mut ibump: List[String] = list_new();
+    ibump = list_push(ibump, inrc.to_string());
+    ibump = list_push(ibump, list_get(cur_env, 1));
+    ibump = list_push(ibump, list_get(cur_env, 2));
+    ibump = list_push(ibump, list_get(cur_env, 3));
+    ibump = list_push(ibump, list_get(cur_env, 4));
+    cur_env = llvm_env_add_var(ibump, "__slot__" + name, slot);
+    println("  %" + slot + ".slot = alloca " + final_ty + ", align 8");
+    llvm_match_zero_slot(final_ty, slot);
+    cur_env = llvm_env_add_var(cur_env, name, final_ty);
+    cur_env = llvm_env_add_var(cur_env, "__asgn__", name);
+    cur_env = llvm_env_add_var(cur_env, "__expect__", final_ty);
+    let ms: List[String] = llvm_emit_match_stmt(toks, pos, n, cur_env);
+    let mut p = parse_int(list_get(ms, 0));
+    cur_env = list_new();
+    cur_env = list_push(cur_env, list_get(ms, 1));
+    cur_env = list_push(cur_env, list_get(ms, 2));
+    cur_env = list_push(cur_env, list_get(ms, 3));
+    cur_env = list_push(cur_env, list_get(ms, 4));
+    cur_env = list_push(cur_env, list_get(ms, 5));
+    cur_env = llvm_env_add_var(cur_env, "__asgn__", "");
+    if p < n && field_at(list_get(toks, p), 0) == "SEMI" { p = p + 1;
+    }
+    let mut out: List[String] = list_new();
+    out = list_push(out, p.to_string());
+    out = list_push(out, list_get(cur_env, 0));
+    out = list_push(out, list_get(cur_env, 1));
+    out = list_push(out, list_get(cur_env, 2));
+    out = list_push(out, list_get(cur_env, 3));
+    out = list_push(out, list_get(cur_env, 4));
+    return out;
+}
+
+pub fn llvm_mex_is_str_result(ty: String) -> Bool {
+    if ty == "Result" || ty == "%OoResS" || ty == "%OoResV" { return true;
+    }
+    if ty == "Result[String]" || ty == "Result[String,String]" { return true;
+    }
+    if ty == "Result[String, String]" { return true;
+    }
+    if chars_len(ty) >= 14 && str_slice(ty, 0, 14) == "Result[String," { return true;
+    }
+    // 2-payload Result cross-product: Ok+Err combos.
+    if ty == "Result[Int, Int]" || ty == "%OoResII" { return true;
+    }
+    if ty == "Result[String, Int]" || ty == "%OoResSI" { return true;
+    }
+    if ty == "Result[Bool, Int]" || ty == "%OoResBI" { return true;
+    }
+    if ty == "Result[String, Bool]" || ty == "%OoResSB" { return true;
+    }
+    if ty == "Result[Bool, Bool]" || ty == "%OoResBB" { return true;
+    }
+    if ty == "Result[Float, Int]" || ty == "%OoResFI" { return true;
+    }
+    if ty == "Result[String, Float]" || ty == "%OoResSF" { return true;
+    }
+    if ty == "Result[Float, Float]" || ty == "%OoResFF" { return true;
+    }
+    return false;
+}
+
+pub fn llvm_mex_zero_slots(ok_slot: String, err_slot: String) {
+    println("  store %OoStr zeroinitializer, %OoStr* %" + ok_slot + ".slot, align 8");
+    println("  store %OoStr zeroinitializer, %OoStr* %" + err_slot + ".slot, align 8");
+}
+
+pub fn llvm_mex_move_if_bind(toks: List[String], pos: Int, bind: String, env: List[String]) {
+    if pos < 0 { return;
+    }
+    let n = list_len(toks);
+    if pos >= n { return;
+    }
+    if field_at(list_get(toks, pos), 0) != "IDENT" {
+        return;
+    }
+    if field_at(list_get(toks, pos), 3) != bind { return;
+    }
+    let slot: String = llvm_env_slot(env, bind);
+    println("  store %OoStr zeroinitializer, %OoStr* %" + slot + ".slot, align 8");
+}

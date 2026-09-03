@@ -1,0 +1,198 @@
+// # Call result type classification
+//
+// Logline: Classifies runtime primitives, built-ins, and compiler calls into C result types.
+//
+// Setup: Compiler internal code emission and lowering stage.
+//
+// Beats:
+//   1. Classify Result[String] and Result[Void] runtime functions.
+//   2. Classify String, List, Float, Bool, and Integer primitives.
+//   3. Supports compiler and runtime helper signatures for cross-module emit.
+
+pub fn c_is_res_s_call(name: String) -> Bool {
+    if name == "Ok" || name == "Err" || name == "read_file" || name == "oo_read_file" || name == "lex_all" { return true;
+    }
+    if name == "sys_exec" || name == "process_exec" || name == "oo_sys_exec" { return true;
+    }
+    if name == "env_get" || name == "oo_env_get" || name == "fetch" || name == "oo_fetch" || name == "chs_build" { return true;
+    }
+    if name == "json_parse_internal" || name == "python_embed_internal" { return true;
+    }
+    if name == "tcp_bind" || name == "tcp_connect" || name == "bind_udp" || name == "tls_connect" { return true;
+    }
+    if name == "oo_tcp_bind" || name == "oo_tcp_connect" || name == "oo_bind_udp" || name == "oo_tls_connect" { return true;
+    }
+    if name == "tcp_write" || name == "tcp_read" || name == "udp_recv" || name == "udp_send" || name == "tcp_close" || name == "sock_raw" { return true;
+    }
+    if name == "oo_tcp_write" || name == "oo_tcp_read" || name == "oo_udp_recv" || name == "oo_udp_send" || name == "oo_tcp_close" || name == "oo_sock_raw" { return true;
+    }
+    if name == "mutex_lock" || name == "mutex_unlock" || name == "thread_spawn" || name == "thread_join" || name == "gpu_launch" { return true;
+    }
+    if name == "oo_mutex_lock" || name == "oo_mutex_unlock" || name == "oo_thread_spawn" || name == "oo_thread_join" || name == "oo_thread_join_s" || name == "oo_gpu_launch" { return true;
+    }
+    if name == "channel_new" || name == "channel_send" || name == "channel_recv" { return true;
+    }
+    if name == "oo_channel_new" || name == "oo_channel_send" || name == "oo_channel_recv" { return true;
+    }
+    if name == "actor_spawn" || name == "actor_send" || name == "actor_recv" { return true;
+    }
+    if name == "oo_actor_spawn" || name == "oo_actor_send" || name == "oo_actor_recv" { return true;
+    }
+    if name == "sys_spawn" || name == "sys_wait" || name == "sys_kill" { return true;
+    }
+    if name == "oo_sys_spawn" || name == "oo_sys_wait" || name == "oo_sys_kill" { return true;
+    }
+    if name == "sys_epoll_create" || name == "sys_inotify_init" || name == "sys_prctl" { return true;
+    }
+    if name == "oo_sys_epoll_create" || name == "oo_sys_inotify_init" || name == "oo_sys_prctl" { return true;
+    }
+    if name == "landlock_restrict" || name == "oo_landlock_restrict" || name == "dns_resolve" || name == "oo_dns_resolve" || name == "oo_dns_resolve_ipv4" { return true;
+    }
+    if name == "arena_create" || name == "arena_alloc" || name == "arena_reset" { return true;
+    }
+    if name == "oo_arena_create" || name == "oo_arena_alloc" || name == "oo_arena_reset" { return true;
+    }
+    if name == "actor_restart" || name == "otp_supervise" || name == "cap_rpc_send" || name == "cap_rpc_recv" { return true;
+    }
+    if name == "oo_actor_restart" || name == "oo_otp_supervise" || name == "oo_cap_rpc_send" || name == "oo_cap_rpc_recv" { return true;
+    }
+    if name == "parse" || name == "load_model" || name == "dlopen" || name == "oo_dlopen" || name == "dlsym" || name == "oo_dlsym" || name == "dlclose" || name == "oo_dlclose" { return true;
+    }
+    return false;
+}
+
+pub fn c_is_res_v_call(name: String) -> Bool {
+    if name == "write_file" || name == "oo_write_file" || name == "fs_write_file" { return true;
+    }
+    if name == "fs_mkdir" || name == "oo_fs_mkdir" || name == "fs_remove_file" || name == "oo_fs_remove_file" { return true;
+    }
+    if name == "fs_rmdir" || name == "oo_fs_rmdir" || name == "oo_fs_hardlink" || name == "oo_fs_symlink" { return true;
+    }
+    if name == "scenario" || name == "check" || name == "sh_mkdir_p" || name == "sh_clean" || name == "sh_copy" { return true;
+    }
+    if name == "fs_copy_file" || name == "fs_mkdir_p" || name == "fs_copy_tree" { return true;
+    }
+    return false;
+}
+
+pub fn c_is_slist_call(name: String) -> Bool {
+    if name == "oo_slist_new" || name == "oo_slist_push" || name == "str_split" { return true;
+    }
+    if name == "tokenize_lines" || name == "collect_tokens" || name == "try_scan_ws" || name == "try_scan_string" { return true;
+    }
+    if name == "try_scan_number" || name == "try_scan_ident" || name == "try_scan_punct" { return true;
+    }
+    if name == "oo_fs_read_dir" || name == "fs_read_dir" || name == "sys_args" || name == "oo_sys_args" { return true;
+    }
+    if name == "pack_tok" || name == "pack_err" || name == "pack_skip" || name == "lex_step" { return true;
+    }
+    if name == "ann_prep" || name == "call_arg_prep" || name == "c_emit_primary_c" || name == "c_emit_expr_c" { return true;
+    }
+    if name == "c_emit_expr_prec" || name == "c_emit_call_args" || name == "c_emit_method" || name == "c_pack_pos_env" { return true;
+    }
+    if name == "c_emit_block" || name == "c_emit_match_stmt" || name == "c_emit_match_let" || name == "c_emit_stmt" { return true;
+    }
+    if name == "c_emit_let_stmt" || name == "c_emit_ident_stmt" || name == "collect_module_paths" || name == "collect_expand" || name == "load_expand" { return true;
+    }
+    if name == "x86_runtime_globls" { return true;
+    }
+    return false;
+}
+
+pub fn c_is_ilist_call(name: String) -> Bool {
+    if name == "list_new" || name == "list_push" || name == "oo_ilist_new" || name == "oo_ilist_push" || name == "gen_list_int_val" { return true;
+    }
+    if name == "bytes_new" || name == "oo_bytes_new" || name == "bytes_push" || name == "oo_bytes_push" { return true;
+    }
+    return false;
+}
+
+pub fn c_is_i64_call(name: String) -> Bool {
+    if name == "chars_len" || name == "list_len" || name == "parse_int" || name == "file_size" { return true;
+    }
+    if name == "oo_slist_len" || name == "oo_ilist_len" || name == "oo_flist_len" || name == "oo_chars_len" { return true;
+    }
+    if name == "byte_at" || name == "oo_byte_at" || name == "str_byte_at" || name == "oo_str_byte_at" { return true;
+    }
+    if name == "bytes_len" || name == "oo_bytes_len" || name == "bytes_get" || name == "oo_bytes_get" { return true;
+    }
+    if name == "str_index_of" || name == "oo_str_index_of" || name == "alloc_bytes" || name == "oo_alloc_bytes" { return true;
+    }
+    if name == "now_ms" || name == "oo_now_ms" || name == "monotonic_us" || name == "oo_monotonic_us" || name == "random" || name == "oo_random" || name == "ord" || name == "oo_ord" { return true;
+    }
+    if name == "proc_mem_read" || name == "oo_proc_mem_read" { return true;
+    }
+    if name == "meta_epoch" || name == "oo_meta_epoch" || name == "meta_mix" || name == "oo_meta_mix" { return true;
+    }
+    if name == "soa_layout" || name == "dod_layout" || name == "checkpoint" || name == "rollback" { return true;
+    }
+    if name == "import_c" || name == "oo_import_c" || name == "ffi_gen" || name == "oo_ffi_gen" || name == "lto_xlang_link" || name == "oo_lto_xlang_link" { return true;
+    }
+    if name == "c_count_top_args" || name == "method_call_end" || name == "operand_end" || name == "c_binop_prec" { return true;
+    }
+    if name == "skip_until_semi" || name == "skip_balanced" || name == "skip_primary" || name == "c_emit_fn" || name == "c_emit_skip_type" || name == "c_emit_skip_braces" { return true;
+    }
+    if name == "x86_runtime_count" || name == "c_env_scope_depth" || name == "poly_ineq_eval" || name == "poly_domain_count_points_bounded" || name == "c_skip_amp_mut" || name == "meta_insn_subst_imm" || name == "wasm_zone_rodata_base" || name == "wasm_zone_shadow_stack_size" || name == "wasm_zone_scratch_base" || name == "wasm_zone_scratch_size" || name == "wasm_zone_heap_ptr_addr" || name == "wasm_rodata_add_string" || name == "wasm_env_bind_var" || name == "wasm_env_bind_var_ext" || name == "wasm_lower_expr" || name == "wasm_env_alloc" || name == "wasm_env_lookup_var" || name == "wasm_env_lookup_type" || name == "wasm_lower_struct_inst" || name == "list_len_str" || name == "wasm_adt_alloc" || name == "wasm_parse_int" || name == "wasm_env_field_offset" || name == "wasm_env_field_type" || name == "wasm_env_lookup_func" || name == "wasm_map_type_str" || name == "wasm_lower_expr_or_block" || name == "wasm_builder_add_type" || name == "wasm_builder_add_func" || name == "wasm_builder_add_import_func" || name == "slab_class_for_size" || name == "slab_class_size" || name == "slab_pool_alloc" || name == "buddy_order_for_size" || name == "buddy_block_size" || name == "buddy_alloc" || name == "x86_bind_idx" || name == "x86_struct_field_count" || name == "x86_struct_field_offset" || name == "eval_env_heap_alloc" || name == "eval_env_heap_read" || name == "eval_env_list_len" || name == "eval_env_list_new" || name == "eval_env_alloc_struct" || name == "eval_env_find_var" || name == "parse_dec_str" || name == "eval_op_prec" || name == "a64_lookup_parse" { return true;
+    }
+    let n_len: Int = chars_len(name);
+    if n_len >= 7 && str_slice(name, 0, 7) == "ssa_op_" { return true;
+    }
+    if n_len >= 8 && str_slice(name, 0, 8) == "wasm_op_" { return true;
+    }
+    if n_len >= 9 && str_slice(name, 0, 9) == "wasm_sec_" { return true;
+    }
+    if n_len >= 9 && str_slice(name, 0, 9) == "wasm_val_" { return true;
+    }
+    if n_len >= 11 && str_slice(name, 0, 11) == "wasm_block_" { return true;
+    }
+    return false;
+}
+
+pub fn c_is_f64_call(name: String) -> Bool {
+    if name == "sin" || name == "cos" || name == "ln" || name == "exp" || name == "sqrt" || name == "pow" { return true;
+    }
+    if name == "oo_sin" || name == "oo_cos" || name == "oo_ln" || name == "oo_exp" || name == "oo_sqrt" || name == "oo_pow" { return true;
+    }
+    return false;
+}
+
+pub fn c_is_i32_call(name: String) -> Bool {
+    if name == "char_is_alpha" || name == "char_is_digit" || name == "char_is_space" || name == "str_contains" { return true;
+    }
+    if name == "oo_char_is_alpha" || name == "oo_char_is_digit" || name == "oo_char_is_space" || name == "oo_str_contains" { return true;
+    }
+    if name == "path_exists" || name == "oo_path_exists" || name == "fs_is_dir" || name == "oo_fs_is_dir" { return true;
+    }
+    if name == "bytes_eq" || name == "oo_bytes_eq" || name == "str_starts_with" || name == "oo_str_starts_with" || name == "str_ends_with" || name == "oo_str_ends_with" { return true;
+    }
+    if name == "landlock_is_available" || name == "oo_landlock_is_available" || name == "cap_attenuate_ok" || name == "oo_cap_attenuate_ok" { return true;
+    }
+    if name == "c_expr_is_str" || name == "c_expr_is_str_env" || name == "c_is_binop" || name == "eval_val_is_truthy" || name == "c_cache_check_binary_manifest" { return true;
+    }
+    return false;
+}
+
+pub fn c_is_str_call(name: String) -> Bool {
+    if name == "char_at" || name == "oo_char_at" || name == "str_slice" || name == "oo_str_slice" { return true;
+    }
+    if name == "str_trim" || name == "oo_str_trim" || name == "str_to_uppercase" || name == "oo_str_to_uppercase" || name == "str_to_lowercase" || name == "oo_str_to_lowercase" { return true;
+    }
+    if name == "int_to_str" || name == "oo_int_to_str" || name == "str_repeat" || name == "oo_str_repeat" || name == "to_string" { return true;
+    }
+    if name == "bytes_from_str" || name == "oo_bytes_from_str" || name == "bytes_to_str" || name == "oo_bytes_to_str" || name == "bytes_concat" || name == "oo_bytes_concat" { return true;
+    }
+    if name == "sha256" || name == "sha1" || name == "md5" || name == "crypto_md5_internal" || name == "crypto_sha1_internal" || name == "crypto_sha256_internal" || name == "crypto_sha512_internal" || name == "crypto_hmac_sha256_internal" { return true;
+    }
+    if name == "json_stringify_internal" || name == "cap_attenuate" || name == "oo_cap_attenuate" { return true;
+    }
+    if name == "field_at" || name == "tok_line" || name == "field_decode3" || name == "keyword_kind" || name == "escape_dump" || name == "nth_csv" || name == "bin_op_name" { return true;
+    }
+    if name == "indent" || name == "drop_depth" || name == "c_env_get" || name == "c_env_put" || name == "c_ty_at" || name == "c_call_result_ty" || name == "c_lower_call_name" { return true;
+    }
+    if name == "path_dirname" || name == "path_join" || name == "path_marker" || name == "c_contract_op" || name == "c_join_parts" || name == "c_lower_ok_err" || name == "c_tokk" || name == "c_tokt" || name == "c_tokf" { return true;
+    }
+    if name == "macro_expand" || name == "ast_macro" || name == "x86_runtime_text" || name == "bc_emit_program" || name == "eval_val_to_str" || name == "expr_tok_k" || name == "expr_tok_t" || name == "stmt_tok_k" || name == "stmt_tok_t" || name == "oo_file_stamp" || name == "c_cache_manifest_path" { return true;
+    }
+    return false;
+}
+

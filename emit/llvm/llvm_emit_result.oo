@@ -1,0 +1,197 @@
+// # Insert Ok and Err as LLVM Result compounds
+//
+// Logline: Builds Int/Bool/Float/String/Void/Named Result compounds from Ok or Err and fails closed on leftover shapes.
+//
+// Setup: llvm_ty_ok_res and llvm_gen_reg exist. expect is __expect__ or __fnret_ty__.
+//
+// Beats:
+//   1. Pick the compound from expect and the payload LLVM type.
+//   2. Fail-close when Ok/Err payload LLVM type disagrees with that compound.
+//   3. Insert the tag and payload; fill the unused slot with zero.
+
+import "llvm_emit_ty.oo";
+
+import "llvm_emit_env.oo";
+
+
+fn llvm_res_pack(val: String, ty: String, p: Int, env: List[String]) -> List[String] {
+    let mut out: List[String] = list_new();
+    out = list_push(out, val);
+    out = list_push(out, ty);
+    out = list_push(out, p.to_string());
+    out = list_push(out, list_get(env, 0));
+    out = list_push(out, list_get(env, 1));
+    out = list_push(out, list_get(env, 2));
+    out = list_push(out, list_get(env, 3));
+    out = list_push(out, list_get(env, 4));
+    return out;
+}
+
+fn llvm_res_bump(env: List[String], more: List[String]) -> List[String] {
+    let mut e: List[String] = list_new();
+    e = list_push(e, list_get(more, 1));
+    e = list_push(e, list_get(more, 2));
+    e = list_push(e, list_get(more, 3));
+    e = list_push(e, list_get(more, 4));
+    e = list_push(e, list_get(more, 5));
+    return e;
+}
+
+fn llvm_res_check_pay(fn_name: String, lty: String, payload_ty: String) {
+    if payload_ty == "" {
+        if lty == "%OoResV" && fn_name == "Ok" { return; }
+        println("ERR\tllvm_emit\tOk/Err residual");
+        process_exit(1);
+        return;
+    }
+    let mut want: String = "";
+    if lty == "%OoResI" {
+        if fn_name == "Ok" { want = "i64"; } else { want = "%OoStr"; }
+    } else if lty == "%OoResB" {
+        if fn_name == "Ok" { want = "i32"; } else { want = "%OoStr"; }
+    } else if lty == "%OoResF" {
+        if fn_name == "Ok" { want = "double"; } else { want = "%OoStr"; }
+    } else if lty == "%OoResS" { want = "%OoStr"; }
+    else if lty == "%OoResV" {
+        if fn_name == "Ok" {
+            if payload_ty == "i64" || payload_ty == "i32" || payload_ty == "double" {
+                println("ERR\tllvm_emit\tOk/Err residual");
+                process_exit(1);
+            }
+            return;
+        }
+        want = "%OoStr";
+    } else if lty == "%OoResLI" { if fn_name == "Ok" { want = "%OoIList"; } else { want = "%OoStr"; } }
+    else if lty == "%OoResLS" { if fn_name == "Ok" { want = "%OoSList"; } else { want = "%OoStr"; } }
+    else if lty == "%OoResLF" { if fn_name == "Ok" { want = "%OoFList"; } else { want = "%OoStr"; } }
+    // 2-payload cross-product: Ok and Err have different slot types.
+    else if lty == "%OoResII" { if fn_name == "Ok" { want = "i64"; } else { want = "i64"; } }
+    else if lty == "%OoResSI" { if fn_name == "Ok" { want = "%OoStr"; } else { want = "i64"; } }
+    else if lty == "%OoResBI" { if fn_name == "Ok" { want = "i32"; } else { want = "i64"; } }
+    else if lty == "%OoResSB" { if fn_name == "Ok" { want = "%OoStr"; } else { want = "i32"; } }
+    else if lty == "%OoResBB" { if fn_name == "Ok" { want = "i32"; } else { want = "i32"; } }
+    else if lty == "%OoResFI" { if fn_name == "Ok" { want = "double"; } else { want = "i64"; } }
+    else if lty == "%OoResSF" { if fn_name == "Ok" { want = "%OoStr"; } else { want = "double"; } }
+    else if lty == "%OoResFF" { if fn_name == "Ok" { want = "double"; } else { want = "double"; } }
+    else if chars_len(lty) >= 7 && str_slice(lty, 0, 7) == "%OoRes." {
+        if fn_name == "Ok" { want = "%struct." + str_slice(lty, 7, chars_len(lty)); } else { want = "%OoStr"; }
+    }
+    if want != "" && payload_ty != want { println("ERR\tllvm_emit\tOk/Err residual"); process_exit(1); }
+}
+
+fn llvm_res_tri(lty: String, fn_name: String, pty: String, zpay: String, payload: String, r1: String, p: Int, env: List[String]) -> List[String] {
+    // Single-payload Result: Err is always %OoStr zeroinitializer at slot 2.
+    return llvm_res_tri2(lty, fn_name, pty, "%OoStr", zpay, "zeroinitializer", payload, r1, p, env);
+}
+
+// 2-payload Result variant: ok_pty/ok_zpay differ from err_pty/err_zpay.
+// For %OoResSI = { i32, %OoStr, i64 }: Ok uses (%OoStr, i64 zero), Err uses (%OoStr zero, i64).
+fn llvm_res_tri2(lty: String, fn_name: String, ok_pty: String, err_pty: String, ok_zpay: String, err_zpay: String, payload: String, r1: String, p: Int, env: List[String]) -> List[String] {
+    let mut cur_env: List[String] = env;
+    let r2s: List[String] = llvm_gen_reg(cur_env);
+    let r2: String = list_get(r2s, 0);
+    cur_env = llvm_res_bump(cur_env, r2s);
+    let r3s: List[String] = llvm_gen_reg(cur_env);
+    let r3: String = list_get(r3s, 0);
+    cur_env = llvm_res_bump(cur_env, r3s);
+    if fn_name == "Ok" {
+        println("  " + r2 + " = insertvalue " + lty + " " + r1 + ", " + ok_pty + " " + payload + ", 1");
+        println("  " + r3 + " = insertvalue " + lty + " " + r2 + ", " + err_pty + " " + err_zpay + ", 2");
+    } else {
+        println("  " + r2 + " = insertvalue " + lty + " " + r1 + ", " + ok_pty + " " + ok_zpay + ", 1");
+        println("  " + r3 + " = insertvalue " + lty + " " + r2 + ", " + err_pty + " " + payload + ", 2");
+    }
+    return llvm_res_pack(r3, lty, p, cur_env);
+}
+
+// Leftover __expect__ from a prior let (e.g. double) is not the Result type.
+fn llvm_res_expect(expect: String, env: List[String]) -> String {
+    if chars_len(expect) >= 6 && str_slice(expect, 0, 6) == "%OoRes" { return expect; }
+    let ef: String = llvm_env_get_var_ty(env, "__fnret_ty__");
+    if chars_len(ef) >= 6 && str_slice(ef, 0, 6) == "%OoRes" { return ef; }
+    return expect;
+}
+
+pub fn llvm_emit_ok_err(fn_name: String, payload: String, payload_ty: String, expect: String, p: Int, env: List[String]) -> List[String] {
+    let mut ok_val = "0";
+    if fn_name == "Ok" { ok_val = "1"; }
+    let lty: String = llvm_ty_ok_res(llvm_res_expect(expect, env), payload_ty);
+    llvm_res_check_pay(fn_name, lty, payload_ty);
+    let mut cur_env: List[String] = env;
+    let r1s: List[String] = llvm_gen_reg(cur_env);
+    let r1: String = list_get(r1s, 0);
+    cur_env = llvm_res_bump(cur_env, r1s);
+    println("  " + r1 + " = insertvalue " + lty + " zeroinitializer, i32 " + ok_val + ", 0");
+    if lty == "%OoResI" {
+        return llvm_res_tri(lty, fn_name, "i64", "0", payload, r1, p, cur_env);
+    }
+    if lty == "%OoResB" {
+        return llvm_res_tri(lty, fn_name, "i32", "0", payload, r1, p, cur_env);
+    }
+    if lty == "%OoResF" {
+        return llvm_res_tri(lty, fn_name, "double", "0.0", payload, r1, p, cur_env);
+    }
+    if lty == "%OoResLI" {
+        return llvm_res_tri(lty, fn_name, "%OoIList", "zeroinitializer", payload, r1, p, cur_env);
+    }
+    if lty == "%OoResLS" {
+        return llvm_res_tri(lty, fn_name, "%OoSList", "zeroinitializer", payload, r1, p, cur_env);
+    }
+    if lty == "%OoResLF" {
+        return llvm_res_tri(lty, fn_name, "%OoFList", "zeroinitializer", payload, r1, p, cur_env);
+    }
+    // 2-payload Result cross-product: Ok and Err have different slot types.
+    if lty == "%OoResII" { return llvm_res_tri2(lty, fn_name, "i64", "i64", "0", "0", payload, r1, p, cur_env); }
+    if lty == "%OoResSI" { return llvm_res_tri2(lty, fn_name, "%OoStr", "i64", "zeroinitializer", "0", payload, r1, p, cur_env); }
+    if lty == "%OoResBI" { return llvm_res_tri2(lty, fn_name, "i32", "i64", "0", "0", payload, r1, p, cur_env); }
+    if lty == "%OoResSB" { return llvm_res_tri2(lty, fn_name, "%OoStr", "i32", "zeroinitializer", "0", payload, r1, p, cur_env); }
+    if lty == "%OoResBB" { return llvm_res_tri2(lty, fn_name, "i32", "i32", "0", "0", payload, r1, p, cur_env); }
+    if lty == "%OoResFI" { return llvm_res_tri2(lty, fn_name, "double", "i64", "0.0", "0", payload, r1, p, cur_env); }
+    if lty == "%OoResSF" { return llvm_res_tri2(lty, fn_name, "%OoStr", "double", "zeroinitializer", "0.0", payload, r1, p, cur_env); }
+    if lty == "%OoResFF" { return llvm_res_tri2(lty, fn_name, "double", "double", "0.0", "0.0", payload, r1, p, cur_env); }
+    if chars_len(lty) >= 7 && str_slice(lty, 0, 7) == "%OoRes." {
+        let pty: String = "%struct." + str_slice(lty, 7, chars_len(lty));
+        return llvm_res_tri(lty, fn_name, pty, "zeroinitializer", payload, r1, p, cur_env);
+    }
+    if lty == "%OoResV" {
+        let r2s: List[String] = llvm_gen_reg(cur_env);
+        let r2: String = list_get(r2s, 0);
+        cur_env = llvm_res_bump(cur_env, r2s);
+        let mut vpay: String = payload;
+        if fn_name == "Ok" { vpay = "zeroinitializer"; }
+        println("  " + r2 + " = insertvalue %OoResV " + r1 + ", %OoStr " + vpay + ", 1");
+        return llvm_res_pack(r2, lty, p, cur_env);
+    }
+    if lty != "%OoResS" {
+        println("ERR\tllvm_emit\tOk/Err residual");
+        process_exit(1);
+    }
+    let r2s: List[String] = llvm_gen_reg(cur_env);
+    let r2: String = list_get(r2s, 0);
+    cur_env = llvm_res_bump(cur_env, r2s);
+    println("  " + r2 + " = insertvalue %OoResS " + r1 + ", %OoStr " + payload + ", 1");
+    return llvm_res_pack(r2, lty, p, cur_env);
+}
+
+pub fn llvm_emit_none(p: Int, env: List[String]) -> List[String] {
+    let mut expect: String = llvm_res_expect(llvm_env_get_var_ty(env, "__expect__"), env);
+
+    // Result, Err is %OoStr zeroinitializer. For 2-payload cross-products,
+    // Err is the 2nd type.
+    let mut payload_ty: String = "%OoStr";
+    let mut payload_val: String = "zeroinitializer";
+    if expect == "%OoResII" { payload_ty = "i64"; payload_val = "0"; }
+    else if expect == "%OoResSI" { payload_ty = "i64"; payload_val = "0"; }
+    else if expect == "%OoResBI" { payload_ty = "i64"; payload_val = "0"; }
+    else if expect == "%OoResSB" { payload_ty = "i32"; payload_val = "0"; }
+    else if expect == "%OoResBB" { payload_ty = "i32"; payload_val = "0"; }
+    else if expect == "%OoResFI" { payload_ty = "i64"; payload_val = "0"; }
+    else if expect == "%OoResSF" { payload_ty = "double"; payload_val = "0.0"; }
+    else if expect == "%OoResFF" { payload_ty = "double"; payload_val = "0.0"; }
+    // Single-payload: Err is %OoStr zeroinitializer (default).
+    if expect == "" {
+        println("ERR\tllvm_emit\tNone: cannot derive expect from __expect__ or __fnret_ty__");
+        process_exit(1);
+    }
+    return llvm_emit_ok_err("Err", payload_val, payload_ty, expect, p, env);
+}

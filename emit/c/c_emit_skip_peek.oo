@@ -1,0 +1,151 @@
+// # Peek type names, struct-lit braces, and skip helpers
+//
+// Logline: Names the type after optional &, peeks list element types, and skips brace-balanced blocks and verify sections.
+//
+// Setup: Token kinds AMP and KW_MUT sit before a type IDENT; c_tokk and field_at exist.
+//
+// Beats:
+//   1. Skip AMP and KW_MUT and peek type names.
+//   2. Peek list element types.
+//   3. Skip brace-balanced regions and verify blocks.
+//   4. Treat {} or { ident: as a struct literal.
+
+
+
+pub fn c_skip_amp_mut(toks: List[String], pos: Int, n: Int) -> Int {
+    let mut p: Int = pos;
+    if p < n && field_at(list_get(toks, p), 0) == "AMP" { p = p + 1;
+    }
+    if p < n && field_at(list_get(toks, p), 0) == "KW_MUT" { p = p + 1;
+    }
+    return p;
+}
+
+pub fn c_is_struct_lit_lbrace(toks: List[String], pos: Int, n: Int) -> Bool {
+    if pos >= n { return false;
+}
+    if c_tokk(toks, pos) != "LBRACE" {
+        return false;
+    }
+    let p2: Int = pos + 1;
+    if p2 >= n { return false;
+    }
+    let k2: String = c_tokk(toks, p2);
+    if k2 == "RBRACE" {
+        return true;
+    }
+    if k2 == "IDENT" {
+        if p2 + 1 < n { if c_tokk(toks, p2 + 1) == "COLON" { return true;
+        }
+        }
+    }
+    return false;
+}
+
+pub fn c_peek_type_name(toks: List[String], pos: Int, n: Int) -> String {
+    if pos >= n { return "";
+}
+    let mut p: Int = pos;
+    if p < n { if c_tokk(toks, p) == "AMP" { p = p + 1;
+    }
+    }
+    if p < n { if c_tokk(toks, p) == "KW_MUT" { p = p + 1;
+    }
+    }
+    if p < n && c_tokk(toks, p) == "IDENT" {
+        return c_tokt(toks, p);
+    }
+    return "";
+}
+
+// pos at type IDENT (e.g. List); returns S, I, or "" for non-List.
+pub fn c_peek_list_elem(toks: List[String], pos: Int, n: Int) -> String {
+    if pos >= n { return "";
+}
+    if field_at(list_get(toks, pos), 0) != "IDENT" {
+        return "";
+    }
+    if field_at(list_get(toks, pos), 3) != "List" {
+        return "";
+    }
+    let mut p: Int = pos + 1;
+    if p < n && field_at(list_get(toks, p), 0) == "LBRACKET" {
+        p = p + 1;
+        if p < n && field_at(list_get(toks, p), 0) == "IDENT" {
+            let e: String = field_at(list_get(toks, p), 3);
+            if e == "Int" {
+                return "I";
+            }
+            if e == "String" {
+                return "S";
+            }
+            if e == "Float" || e == "f64" { return "F";
+            }
+            if e == "Bool" { return "I";
+            }
+            return e;
+        }
+    }
+    return "S";
+}
+
+// Skip brace-balanced region starting at LBRACE (or find next LBRACE).
+pub fn c_emit_skip_braces(toks: List[String], pos: Int, n: Int) -> Int {
+    let mut p: Int = pos;
+while p < n && field_at(list_get(toks, p), 0) != "LBRACE" { p = p + 1;
+}
+    if p >= n { return p;
+    }
+    let mut depth: Int = 0;
+    while p < n { let k: String = field_at(list_get(toks, p), 0);
+    if k == "LBRACE" { depth = depth + 1;
+    }
+        if k == "RBRACE" {
+            depth = depth - 1;
+            p = p + 1;
+            if depth == 0 { return p;
+            }
+        } else {
+            p = p + 1;
+        }
+    }
+    return p;
+}
+
+pub fn c_emit_skip_verify(toks: List[String], pos: Int, n: Int) -> Int {
+    let mut p: Int = pos;
+if p < n && field_at(list_get(toks, p), 0) == "KW_VERIFY" { p = p + 1;
+if p < n && field_at(list_get(toks, p), 0) == "IDENT" { p = p + 1;
+}
+        if p < n && field_at(list_get(toks, p), 0) == "LBRACE" {
+            p = c_emit_skip_braces(toks, p, n);
+        }
+    }
+    return p;
+}
+
+pub fn skip_until_semi(toks: List[String], pos0: Int) -> Int {
+    let n: Int = list_len(toks);
+    let mut pos: Int = pos0;
+    while pos < n {
+        if field_at(list_get(toks, pos), 0) == "SEMI" {
+            return pos + 1;
+        }
+        pos = pos + 1;
+    }
+    return pos;
+}
+
+pub fn skip_trait_or_impl(toks: List[String], pos0: Int) -> Int {
+    let n = list_len(toks);
+    let mut pos = pos0 + 1;
+    while pos < n {
+        if field_at(list_get(toks, pos), 0) == "LBRACE" {
+            return c_emit_skip_braces(toks, pos, n);
+        }
+        pos = pos + 1;
+    }
+    return pos;
+}
+
+

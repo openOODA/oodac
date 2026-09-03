@@ -1,0 +1,67 @@
+// # WebAssembly Backend — Module Entry Door
+//
+// Logline: Re-exports WASI, WasmGC, Component Model WIT, and binary LEB128 emission interfaces.
+//
+// Setup: Imports internal WebAssembly backend siblings and provides clean public re-exports.
+//
+// Beats:
+//   1. Import WebAssembly binary builder, memory layout, and lowering siblings.
+//   2. Re-export public Wasm binary generation and driver interfaces.
+//   3. Maintain <= 256 lines limit.
+
+import "lex/ANCHOR.oo";
+import "types/ANCHOR.oo";
+import "ast/ANCHOR.oo";
+import "wasm_alloc_buddy.oo";
+import "wasm_alloc_slab.oo";
+import "wasm_arc_runtime.oo";
+import "wasm_atomic_emitter.oo";
+import "wasm_backend_driver.oo";
+import "wasm_binary_builder.oo";
+import "wasm_cap_lowering.oo";
+import "wasm_component_builder.oo";
+import "wasm_component_canonical.oo";
+import "wasm_component_types.oo";
+import "wasm_component_wit_emit.oo";
+import "wasm_debug_custom_sec.oo";
+import "wasm_direct_emit.oo";
+import "wasm_dwarf_header.oo";
+import "wasm_dwarf_lines.oo";
+import "wasm_gc_cast.oo";
+import "wasm_gc_lower.oo";
+import "wasm_gc_types.oo";
+import "wasm_js_glue_gen.oo";
+import "wasm_leb128.oo";
+import "wasm_lower_adt.oo";
+import "wasm_lower_control.oo";
+import "wasm_lower_expr.oo";
+import "wasm_lower_fn.oo";
+import "wasm_lower_list.oo";
+import "wasm_lower_ops.oo";
+import "wasm_lower_stmt.oo";
+import "wasm_lower_string.oo";
+import "wasm_lower_struct.oo";
+import "wasm_mem_layout.oo";
+import "wasm_opcodes.oo";
+import "wasm_opt_ir.oo";
+import "wasm_opt_locals.oo";
+import "wasm_opt_peephole.oo";
+import "wasm_opt_transforms.oo";
+import "wasm_simd_emitter.oo";
+import "wasm_sourcemap_gen.oo";
+import "wasm_sourcemap_vlq.oo";
+import "wasm_target_browser.oo";
+import "wasm_target_wasi.oo";
+import "wasm_threads_sync.oo";
+import "wasm_types.oo";
+import "wasm_wasi_p2.oo";
+
+// ──▓▓ Public WebAssembly Emitter API ──▓▓──
+
+pub fn emit_wasm_driver(src: String, target_mode: String) -> List[Int] {
+    return wasm_driver_compile_source(src, target_mode);
+}
+
+pub fn emit_wasm_module(ast_str: String, target_mode: String) -> List[Int] {
+    return wasm_compile_ast_to_binary(ast_str, target_mode);
+}

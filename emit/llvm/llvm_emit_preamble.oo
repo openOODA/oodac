@@ -1,0 +1,187 @@
+// # Print the LLVM module preamble
+//
+// Logline: Prints the LLVM module header, target triple, runtime struct types, and declare lines for the CHS runtime, math floor, and capability grants.
+//
+// Setup: println exists; llvm_emit_stream prints this once before any function.
+//
+// Beats:
+//   1. Canonicalize target triple and lookup target datalayout.
+//   2. Print ModuleID, datalayout, and target triple.
+//   3. Define %OoStr, list, and Result types plus their header structs.
+//   4. Declare string, list, print, float math, exit, and cap-grant runtime symbols.
+
+
+
+pub fn llvm_canonical_triple(triple: String) -> String {
+    if triple == "" || triple == "x86_64-unknown-linux-gnu" || triple == "x86_64-linux" || triple == "linux-x86_64" || triple == "x86_64" || triple == "native" { return "x86_64-unknown-linux-gnu";
+}
+    if triple == "aarch64-unknown-linux-gnu" || triple == "aarch64-linux" || triple == "arm64-linux" || triple == "linux-arm64" || triple == "aarch64" || triple == "arm64" {
+        return "aarch64-unknown-linux-gnu";
+    }
+    if triple == "aarch64-apple-darwin" || triple == "aarch64-darwin" || triple == "arm64-darwin" || triple == "darwin" || triple == "macos" || triple == "darwin-arm64" {
+        return "aarch64-apple-darwin";
+    }
+    if triple == "wasm32-unknown-wasi" || triple == "wasm32-wasi" || triple == "wasm32" || triple == "wasi" || triple == "wasm" {
+        return "wasm32-unknown-wasi";
+    }
+    return triple;
+}
+
+pub fn llvm_target_datalayout(triple: String) -> String {
+    let t: String = llvm_canonical_triple(triple);
+if t == "aarch64-unknown-linux-gnu" { return "e-m:e-i8:8:32-i16:16:32-i64:64-i128:128-n32:64-S128";
+}
+    if t == "aarch64-apple-darwin" {
+        return "e-m:o-i64:64-i128:128-n32:64-S128";
+    }
+    if t == "wasm32-unknown-wasi" {
+        return "e-m:e-p:32:32-p10:8:8-p20:8:8-i64:64-i128:128-n32:64-S128-ni:1:10:20";
+    }
+    return "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-f80:128-n8:16:32:64-S128";
+}
+
+pub fn llvm_emit_preamble() {
+    llvm_emit_preamble_target("");
+}
+
+pub fn llvm_emit_preamble_target(triple: String) {
+    let tr: String = llvm_canonical_triple(triple);
+    let dl: String = llvm_target_datalayout(tr);
+    println("; ModuleID = 'openOODA'");
+    println("target datalayout = \"" + dl + "\"");
+    println("target triple = \"" + tr + "\"");
+    println("");
+    println("%OoStrHeader = type { i32, i32 }");
+    println("%OoListHeader = type { i32, i32 }");
+    println("%OoStr = type { i8*, i64 }");
+    println("%OoIList = type { i64*, i64, i64 }");
+    println("%OoSList = type { %OoStr*, i64, i64 }");
+    println("%OoFList = type { double*, i64, i64 }");
+    println("%OoLL_I = type { %OoIList*, i64, i64 }");
+    println("%OoLL_S = type { %OoSList*, i64, i64 }");
+    println("%OoLL_F = type { %OoFList*, i64, i64 }");
+    println("%OoResS = type { i32, %OoStr }");
+    println("%OoResV = type { i32, %OoStr }");
+    println("%OoResI = type { i32, i64, %OoStr }");
+    println("%OoResB = type { i32, i32, %OoStr }");
+    println("%OoResF = type { i32, double, %OoStr }");
+    println("%OoResLI = type { i32, %OoIList, %OoStr }");
+    println("%OoResLS = type { i32, %OoSList, %OoStr }");
+    println("%OoResLF = type { i32, %OoFList, %OoStr }");
+    println("%OoResII = type { i32, i64, i64 }");
+    println("%OoResSI = type { i32, %OoStr, i64 }");
+    println("%OoResBI = type { i32, i32, i64 }");
+    println("%OoResSB = type { i32, %OoStr, i32 }");
+    println("%OoResBB = type { i32, i32, i32 }");
+    println("%OoResFI = type { i32, double, i64 }");
+    println("%OoResSF = type { i32, %OoStr, double }");
+    println("%OoResFF = type { i32, double, double }");
+    println("");
+    println("declare void @oo_str_retain(%OoStr)");
+    println("declare void @oo_str_release(%OoStr)");
+    // oo_ll_S_retain/release are declared below with byval(%OoLL_S) — avoid duplicate.
+    println("declare void @oo_ll_S_set(%OoLL_S* sret(%OoLL_S), %OoLL_S* byval(%OoLL_S), i64, %OoSList* byval(%OoSList))");
+    println("declare void @oo_ilist_retain(%OoIList* byval(%OoIList))");
+    println("declare void @oo_ilist_release(%OoIList* byval(%OoIList))");
+    println("declare void @oo_slist_retain(%OoSList* byval(%OoSList))");
+    println("declare void @oo_slist_release(%OoSList* byval(%OoSList))");
+    println("declare %OoStr @oo_str_lit(i8*)");
+    println("declare %OoStr @oo_str_concat(%OoStr, %OoStr)");
+    println("declare i64 @oo_str_byte_len(%OoStr)");
+    println("declare i64 @oo_chars_len(%OoStr)");
+    println("declare i64 @oo_byte_at(%OoStr, i64)");
+    println("declare i64 @oo_bytes_len(%OoStr)");
+    println("declare %OoStr @oo_byte_slice(%OoStr, i64, i64)");
+    println("declare i32 @oo_bytes_eq(%OoStr, %OoStr)");
+    println("declare %OoStr @oo_bytes_from_str(%OoStr)");
+    println("declare %OoStr @oo_bytes_concat(%OoStr, %OoStr)");
+    println("declare %OoStr @oo_char_at(%OoStr, i64)");
+    println("declare %OoStr @oo_str_slice(%OoStr, i64, i64)");
+    println("declare i32 @oo_str_contains(%OoStr, %OoStr)");
+    println("declare i32 @oo_str_eq(%OoStr, %OoStr)");
+    println("declare i32 @oo_res_eq_s(%OoResS, %OoResS)");
+    println("declare %OoStr @oo_str_trim(%OoStr)");
+    println("declare %OoStr @oo_str_to_lowercase(%OoStr)");
+    println("declare %OoStr @oo_str_to_uppercase(%OoStr)");
+    println("declare %OoStr @oo_str_repeat(%OoStr, i64)");
+    println("declare i32 @oo_char_is_alpha(%OoStr)");
+    println("declare i32 @oo_char_is_digit(%OoStr)");
+    println("declare i32 @oo_char_is_space(%OoStr)");
+    println("declare %OoStr @oo_int_to_str(i64)");
+    println("declare i64 @oo_str_to_int(%OoStr)");
+    println("declare void @oo_ilist_new(%OoIList* sret(%OoIList))");
+    println("declare void @oo_ilist_push(%OoIList* sret(%OoIList), %OoIList* byval(%OoIList), i64)");
+    println("declare i64 @oo_ilist_get(%OoIList* byval(%OoIList), i64)");
+    println("declare i64 @oo_ilist_len(%OoIList* byval(%OoIList))");
+    println("declare i32 @oo_ilist_eq(%OoIList* byval(%OoIList), %OoIList* byval(%OoIList))");
+    println("declare void @oo_ilist_set(%OoIList* sret(%OoIList), %OoIList* byval(%OoIList), i64, i64)");
+    println("declare void @oo_slist_set(%OoSList* sret(%OoSList), %OoSList* byval(%OoSList), i64, %OoStr)");
+    println("declare void @oo_flist_set(%OoFList* sret(%OoFList), %OoFList* byval(%OoFList), i64, double)");
+    println("declare i8* @malloc(i64)");
+    println("declare i8* @memcpy(i8*, i8*, i64)");
+    println("declare void @oo_slist_new(%OoSList* sret(%OoSList))");
+    println("declare void @oo_slist_push(%OoSList* sret(%OoSList), %OoSList* byval(%OoSList), %OoStr)");
+    println("declare %OoStr @oo_slist_get(%OoSList* byval(%OoSList), i64)");
+    println("declare i64 @oo_slist_len(%OoSList* byval(%OoSList))");
+    println("declare i32 @oo_slist_eq(%OoSList* byval(%OoSList), %OoSList* byval(%OoSList))");
+    println("declare %OoSList @str_split(%OoStr, %OoStr)");
+    println("declare void @oo_flist_retain(%OoFList* byval(%OoFList))");
+    println("declare void @oo_flist_release(%OoFList* byval(%OoFList))");
+    println("declare void @oo_flist_new(%OoFList* sret(%OoFList))");
+    println("declare void @oo_flist_push(%OoFList* sret(%OoFList), %OoFList* byval(%OoFList), double)");
+    println("declare double @oo_flist_get(%OoFList* byval(%OoFList), i64)");
+    println("declare i64 @oo_flist_len(%OoFList* byval(%OoFList))");
+    println("declare i32 @oo_flist_eq(%OoFList* byval(%OoFList), %OoFList* byval(%OoFList))");
+    println("declare void @oo_ll_I_new(%OoLL_I* sret(%OoLL_I))");
+    println("declare void @oo_ll_I_push(%OoLL_I* sret(%OoLL_I), %OoLL_I* byval(%OoLL_I), %OoIList* byval(%OoIList))");
+    println("declare void @oo_ll_I_get(%OoIList* sret(%OoIList), %OoLL_I* byval(%OoLL_I), i64)");
+    println("declare i64 @oo_ll_I_len(%OoLL_I* byval(%OoLL_I))");
+    println("declare void @oo_ll_I_release(%OoLL_I* byval(%OoLL_I))");
+    println("declare void @oo_ll_S_new(%OoLL_S* sret(%OoLL_S))");
+    println("declare void @oo_ll_S_push(%OoLL_S* sret(%OoLL_S), %OoLL_S* byval(%OoLL_S), %OoSList* byval(%OoSList))");
+    println("declare void @oo_ll_S_get(%OoSList* sret(%OoSList), %OoLL_S* byval(%OoLL_S), i64)");
+    println("declare i64 @oo_ll_S_len(%OoLL_S* byval(%OoLL_S))");
+    println("declare void @oo_ll_S_release(%OoLL_S* byval(%OoLL_S))");
+    println("declare void @oo_ll_F_new(%OoLL_F* sret(%OoLL_F))");
+    println("declare void @oo_ll_F_push(%OoLL_F* sret(%OoLL_F), %OoLL_F* byval(%OoLL_F), %OoFList* byval(%OoFList))");
+    println("declare void @oo_ll_F_get(%OoFList* sret(%OoFList), %OoLL_F* byval(%OoLL_F), i64)");
+    println("declare i64 @oo_ll_F_len(%OoLL_F* byval(%OoLL_F))");
+    println("declare void @oo_ll_F_release(%OoLL_F* byval(%OoLL_F))");
+    println("declare void @oo_print_str(%OoStr)");
+    println("declare void @oo_eprint_str(%OoStr)");
+    println("declare void @oo_print_int(i64)");
+    println("declare void @oo_print_bool(i32)");
+    println("declare void @oo_print_double(double)");
+    println("declare void @oo_println()");
+    println("declare void @oo_eprintln()");
+    println("declare void @exit(i32)");
+    println("define linkonce_odr void @oo_process_exit(i64 %c) {");
+    println("  %oo_pe = trunc i64 %c to i32");
+    println("  call void @exit(i32 %oo_pe)");
+    println("  unreachable");
+    println("}");
+    println("declare double @oo_sin(double)");
+    println("declare double @oo_cos(double)");
+    println("declare double @oo_ln(double)");
+    println("declare double @oo_exp(double)");
+    println("declare double @oo_sqrt(double)");
+    println("declare double @oo_pow(double, double)");
+    println("declare i64 @oo_cap_grant_fs()");
+    println("declare i64 @oo_cap_grant_sys()");
+    println("declare i64 @oo_cap_grant_env()");
+    println("declare i64 @oo_cap_grant_net()");
+    println("declare void @oo_env_get(%OoResS* sret(%OoResS), i64, %OoStr)");
+    println("declare i64 @oo_now_ms(i64)");
+    println("declare void @oo_sleep_ms(i64, i64)");
+    println("define linkonce_odr i64 @now_ms(i64 %c) {");
+    println("  %r = call i64 @oo_now_ms(i64 %c)");
+    println("  ret i64 %r");
+    println("}");
+    println("define linkonce_odr void @sleep_ms(i64 %c, i64 %ms) {");
+    println("  call void @oo_sleep_ms(i64 %c, i64 %ms)");
+    println("  ret void");
+    println("}");
+    println("declare void @oo_cap_require(i64, i64, i8*)");
+    println("declare void @llvm.trap()");
+    println("");
+}

@@ -1,0 +1,198 @@
+// # Escape C strings and detect string expressions
+//
+// Logline: Escapes Ooda string text for C literals and decides whether a C expression is an OoStr from call names, env tags, or oo_* prefixes.
+//
+// Setup: c_rhs_call_name, c_call_result_ty, c_env_get, chars_len, char_at, and byte_at exist.
+//
+// Beats:
+//   1. c_escape_ctrl_byte maps CR, BS, FF, VT, and NUL to \\r \\b \\f \\v \\0.
+//   2. c_escape_str_text walks text via Builder fold (List + oo_str_concat_list) for O(n) single allocation.
+//   3. c_expr_is_str and c_expr_is_str_env treat env T, __fr__ String returns, Result unwraps, and oo_str / byte / slist / char / int helpers as strings.
+//   4. Builder fold for a+b+c chains via c_emit_concat_multi (oo_str_concat_multi).
+
+import "c_emit_ty_ext.oo";
+import "c_emit_call_ty.oo";
+import "c_emit_env.oo";
+import "c_emit_temps.oo";
+
+pub fn c_escape_ctrl_byte(b: Int) -> String {
+    if b == 13 { return "\\r";
+    }
+    if b == 8 { return "\\b";
+    }
+    if b == 12 { return "\\f";
+    }
+    if b == 11 { return "\\v";
+    }
+    if b == 0 { return "\\0";
+    }
+    return "";
+}
+
+pub fn c_escape_str_text(t: String) -> String {
+    let n = chars_len(t);
+if n == 0 { return "";
+}
+    if n == 1 {
+        let c = char_at(t, 0);
+        if c == "\n" { return "\\n";
+        }
+        if c == "\t" { return "\\t";
+        }
+        if c == "\"" { return "\\\"";
+        }
+        if c == "\\" { return "\\\\";
+        }
+        let esc: String = c_escape_ctrl_byte(byte_at(c, 0));
+        if esc != "" { return esc;
+        }
+        return t;
+    }
+    let mut parts: List[String] = list_new();
+    let mut i = 0;
+    while i < n { let c = char_at(t, i);
+    if c == "\\" { parts = list_push(parts, "\\\\");
+    } else if c == "\"" {
+            parts = list_push(parts, "\\\"");
+        } else if c == "\n" {
+            parts = list_push(parts, "\\n");
+        } else if c == "\t" {
+            parts = list_push(parts, "\\t");
+        } else {
+            let esc2: String = c_escape_ctrl_byte(byte_at(c, 0));
+            if esc2 != "" {
+                parts = list_push(parts, esc2);
+            } else {
+                parts = list_push(parts, c);
+            }
+        }
+        i = i + 1;
+    }
+    return c_join_parts(parts);
+}
+
+pub fn c_expr_is_str(e: String) -> Bool {
+    let cnm: String = c_rhs_call_name(e);
+if cnm != "" { if c_call_result_ty(cnm) == "OoStr" { return true;
+}
+        if cnm == "crypto_md5_internal" || cnm == "crypto_sha1_internal"
+            || cnm == "crypto_aes_encrypt_internal" || cnm == "crypto_sha256_internal"
+            || cnm == "crypto_hmac_sha256_internal" || cnm == "crypto_sha3_256_internal"
+            || cnm == "crypto_aes_gcm_seal_internal" || cnm == "crypto_aes_gcm_open_internal"
+            || cnm == "crypto_chacha20poly1305_seal_internal" || cnm == "crypto_chacha20poly1305_open_internal"
+            || cnm == "crypto_mlkem768_keygen_internal" || cnm == "crypto_mlkem768_encaps_internal"
+            || cnm == "crypto_mlkem768_decaps_internal"
+            || cnm == "crypto_mldsa65_keygen_internal" || cnm == "crypto_mldsa65_sign_internal"
+            || cnm == "crypto_mldsa65_verify_internal"
+            || cnm == "cap_attenuate" || cnm == "oo_cap_attenuate"
+            || cnm == "oo_cap_kernel_seal" || cnm == "cap_kernel_seal"
+            || cnm == "oo_enclave_enter" || cnm == "enclave_enter" {
+            return true;
+        }
+    }
+    let elen: Int = chars_len(e);
+    if elen >= 8 && str_slice(e, 0, 7) == "oo_str_" {
+        return true;
+    }
+    if elen >= 13 && str_slice(e, 0, 13) == "oo_int_to_str" {
+        return true;
+    }
+    if elen >= 10 && str_slice(e, 0, 10) == "oo_char_at" {
+        return true;
+    }
+    if elen >= 12 && str_slice(e, 0, 12) == "oo_slist_get" {
+        return true;
+    }
+    if elen >= 12 && (str_slice(e, 0, 12) == "oo_byte_slic" || str_slice(e, 0, 12) == "oo_bytes_to_") {
+        return true;
+    }
+    return false;
+}
+
+pub fn c_expr_is_str_env(e: String, env: String) -> Bool {
+    if c_expr_is_emit_tmp(e) { return true;
+}
+    // FIX: when the user has explicitly typed the binding (e.g. `let len1: Int = match ...`)
+    // the env records the precise C type under `__ty__<e>`. Honor that over the rkind-derived
+    // kind, otherwise the `==` operator on a typed `Int` binding is mis-translated to
+    // `oo_str_eq(left, right)` and the binary fails to compile.
+    let pty: String = c_env_get(env, "__ty__" + e);
+    if pty == "OoStr" || pty == "T" { return true;
+    }
+    if pty == "long long" || pty == "int" || pty == "double" || pty == "I" || pty == "F" || pty == "B" { return false;
+    }
+    if c_env_get(env, e) == "T" {
+        return true;
+    }
+    let cnm: String = c_rhs_call_name(e);
+    if cnm != "" {
+        if c_env_get(env, "__fr__" + cnm) == "T" {
+            return true;
+        }
+    }
+    return c_expr_is_str(e);
+}
+
+fn xor_hex_digit(n: Int) -> String {
+    let h: String = "0123456789abcdef";
+let d: Int = n & 15;
+return char_at(h, d);
+}
+
+pub fn c_join_parts(parts: List[String]) -> String {
+    let n: Int = list_len(parts);
+    if n == 0 { return "";
+    }
+    if n == 1 { return list_get(parts, 0);
+    }
+    let mut res: String = "";
+    let mut i: Int = 0;
+    while i < n { res = res + list_get(parts, i);
+    i = i + 1;
+    }
+    return res;
+}
+
+pub fn c_emit_secret_str_lit(t: String) -> String {
+    let n: Int = bytes_len(t);
+let key: Int = 173;
+if n == 0 { return "oo_str_xor_lit((const unsigned char*)0,0LL,173LL)";
+}
+    let mut parts: List[String] = list_new();
+    let mut i: Int = 0;
+    while i < n { let b: Int = byte_at(t, i) & 255;
+    let enc: Int = (b ^ ((key + (i * 17)) & 255)) & 255;
+    let hex: String = "0x" + xor_hex_digit(enc / 16) + xor_hex_digit(enc);
+    if i > 0 { parts = list_push(parts, ",");
+    parts = list_push(parts, hex);
+    } else {
+            parts = list_push(parts, hex);
+        }
+        i = i + 1;
+    }
+    let body: String = c_join_parts(parts);
+    return "oo_str_xor_lit((const unsigned char[]){" + body + "}," + n.to_string() + "LL,173LL)";
+}
+
+pub fn c_emit_concat_multi(parts: List[String]) -> String {
+    let n: Int = list_len(parts);
+    if n == 0 { return "oo_str_lit(\"\")";
+    }
+    if n == 1 { return list_get(parts, 0);
+    }
+    if n == 2 { return c_bind_str_temp_if("concat", "oo_str_concat(" + list_get(parts, 0) + ", " + list_get(parts, 1) + ")");
+    }
+    if n == 3 { return c_bind_str_temp_if("concat", "oo_str_concat_multi(3, " + list_get(parts, 0) + ", " + list_get(parts, 1) + ", " + list_get(parts, 2) + ")");
+    }
+    let mut call: String = "oo_str_concat_multi(" + n.to_string();
+    let mut i: Int = 0;
+    while i < n { call = call + ", " + list_get(parts, i);
+    i = i + 1;
+    }
+    call = call + ")";
+    return c_bind_str_temp_if("concat", call);
+}
+
+pub fn oo_str_concat3(a: String, b: String, c: String) -> String {
+    return c_bind_str_temp_if("concat", "oo_str_concat_multi(3, " + a + ", " + b + ", " + c + ")");
+}

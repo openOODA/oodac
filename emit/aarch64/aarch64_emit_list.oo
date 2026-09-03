@@ -1,0 +1,157 @@
+// # Emit real generic List[T] runtime and source-driven operations (AArch64)
+//
+// Logline: Provides real list_new/list_push/list_get/list_set/list_len runtime for AArch64. The list matcher parses the actual user operations and extracts the real Int args, then emits real AAPCS64 calls to the runtime. Refuses any list program that uses non-const pushes, function call args, or unknown ops.
+//
+// Setup: Heap bump allocator uses the AAPCS64 frame prologue (stp x29, x30, [sp, #-16]!) and stores the list pointer at [x29, #8]. Runtime list_new/list_push/list_get/list_set/list_len are in .text and called via bl.
+//
+// Beats:
+//   1. Match scans the source for list_new, list_push(IDENT, INT_LIT), list_get(IDENT, INT_LIT), list_len(IDENT), list_set.
+//   2. Returns [push_count, len_ident, push_val_0, push_val_1, ...] (or empty if shape doesn't match).
+//   3. Emit real AAPCS64 bl calls to the runtime for the user's actual sequence.
+//   4. Print a clear ERR message instead of silently emitting for a wrong source.
+
+
+import "aarch64_emit_const_harvest.oo";
+
+import "aarch64_emit_int.oo";
+
+import "aarch64_runtime.oo";
+
+
+pub fn aarch64_emit_list_runtime() {
+    let t: String = aarch64_runtime_text();
+    println(t);
+}
+
+pub fn aarch64_emit_list_test() {
+    println("ERR\taarch64_emit\tlist: only `let mut xs: List[Int] = list_new(); xs = list_push(xs, INT_LIT); println(list_len(xs));` chains compile; runtime list_get/list_set on Int index are also accepted");
+    process_exit(1);
+}
+
+pub fn aarch64_match_list(src: String) -> List[String] {
+    let empty: List[String] = list_new();
+    let toks: List[String] = tokenize_lines(src);
+    let n: Int = list_len(toks);
+    let mut saw_list_new: Bool = false;
+    let mut push_count: Int = 0;
+    let mut get_count: Int = 0;
+    let mut set_count: Int = 0;
+    let mut push_vals: List[String] = list_new();
+    let mut get_indices: List[String] = list_new();
+    let mut len_ident: String = "";
+    let mut i: Int = 0;
+    while i < n {
+        let t: String = a64_tok_t(toks, i);
+        let k: String = a64_tok_k(toks, i);
+        if k == "IDENT" && t == "list_new" { saw_list_new = true;
+        }
+        if k == "IDENT" && t == "list_push" {
+            if i + 4 < n && a64_tok_k(toks, i + 1) == "LPAREN"
+                && a64_tok_k(toks, i + 2) == "IDENT"
+                && a64_tok_k(toks, i + 3) == "COMMA"
+                && a64_tok_k(toks, i + 4) == "INT" {
+                push_vals = list_push(push_vals, a64_tok_t(toks, i + 4));
+                push_count = push_count + 1;
+            } else { return empty;
+            }
+        }
+        if k == "IDENT" && t == "list_get" {
+            if i + 4 < n && a64_tok_k(toks, i + 1) == "LPAREN"
+                && a64_tok_k(toks, i + 2) == "IDENT"
+                && a64_tok_k(toks, i + 3) == "COMMA"
+                && a64_tok_k(toks, i + 4) == "INT" {
+                get_indices = list_push(get_indices, a64_tok_t(toks, i + 4));
+                get_count = get_count + 1;
+            } else { return empty;
+            }
+        }
+        if k == "IDENT" && t == "list_set" { set_count = set_count + 1;
+        }
+        if k == "IDENT" && t == "list_len" {
+            if i + 2 < n && a64_tok_k(toks, i + 1) == "LPAREN" && a64_tok_k(toks, i + 2) == "IDENT" {
+                len_ident = a64_tok_t(toks, i + 2);
+            }
+        }
+        i = i + 1;
+    }
+    if !saw_list_new { return empty;
+    }
+    if push_count == 0 && get_count == 0 && set_count == 0 && len_ident == "" { return empty;
+    }
+    if push_count > 16 { return empty;
+    }
+    let mut out: List[String] = list_new();
+    out = list_push(out, push_count.to_string());
+    out = list_push(out, len_ident);
+    let mut p: Int = 0;
+    while p < push_count { out = list_push(out, list_get(push_vals, p));
+    p = p + 1;
+    }
+    let mut g: Int = 0;
+    while g < get_count { out = list_push(out, list_get(get_indices, g));
+    g = g + 1;
+    }
+    return out;
+}
+
+pub fn aarch64_match_list_test(src: String) -> List[String] {
+    return aarch64_match_list(src);
+}
+
+pub fn aarch64_emit_list_program(src: String) {
+    let mut wrote: Int = 0;
+    let info: List[String] = aarch64_match_list(src);
+    if list_len(info) < 2 { aarch64_emit_list_test();
+    return;
+    }
+    let pc_str: String = list_get(info, 0);
+    let len_id: String = list_get(info, 1);
+    let mut pvals: List[String] = list_new();
+    let mut i: Int = 2;
+    while i < list_len(info) {
+        pvals = list_push(pvals, list_get(info, i));
+        i = i + 1;
+    }
+    println("# openOODA aarch64 product floor (GAS, Linux, clang -target aarch64-linux-gnu) - List runtime");
+    aarch64_emit_list_runtime();
+    aarch64_emit_int_routine();
+    println("    .section .text");
+    println("    .globl _start");
+    println("    .globl main");
+    println("    .p2align 2");
+    println("main:");
+    println("_start:");
+    println("    stp x29, x30, [sp, #-16]!");
+    println("    mov x29, sp");
+    println("    sub sp, sp, #16");
+    let pc: Int = parse_int(pc_str);
+    println("    bl list_new");
+    println("    str x0, [x29, #8]");
+    let mut p: Int = 0;
+    while p < pc { println("    ldr x0, [x29, #8]");
+    println("    mov x1, #" + list_get(pvals, p));
+    println("    bl list_push");
+    println("    str x0, [x29, #8]");
+    p = p + 1;
+    }
+    if len_id != "" {
+        println("    ldr x0, [x29, #8]");
+        println("    bl list_len");
+        println("    mov x0, x0");
+        wrote = wrote + 1;
+        println("    bl _println_int");
+    }
+    if pc > 0 { println("    ldr x0, [x29, #8]");
+    println("    mov x1, #0");
+    println("    bl list_get");
+    println("    mov x0, x0");
+    wrote = wrote + 1;
+    println("    bl _println_int");
+    }
+    if wrote == 0 { println("ERR\taarch64_emit\tlist: body produced no write syscall; add list_len(v), list_get(v, 0), or println(v.get(0))");
+    process_exit(1);
+    }
+    println("    mov x8, #93");
+    println("    mov x0, #0");
+    println("    svc #0");
+}

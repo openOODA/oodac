@@ -1,0 +1,63 @@
+// # Sovereign Direct Machine Code Build Router
+//
+// Logline: Routes CLI builds to in-process x86-64 ELF, AArch64 ELF, pure Mach-O, and WASM binary generators.
+//
+// Setup: fs and sys capabilities granted; compiles source to standalone binary without host toolchains.
+//
+// Beats:
+//   1. Check if backend is a sovereign direct machine code target (x86_64-elf, aarch64, macho, wasm).
+//   2. Load source with imports.
+//   3. Dispatch to matching binary generator.
+//   4. Return true on success or false on failure.
+
+
+fn sov_write_img(fs: &FsWriteCap, out: String, img: List[Int]) -> Bool {
+    if list_len(img) == 0 {
+        return false;
+    }
+    let binary: String = bytes_to_str(img);
+    let w: Result[Void, String] = write_file(fs, out, binary);
+    return w.is_ok();
+}
+
+fn sov_x86_elf_pure(fs: &FsWriteCap, src: String, out: String) -> Bool {
+    let pkg: ByteOut = x86_elf_pure_from_source(src);
+    if pkg.flag == 1 {
+        return sov_write_img(fs, out, pkg.bytes);
+    }
+    return x86_emit_direct_elf_binary_pure_e(fs, src, out);
+}
+
+pub fn is_sovereign_backend(backend: String) -> Bool {
+    if backend == "x86_64-elf" || backend == "aarch64" || backend == "macho" || backend == "wasm" || backend == "wasm-gc" || backend == "wasm-linear" || backend == "wasm-dual" {
+        return true;
+    }
+    return false;
+}
+
+pub fn run_build_sovereign(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, path: String, out: String, backend: String, x86_elf_pure: Bool) -> Bool {
+    let src: String = load_source_with_imports(fs_r, path);
+    if backend == "x86_64-elf" {
+        if x86_elf_pure {
+            return sov_x86_elf_pure(fs_w, src, out);
+        }
+        run_build_x86(sys, path, out);
+        return true;
+    }
+    if backend == "aarch64" {
+        return aarch64_emit_direct_elf_binary_pure(fs_w, src, out);
+    }
+    if backend == "macho" {
+        return macho_emit_direct_binary_pure(fs_w, src, out);
+    }
+    if backend == "wasm" || backend == "wasm-linear" {
+        return wasm_emit_direct_binary(fs_w, sys, src, out);
+    }
+    if backend == "wasm-gc" {
+        return wasm_emit_direct_gc_binary(fs_w, sys, src, out);
+    }
+    if backend == "wasm-dual" {
+        return wasm_emit_direct_dual_package(fs_w, sys, src, out);
+    }
+    return false;
+}

@@ -1,0 +1,163 @@
+// # Pure In-Process AArch64 ELF64 Binary Packager
+//
+// Logline: Builds a 64-bit ET_EXEC ELF image for EM_AARCH64 with one RX 64KB-aligned PT_LOAD text segment.
+//
+// Setup: Pure byte transform. Caller supplies AArch64 machine-code bytes. No GNU as or ld. No ambient I/O.
+//
+// Beats:
+//   1. Encode little-endian ELF64 header fields with e_machine EM_AARCH64.
+//   2. Emit one 56-byte PT_LOAD with RX flags and 65536-byte alignment.
+//   3. Place supplied machine code in the loadable text segment and bind e_entry to _start.
+//   4. Fail closed on empty text.
+
+import "types/byte_out.oo";
+
+fn a64p_le16(b: List[Int], v: Int) -> List[Int] {
+    let mut o: List[Int] = list_push(b, v & 255);
+    return list_push(o, (v / 256) & 255);
+}
+
+fn a64p_le32(b: List[Int], v: Int) -> List[Int] {
+    let mut o: List[Int] = a64p_le16(b, v);
+    o = list_push(o, (v / 65536) & 255);
+    return list_push(o, (v / 16777216) & 255);
+}
+
+fn a64p_le64(b: List[Int], v: Int) -> List[Int] {
+    let mut o: List[Int] = b;
+    let mut x: Int = v;
+    let mut i: Int = 0;
+    while i < 8 { o = list_push(o, x & 255);
+    x = x / 256;
+    i = i + 1;
+    }
+    return o;
+}
+
+fn a64p_cat(a: List[Int], src: List[Int]) -> List[Int] {
+    let n: Int = list_len(src);
+    let mut o: List[Int] = a;
+    let mut i: Int = 0;
+    while i < n { o = list_push(o, list_get(src, i) & 255);
+    i = i + 1;
+    }
+    return o;
+}
+
+pub fn aarch64_elf_pure_text_off() -> Int {
+    return 120;
+}
+
+pub fn aarch64_elf_pure_base_vaddr() -> Int {
+    return 4194304;
+}
+
+pub fn aarch64_elf_pure_align() -> Int {
+    return 65536;
+}
+
+pub fn aarch64_elf_pure_rx_flags() -> Int {
+    return 5;
+}
+
+pub fn aarch64_elf_pure_linux_exit(status: Int) -> List[Int] {
+    let st: Int = status & 255;
+    let imm: Int = st * 32;
+    let mut ops: List[Int] = list_new();
+    ops = list_push(ops, imm & 255);
+    ops = list_push(ops, (imm / 256) & 255);
+    ops = list_push(ops, 128);
+    ops = list_push(ops, 210);
+    ops = list_push(ops, 168);
+    ops = list_push(ops, 11);
+    ops = list_push(ops, 128);
+    ops = list_push(ops, 210);
+    ops = list_push(ops, 1);
+    ops = list_push(ops, 0);
+    ops = list_push(ops, 0);
+    ops = list_push(ops, 212);
+    let mut b: List[Int] = list_new();
+    let n: Int = list_len(ops);
+    let mut i: Int = 0;
+    while i < n { b = list_push(b, list_get(ops, i));
+    i = i + 1;
+    }
+    return b;
+}
+
+fn a64p_ident() -> List[Int] {
+    let mut h: List[Int] = list_new();
+    h = list_push(h, 127);
+    h = list_push(h, 69);
+    h = list_push(h, 76);
+    h = list_push(h, 70);
+    h = list_push(h, 2);
+    h = list_push(h, 1);
+    h = list_push(h, 1);
+    h = list_push(h, 0);
+    let mut p: Int = 0;
+    while p < 8 { h = list_push(h, 0);
+    p = p + 1;
+    }
+    return h;
+}
+
+fn a64p_ehdr(entry: Int) -> List[Int] {
+    let mut h: List[Int] = a64p_ident();
+    h = a64p_le16(h, 2);
+    h = a64p_le16(h, 183);
+    h = a64p_le32(h, 1);
+    h = a64p_le64(h, entry);
+    h = a64p_le64(h, 64);
+    h = a64p_le64(h, 0);
+    h = a64p_le32(h, 0);
+    h = a64p_le16(h, 64);
+    h = a64p_le16(h, 56);
+    h = a64p_le16(h, 1);
+    h = a64p_le16(h, 0);
+    h = a64p_le16(h, 0);
+    h = a64p_le16(h, 0);
+    return h;
+}
+
+fn a64p_phdr(filesz: Int) -> List[Int] {
+    let mut p: List[Int] = list_new();
+    p = a64p_le32(p, 1);
+    p = a64p_le32(p, 5);
+    p = a64p_le64(p, 0);
+    p = a64p_le64(p, 4194304);
+    p = a64p_le64(p, 4194304);
+    p = a64p_le64(p, filesz);
+    p = a64p_le64(p, filesz);
+    p = a64p_le64(p, 65536);
+    return p;
+}
+
+pub fn aarch64_elf_pure_package(code: List[Int]) -> ByteOut {
+    let n: Int = list_len(code);
+if n == 0 { return byte_out_err("aarch64_elf_pure: empty text");
+}
+    let off: Int = 120;
+    let filesz: Int = off + n;
+    let entry: Int = 4194304 + off;
+    let mut img: List[Int] = a64p_ehdr(entry);
+    img = a64p_cat(img, a64p_phdr(filesz));
+    img = a64p_cat(img, code);
+    return byte_out_ok(img);
+}
+
+pub fn aarch64_elf_pure_write(fs: &FsWriteCap, path: String, img: List[Int]) -> Result[Int, String] {
+    if path == "" {
+        return Err("aarch64_elf_pure: empty path");
+    }
+    if list_len(img) == 0 { return Err("aarch64_elf_pure: empty image");
+    }
+    let binary: String = bytes_to_str(img);
+    let r: Result[Void, String] = write_file(fs, path, binary);
+    match r { Ok(_) => { return Ok(list_len(img));
+    }
+        Err(e) => {
+            return Err(e);
+        }
+    }
+}

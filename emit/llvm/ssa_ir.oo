@@ -1,0 +1,184 @@
+// # Static Single Assignment (SSA) Intermediate Representation
+// Logline: Canonical SSA data structures defining virtual values, instructions, basic blocks, and functions.
+// Setup: Pure SSA definitions module.
+// Beats: (1) Define SSA opcodes. (2) Define SsaFunction with parallel inst arrays (ops, results, imm, lhs, block). (3) Builder and modification helpers.
+
+pub fn ssa_op_add() -> Int { return 1; }
+pub fn ssa_op_sub() -> Int { return 2; }
+pub fn ssa_op_mul() -> Int { return 3; }
+pub fn ssa_op_sdiv() -> Int { return 4; }
+pub fn ssa_op_srem() -> Int { return 5; }
+pub fn ssa_op_and() -> Int { return 6; }
+pub fn ssa_op_or() -> Int { return 7; }
+pub fn ssa_op_xor() -> Int { return 8; }
+pub fn ssa_op_shl() -> Int { return 9; }
+pub fn ssa_op_shr() -> Int { return 10; }
+pub fn ssa_op_icmp_eq() -> Int { return 11; }
+pub fn ssa_op_icmp_slt() -> Int { return 12; }
+pub fn ssa_op_phi() -> Int { return 13; }
+pub fn ssa_op_alloca() -> Int { return 14; }
+pub fn ssa_op_load() -> Int { return 15; }
+pub fn ssa_op_store() -> Int { return 16; }
+pub fn ssa_op_br() -> Int { return 17; }
+pub fn ssa_op_cond_br() -> Int { return 18; }
+pub fn ssa_op_ret() -> Int { return 19; }
+pub fn ssa_op_const() -> Int { return 20; }
+pub fn ssa_op_store_lit() -> Int { return 21; }
+pub fn ssa_op_const_forced() -> Int { return 22; }
+pub fn ssa_op_println_int() -> Int { return 23; }
+pub fn ssa_op_println_str() -> Int { return 24; }
+
+// Float arithmetic opcodes (25-29).
+pub fn ssa_op_fadd() -> Int { return 25; }
+pub fn ssa_op_fsub() -> Int { return 26; }
+pub fn ssa_op_fmul() -> Int { return 27; }
+pub fn ssa_op_fdiv() -> Int { return 28; }
+pub fn ssa_op_frem() -> Int { return 29; }
+
+// Float compare opcodes (30-35). Ordered comparisons: oeq olt ole ogt oge une.
+pub fn ssa_op_fcmp_oeq() -> Int { return 30; }
+pub fn ssa_op_fcmp_olt() -> Int { return 31; }
+pub fn ssa_op_fcmp_ole() -> Int { return 32; }
+pub fn ssa_op_fcmp_ogt() -> Int { return 33; }
+pub fn ssa_op_fcmp_oge() -> Int { return 34; }
+pub fn ssa_op_fcmp_une() -> Int { return 35; }
+
+// Additional integer compare opcodes (36-40).
+// Existing: icmp_eq (11), icmp_slt (12).
+// New: unsigned (ult, ule), signed (sgt, sge), not-equal (ne).
+pub fn ssa_op_icmp_ult() -> Int { return 36; }
+pub fn ssa_op_icmp_ule() -> Int { return 37; }
+pub fn ssa_op_icmp_sgt() -> Int { return 38; }
+pub fn ssa_op_icmp_sge() -> Int { return 39; }
+pub fn ssa_op_icmp_ne() -> Int { return 40; }
+
+// Integer casts (41-43).
+pub fn ssa_op_sext() -> Int { return 41; }
+pub fn ssa_op_zext() -> Int { return 42; }
+pub fn ssa_op_trunc() -> Int { return 43; }
+
+// Float casts (44-45).
+pub fn ssa_op_sitofp() -> Int { return 44; }
+pub fn ssa_op_fptosi() -> Int { return 45; }
+
+// Function call (46). NOTE: full support requires extending SsaFunction with
+// a per-instruction arg list (or an inst_extra parallel list). The opcode
+// constant is defined here; the struct extension is left to a follow-up lane
+// because ssa_lower / ssa_opt / ssa_opt_licm / llvm_text_emitter /
+// compiler_driver all construct SsaFunction literals and would need to be
+// updated together. The 2nd imm encodes #args when this opcode is wired up.
+pub fn ssa_op_call() -> Int { return 46; }
+
+// GEP (47). NOTE: full support requires per-instruction index list. Same
+// follow-up constraint as `call` above. The imm may carry #indices until the
+// struct is extended.
+pub fn ssa_op_getelementptr() -> Int { return 47; }
+
+// Aggregate access (48-49).
+pub fn ssa_op_extractvalue() -> Int { return 48; }
+pub fn ssa_op_insertvalue() -> Int { return 49; }
+
+// Type cast (50).
+pub fn ssa_op_bitcast() -> Int { return 50; }
+
+// Pointer / integer casts (51-52).
+pub fn ssa_op_ptrtoint() -> Int { return 51; }
+pub fn ssa_op_inttoptr() -> Int { return 52; }
+
+// Multi-way branch (53). NOTE: full support requires a jump-table or
+// (key, [case_value, target_block]) list per instruction; not representable in
+// the current 5 parallel lists. Constant reserved; struct follow-up needed.
+pub fn ssa_op_switch() -> Int { return 53; }
+
+// Unreachable marker (54).
+pub fn ssa_op_unreachable() -> Int { return 54; }
+
+// EH landingpad stub (55). No operand semantics yet.
+pub fn ssa_op_landingpad() -> Int { return 55; }
+
+// SIMD 256-bit Vector Operations (56-78) RFC 0026.
+pub fn ssa_op_f32x8_splat() -> Int { return 56; }
+pub fn ssa_op_f32x8_get_lane() -> Int { return 57; }
+pub fn ssa_op_f32x8_insert_lane() -> Int { return 58; }
+pub fn ssa_op_f32x8_add() -> Int { return 59; }
+pub fn ssa_op_f32x8_sub() -> Int { return 60; }
+pub fn ssa_op_f32x8_mul() -> Int { return 61; }
+pub fn ssa_op_f32x8_div() -> Int { return 62; }
+pub fn ssa_op_f32x8_fma() -> Int { return 63; }
+pub fn ssa_op_f32x8_reduce_sum() -> Int { return 64; }
+pub fn ssa_op_f32x8_load_aligned() -> Int { return 65; }
+pub fn ssa_op_f32x8_store_aligned() -> Int { return 66; }
+
+pub fn ssa_op_f64x4_splat() -> Int { return 67; }
+pub fn ssa_op_f64x4_get_lane() -> Int { return 68; }
+pub fn ssa_op_f64x4_insert_lane() -> Int { return 69; }
+pub fn ssa_op_f64x4_add() -> Int { return 70; }
+pub fn ssa_op_f64x4_sub() -> Int { return 71; }
+pub fn ssa_op_f64x4_mul() -> Int { return 72; }
+pub fn ssa_op_f64x4_div() -> Int { return 73; }
+pub fn ssa_op_f64x4_fma() -> Int { return 74; }
+pub fn ssa_op_f64x4_reduce_sum() -> Int { return 75; }
+pub fn ssa_op_f64x4_load_aligned() -> Int { return 76; }
+pub fn ssa_op_f64x4_store_aligned() -> Int { return 77; }
+pub fn ssa_op_scalar_fma() -> Int { return 78; }
+
+type SsaFunction = struct {
+    name: String,
+    return_type: Int,
+    block_count: Int,
+    block_names: List[String],
+    inst_opcodes: List[Int],
+    inst_results: List[Int],
+    inst_imm_vals: List[Int],
+    inst_lhs_vals: List[Int],
+    inst_block_ids: List[Int]
+};
+
+pub fn ssa_fn_new(name: String, ret_type: Int) -> SsaFunction {
+    let empty_s: List[String] = list_new();
+    let empty_i1: List[Int] = list_new();
+    let empty_i2: List[Int] = list_new();
+    let empty_i3: List[Int] = list_new();
+    let empty_i4: List[Int] = list_new();
+    let empty_i5: List[Int] = list_new();
+    return SsaFunction { name: name, return_type: ret_type, block_count: 0, block_names: empty_s, inst_opcodes: empty_i1, inst_results: empty_i2, inst_imm_vals: empty_i3, inst_lhs_vals: empty_i4, inst_block_ids: empty_i5 };
+}
+
+pub fn ssa_fn_add_block(fn_data: SsaFunction, name: String) -> SsaFunction {
+    let mut bnames: List[String] = fn_data.block_names;
+    let names: List[String] = list_push(bnames, name);
+    return SsaFunction { name: fn_data.name, return_type: fn_data.return_type, block_count: fn_data.block_count + 1, block_names: names, inst_opcodes: fn_data.inst_opcodes, inst_results: fn_data.inst_results, inst_imm_vals: fn_data.inst_imm_vals, inst_lhs_vals: fn_data.inst_lhs_vals, inst_block_ids: fn_data.inst_block_ids };
+}
+
+pub fn ssa_fn_emit_inst(fn_data: SsaFunction, block_id: Int, res_reg: Int, op: Int, imm: Int) -> SsaFunction {
+    let mut o_ops: List[Int] = fn_data.inst_opcodes;
+    let mut o_res: List[Int] = fn_data.inst_results;
+    let mut o_imms: List[Int] = fn_data.inst_imm_vals;
+    let mut o_lhss: List[Int] = fn_data.inst_lhs_vals;
+    let mut o_bids: List[Int] = fn_data.inst_block_ids;
+    let ops: List[Int] = list_push(o_ops, op);
+    let res: List[Int] = list_push(o_res, res_reg);
+    let imms: List[Int] = list_push(o_imms, imm);
+    let lhss: List[Int] = list_push(o_lhss, 0);
+    let bids: List[Int] = list_push(o_bids, block_id);
+    return SsaFunction { name: fn_data.name, return_type: fn_data.return_type, block_count: fn_data.block_count, block_names: fn_data.block_names, inst_opcodes: ops, inst_results: res, inst_imm_vals: imms, inst_lhs_vals: lhss, inst_block_ids: bids };
+}
+
+pub fn ssa_fn_emit_inst_lhs(fn_data: SsaFunction, block_id: Int, res_reg: Int, op: Int, imm: Int, lhs: Int) -> SsaFunction {
+    let mut o_ops: List[Int] = fn_data.inst_opcodes;
+    let mut o_res: List[Int] = fn_data.inst_results;
+    let mut o_imms: List[Int] = fn_data.inst_imm_vals;
+    let mut o_lhss: List[Int] = fn_data.inst_lhs_vals;
+    let mut o_bids: List[Int] = fn_data.inst_block_ids;
+    let ops: List[Int] = list_push(o_ops, op);
+    let res: List[Int] = list_push(o_res, res_reg);
+    let imms: List[Int] = list_push(o_imms, imm);
+    let lhss: List[Int] = list_push(o_lhss, lhs);
+    let bids: List[Int] = list_push(o_bids, block_id);
+    return SsaFunction { name: fn_data.name, return_type: fn_data.return_type, block_count: fn_data.block_count, block_names: fn_data.block_names, inst_opcodes: ops, inst_results: res, inst_imm_vals: imms, inst_lhs_vals: lhss, inst_block_ids: bids };
+}
+
+pub fn ssa_fn_inst_count(fn_data: SsaFunction) -> Int {
+    let ops: List[Int] = fn_data.inst_opcodes;
+    return list_len(ops);
+}

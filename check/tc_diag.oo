@@ -1,0 +1,115 @@
+// # Print a type error and exit
+//
+// Logline: Prints a tab-separated type error at LINE:COL and exits the process.
+//
+// Setup: field_at, list_len, list_get, println, and process_exit exist; token field 1 is line and field 2 is column.
+//
+// Beats:
+//   1. Print ERR type Type error at LINE:COL: msg, then optional --> path:LINE:COL.
+//   2. Reconstruct that source line from tokens and print a ^ under the bad token.
+//   3. Token 0 SRC_PATH carries the source path; missing path prints only ERR.
+//   4. Parse-unexpected prints ERR parse unexpected, then the same path and caret.
+//
+// OPEN-12: multi-module check uses per-file bodies (check_mod.oo np>1)
+// with import lines kept as blanks, so LINE:COL is local to that file.
+
+pub fn tc_src_path_of(toks: List[String]) -> String {
+    let n = list_len(toks);
+if n <= 0 { return "";
+}
+    let t0: String = list_get(toks, 0);
+    if field_at(t0, 0) == "SRC_PATH" {
+        return field_at(t0, 3);
+    }
+    return "";
+}
+
+pub fn tc_err_lc(line: String, col: String, msg: String) {
+    println("ERR\ttype\tType error at " + line + ":" + col + ": " + msg);
+    process_exit(1);
+}
+
+pub fn tc_parse_unclosed_at(toks: List[String], i: Int) {
+    let mut line = "0";
+    let mut col = "0";
+    let n = list_len(toks);
+    if i >= 0 { if i < n { let tok = list_get(toks, i);
+    line = field_at(tok, 1);
+    col = field_at(tok, 2);
+    }
+    }
+    let path: String = tc_src_path_of(toks);
+    println("ERR\tparse\tunclosed brace");
+    if path != "" {
+        println("--> " + path + ":" + line + ":" + col);
+    }
+    tc_print_caret(toks, i, line);
+    process_exit(1);
+}
+
+pub fn tc_parse_unexp_at(toks: List[String], i: Int, k: String) {
+    let mut line = "0";
+    let mut col = "0";
+    let n = list_len(toks);
+    if i >= 0 { if i < n { let tok = list_get(toks, i);
+    line = field_at(tok, 1);
+    col = field_at(tok, 2);
+    }
+    }
+    let path: String = tc_src_path_of(toks);
+    println("ERR\tparse\tunexpected " + k);
+    if path != "" {
+        println("--> " + path + ":" + line + ":" + col);
+    }
+    tc_print_caret(toks, i, line);
+    process_exit(1);
+}
+
+pub fn tc_err_at(toks: List[String], i: Int, msg: String) {
+    let mut line = "0";
+    let mut col = "0";
+    let n = list_len(toks);
+    if i >= 0 { if i < n { let tok = list_get(toks, i);
+    line = field_at(tok, 1);
+    col = field_at(tok, 2);
+    }
+    }
+    let path: String = tc_src_path_of(toks);
+    println("ERR\ttype\tType error at " + line + ":" + col + ": " + msg);
+    if path != "" {
+        println("--> " + path + ":" + line + ":" + col);
+    }
+    tc_print_caret(toks, i, line);
+    process_exit(1);
+}
+
+fn tc_print_caret(toks: List[String], err_i: Int, line: String) {
+    if line == "0" {
+        return;
+    }
+    let n: Int = list_len(toks);
+    let mut s: String = "";
+    let mut caret_at: Int = 1;
+    let mut i: Int = 0;
+    while i < n { let row: String = list_get(toks, i);
+    if field_at(row, 1) == line { let pk: String = field_at(row, 0);
+    if pk != "SRC_PATH" && pk != "LINEFILE" { if s != "" { s = s + " ";
+    }
+                if i == err_i { caret_at = chars_len(s) + 1;
+                }
+                s = s + field_at(row, 3);
+            }
+        }
+        i = i + 1;
+    }
+    if s == "" {
+        return;
+    }
+    println(s);
+    let mut pad: String = "";
+    let mut k: Int = 1;
+    while k < caret_at { pad = pad + " ";
+    k = k + 1;
+    }
+    println(pad + "^");
+}

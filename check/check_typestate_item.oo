@@ -1,0 +1,92 @@
+// # Trait and impl item skip, dump, and emit
+//
+// Logline: Parse residual TraitDecl / impl enough to skip, dump, and monomorphize methods.
+//
+// Setup: skip_balanced, c_emit_fn_mode, parse_int, field_at, list_get, list_len, and println exist.
+//
+// Beats:
+//   1. skip_trait_or_impl walks trait T {..} or impl T for S {..} as one item.
+//   2. parse_trait_item / parse_impl_item dump TRAIT / IMPL rows.
+//   3. c_emit_impl_methods emits impl fns as concrete C functions.
+import "ast/ANCHOR.oo";
+
+
+pub fn skip_trait_or_impl(toks: List[String], pos0: Int) -> Int {
+    let n = list_len(toks);
+let mut pos = pos0 + 1;
+while pos < n { if c_tokk(toks, pos) == "LBRACE" { return skip_balanced(toks, pos);
+}
+        pos = pos + 1;
+    }
+    return pos;
+}
+
+pub fn parse_trait_item(toks: List[String], pos0: Int, item_idx: Int) -> Int {
+    let n = list_len(toks);
+let mut name = "";
+if pos0 + 1 < n { name = c_tokt(toks, pos0 + 1);
+}
+    let iis: String = item_idx.to_string();
+    println("  ITEM[" + iis + "] TRAIT name=" + name);
+    return skip_trait_or_impl(toks, pos0);
+}
+
+pub fn parse_impl_item(toks: List[String], pos0: Int, item_idx: Int) -> Int {
+    let n = list_len(toks);
+let mut tname = "";
+let mut sname = "";
+if pos0 + 1 < n { tname = c_tokt(toks, pos0 + 1);
+}
+    let mut j = pos0 + 2;
+    while j < n {
+        let k: String = c_tokk(toks, j);
+        if k == "LBRACE" { j = n;
+        }
+        else if k == "IDENT" {
+            if c_tokt(toks, j) == "for" {
+                if j + 1 < n { sname = c_tokt(toks, j + 1);
+                }
+                j = n;
+            } else { j = j + 1;
+            }
+        } else { j = j + 1;
+        }
+    }
+    let iis: String = item_idx.to_string();
+    println("  ITEM[" + iis + "] IMPL trait=" + tname + " for=" + sname);
+    return skip_trait_or_impl(toks, pos0);
+}
+
+pub fn trait_method_defined(toks: List[String], mname: String) -> Bool {
+    let n = list_len(toks);
+    let mut i = 0;
+    let mut in_impl = false;
+    let mut depth = 0;
+    while i < n {
+        let k: String = c_tokk(toks, i);
+        if k == "IDENT" {
+            if c_tokt(toks, i) == "impl" {
+                if !in_impl { in_impl = true;
+                }
+            }
+        }
+        if in_impl {
+            if k == "LBRACE" { depth = depth + 1;
+            }
+            if k == "RBRACE" {
+                depth = depth - 1;
+                if depth == 0 { in_impl = false;
+                }
+            }
+            if k == "KW_FN" {
+                if i + 1 < n {
+                    if c_tokt(toks, i + 1) == mname { return true;
+                    }
+                }
+            }
+        }
+        i = i + 1;
+    }
+    return false;
+}
+

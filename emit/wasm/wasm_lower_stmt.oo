@@ -1,0 +1,253 @@
+// # WebAssembly Statement Lowering
+//
+// Logline: Lowers variable declarations, assignments, returns, and expression statements to WebAssembly bytecode.
+//
+// Setup: Import wasm_opcodes.oo, wasm_types.oo, wasm_lower_expr.oo, ast.oo.
+//
+// Beats:
+//   1. Map AST type signatures to WebAssembly value types.
+//   2. Lower let and let mut local variable bindings.
+//   3. Lower assignment statements to local and memory targets.
+//   4. Lower explicit return statements with value type conversions.
+
+import "wasm_opcodes.oo";
+
+import "wasm_types.oo";
+
+import "wasm_lower_expr.oo";
+
+import "wasm_lower_ops.oo";
+
+import "wasm_lower_struct.oo";
+
+
+
+pub fn wasm_map_type_str(ty_str: String, default_int: Int) -> Int {
+    if ty_str == "TyFloat" || ty_str == "Float" || ty_str == "f64" || str_index_of(ty_str, "Float") >= 0 || str_index_of(ty_str, "f64") >= 0 { return wasm_val_type_f64();
+    }
+    if ty_str == "f32" || ty_str == "TyName(f32)" { return wasm_val_type_f32();
+    }
+    if ty_str == "TyBool" || ty_str == "Bool" || ty_str == "TyName(Bool)" { return wasm_val_type_i32();
+    }
+    if ty_str == "TyStr" || ty_str == "String" || ty_str == "TyName(String)" { return wasm_val_type_i32();
+    }
+    if ty_str == "TyUnit" || ty_str == "Void" || ty_str == "void" || ty_str == "" || ty_str == "_" || ty_str == "TyName(Void)" || ty_str == "TyName(Unit)" || ty_str == "TyVoid" || ty_str == "TyInfer" || ty_str == "infer" { return wasm_block_type_empty();
+    }
+    if ty_str == "i64" || ty_str == "TyName(i64)" { return wasm_val_type_i64();
+    }
+    if ty_str == "i32" || ty_str == "TyName(i32)" { return wasm_val_type_i32();
+    }
+    if str_index_of(ty_str, "Cap") >= 0 { return wasm_val_type_i32();
+    }
+    if ty_str == "TyInt" || ty_str == "Int" || ty_str == "TyName(Int)" { return default_int;
+    }
+    let tag: String = ast_tag(ty_str);
+    if tag == "TyList" || tag == "TyOption" || tag == "TyResult" || tag == "TyBox" || tag == "TyRef" || tag == "TyRefMut" || tag == "TyPtr" || tag == "TyStruct" {
+        return wasm_val_type_i32();
+    }
+    if str_starts_with(ty_str, "List[") || str_starts_with(ty_str, "Map[") || str_starts_with(ty_str, "Option[") || str_starts_with(ty_str, "Result[") || str_starts_with(ty_str, "&") || str_starts_with(ty_str, "*") {
+        return wasm_val_type_i32();
+    }
+    if tag == "TyName" { return wasm_val_type_i32();
+    }
+    return default_int;
+}
+
+pub fn wasm_lower_slet(env: &mut WasmEnv, name: String, ty_str: String, rhs: String) {
+    let mut val_ty: Int = (0 + wasm_map_type_str(ty_str, env.default_int_type));
+    let mut is_str: Int = if ty_str == "TyStr" || ty_str == "String" || ty_str == "TyName(String)" { 1 } else { 0 };
+    if (rhs != "") && !ast_is(rhs, "SEmpty") {
+        let inferred_ty: Int = (0 + wasm_lower_expr(env, rhs));
+        if val_ty == wasm_block_type_empty() || ty_str == "_" || ty_str == "" || ty_str == "TyInfer" {
+            val_ty = inferred_ty;
+        }
+        if is_str == 0 && wasm_is_str_expr(env, rhs) { is_str = 1;
+        }
+    } else {
+        if val_ty == wasm_val_type_f64() { wasm_env_emit(env, op_f64_const());
+        wasm_env_emit_bytes(env, wasm_encode_f64_lit("0.0"));
+        }
+        else if val_ty == wasm_val_type_i64() { wasm_env_emit(env, op_i64_const());
+        wasm_env_emit_i64(env, 0);
+        }
+        else { wasm_env_emit(env, op_i32_const());
+        wasm_env_emit_i32(env, 0);
+        }
+    }
+    let slot: Int = (0 + wasm_env_bind_var_ext(env, name, val_ty, is_str));
+    wasm_env_emit(env, op_local_set());
+    wasm_env_emit_u32(env, slot);
+}
+
+pub fn wasm_lower_sassign(env: &mut WasmEnv, lhs: String, rhs: String) {
+    if ast_is(lhs, "EField") {
+        let fargs: String = wasm_ast_args(lhs);
+        let recv: String = list_get_str(fargs, 0);
+        let fname: String = list_get_str(fargs, 1);
+        let offset: Int = (0 + wasm_env_field_offset(env, fname));
+        let fty: Int = (0 + wasm_env_field_type(env, fname));
+        wasm_lower_field_set(env, recv, offset, rhs, fty);
+        return;
+    }
+    let vname: String = if ast_is(lhs, "EVar") { list_get_str(wasm_ast_args(lhs), 0) } else { lhs };
+    let slot: Int = (0 + wasm_env_lookup_var(env, vname));
+    let _r: Int = (0 + wasm_lower_expr(env, rhs));
+    if slot >= 0 { wasm_env_emit(env, op_local_set());
+    wasm_env_emit_u32(env, slot);
+    } else {
+        wasm_env_emit(env, op_drop());
+    }
+}
+
+pub fn wasm_lower_sreturn(env: &mut WasmEnv, expr: String) {
+    if (expr != "") && !ast_is(expr, "SEmpty") {
+        let _r: Int = (0 + wasm_lower_expr(env, expr));
+    }
+    wasm_env_emit(env, op_return());
+}
+
+pub fn wasm_lower_sexpr(env: &mut WasmEnv, expr: String) {
+    if (expr != "") && !ast_is(expr, "SEmpty") {
+        let tag: String = ast_tag(expr);
+        if tag == "EIf" || tag == "AstBlock" || tag == "EMatch" {
+            wasm_lower_stmt(env, expr);
+            return;
+        }
+        let ty: Int = (0 + wasm_lower_expr(env, expr));
+        if ty != wasm_block_type_empty() {
+            wasm_env_emit(env, op_drop());
+        }
+    }
+}
+
+pub fn wasm_lower_sbreak(env: &mut WasmEnv) {
+    let n: Int = list_len(env.loop_break_depths);
+    if n > 0 { let target_level: Int = list_get(env.loop_break_depths, n - 1);
+    let rel_depth: Int = (env.current_block_depth - 1) - target_level;
+    wasm_env_emit(env, op_br());
+    wasm_env_emit_u32(env, rel_depth);
+    }
+}
+
+pub fn wasm_lower_scontinue(env: &mut WasmEnv) {
+    let n: Int = list_len(env.loop_continue_depths);
+    if n > 0 { let target_level: Int = list_get(env.loop_continue_depths, n - 1);
+    let rel_depth: Int = (env.current_block_depth - 1) - target_level;
+    wasm_env_emit(env, op_br());
+    wasm_env_emit_u32(env, rel_depth);
+    }
+}
+
+pub fn wasm_lower_swhile(env: &mut WasmEnv, cond: String, body_node: String) {
+    wasm_env_emit(env, op_block());
+    wasm_env_emit_byte(env, wasm_block_type_empty());
+    env.current_block_depth = env.current_block_depth + 1;
+    wasm_env_emit(env, op_loop());
+    wasm_env_emit_byte(env, wasm_block_type_empty());
+    env.current_block_depth = env.current_block_depth + 1;
+    wasm_env_push_loop(env, env.current_block_depth - 2, env.current_block_depth - 1);
+    let _c: Int = (0 + wasm_lower_expr(env, cond));
+    wasm_env_emit(env, op_i32_eqz());
+    wasm_env_emit(env, op_br_if());
+    wasm_env_emit_u32(env, 1);
+    wasm_lower_stmt(env, body_node);
+    wasm_env_emit(env, op_br());
+    wasm_env_emit_u32(env, 0);
+    wasm_env_emit(env, op_end());
+    env.current_block_depth = env.current_block_depth - 1;
+    wasm_env_emit(env, op_end());
+    env.current_block_depth = env.current_block_depth - 1;
+    wasm_env_pop_loop(env);
+}
+
+pub fn wasm_lower_sfor(env: &mut WasmEnv, init_node: String, cond: String, step_node: String, body_node: String) {
+    if init_node != "" && !ast_is(init_node, "SEmpty") { wasm_lower_stmt(env, init_node);
+    }
+    wasm_env_emit(env, op_block());
+    wasm_env_emit_byte(env, wasm_block_type_empty());
+    env.current_block_depth = env.current_block_depth + 1;
+    wasm_env_emit(env, op_loop());
+    wasm_env_emit_byte(env, wasm_block_type_empty());
+    env.current_block_depth = env.current_block_depth + 1;
+    wasm_env_push_loop(env, env.current_block_depth - 2, env.current_block_depth - 1);
+    if cond != "" && !ast_is(cond, "SEmpty") {
+        let _c: Int = (0 + wasm_lower_expr(env, cond));
+        wasm_env_emit(env, op_i32_eqz());
+        wasm_env_emit(env, op_br_if());
+        wasm_env_emit_u32(env, 1);
+    }
+    wasm_lower_stmt(env, body_node);
+    if step_node != "" && !ast_is(step_node, "SEmpty") { wasm_lower_stmt(env, step_node);
+    }
+    wasm_env_emit(env, op_br());
+    wasm_env_emit_u32(env, 0);
+    wasm_env_emit(env, op_end());
+    env.current_block_depth = env.current_block_depth - 1;
+    wasm_env_emit(env, op_end());
+    env.current_block_depth = env.current_block_depth - 1;
+    wasm_env_pop_loop(env);
+}
+
+pub fn wasm_lower_stmt(env: &mut WasmEnv, stmt_node: String) {
+    let tag: String = ast_tag(stmt_node);
+    let args: String = wasm_ast_args(stmt_node);
+    if tag == "AstBlock" {
+        let n: Int = (0 + list_len_str(args));
+        let mut i: Int = 0;
+        while i < n {
+            let item: String = list_get_str(args, i);
+            if item != "" && !ast_is(item, "SEmpty") { wasm_lower_stmt(env, item);
+            }
+            i = i + 1;
+        }
+        return;
+    }
+    if tag == "EIf" {
+        let n_if: Int = (0 + list_len_str(args));
+        let c: String = list_get_str(args, 0);
+        let t: String = if n_if >= 2 { list_get_str(args, 1) } else { "" };
+        let e: String = if n_if >= 3 { list_get_str(args, 2) } else { "" };
+        let has_e: Bool = (e != "" && !ast_is(e, "SEmpty") && !ast_is(e, "EEmpty") && e != "EEmpty" && e != "SEmpty");
+        let _c: Int = (0 + wasm_lower_expr(env, c));
+        wasm_env_emit(env, op_if());
+        wasm_env_emit_byte(env, wasm_block_type_empty());
+        env.current_block_depth = env.current_block_depth + 1;
+        wasm_lower_stmt(env, t);
+        if has_e { wasm_env_emit(env, op_else());
+        wasm_lower_stmt(env, e);
+        }
+        wasm_env_emit(env, op_end());
+        env.current_block_depth = env.current_block_depth - 1;
+        return;
+    }
+    if tag == "EMatch" { let _m: Int = (0 + wasm_lower_match(env, stmt_node, wasm_block_type_empty()));
+    return;
+    }
+    if tag == "SWhile" { wasm_lower_swhile(env, list_get_str(args, 0), list_get_str(args, 1));
+    return;
+    }
+    if tag == "SFor" { wasm_lower_sfor(env, list_get_str(args, 0), list_get_str(args, 1), list_get_str(args, 2), list_get_str(args, 3));
+    return;
+    }
+    if tag == "SLet" || tag == "SLetMut" { wasm_lower_slet(env, list_get_str(args, 0), list_get_str(args, 1), list_get_str(args, 2));
+    return;
+    }
+    if tag == "SAssign" { wasm_lower_sassign(env, list_get_str(args, 0), list_get_str(args, 1));
+    return;
+    }
+    if tag == "SReturn" { wasm_lower_sreturn(env, list_get_str(args, 0));
+    return;
+    }
+    if tag == "SExpr" { wasm_lower_sexpr(env, list_get_str(args, 0));
+    return;
+    }
+    if tag == "SBreak" { wasm_lower_sbreak(env);
+    return;
+    }
+    if tag == "SContinue" { wasm_lower_scontinue(env);
+    return;
+    }
+    if tag != "SEmpty" && stmt_node != "" { wasm_lower_sexpr(env, stmt_node);
+    }
+}
+

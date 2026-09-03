@@ -1,0 +1,18 @@
+name: oodac CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify VERSION + api_surface
+        run: |
+          echo "Declared api_surface: $(grep api_surface VERSION | cut -d= -f2)"
+          test "$(grep api_surface VERSION | cut -d= -f2)" = "12" || (echo "api_surface drift"; exit 1)
+          echo "api_surface verified: 12"

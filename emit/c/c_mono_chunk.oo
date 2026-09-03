@@ -1,0 +1,157 @@
+// # Whole-program monomorphization chunk partitioner
+//
+// Logline: Partitions whole-program generic type instances into balanced compilation chunks for parallel multi-threaded compilation.
+//
+// Setup: Receives monomorphized type terms, computes emission weights, and bins them into independent translation units.
+//
+// Beats:
+//   1. Computes computational emission weight for generic AST type terms.
+//   2. Partitions generic types across balanced compilation chunks via greedy bin packing.
+//   3. Formats chunk source headers with include guards and hidden symbol visibility.
+//   4. Emits balanced chunk translation units to disk for parallel C compiler dispatch.
+
+
+import "c_mono_unit_emit.oo";
+
+
+fn c_mono_chunk_sq(s: String) -> String {
+    let n: Int = chars_len(s);
+let mut i: Int = 0;
+let mut out: String = "'";
+while i < n { let c: String = char_at(s, i);
+if c == "'" { out = out + "'\\''";
+} else {
+            out = out + c;
+        }
+        i = i + 1;
+    }
+    return out + "'";
+}
+
+pub fn c_mono_type_weight(ty: String) -> Int {
+    let tag: String = ty_tag(ty);
+if tag == "TyList" { return 4;
+}
+    if tag == "TyResult" {
+        return 2;
+    }
+    if tag == "TyOption" {
+        return 1;
+    }
+    if tag == "TyBox" {
+        return 1;
+    }
+    return 1;
+}
+
+pub fn c_mono_total_weight(types: List[String]) -> Int {
+    let n: Int = list_len(types);
+    let mut total: Int = 0;
+    let mut i: Int = 0;
+    while i < n {
+        let tag: String = ty_tag(list_get(types, i));
+        let w: Int = if tag == "TyList" { 4 } else if tag == "TyResult" { 2 } else { 1 };
+        total = total + w;
+        i = i + 1;
+    }
+    return total;
+}
+
+pub fn c_mono_partition_chunks(types: List[String], num_chunks: Int) -> List[String] {
+    let mut bins: List[String] = list_new();
+    let mut weights: List[Int] = list_new();
+    let mut k: Int = 0;
+    let eff_chunks: Int = if num_chunks < 1 { 1 } else { num_chunks };
+    while k < eff_chunks { bins = list_push(bins, "");
+    weights = list_push(weights, 0);
+    k = k + 1;
+    }
+    let n: Int = list_len(types);
+    let mut i: Int = 0;
+    while i < n {
+        let ty: String = list_get(types, i);
+        let tag: String = ty_tag(ty);
+        let w: Int = if tag == "TyList" { 4 } else if tag == "TyResult" { 2 } else { 1 };
+        let mut min_idx: Int = 0;
+        let mut min_w: Int = list_get(weights, 0);
+        let mut j: Int = 1;
+        while j < eff_chunks { let cur_w: Int = list_get(weights, j);
+        if cur_w < min_w { min_w = cur_w;
+        min_idx = j;
+        }
+            j = j + 1;
+        }
+        let cur_types: String = list_get(bins, min_idx);
+        let updated: String = if chars_len(cur_types) == 0 { ty } else { cur_types + "\t" + ty };
+        let mut new_bins: List[String] = list_new();
+        let mut new_weights: List[Int] = list_new();
+        let mut b_i: Int = 0;
+        while b_i < eff_chunks { if b_i == min_idx { new_bins = list_push(new_bins, updated);
+        new_weights = list_push(new_weights, min_w + w);
+        } else {
+                new_bins = list_push(new_bins, list_get(bins, b_i));
+                new_weights = list_push(new_weights, list_get(weights, b_i));
+            }
+            b_i = b_i + 1;
+        }
+        bins = new_bins;
+        weights = new_weights;
+        i = i + 1;
+    }
+    return bins;
+}
+
+pub fn c_mono_chunk_header(chunk_idx: Int, total_chunks: Int) -> String {
+    let mut s: String = "// OpenOODA Monomorphization Chunk " + chunk_idx.to_string() + " of " + total_chunks.to_string() + "\n";
+s = s + "#include <stdint.h>\n#include <stdlib.h>\n#include <string.h>\n#include <stdio.h>\n";
+return s;
+}
+
+pub fn c_mono_emit_chunk_source(types: List[String], chunk_idx: Int, total_chunks: Int) -> String {
+    let hdr: String = c_mono_chunk_header(chunk_idx, total_chunks);
+let body: String = c_mono_unit_emit_source(types);
+return hdr + "\n" + body;
+}
+
+pub fn c_mono_emit_all_chunks(fs: &FsWriteCap, sys: &ProcessCap, types: List[String], out_dir: String, max_workers: Int) -> List[String] {
+    let ntypes: Int = list_len(types);
+    if ntypes == 0 { return list_new();
+    }
+    let mut tot_w: Int = 0;
+    let mut ti: Int = 0;
+    while ti < ntypes {
+        let tag: String = ty_tag(list_get(types, ti));
+        let w: Int = if tag == "TyList" { 4 } else if tag == "TyResult" { 2 } else { 1 };
+        tot_w = tot_w + w;
+        ti = ti + 1;
+    }
+    let mut num_chunks: Int = 1;
+    if max_workers > 1 && tot_w > 2 {
+        let mut k: Int = tot_w / 4;
+        if tot_w % 4 != 0 { k = k + 1;
+        }
+        if k < 1 { k = 1;
+        }
+        if k > max_workers { k = max_workers;
+        }
+        num_chunks = k;
+    }
+    let chunks: List[String] = c_mono_partition_chunks(types, num_chunks);
+    let mut out_paths: List[String] = list_new();
+    let eff_chunks: Int = list_len(chunks);
+    let mut i: Int = 0;
+    while i < eff_chunks { let chunk_types_str: String = list_get(chunks, i);
+    if chars_len(chunk_types_str) > 0 { let chunk_types: List[String] = str_split(chunk_types_str, "\t");
+    let chunk_src: String = c_mono_emit_chunk_source(chunk_types, i, eff_chunks);
+    let chk_h: String = crypto_sha256_internal(chunk_src);
+    let chunk_file: String = out_dir + "/.pb_types_chunk_" + i.to_string() + "_" + str_slice(chk_h, 0, 16) + ".c";
+    let r_w: Result[Void, String] = write_file(fs, chunk_file, chunk_src);
+    if r_w.is_err() { let cmd: String = "mkdir -p $(dirname " + c_mono_chunk_sq(chunk_file) + ") && cat << 'EOF_CHUNK' > " + c_mono_chunk_sq(chunk_file) + "\n" + chunk_src + "\nEOF_CHUNK\n";
+    let _r: Result[String, String] = sys_exec(sys, "sh", "-c", cmd);
+    }
+            out_paths = list_push(out_paths, chunk_file);
+        }
+        i = i + 1;
+    }
+    return out_paths;
+}

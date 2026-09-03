@@ -1,0 +1,254 @@
+// # Emit native looping while loop for AArch64
+//
+// Logline: Lowers dynamic while loop with register-backed counter, conditional branch, body stmts, and backward jmp. Accepts 6 comparison operators, 0+ body stmts (println(STRING) and var increment), and empty body.
+//
+// Setup: tokenize_lines, a64_tok_k, and a64_tok_t exist in aarch64_emit_harv.oo. aarch64_ascii_esc exists in aarch64_emit_sys.oo.
+//
+// Beats:
+//   1. Match let mut x: Int = V; while x OP N { BODY } where OP in {<, <=, >, >=, ==, !=}.
+//   2. Allocate x9 as the counter, emit loop header, cmp with bound, inverse-cond branch to exit, body stmts, increment, backward jmp.
+//   3. BODY is 0+ println(STRING); stmts plus 0..1 x = x +- INT; increment.
+//   4. Refuse-don't-miscompile: no let mut init, bad OP, non-loop-var cmp, unsupported stmt — return empty.
+//
+// residual: typed-AST path (Tier 5 #24) handles arbitrary loop bodies; this is the refuse-safe shape.
+
+
+import "aarch64_emit_const_harvest.oo";
+
+import "aarch64_emit_sys.oo";
+
+
+
+// Translate comparison OP to the inverse AArch64 b.cond mnemonic that exits the loop.
+fn aarch64_loop_exit_bcond(op: String) -> String {
+    if op == "<" { return "b.ge";
+    }
+    if op == "<=" { return "b.gt";
+    }
+    if op == ">" { return "b.le";
+    }
+    if op == ">=" { return "b.lt";
+    }
+    if op == "==" { return "b.ne";
+    }
+    if op == "!=" { return "b.eq";
+    }
+    return "b.ge";
+}
+
+// Emit a "mov Rd, #imm" (or movz/movk split) for a value that may be negative or larger than 16 bits.
+fn aarch64_loop_emit_mov(reg: String, num_str: String) {
+    let v: Int = parse_int(num_str);
+    if v >= 0 && v <= 65535 { println("    mov " + reg + ", #" + v.to_string());
+    return;
+    }
+    if v >= -65535 && v < 0 { println("    mov " + reg + ", #" + num_str);
+    return;
+    }
+    let mut u: Int = v;
+    let mut neg = false;
+    if u < 0 { neg = true;
+    u = 0 - u;
+    }
+    let lo = u % 65536;
+    let hi = u / 65536;
+    if neg { println("    mov " + reg + ", #0");
+    println("    movk " + reg + ", #" + i2s(65536 - lo) + ", lsl #0");
+    if hi > 0 { println("    movk " + reg + ", #" + i2s(65536 - hi) + ", lsl #16");
+    }
+        return;
+    }
+    println("    movz " + reg + ", #" + lo.to_string() + ", lsl #0");
+    if hi > 0 { println("    movk " + reg + ", #" + hi.to_string() + ", lsl #16");
+    }
+}
+
+pub fn aarch64_match_while_loop(src: String) -> List[String] {
+    let empty: List[String] = list_new();
+    let toks: List[String] = tokenize_lines(src);
+    let n = list_len(toks);
+    let mut i = 0;
+    while i < n {
+        if a64_tok_k(toks, i) == "KW_FN" && i + 1 < n && a64_tok_t(toks, i + 1) == "main" {
+            let mut p = i + 2;
+            if p + 3 >= n { return empty;
+            }
+            if a64_tok_k(toks, p) != "LPAREN" || a64_tok_k(toks, p + 1) != "RPAREN" || a64_tok_k(toks, p + 2) != "LBRACE" { return empty;
+            }
+            p = p + 3;
+            if p + 2 >= n || a64_tok_k(toks, p) != "KW_LET" || a64_tok_k(toks, p + 1) != "KW_MUT" || a64_tok_k(toks, p + 2) != "IDENT" { return empty;
+            }
+            let var_name: String = a64_tok_t(toks, p + 2);
+            p = p + 3;
+            if p >= n || a64_tok_k(toks, p) != "COLON" { return empty;
+            }
+            p = p + 1;
+            if p >= n || a64_tok_k(toks, p) != "IDENT" || a64_tok_t(toks, p) != "Int" { return empty;
+            }
+            p = p + 1;
+            if p >= n || a64_tok_k(toks, p) != "EQ" { return empty;
+            }
+            p = p + 1;
+            let mut isign = "";
+            if p < n && a64_tok_k(toks, p) == "MINUS" { isign = "-";
+            p = p + 1;
+            }
+            if p >= n || a64_tok_k(toks, p) != "INT" { return empty;
+            }
+            let init_val: String = isign + a64_tok_t(toks, p);
+            p = p + 1;
+            if p >= n || a64_tok_k(toks, p) != "SEMI" { return empty;
+            }
+            p = p + 1;
+            if p >= n || a64_tok_k(toks, p) != "KW_WHILE" { return empty;
+            }
+            p = p + 1;
+            if p >= n || a64_tok_k(toks, p) != "IDENT" || a64_tok_t(toks, p) != var_name { return empty;
+            }
+            p = p + 1;
+            let mut op: String = "";
+            if a64_tok_k(toks, p) == "LT" { op = "<";
+            }
+            else if a64_tok_k(toks, p) == "LTE" { op = "<=";
+            }
+            else if a64_tok_k(toks, p) == "GT" { op = ">";
+            }
+            else if a64_tok_k(toks, p) == "GTE" { op = ">=";
+            }
+            else if a64_tok_k(toks, p) == "EQEQ" { op = "==";
+            }
+            else if a64_tok_k(toks, p) == "NEQ" { op = "!=";
+            }
+            else { return empty;
+            }
+            p = p + 1;
+            let mut bsign = "";
+            if p < n && a64_tok_k(toks, p) == "MINUS" { bsign = "-";
+            p = p + 1;
+            }
+            if p >= n || a64_tok_k(toks, p) != "INT" { return empty;
+            }
+            let bound_val: String = bsign + a64_tok_t(toks, p);
+            p = p + 1;
+            if p >= n || a64_tok_k(toks, p) != "LBRACE" { return empty;
+            }
+            p = p + 1;
+
+            // Body stmts. Allowed: println(STRING); and x = x +- INT; (at most one increment).
+            let mut msgs: List[String] = list_new();
+            let mut incr_val: String = "1";
+            let mut saw_incr = false;
+            let mut stmt_count = 0;
+            while p < n && a64_tok_k(toks, p) != "RBRACE" {
+                stmt_count = stmt_count + 1;
+                if stmt_count > 16 { return empty;
+                }
+                // println(STRING);
+                if p + 3 < n && a64_tok_k(toks, p) == "IDENT" && a64_tok_t(toks, p) == "println"
+                    && a64_tok_k(toks, p + 1) == "LPAREN"
+                    && a64_tok_k(toks, p + 2) == "STRING"
+                    && a64_tok_k(toks, p + 3) == "RPAREN" {
+                    msgs = list_push(msgs, a64_tok_t(toks, p + 2));
+                    p = p + 4;
+                    if p < n && a64_tok_k(toks, p) == "SEMI" { p = p + 1;
+                    }
+                    continue;
+                }
+                // x = x +- INT;
+                if p + 4 < n && a64_tok_k(toks, p) == "IDENT" && a64_tok_t(toks, p) == var_name
+                    && a64_tok_k(toks, p + 1) == "EQ"
+                    && a64_tok_k(toks, p + 2) == "IDENT" && a64_tok_t(toks, p + 2) == var_name {
+                    let mut op_tok: String = "";
+                    if a64_tok_k(toks, p + 3) == "PLUS" { op_tok = "+";
+                    }
+                    else if a64_tok_k(toks, p + 3) == "MINUS" { op_tok = "-";
+                    }
+                    else { return empty;
+                    }
+                    if saw_incr { return empty;
+                    }
+                    if p + 5 >= n || a64_tok_k(toks, p + 4) != "INT" { return empty;
+                    }
+                    let lit: String = a64_tok_t(toks, p + 4);
+                    if op_tok == "+" { incr_val = lit;
+                    } else { incr_val = "-" + lit;
+                    }
+                    saw_incr = true;
+                    p = p + 5;
+                    if p < n && a64_tok_k(toks, p) == "SEMI" { p = p + 1;
+                    }
+                    continue;
+                }
+                return empty;
+            }
+            if p >= n || a64_tok_k(toks, p) != "RBRACE" { return empty;
+            }
+
+            // Return: [init_val, bound_val, op, incr_val, msg1, msg2, ...]
+            let mut out: List[String] = list_new();
+            out = list_push(out, init_val);
+            out = list_push(out, bound_val);
+            out = list_push(out, op);
+            out = list_push(out, incr_val);
+            let mut mi = 0;
+            while mi < list_len(msgs) {
+                out = list_push(out, list_get(msgs, mi));
+                mi = mi + 1;
+            }
+            return out;
+        }
+        i = i + 1;
+    }
+    return empty;
+}
+
+pub fn aarch64_emit_while_loop(spec: List[String]) {
+    let init_val: String = list_get(spec, 0);
+    let bound_val: String = list_get(spec, 1);
+    let op: String = list_get(spec, 2);
+    let incr_val: String = list_get(spec, 3);
+    let n_msgs = list_len(spec) - 4;
+    let exit_bcond: String = aarch64_loop_exit_bcond(op);
+    println("# openOODA aarch64 product floor (GAS, Linux, clang -target aarch64-linux-gnu)");
+    println("    .arch armv8-a");
+    println("    .section .rodata");
+    let mut mi = 0;
+    while mi < n_msgs { let msg: String = list_get(spec, 4 + mi);
+    println(".Lstr_loop_" + mi.to_string() + ":");
+    println("    .ascii \"" + aarch64_ascii_esc(msg) + "\\n\"");
+    mi = mi + 1;
+    }
+    println("    .section .text");
+    println("    .globl _start");
+    println("    .globl main");
+    println("    .p2align 2");
+    println("main:");
+    println("_start:");
+    println("    stp x29, x30, [sp, #-16]!");
+    println("    mov x29, sp");
+    aarch64_loop_emit_mov("x9", init_val);
+    println(".Lwhile_start_0:");
+    aarch64_loop_emit_mov("x10", bound_val);
+    println("    cmp x9, x10");
+    println("    " + exit_bcond + " .Lwhile_end_0");
+    mi = 0;
+    while mi < n_msgs { let msg: String = list_get(spec, 4 + mi);
+    let tag: String = mi.to_string();
+    println("    mov x8, #64");
+    println("    mov x0, #1");
+    println("    adrp x1, .Lstr_loop_" + tag);
+    println("    add x1, x1, :lo12:.Lstr_loop_" + tag);
+    let ln = bytes_len(msg) + 1;
+    aarch64_loop_emit_mov("x2", ln.to_string());
+    println("    svc #0");
+    mi = mi + 1;
+    }
+    aarch64_loop_emit_mov("x10", incr_val);
+    println("    add x9, x9, x10");
+    println("    b .Lwhile_start_0");
+    println(".Lwhile_end_0:");
+    println("    mov x0, #0");
+    println("    ldp x29, x30, [sp], #16");
+    println("    mov x8, #93");
+    println("    svc #0");
+}

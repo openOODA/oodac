@@ -1,0 +1,232 @@
+// # Lower while and if to LLVM
+//
+// Logline: Mint cond/body/end labels for while and then/else/merge labels for if, emit the icmp branch, and pack pos plus the five-slot env.
+//
+// Setup: field_at, list_get, list_push, list_new, parse_int, and println exist; llvm_gen_label, llvm_gen_reg, llvm_emit_expr, llvm_emit_block, and llvm_emit_stmt live in sibling emit files; env is the five-slot LLVM emit env.
+//
+// Beats:
+//   1. While: mint cond/body/end, emit the cond expr, icmp ne i32, emit the body block, and branch back to cond.
+//   2. If: emit the cond expr, mint then/else/merge, icmp, emit the then block, and branch to merge.
+//   3. Branches are plain `br` / `br i1`. Inline !prof tuples are not valid llvm-as.
+
+
+import "llvm_emit_env.oo";
+
+import "llvm_emit_expr.oo";
+
+import "llvm_emit_shims.oo";
+
+
+pub fn llvm_emit_while_stmt(toks: List[String], pos: Int, n: Int, env: List[String]) -> List[String] {
+    let mut p = pos;
+    let mut cur_env: List[String] = env;
+    p = p + 1;
+
+    let lbl_cond_res: List[String] = llvm_gen_label("bb_while_cond", cur_env);
+    let lbl_cond: String = list_get(lbl_cond_res, 0);
+    cur_env = list_new();
+    cur_env = list_push(cur_env, list_get(lbl_cond_res, 1));
+    cur_env = list_push(cur_env, list_get(lbl_cond_res, 2));
+    cur_env = list_push(cur_env, list_get(lbl_cond_res, 3));
+    cur_env = list_push(cur_env, list_get(lbl_cond_res, 4));
+    cur_env = list_push(cur_env, list_get(lbl_cond_res, 5));
+
+    let lbl_body_res: List[String] = llvm_gen_label("bb_while_body", cur_env);
+    let lbl_body: String = list_get(lbl_body_res, 0);
+    cur_env = list_new();
+    cur_env = list_push(cur_env, list_get(lbl_body_res, 1));
+    cur_env = list_push(cur_env, list_get(lbl_body_res, 2));
+    cur_env = list_push(cur_env, list_get(lbl_body_res, 3));
+    cur_env = list_push(cur_env, list_get(lbl_body_res, 4));
+    cur_env = list_push(cur_env, list_get(lbl_body_res, 5));
+
+    let lbl_end_res: List[String] = llvm_gen_label("bb_while_end", cur_env);
+    let lbl_end: String = list_get(lbl_end_res, 0);
+    cur_env = list_new();
+    cur_env = list_push(cur_env, list_get(lbl_end_res, 1));
+    cur_env = list_push(cur_env, list_get(lbl_end_res, 2));
+    cur_env = list_push(cur_env, list_get(lbl_end_res, 3));
+    cur_env = list_push(cur_env, list_get(lbl_end_res, 4));
+    cur_env = list_push(cur_env, list_get(lbl_end_res, 5));
+    let prev_end: String = llvm_env_get_var_ty(cur_env, "__while_end__");
+    let prev_cond: String = llvm_env_get_var_ty(cur_env, "__while_cond__");
+    cur_env = llvm_env_add_var(cur_env, "__while_end__", lbl_end);
+    cur_env = llvm_env_add_var(cur_env, "__while_cond__", lbl_cond);
+
+    println("  br label %" + lbl_cond);
+    println(lbl_cond + ":");
+
+    let cond_res: List[String] = llvm_emit_expr(toks, p, n, cur_env);
+    let cond_reg: String = list_get(cond_res, 0);
+    let cond_ty: String = list_get(cond_res, 1);
+    p = parse_int(list_get(cond_res, 2));
+    cur_env = list_new();
+    cur_env = list_push(cur_env, list_get(cond_res, 3));
+    cur_env = list_push(cur_env, list_get(cond_res, 4));
+    cur_env = list_push(cur_env, list_get(cond_res, 5));
+    cur_env = list_push(cur_env, list_get(cond_res, 6));
+    cur_env = list_push(cur_env, list_get(cond_res, 7));
+
+    let reg_res: List[String] = llvm_gen_reg(cur_env);
+    let cond_i1: String = list_get(reg_res, 0);
+    cur_env = list_new();
+    cur_env = list_push(cur_env, list_get(reg_res, 1));
+    cur_env = list_push(cur_env, list_get(reg_res, 2));
+    cur_env = list_push(cur_env, list_get(reg_res, 3));
+    cur_env = list_push(cur_env, list_get(reg_res, 4));
+    cur_env = list_push(cur_env, list_get(reg_res, 5));
+
+    let mut cty = "i32";
+    if cond_ty == "i64" { cty = "i64";
+    }
+    println("  " + cond_i1 + " = icmp ne " + cty + " " + cond_reg + ", 0");
+    println("  br i1 " + cond_i1 + ", label %" + lbl_body + ", label %" + lbl_end);
+
+    println(lbl_body + ":");
+
+    let block_res: List[String] = llvm_emit_block(toks, p, n, cur_env);
+    p = parse_int(list_get(block_res, 0));
+    cur_env = list_new();
+    cur_env = list_push(cur_env, list_get(block_res, 1));
+    cur_env = list_push(cur_env, list_get(block_res, 2));
+    cur_env = list_push(cur_env, list_get(block_res, 3));
+    cur_env = list_push(cur_env, list_get(block_res, 4));
+    cur_env = list_push(cur_env, list_get(block_res, 5));
+
+    if !llvm_env_vars_has(list_get(block_res, 4), "__did_ret__") {
+        println("  br label %" + lbl_cond);
+    }
+    println(lbl_end + ":");
+    cur_env = llvm_env_add_var(cur_env, "__while_end__", prev_end);
+    cur_env = llvm_env_add_var(cur_env, "__while_cond__", prev_cond);
+
+    let mut out: List[String] = list_new();
+    out = list_push(out, p.to_string());
+    out = list_push(out, list_get(cur_env, 0));
+    out = list_push(out, list_get(cur_env, 1));
+    out = list_push(out, list_get(cur_env, 2));
+    out = list_push(out, list_get(cur_env, 3));
+    out = list_push(out, list_get(cur_env, 4));
+    return out;
+}
+
+pub fn llvm_emit_if_stmt(toks: List[String], pos: Int, n: Int, env: List[String]) -> List[String] {
+    let mut p = pos;
+    let mut cur_env: List[String] = env;
+    p = p + 1;
+
+    let cond_res: List[String] = llvm_emit_expr(toks, p, n, cur_env);
+    let cond_reg: String = list_get(cond_res, 0);
+    let if_cty: String = list_get(cond_res, 1);
+    p = parse_int(list_get(cond_res, 2));
+
+    cur_env = list_new();
+    cur_env = list_push(cur_env, list_get(cond_res, 3));
+    cur_env = list_push(cur_env, list_get(cond_res, 4));
+    cur_env = list_push(cur_env, list_get(cond_res, 5));
+    cur_env = list_push(cur_env, list_get(cond_res, 6));
+    cur_env = list_push(cur_env, list_get(cond_res, 7));
+
+    let lbl_then_res: List[String] = llvm_gen_label("bb_then", cur_env);
+    let lbl_then: String = list_get(lbl_then_res, 0);
+    cur_env = list_new();
+    cur_env = list_push(cur_env, list_get(lbl_then_res, 1));
+    cur_env = list_push(cur_env, list_get(lbl_then_res, 2));
+    cur_env = list_push(cur_env, list_get(lbl_then_res, 3));
+    cur_env = list_push(cur_env, list_get(lbl_then_res, 4));
+    cur_env = list_push(cur_env, list_get(lbl_then_res, 5));
+
+    let lbl_else_res: List[String] = llvm_gen_label("bb_else", cur_env);
+    let lbl_else: String = list_get(lbl_else_res, 0);
+    cur_env = list_new();
+    cur_env = list_push(cur_env, list_get(lbl_else_res, 1));
+    cur_env = list_push(cur_env, list_get(lbl_else_res, 2));
+    cur_env = list_push(cur_env, list_get(lbl_else_res, 3));
+    cur_env = list_push(cur_env, list_get(lbl_else_res, 4));
+    cur_env = list_push(cur_env, list_get(lbl_else_res, 5));
+
+    let lbl_merge_res: List[String] = llvm_gen_label("bb_merge", cur_env);
+    let lbl_merge: String = list_get(lbl_merge_res, 0);
+    cur_env = list_new();
+    cur_env = list_push(cur_env, list_get(lbl_merge_res, 1));
+    cur_env = list_push(cur_env, list_get(lbl_merge_res, 2));
+    cur_env = list_push(cur_env, list_get(lbl_merge_res, 3));
+    cur_env = list_push(cur_env, list_get(lbl_merge_res, 4));
+    cur_env = list_push(cur_env, list_get(lbl_merge_res, 5));
+
+    let reg_res: List[String] = llvm_gen_reg(cur_env);
+    let cond_i1: String = list_get(reg_res, 0);
+    cur_env = list_new();
+    cur_env = list_push(cur_env, list_get(reg_res, 1));
+    cur_env = list_push(cur_env, list_get(reg_res, 2));
+    cur_env = list_push(cur_env, list_get(reg_res, 3));
+    cur_env = list_push(cur_env, list_get(reg_res, 4));
+    cur_env = list_push(cur_env, list_get(reg_res, 5));
+
+    let mut icty = "i32";
+    if if_cty == "i64" { icty = "i64";
+    }
+    println("  " + cond_i1 + " = icmp ne " + icty + " " + cond_reg + ", 0");
+    println("  br i1 " + cond_i1 + ", label %" + lbl_then + ", label %" + lbl_else);
+
+    println(lbl_then + ":");
+    let block_res: List[String] = llvm_emit_block(toks, p, n, cur_env);
+    p = parse_int(list_get(block_res, 0));
+    let then_ret: Bool = llvm_env_vars_has(list_get(block_res, 4), "__did_ret__");
+    let reg_c1: String = list_get(block_res, 1);
+    let lbl_c1: String = list_get(block_res, 2);
+    let str_c1: String = list_get(block_res, 3);
+    let str_t1: String = list_get(block_res, 5);
+    if !then_ret { println("  br label %" + lbl_merge);
+    }
+
+    println(lbl_else + ":");
+    let mut else_ret: Bool = false;
+    let mut reg_c2: String = reg_c1;
+    let mut lbl_c2: String = lbl_c1;
+    let mut str_c2: String = str_c1;
+    let mut str_t2: String = str_t1;
+    if p < n && field_at(list_get(toks, p), 0) == "KW_ELSE" {
+        p = p + 1;
+        let mut else_env: List[String] = list_new();
+        else_env = list_push(else_env, reg_c1);
+        else_env = list_push(else_env, lbl_c1);
+        else_env = list_push(else_env, str_c1);
+        else_env = list_push(else_env, list_get(cur_env, 3));
+        else_env = list_push(else_env, str_t1);
+        if p < n && field_at(list_get(toks, p), 0) == "KW_IF" {
+            let else_if_res: List[String] = llvm_emit_stmt(toks, p, n, else_env);
+            p = parse_int(list_get(else_if_res, 0));
+            reg_c2 = list_get(else_if_res, 1);
+            lbl_c2 = list_get(else_if_res, 2);
+            str_c2 = list_get(else_if_res, 3);
+            else_ret = llvm_env_vars_has(list_get(else_if_res, 4), "__did_ret__");
+            str_t2 = list_get(else_if_res, 5);
+        } else {
+            let else_block_res: List[String] = llvm_emit_block(toks, p, n, else_env);
+            p = parse_int(list_get(else_block_res, 0));
+            reg_c2 = list_get(else_block_res, 1);
+            lbl_c2 = list_get(else_block_res, 2);
+            str_c2 = list_get(else_block_res, 3);
+            else_ret = llvm_env_vars_has(list_get(else_block_res, 4), "__did_ret__");
+            str_t2 = list_get(else_block_res, 5);
+        }
+        if !else_ret { println("  br label %" + lbl_merge);
+        }
+    } else {
+        println("  br label %" + lbl_merge);
+    }
+
+    println(lbl_merge + ":");
+    let mut out_vars: String = list_get(cur_env, 3);
+    if then_ret && else_ret { out_vars = out_vars + "__did_ret__:1;";
+    }
+    let mut out: List[String] = list_new();
+    out = list_push(out, p.to_string());
+    out = list_push(out, reg_c2);
+    out = list_push(out, lbl_c2);
+    out = list_push(out, str_c2);
+    out = list_push(out, out_vars);
+    out = list_push(out, str_t2);
+    return out;
+}

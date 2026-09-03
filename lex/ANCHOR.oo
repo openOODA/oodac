@@ -1,0 +1,47 @@
+// # Lexical Analysis Subsystem — Module Entry Door
+//
+// Logline: Re-exports tokenization, character scanning, and source formatting interfaces.
+//
+// Setup: Imports internal lexical scanning siblings and provides clean public re-exports.
+//
+// Beats:
+//   1. Import token scanning, formatting, and character lexing siblings.
+//   2. Re-export public lexer, tokenizer, and formatter APIs.
+//   3. Preserve strict <= 256 lines limit and zero ambient authority.
+
+import "lex.oo";
+import "lex_scan.oo";
+import "oodac_fmt.oo";
+import "token_dump.oo";
+import "token_fmt.oo";
+import "token_ident.oo";
+import "token_next.oo";
+import "token_scan_number.oo";
+import "token_scan_punct.oo";
+import "token_scan_string.oo";
+import "token_scan_whitespace.oo";
+import "token_stream.oo";
+import "token_parse_int.oo";
+import "types/token_typed.oo";
+
+// ──▓▓ Public Lexical API ──▓▓──
+
+pub fn lex_scan_source(src: String) -> Result[String, String] {
+    return lex_all(src);
+}
+
+pub fn lex_tokenize(src: String) -> List[String] {
+    return tokenize_lines(src);
+}
+
+pub fn lex_collect(src: String) -> List[String] {
+    return collect_tokens(src);
+}
+
+pub fn lex_dump(src: String) {
+    dump_tokens(src);
+}
+
+pub fn lex_fmt_check(src: String) -> Int {
+    return fmt_check_all(src);
+}

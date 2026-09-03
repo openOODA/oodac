@@ -1,0 +1,202 @@
+// # Canonical deterministic C type mangler
+//
+// Logline: Converts arbitrary recursive algebraic types (List, Option, Result, Box, structs) into canonical C identifiers.
+//
+// Setup: Pure data transformations mapping AST type strings to legal C struct and function identifiers.
+//
+// Beats:
+//   1. Primitives: I (Int), F (Float), B (Bool), S (String), V (Unit).
+//   2. Generics: OoL_ (List), OoOpt_ (Option), OoRes_ / OoRes2_ (Result), OoBox_ (Box).
+//   3. Ref and Caps: Ref_, RefMut_, Cap_.
+//   4. List helper operation naming for arbitrary element types.
+
+import "ty.oo";
+
+import "ty_parse.oo";
+
+
+pub fn ty_guard_macro(mangled: String) -> String {
+    return "OO_TY_" + mangled;
+}
+
+pub fn ty_mangle(ty: String) -> String {
+    if ty == "TyInt" || ty == "Int" || ty == "i64" || ty == "isize" { return "I"; }
+    if ty == "TyFloat" || ty == "Float" || ty == "f64" { return "F"; }
+    if ty == "TyBool" || ty == "Bool" { return "B"; }
+    if ty == "TyStr" || ty == "String" || ty == "str" { return "S"; }
+    if ty == "TyUnit" || ty == "Void" || ty == "void" || ty == "unit" || ty == "()" { return "V"; }
+    if ty == "TyF32x8" || ty == "f32x8" { return "F32x8"; }
+    if ty == "TyF64x4" || ty == "f64x4" { return "F64x4"; }
+    let tag: String = ty_tag(ty);
+    if tag == "TyName" { return ty_arg(ty, 0); }
+    if tag == "TyCap" { return "Cap_" + ty_arg(ty, 0); }
+    if tag == "TyRef" { return "Ref_" + ty_mangle(ty_arg(ty, 0)); }
+    if tag == "TyRefMut" { return "RefMut_" + ty_mangle(ty_arg(ty, 0)); }
+    if tag == "TyList" {
+        let elem: String = ty_arg(ty, 0);
+        if elem == "TyInt" || elem == "Int" { return "LI"; }
+        if elem == "TyStr" || elem == "String" { return "LS"; }
+        if elem == "TyFloat" || elem == "Float" || elem == "f64" { return "LF"; }
+        if elem == "TyList(TyInt)" || elem == "TyList(Int)" { return "OoLL_I"; }
+        if elem == "TyList(TyStr)" || elem == "TyList(String)" { return "OoLL_S"; }
+        if elem == "TyList(TyFloat)" || elem == "TyList(Float)" { return "OoLL_F"; }
+        if elem == "TyList(TyList(TyInt))" || elem == "TyList(TyList(Int))" { return "OoLLL_I"; }
+        if elem == "TyList(TyList(TyStr))" || elem == "TyList(TyList(String))" { return "OoLLL_S"; }
+        if elem == "TyList(TyList(TyFloat))" || elem == "TyList(TyList(Float))" { return "OoLLL_F"; }
+        if elem == "TyList(TyList(TyList(TyInt)))" || elem == "TyList(TyList(TyList(Int)))" { return "OoLLLL_I"; }
+        if elem == "TyList(TyList(TyList(TyStr)))" || elem == "TyList(TyList(TyList(String)))" { return "OoLLLL_S"; }
+        if elem == "TyList(TyList(TyList(TyFloat)))" || elem == "TyList(TyList(TyList(Float)))" { return "OoLLLL_F"; }
+        return "OoL_" + ty_mangle(elem);
+    }
+    if tag == "TyOption" { return "OoOpt_" + ty_mangle(ty_arg(ty, 0)); }
+    if tag == "TyResult" {
+        let ok: String = ty_arg(ty, 0);
+        let err: String = ty_arg(ty, 1);
+        if err == "TyStr" || err == "String" || err == "str" || err == "" {
+            if ok == "TyStr" || ok == "String" || ok == "str" { return "OoResS"; }
+            if ok == "TyUnit" || ok == "Void" || ok == "unit" || ok == "void" || ok == "()" { return "OoResV"; }
+            if ok == "TyInt" || ok == "Int" || ok == "i64" { return "OoResI"; }
+            if ok == "TyBool" || ok == "Bool" { return "OoResB"; }
+            if ok == "TyFloat" || ok == "Float" || ok == "f64" { return "OoResF"; }
+            if ok == "TyList(TyInt)" || ok == "TyList(Int)" { return "OoResLI"; }
+            if ok == "TyList(TyStr)" || ok == "TyList(String)" { return "OoResLS"; }
+            if ok == "TyList(TyFloat)" || ok == "TyList(Float)" { return "OoResLF"; }
+            return "OoRes_" + ty_mangle(ok);
+        }
+        if (ok == "TyInt" || ok == "Int") && (err == "TyInt" || err == "Int") {
+            return "OoResII";
+        }
+        return "OoRes2_" + ty_mangle(ok) + "_" + ty_mangle(err);
+    }
+    if tag == "TyBox" { return "OoBox_" + ty_mangle(ty_arg(ty, 0)); }
+    if ty.contains("[") {
+        return ty_mangle(ty_parse_str(ty));
+    }
+    return ty;
+}
+
+pub fn ty_to_c_typedef(ty: String) -> String {
+    if ty == "TyInt" || ty == "Int" || ty == "i64" || ty == "isize" { return "long long"; }
+    if ty == "TyFloat" || ty == "Float" || ty == "f64" { return "double"; }
+    if ty == "TyBool" || ty == "Bool" { return "int"; }
+    if ty == "TyStr" || ty == "String" || ty == "str" { return "OoStr"; }
+    if ty == "TyUnit" || ty == "Void" || ty == "void" || ty == "unit" || ty == "()" { return "void"; }
+    if ty == "TyF32x8" || ty == "f32x8" { return "f32x8"; }
+    if ty == "TyF64x4" || ty == "f64x4" { return "f64x4"; }
+    let tag: String = ty_tag(ty);
+    if tag == "TyName" { return ty_arg(ty, 0); }
+    if tag == "TyCap" { return "long long"; }
+    if tag == "TyRef" { return ty_to_c_typedef(ty_arg(ty, 0)) + "*"; }
+    if tag == "TyRefMut" { return ty_to_c_typedef(ty_arg(ty, 0)) + "*"; }
+    if tag == "TyList" {
+        let elem: String = ty_arg(ty, 0);
+        if elem == "TyInt" || elem == "Int" { return "OoIList"; }
+        if elem == "TyStr" || elem == "String" { return "OoSList"; }
+        if elem == "TyFloat" || elem == "Float" || elem == "f64" { return "OoFList"; }
+        if elem == "TyList(TyInt)" || elem == "TyList(Int)" { return "OoLL_I"; }
+        if elem == "TyList(TyStr)" || elem == "TyList(String)" { return "OoLL_S"; }
+        if elem == "TyList(TyFloat)" || elem == "TyList(Float)" { return "OoLL_F"; }
+        if elem == "TyList(TyList(TyInt))" || elem == "TyList(TyList(Int))" { return "OoLLL_I"; }
+        if elem == "TyList(TyList(TyStr))" || elem == "TyList(TyList(String))" { return "OoLLL_S"; }
+        if elem == "TyList(TyList(TyFloat))" || elem == "TyList(TyList(Float))" { return "OoLLL_F"; }
+        if elem == "TyList(TyList(TyList(TyInt)))" || elem == "TyList(TyList(TyList(Int)))" { return "OoLLLL_I"; }
+        if elem == "TyList(TyList(TyList(TyStr)))" || elem == "TyList(TyList(TyList(String)))" { return "OoLLLL_S"; }
+        if elem == "TyList(TyList(TyList(TyFloat)))" || elem == "TyList(TyList(TyList(Float)))" { return "OoLLLL_F"; }
+        return "OoL_" + ty_mangle(elem);
+    }
+    if tag == "TyOption" {
+        let elem: String = ty_arg(ty, 0);
+        if elem == "TyInt" || elem == "Int" { return "OoOpt_I"; }
+        if elem == "TyStr" || elem == "String" { return "OoOpt_S"; }
+        if elem == "TyFloat" || elem == "Float" || elem == "f64" { return "OoOpt_F"; }
+        if elem == "TyBool" || elem == "Bool" { return "OoOpt_B"; }
+        if elem == "TyList(TyInt)" || elem == "TyList(Int)" { return "OoOpt_OoL_I"; }
+        if elem == "TyList(TyStr)" || elem == "TyList(String)" { return "OoOpt_OoL_S"; }
+        if elem == "TyList(TyList(TyStr))" || elem == "TyList(TyList(String))" { return "OoOpt_OoLL_S"; }
+        if elem == "TyList(TyList(TyList(TyInt)))" || elem == "TyList(TyList(TyList(Int)))" { return "OoOpt_OoLLL_I"; }
+        return "OoOpt_" + ty_mangle(elem);
+    }
+    if tag == "TyResult" {
+        let ok: String = ty_arg(ty, 0);
+        let err: String = ty_arg(ty, 1);
+        if err == "TyStr" || err == "String" || err == "str" || err == "" {
+            if ok == "TyStr" || ok == "String" { return "OoResS"; }
+            if ok == "TyUnit" || ok == "Void" || ok == "unit" || ok == "void" || ok == "()" { return "OoResV"; }
+            if ok == "TyInt" || ok == "Int" { return "OoResI"; }
+            if ok == "TyBool" || ok == "Bool" { return "OoResB"; }
+            if ok == "TyFloat" || ok == "Float" || ok == "f64" { return "OoResF"; }
+            if ok == "TyList(TyInt)" || ok == "TyList(Int)" { return "OoResLI"; }
+            if ok == "TyList(TyStr)" || ok == "TyList(String)" { return "OoResLS"; }
+            if ok == "TyList(TyFloat)" || ok == "TyList(Float)" { return "OoResLF"; }
+            if ok == "TyOption(TyInt)" || ok == "TyOption(Int)" { return "OoRes_OoOpt_I"; }
+            if ok == "TyOption(TyStr)" || ok == "TyOption(String)" { return "OoRes_OoOpt_S"; }
+            if ok == "TyOption(TyBool)" || ok == "TyOption(Bool)" { return "OoRes_OoOpt_B"; }
+            if ok == "TyOption(TyFloat)" || ok == "TyOption(Float)" { return "OoRes_OoOpt_F"; }
+            if ok == "TyOption(TyList(TyInt))" || ok == "TyOption(TyList(Int))" { return "OoRes_OoOpt_OoL_I"; }
+            if ok == "TyOption(TyList(TyStr))" || ok == "TyOption(TyList(String))" { return "OoRes_OoOpt_OoL_S"; }
+            if ok == "TyOption(TyList(TyFloat))" || ok == "TyOption(TyList(Float))" { return "OoRes_OoOpt_OoL_F"; }
+            if ok == "TyOption(TyList(TyList(TyStr)))" || ok == "TyOption(TyList(TyList(String)))" { return "OoRes_OoOpt_OoLL_S"; }
+            if ok == "TyOption(TyList(TyList(TyList(TyInt))))" || ok == "TyOption(TyList(TyList(TyList(Int))))" { return "OoRes_OoOpt_OoLLL_I"; }
+            return "OoRes_" + ty_mangle(ok);
+        }
+        if (ok == "TyInt" || ok == "Int") && (err == "TyInt" || err == "Int") {
+            return "OoResII";
+        }
+        return "OoRes2_" + ty_mangle(ok) + "_" + ty_mangle(err);
+    }
+    if tag == "TyBox" { return "OoBox_" + ty_mangle(ty_arg(ty, 0)); }
+    if ty.contains("[") {
+        return ty_to_c_typedef(ty_parse_str(ty));
+    }
+    return ty;
+}
+
+pub fn ty_list_op_name(elem_ty: String, op: String) -> String {
+    let mut op_suf: String = op; if chars_len(op) >= 5 && str_slice(op, 0, 5) == "list_" { op_suf = str_slice(op, 5, chars_len(op));
+}
+    if elem_ty == "TyInt" || elem_ty == "I" || elem_ty == "Int" {
+        return "oo_ilist_" + op_suf;
+    }
+    if elem_ty == "TyStr" || elem_ty == "S" || elem_ty == "String" {
+        return "oo_slist_" + op_suf;
+    }
+    if elem_ty == "TyFloat" || elem_ty == "F" || elem_ty == "LF" || elem_ty == "Float" || elem_ty == "f64" {
+        return "oo_flist_" + op_suf;
+    }
+    if elem_ty == "LL_I" || elem_ty == "OoLL_I" || elem_ty == "TyList(TyInt)" || elem_ty == "TyList(Int)" {
+        return "oo_ll_I_" + op_suf;
+    }
+    if elem_ty == "LL_S" || elem_ty == "OoLL_S" || elem_ty == "TyList(TyStr)" || elem_ty == "TyList(String)" {
+        return "oo_ll_S_" + op_suf;
+    }
+    if elem_ty == "LL_F" || elem_ty == "OoLL_F" || elem_ty == "TyList(TyFloat)" || elem_ty == "TyList(Float)" {
+        return "oo_ll_F_" + op_suf;
+    }
+    if elem_ty == "LLL_I" || elem_ty == "OoLLL_I" || elem_ty == "TyList(TyList(TyInt))" {
+        return "oo_lll_I_" + op_suf;
+    }
+    if elem_ty == "LLL_S" || elem_ty == "OoLLL_S" || elem_ty == "TyList(TyList(TyStr))" {
+        return "oo_lll_S_" + op_suf;
+    }
+    if elem_ty == "LLL_F" || elem_ty == "OoLLL_F" || elem_ty == "TyList(TyList(TyFloat))" {
+        return "oo_lll_F_" + op_suf;
+    }
+    if elem_ty == "LLLL_I" || elem_ty == "OoLLLL_I" || elem_ty == "TyList(TyList(TyList(TyInt)))" {
+        return "oo_llll_I_" + op_suf;
+    }
+    if elem_ty == "LLLL_S" || elem_ty == "OoLLLL_S" || elem_ty == "TyList(TyList(TyList(TyStr)))" {
+        return "oo_llll_S_" + op_suf;
+    }
+    if elem_ty == "LLLL_F" || elem_ty == "OoLLLL_F" || elem_ty == "TyList(TyList(TyList(TyFloat)))" {
+        return "oo_llll_F_" + op_suf;
+    }
+    let m: String = ty_mangle(elem_ty);
+    return "oo_l_" + m + "_" + op_suf;
+}
+
+pub fn ty_is_dynamic(ty: String) -> Bool {
+    if ty == "TyStr" || ty == "String" { return true; }
+    let tag: String = ty_tag(ty);
+    if tag == "TyList" || tag == "TyOption" || tag == "TyResult" || tag == "TyBox" { return true; }
+    return false;
+}

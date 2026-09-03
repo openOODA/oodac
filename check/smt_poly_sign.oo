@@ -1,0 +1,252 @@
+// # Abstract Sign Lattice and Domain Propagation
+//
+// Logline: Implements the 7-element sign lattice, transfer functions, and Galois connection to intervals.
+//
+// Setup: Pure .oo sign abstract domain with sign multiplication and squaring.
+//
+// Beats:
+//   1. Define sign tags (BOT, NEG, ZERO, POS, NONNEG, NONPOS, TOP).
+//   2. Implement sign multiplication, squaring, meet, and join.
+//   3. Implement Galois connection between sign domain and intervals.
+
+import "smt_poly_interval.oo";
+
+
+pub fn sign_tag_bot() -> Int {
+    return 0;
+}
+pub fn sign_tag_neg() -> Int {
+    return 1;
+}
+pub fn sign_tag_zero() -> Int {
+    return 2;
+}
+pub fn sign_tag_pos() -> Int {
+    return 3;
+}
+pub fn sign_tag_nonneg() -> Int {
+    return 4;
+}
+pub fn sign_tag_nonpos() -> Int {
+    return 5;
+}
+pub fn sign_tag_top() -> Int {
+    return 6;
+}
+
+pub fn sign_from_int(v: Int) -> Int {
+    if v > 0 { return 3;
+    }
+    if v == 0 { return 2;
+    }
+    return 1;
+}
+
+pub fn sign_from_interval(inv: Interval) -> Int {
+    if inv.is_bottom { return 0;
+    }
+    if inv.low == 0 && inv.high == 0 { return 2;
+    }
+    if inv.low > 0 { return 3;
+    }
+    if inv.low >= 0 { return 4;
+    }
+    if inv.high < 0 { return 1;
+    }
+    if inv.high <= 0 { return 5;
+    }
+    return 6;
+}
+
+pub fn sign_to_interval(tag: Int) -> Interval {
+    if tag == 0 { return interval_bottom();
+    }
+    if tag == 1 { return interval_range(interval_inf_min(), 0 - 1);
+    }
+    if tag == 2 { return interval_const(0);
+    }
+    if tag == 3 { return interval_range(1, interval_inf_max());
+    }
+    if tag == 4 { return interval_range(0, interval_inf_max());
+    }
+    if tag == 5 { return interval_range(interval_inf_min(), 0);
+    }
+    return interval_top();
+}
+
+pub fn sign_mul(a: Int, b: Int) -> Int {
+    if a == 0 || b == 0 { return 0;
+    }
+    if a == 2 || b == 2 { return 2;
+    }
+    if a == 6 || b == 6 { return 6;
+    }
+    if a == 3 {
+        if b == 3 { return 3;
+        }
+        if b == 1 { return 1;
+        }
+        if b == 4 { return 4;
+        }
+        if b == 5 { return 5;
+        }
+    }
+    if a == 1 {
+        if b == 3 { return 1;
+        }
+        if b == 1 { return 3;
+        }
+        if b == 4 { return 5;
+        }
+        if b == 5 { return 4;
+        }
+    }
+    if a == 4 {
+        if b == 3 { return 4;
+        }
+        if b == 1 { return 5;
+        }
+        if b == 4 { return 4;
+        }
+        if b == 5 { return 5;
+        }
+    }
+    if a == 5 {
+        if b == 3 { return 5;
+        }
+        if b == 1 { return 4;
+        }
+        if b == 4 { return 5;
+        }
+        if b == 5 { return 4;
+        }
+    }
+    return 6;
+}
+
+pub fn sign_sqr(a: Int) -> Int {
+    if a == 0 { return 0;
+    }
+    if a == 2 { return 2;
+    }
+    if a == 3 || a == 1 { return 3;
+    }
+    return 4;
+}
+
+pub fn sign_meet(a: Int, b: Int) -> Int {
+    if a == 0 || b == 0 { return 0;
+    }
+    if a == 6 { return b;
+    }
+    if b == 6 { return a;
+    }
+    if a == b { return a;
+    }
+    if a == 4 {
+        if b == 3 { return 3;
+        }
+        if b == 2 { return 2;
+        }
+        if b == 5 { return 2;
+        }
+        if b == 1 { return 0;
+        }
+    }
+    if a == 5 {
+        if b == 1 { return 1;
+        }
+        if b == 2 { return 2;
+        }
+        if b == 4 { return 2;
+        }
+        if b == 3 { return 0;
+        }
+    }
+    if a == 3 {
+        if b == 4 { return 3;
+        }
+        return 0;
+    }
+    if a == 1 {
+        if b == 5 { return 1;
+        }
+        return 0;
+    }
+    if a == 2 {
+        if b == 4 || b == 5 { return 2;
+        }
+        return 0;
+    }
+    return 0;
+}
+
+pub fn sign_join(a: Int, b: Int) -> Int {
+    if a == 0 { return b;
+    }
+    if b == 0 { return a;
+    }
+    if a == 6 || b == 6 { return 6;
+    }
+    if a == b { return a;
+    }
+    if (a == 2 && b == 3) || (a == 3 && b == 2) { return 4;
+    }
+    if (a == 2 && b == 1) || (a == 1 && b == 2) { return 5;
+    }
+    if (a == 4 && (b == 2 || b == 3)) || (b == 4 && (a == 2 || a == 3)) { return 4;
+    }
+    if (a == 5 && (b == 2 || b == 1)) || (b == 5 && (a == 2 || a == 1)) { return 5;
+    }
+    return 6;
+}
+
+pub fn sign_eval_rel(op: String, a: Int, b: Int) -> Int {
+    if a == 0 || b == 0 { return 0;
+    }
+    if b == 2 {
+        if op == ">=" {
+            if a == 3 || a == 4 || a == 2 { return 1;
+            }
+            if a == 1 { return 0;
+            }
+            return 0 - 1;
+        }
+        if op == ">" {
+            if a == 3 { return 1;
+            }
+            if a == 1 || a == 2 || a == 5 { return 0;
+            }
+            return 0 - 1;
+        }
+        if op == "<=" {
+            if a == 1 || a == 5 || a == 2 { return 1;
+            }
+            if a == 3 { return 0;
+            }
+            return 0 - 1;
+        }
+        if op == "<" {
+            if a == 1 { return 1;
+            }
+            if a == 3 || a == 2 || a == 4 { return 0;
+            }
+            return 0 - 1;
+        }
+        if op == "==" {
+            if a == 2 { return 1;
+            }
+            if a == 1 || a == 3 { return 0;
+            }
+            return 0 - 1;
+        }
+        if op == "!=" {
+            if a == 1 || a == 3 { return 1;
+            }
+            if a == 2 { return 0;
+            }
+            return 0 - 1;
+        }
+    }
+    return 0 - 1;
+}

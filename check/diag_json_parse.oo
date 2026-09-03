@@ -1,0 +1,174 @@
+// # Parse ERR lines into JSON
+//
+// Logline: Turn a check capture string into a JSON array of diagnostic objects, or return empty for OK lines.
+//
+// Setup: diag_obj_json and diag_kind_to_code exist in diag_json.oo; path is the source path shown in each object.
+//
+// Beats:
+//   1. diag_scan_digits and diag_find pull a number or a substring from a line.
+//   2. diag_extract_loc reads line and col from Type error at or at line text.
+//   3. diag_err_line_to_json classifies one line; diag_check_output_to_json joins those objects.
+
+fn diag_scan_digits(s: String, i0: Int) -> String {
+    let n = chars_len(s);
+let mut i = i0;
+let mut v: String = "";
+while i < n { let c: String = char_at(s, i);
+if c == "0" || c == "1" || c == "2" || c == "3" || c == "4" || c == "5" || c == "6" || c == "7" || c == "8" || c == "9" { v = v + c;
+i = i + 1;
+} else {
+            if v == "" {
+                let i0s: String = i0.to_string();
+                return "0\t" + i0s;
+            }
+            let is: String = i.to_string();
+            return v + "\t" + is;
+        }
+    }
+    if v == "" {
+        let i0s: String = i0.to_string();
+        return "0\t" + i0s;
+    }
+    let is: String = i.to_string();
+    return v + "\t" + is;
+}
+
+fn diag_find(s: String, needle: String) -> Int {
+    let n = chars_len(s);
+let m = chars_len(needle);
+if m == 0 { return 0;
+}
+    if m > n { return 0 - 1;
+    }
+    let mut i = 0;
+    while i + m <= n { let slice: String = str_slice(s, i, i + m);
+    if slice == needle { return i;
+    }
+        i = i + 1;
+    }
+    return 0 - 1;
+}
+
+// From msg → "line\tcol" (0\t0 if unknown).
+pub fn diag_extract_loc(msg: String) -> String {
+    let p1 = 0 + diag_find(msg, "Type error at ");
+if p1 >= 0 { let d1: String = diag_scan_digits(msg, p1 + 14);
+let line: String = field_at(d1, 0);
+let i1 = 0 + parse_int(field_at(d1, 1));
+if i1 < chars_len(msg) { if char_at(msg, i1) == ":" { let d2: String = diag_scan_digits(msg, i1 + 1);
+let col: String = field_at(d2, 0);
+return line + "\t" + col;
+}
+        }
+    }
+    let p2 = 0 + diag_find(msg, " at line ");
+    if p2 >= 0 { let d3: String = diag_scan_digits(msg, p2 + 9);
+    let line2: String = field_at(d3, 0);
+    let i2 = 0 + parse_int(field_at(d3, 1));
+    let rest: String = str_slice(msg, i2, chars_len(msg));
+    let pcol = 0 + diag_find(rest, ", col ");
+    if pcol >= 0 { let d4: String = diag_scan_digits(msg, i2 + pcol + 6);
+    let col2: String = field_at(d4, 0);
+    return line2 + "\t" + col2;
+    }
+        return line2 + "\t0";
+    }
+    return "0\t0";
+}
+
+pub fn diag_err_line_to_json(line: String, path: String) -> String {
+    if chars_len(line) == 0 { return "";
+}
+    // Pass line may be OK or OK\r
+    if line == "OK" {
+        return "";
+    }
+    if chars_len(line) >= 2 { if str_slice(line, 0, 2) == "OK" { return "";
+    }
+    }
+    // Capability check lines (robust to tab/encoding quirks in capture)
+    if diag_find(line, "capability") >= 0 { if diag_find(line, "Capability") >= 0 || diag_find(line, "ERR") >= 0 { let locc: String = diag_extract_loc(line);
+    let lnc: String = field_at(locc, 0);
+    let colc: String = field_at(locc, 1);
+    return diag_obj_json("E_CAP", lnc, colc, line, path);
+    }
+    }
+    // Residual path A free-name refuse
+    if diag_find(line, "Residual product refuse") >= 0 || diag_find(line, "ERR\tresidual") >= 0 { let locr: String = diag_extract_loc(line);
+    let lnr: String = field_at(locr, 0);
+    let colr: String = field_at(locr, 1);
+    return diag_obj_json("E_RESIDUAL", lnr, colr, line, path);
+    }
+    // HITL non-interactive deny-mode
+    if diag_find(line, "non-interactive deny") >= 0 || diag_find(line, "ERR\thitl") >= 0 { let loch: String = diag_extract_loc(line);
+    let lnh: String = field_at(loch, 0);
+    let colh: String = field_at(loch, 1);
+    return diag_obj_json("E_HITL", lnh, colh, line, path);
+    }
+    if chars_len(line) >= 4 { if str_slice(line, 0, 4) == "ERR\t" { let rest: String = str_slice(line, 4, chars_len(line));
+    let t1 = 0 + diag_find(rest, "\t");
+    let mut kind: String = rest;
+    let mut msg: String = "";
+    if t1 >= 0 { kind = str_slice(rest, 0, t1);
+    msg = str_slice(rest, t1 + 1, chars_len(rest));
+    }
+            // Runtime process-local forge noise is kind "cap" (not check "capability").
+            if kind == "cap" {
+                return "";
+            }
+            if kind == "" && msg == "" {
+                return diag_obj_json("E_OTHER", "0", "0", rest, path);
+            }
+            let loc: String = diag_extract_loc(msg);
+            let code: String = diag_kind_to_code(kind);
+            let ln: String = field_at(loc, 0);
+            let col: String = field_at(loc, 1);
+            return diag_obj_json(code, ln, col, msg, path);
+        }
+    }
+    if chars_len(line) >= 3 { if str_slice(line, 0, 3) == "ERR" { let rest2: String = str_slice(line, 3, chars_len(line));
+    return diag_obj_json("E_OTHER", "0", "0", rest2, path);
+    }
+    }
+    return diag_obj_json("E_OTHER", "0", "0", line, path);
+}
+
+// Full check capture → JSON array string.
+pub fn diag_check_output_to_json(out: String, path: String) -> String {
+    let n = chars_len(out);
+if out == "OK" || out == "OK\n" || out == "OK\r\n" { return "[]";
+}
+    if n >= 2 { if str_slice(out, 0, 2) == "OK" { if n == 2 { return "[]";
+    }
+            if n == 3 { let c2 = char_at(out, 2);
+            if c2 == "\n" || c2 == "\r" { return "[]";
+            }
+            }
+        }
+    }
+    let mut arr: String = "";
+    let mut first = true;
+    let mut i = 0;
+    let mut start = 0;
+    while i < n { if char_at(out, i) == "\n" { let piece: String = str_slice(out, start, i);
+    let obj: String = diag_err_line_to_json(piece, path);
+    if obj != "" { if first { arr = obj;
+    first = false;
+    } else {
+                    arr = arr + "," + obj;
+                }
+            }
+            start = i + 1;
+        }
+        i = i + 1;
+    }
+    if start < n { let piece2: String = str_slice(out, start, n);
+    let obj2: String = diag_err_line_to_json(piece2, path);
+    if obj2 != "" { if first { arr = obj2;
+    } else {
+                arr = arr + "," + obj2;
+            }
+        }
+    }
+    return "[" + arr + "]";
+}

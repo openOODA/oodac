@@ -1,0 +1,245 @@
+// # WebAssembly Structured Control Flow Lowering
+//
+// Logline: Lowers structured branching (if/else), iteration (while), and pattern matching to WebAssembly bytecode.
+//
+// Setup: Import wasm_opcodes.oo, wasm_types.oo, wasm_lower_expr.oo, wasm_lower_stmt.oo, wasm_lower_adt.oo, ast.oo.
+//
+// Beats:
+//   1. Lower expressions and statement blocks into linear instruction streams.
+//   2. Lower conditional if and else blocks with typed block signatures.
+//   3. Lower while loops with labeled break and continue depth targets.
+//   4. Lower match pattern statements and destructuring.
+
+import "wasm_opcodes.oo";
+
+import "wasm_types.oo";
+
+import "wasm_lower_expr.oo";
+
+import "wasm_lower_stmt.oo";
+
+import "wasm_lower_adt.oo";
+
+
+
+pub fn wasm_lower_expr_or_block(env: &mut WasmEnv, node: String) -> Int {
+    if node == "" || ast_is(node, "SEmpty") { return env.default_int_type; }
+    let tag: String = ast_tag(node);
+    if tag == "AstBlock" {
+        let args: String = wasm_ast_args(node);
+        let n: Int = (0 + list_len_str(args));
+        let mut i: Int = 0;
+        let mut last_ty: Int = env.default_int_type;
+        while i < n { let item: String = list_get_str(args, i); if item != "" && !ast_is(item, "SEmpty") { if i == n - 1 { last_ty = (0 + wasm_lower_expr_or_block(env, item)); } else {
+                    wasm_lower_any(env, item);
+                }
+            }
+            i = i + 1;
+        }
+        return last_ty;
+    }
+    return (0 + wasm_lower_expr(env, node));
+}
+
+pub fn wasm_lower_if(env: &mut WasmEnv, cond: String, then_node: String, else_node: String, result_type: Int) {
+    let _c: Int = (0 + wasm_lower_expr(env, cond));
+    let eff_res_ty: Int = if else_node == "" || ast_is(else_node, "SEmpty") { wasm_block_type_empty() } else { result_type };
+    wasm_env_emit(env, op_if());
+    wasm_env_emit_byte(env, eff_res_ty);
+    env.current_block_depth = env.current_block_depth + 1;
+    if eff_res_ty == wasm_block_type_empty() {
+        wasm_lower_any(env, then_node);
+    } else {
+        let _th: Int = (0 + wasm_lower_expr_or_block(env, then_node));
+    }
+    if else_node != "" && !ast_is(else_node, "SEmpty") {
+        wasm_env_emit(env, op_else());
+        if eff_res_ty == wasm_block_type_empty() {
+            wasm_lower_any(env, else_node);
+        } else {
+            let _el: Int = (0 + wasm_lower_expr_or_block(env, else_node));
+        }
+    }
+    wasm_env_emit(env, op_end());
+    env.current_block_depth = env.current_block_depth - 1;
+}
+
+pub fn wasm_lower_while(env: &mut WasmEnv, cond: String, body_node: String) {
+    wasm_env_emit(env, op_block());
+    wasm_env_emit_byte(env, wasm_block_type_empty());
+    env.current_block_depth = env.current_block_depth + 1;
+
+    wasm_env_emit(env, op_loop());
+    wasm_env_emit_byte(env, wasm_block_type_empty());
+    env.current_block_depth = env.current_block_depth + 1;
+
+    wasm_env_push_loop(env, env.current_block_depth - 2, env.current_block_depth - 1);
+
+    let _c: Int = (0 + wasm_lower_expr(env, cond));
+    wasm_env_emit(env, op_i32_eqz());
+    wasm_env_emit(env, op_br_if());
+    wasm_env_emit_u32(env, 1);
+
+    wasm_lower_any(env, body_node);
+
+    wasm_env_emit(env, op_br());
+    wasm_env_emit_u32(env, 0);
+
+    wasm_env_emit(env, op_end());
+    env.current_block_depth = env.current_block_depth - 1;
+
+    wasm_env_emit(env, op_end());
+    env.current_block_depth = env.current_block_depth - 1;
+
+    wasm_env_pop_loop(env);
+}
+
+pub fn wasm_lower_for(env: &mut WasmEnv, init_node: String, cond: String, step_node: String, body_node: String) {
+    if init_node != "" && !ast_is(init_node, "SEmpty") {
+        wasm_lower_any(env, init_node);
+    }
+    wasm_env_emit(env, op_block());
+    wasm_env_emit_byte(env, wasm_block_type_empty());
+    env.current_block_depth = env.current_block_depth + 1;
+
+    wasm_env_emit(env, op_loop());
+    wasm_env_emit_byte(env, wasm_block_type_empty());
+    env.current_block_depth = env.current_block_depth + 1;
+
+    wasm_env_push_loop(env, env.current_block_depth - 2, env.current_block_depth - 1);
+
+    if cond != "" && !ast_is(cond, "SEmpty") {
+        let _c: Int = (0 + wasm_lower_expr(env, cond));
+        wasm_env_emit(env, op_i32_eqz());
+        wasm_env_emit(env, op_br_if());
+        wasm_env_emit_u32(env, 1);
+    }
+
+    wasm_lower_any(env, body_node);
+
+    if step_node != "" && !ast_is(step_node, "SEmpty") {
+        wasm_lower_any(env, step_node);
+    }
+
+    wasm_env_emit(env, op_br());
+    wasm_env_emit_u32(env, 0);
+
+    wasm_env_emit(env, op_end());
+    env.current_block_depth = env.current_block_depth - 1;
+
+    wasm_env_emit(env, op_end());
+    env.current_block_depth = env.current_block_depth - 1;
+
+    wasm_env_pop_loop(env);
+}
+
+pub fn wasm_lower_match_arm(env: &mut WasmEnv, scrut_slot: Int, arm_node: String, all_args: String, arm_idx: Int, max_arm_idx: Int, result_type: Int) {
+    let arm_args: String = wasm_ast_args(arm_node);
+    let pat_str: String = list_get_str(arm_args, 0);
+    let body_str: String = list_get_str(arm_args, 1);
+    let is_wildcard: Bool = (pat_str == "_") || (pat_str == "EVar(_)") || (pat_str == "");
+    if is_wildcard || arm_idx >= max_arm_idx - 1 {
+        if result_type == wasm_block_type_empty() { wasm_lower_any(env, body_str); } else { let _r: Int = (0 + wasm_lower_expr_or_block(env, body_str)); }
+        return;
+    }
+    if wasm_adt_is_pattern(pat_str) {
+        wasm_env_emit(env, op_local_get()); wasm_env_emit_u32(env, scrut_slot);
+        wasm_env_emit(env, op_i32_load()); wasm_env_emit_u32(env, 2); wasm_env_emit_u32(env, 0);
+        wasm_env_emit(env, op_i32_const()); wasm_env_emit_i32(env, wasm_adt_pattern_tag(pat_str));
+        wasm_env_emit(env, op_i32_eq());
+        wasm_env_emit(env, op_if()); wasm_env_emit_byte(env, result_type);
+        env.current_block_depth = env.current_block_depth + 1;
+        let binding: String = wasm_adt_pattern_binding(pat_str);
+        if binding != "" && binding != "_" {
+            let _d: Int = (0 + wasm_lower_adt_destructure(env, scrut_slot, binding, wasm_val_type_i32()));
+        }
+        if result_type == wasm_block_type_empty() { wasm_lower_any(env, body_str); } else { let _r: Int = (0 + wasm_lower_expr_or_block(env, body_str)); }
+        wasm_env_emit(env, op_else());
+        let next_arm: String = list_get_str(all_args, arm_idx + 1);
+        wasm_lower_match_arm(env, scrut_slot, next_arm, all_args, arm_idx + 1, max_arm_idx, result_type);
+        wasm_env_emit(env, op_end());
+        env.current_block_depth = env.current_block_depth - 1;
+        return;
+    }
+    wasm_env_emit(env, op_local_get()); wasm_env_emit_u32(env, scrut_slot);
+    let _p: Int = (0 + wasm_lower_expr(env, pat_str));
+    if env.default_int_type == wasm_val_type_i64() { wasm_env_emit(env, op_i64_eq()); } else { wasm_env_emit(env, op_i32_eq()); }
+    wasm_env_emit(env, op_if()); wasm_env_emit_byte(env, result_type);
+    env.current_block_depth = env.current_block_depth + 1;
+    if result_type == wasm_block_type_empty() { wasm_lower_any(env, body_str); } else { let _r: Int = (0 + wasm_lower_expr_or_block(env, body_str)); }
+    wasm_env_emit(env, op_else());
+    let next_arm: String = list_get_str(all_args, arm_idx + 1);
+    wasm_lower_match_arm(env, scrut_slot, next_arm, all_args, arm_idx + 1, max_arm_idx, result_type);
+    wasm_env_emit(env, op_end());
+    env.current_block_depth = env.current_block_depth - 1;
+}
+
+pub fn wasm_lower_match(env: &mut WasmEnv, match_node: String, default_ty: Int) -> Int {
+    let args: String = wasm_ast_args(match_node);
+    let n_args: Int = (0 + list_len_str(args));
+    if n_args < 2 { return wasm_block_type_empty(); }
+    let first_arm: String = list_get_str(args, 1);
+    let arm_args: String = wasm_ast_args(first_arm);
+    let body_str: String = list_get_str(arm_args, 1);
+    let is_val: Bool = wasm_ast_last_is_expr(body_str);
+    let result_type: Int = if is_val && default_ty != wasm_block_type_empty() { default_ty } else { wasm_block_type_empty() };
+    let scrutinee: String = list_get_str(args, 0);
+    let s_ty: Int = (0 + wasm_lower_expr(env, scrutinee));
+    let loc_types: List[Int] = env.local_types;
+    let n_locs: Int = list_len(loc_types);
+    let s_n: String = n_locs.to_string();
+    let vname: String = "__scrut_" + s_n;
+    let scrut_slot: Int = (0 + wasm_env_bind_var(env, vname, s_ty));
+    wasm_env_emit(env, op_local_set());
+    wasm_env_emit_u32(env, scrut_slot);
+
+    wasm_lower_match_arm(env, scrut_slot, first_arm, args, 1, n_args, result_type);
+    return result_type;
+}
+
+pub fn wasm_lower_block(env: &mut WasmEnv, block_node: String) {
+    let args: String = wasm_ast_args(block_node);
+    let n: Int = (0 + list_len_str(args));
+    let mut i: Int = 0;
+    while i < n { let item: String = list_get_str(args, i); if item != "" && !ast_is(item, "SEmpty") { wasm_lower_any(env, item); }
+        i = i + 1;
+    }
+}
+
+pub fn wasm_lower_any(env: &mut WasmEnv, node: String) {
+    let tag: String = ast_tag(node);
+    let args: String = wasm_ast_args(node);
+    if tag == "EIf" {
+        let n_if_args: Int = (0 + list_len_str(args));
+        let cond: String = list_get_str(args, 0);
+        let then_e: String = if n_if_args >= 2 { list_get_str(args, 1) } else { "" };
+        let else_e: String = if n_if_args >= 3 { list_get_str(args, 2) } else { "" };
+        wasm_lower_if(env, cond, then_e, else_e, wasm_block_type_empty());
+        return;
+    }
+    if tag == "SWhile" {
+        wasm_lower_while(env, list_get_str(args, 0), list_get_str(args, 1));
+        return;
+    }
+    if tag == "SFor" {
+        wasm_lower_for(env, list_get_str(args, 0), list_get_str(args, 1), list_get_str(args, 2), list_get_str(args, 3));
+        return;
+    }
+    if tag == "EMatch" {
+        let _m: Int = (0 + wasm_lower_match(env, node, wasm_block_type_empty()));
+        return;
+    }
+    if tag == "AstBlock" {
+        wasm_lower_block(env, node);
+        return;
+    }
+    if tag == "SLet" || tag == "SLetMut" || tag == "SAssign" || tag == "SReturn" || tag == "SExpr" || tag == "SBreak" || tag == "SContinue" {
+        wasm_lower_stmt(env, node);
+        return;
+    }
+    if tag != "SEmpty" && node != "" {
+        wasm_lower_stmt(env, node);
+    }
+}
+
+

@@ -1,0 +1,172 @@
+// # WebAssembly Linear Memory Buddy Allocator
+//
+// Logline: Binary power-of-two buddy system memory allocator with dynamic memory.grow integration for large buffers.
+//
+// Setup: Import wasm_leb128.oo for address encoding and page math.
+//
+// Beats:
+//   1. Compute power-of-two orders and buddy block address arithmetic.
+//   2. Manage free lists per order and block splitting.
+
+import "wasm_binary_builder.oo";
+
+//   3. Coalesce adjacent buddy blocks on deallocation.
+//   4. Expand heap capacity via WebAssembly 64KB page growth.
+
+import "wasm_leb128.oo";
+
+
+type BuddyAllocator = struct {
+    heap_base: Int,
+    min_order: Int,
+    max_order: Int,
+    total_pages: Int,
+    total_bytes: Int,
+    block_addresses: List[Int],
+    block_orders: List[Int],
+    block_is_free: List[Int],
+    block_count: Int
+};
+
+pub fn buddy_order_for_size(min_order: Int, max_order: Int, req_bytes: Int) -> Int {
+    let mut order: Int = min_order;
+    let mut sz: Int = 1;
+    let mut i: Int = 0;
+    while i < min_order { sz = sz * 2;
+    i = i + 1;
+    }
+    while order <= max_order {
+        if sz >= req_bytes { return order;
+        }
+        sz = sz * 2;
+        order = order + 1;
+    }
+    return -1;
+}
+
+pub fn buddy_block_size(order: Int) -> Int {
+    let mut sz: Int = 1;
+    let mut i: Int = 0;
+    while i < order { sz = sz * 2;
+    i = i + 1;
+    }
+    return sz;
+}
+
+fn buddy_init_addrs(heap_base: Int, total_pages: Int) -> List[Int] {
+    let mut l: List[Int] = list_new();
+    let mut p: Int = 0;
+    while p < total_pages {
+        l = list_push(l, heap_base + (p * 65536));
+        p = p + 1;
+    }
+    return l;
+}
+
+fn buddy_init_ords(total_pages: Int) -> List[Int] {
+    let mut l: List[Int] = list_new();
+    let mut p: Int = 0;
+    while p < total_pages {
+        l = list_push(l, 16);
+        p = p + 1;
+    }
+    return l;
+}
+
+fn buddy_init_frees(total_pages: Int) -> List[Int] {
+    let mut l: List[Int] = list_new();
+    let mut p: Int = 0;
+    while p < total_pages {
+        l = list_push(l, 1);
+        p = p + 1;
+    }
+    return l;
+}
+
+pub fn buddy_allocator_new(heap_base: Int, total_pages: Int) -> BuddyAllocator {
+    return BuddyAllocator {
+        heap_base: heap_base,
+        min_order: 9,
+        max_order: 16,
+        total_pages: total_pages,
+        total_bytes: total_pages * 65536,
+        block_addresses: buddy_init_addrs(heap_base, total_pages),
+        block_orders: buddy_init_ords(total_pages),
+        block_is_free: buddy_init_frees(total_pages),
+        block_count: total_pages
+    };
+}
+
+pub fn buddy_alloc(alloc: BuddyAllocator, req_bytes: Int) -> Int {
+    let mut alloc: BuddyAllocator = alloc;
+    let target_order: Int = (0 + buddy_order_for_size(alloc.min_order, alloc.max_order, req_bytes));
+    if target_order < 0 { return 0;
+    }
+    let mut best_idx: Int = -1;
+    let mut i: Int = 0;
+    let n_blocks: Int = alloc.block_count;
+    while i < n_blocks { let is_f: Int = list_get(alloc.block_is_free, i);
+    let ord: Int = list_get(alloc.block_orders, i);
+    if is_f == 1 && ord >= target_order { if best_idx < 0 || ord < list_get(alloc.block_orders, best_idx) { best_idx = i;
+    }
+        }
+        i = i + 1;
+    }
+    if best_idx < 0 { return 0;
+    }
+    let mut cur_ord: Int = list_get(alloc.block_orders, best_idx);
+    let cur_addr: Int = list_get(alloc.block_addresses, best_idx);
+    while cur_ord > target_order { let child_order: Int = cur_ord - 1;
+    let child_size: Int = (0 + buddy_block_size(child_order));
+    let split_addr: Int = cur_addr + child_size;
+    cur_ord = child_order;
+    alloc.block_orders = wasm_ilist_set(alloc.block_orders, best_idx, cur_ord);
+    alloc.block_addresses = list_push(alloc.block_addresses, split_addr);
+    alloc.block_orders = list_push(alloc.block_orders, child_order);
+    alloc.block_is_free = list_push(alloc.block_is_free, 1);
+    let b_cnt: Int = alloc.block_count;
+    alloc.block_count = b_cnt + 1;
+    }
+    alloc.block_is_free = wasm_ilist_set(alloc.block_is_free, best_idx, 0);
+    return cur_addr;
+}
+
+pub fn buddy_free(alloc: BuddyAllocator, ptr: Int) -> Bool {
+    let mut alloc: BuddyAllocator = alloc;
+let mut target_idx: Int = -1;
+let mut i: Int = 0;
+let n_blocks: Int = alloc.block_count;
+while i < n_blocks { let addr: Int = list_get(alloc.block_addresses, i);
+let is_f: Int = list_get(alloc.block_is_free, i);
+if addr == ptr && is_f == 0 { target_idx = i;
+}
+        i = i + 1;
+    }
+    if target_idx < 0 { return false;
+    }
+    alloc.block_is_free = wasm_ilist_set(alloc.block_is_free, target_idx, 1);
+    return true;
+}
+
+pub fn buddy_grow_pages(alloc: BuddyAllocator, extra_pages: Int) -> Bool {
+    if extra_pages <= 0 { return false;
+    }
+    let start_p: Int = alloc.total_pages;
+    let base: Int = alloc.heap_base;
+    let mut p: Int = 0;
+    while p < extra_pages { let page_offset: Int = (start_p + p) * 65536;
+    let addr: Int = base + page_offset;
+    alloc.block_addresses = list_push(alloc.block_addresses, addr);
+    alloc.block_orders = list_push(alloc.block_orders, alloc.max_order);
+    alloc.block_is_free = list_push(alloc.block_is_free, 1);
+    p = p + 1;
+    }
+    let cur_pages: Int = alloc.total_pages;
+    let cur_blocks: Int = alloc.block_count;
+    let new_pages: Int = cur_pages + extra_pages;
+    let new_blocks: Int = cur_blocks + extra_pages;
+    alloc.total_pages = new_pages;
+    alloc.total_bytes = new_pages * 65536;
+    alloc.block_count = new_blocks;
+    return true;
+}

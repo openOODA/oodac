@@ -1,0 +1,219 @@
+// # WebAssembly Capability Lowering & Sandboxing Engine
+//
+// Logline: Verifies compile-time capability tokens, validates syscall grants fail-closed, and lowers capabilities.
+//
+// Setup: Import ast.oo, ty.oo before capability validation and lowering.
+//
+// Beats:
+//   1. Identify capability token types (FsReadCap, FsWriteCap, SysCap, NetCap).
+//   2. Validate fail-closed ambient authority restriction.
+//   3. Lower capability arguments to zero-cost erased parameters in WebAssembly functions.
+//   4. Validate call site token provenance.
+
+
+
+
+pub fn wasm_ast_args(node: String) -> String {
+    let n: Int = chars_len(node);
+    let mut depth: Int = 0;
+    let mut start: Int = 0;
+    let mut i: Int = 0;
+    let mut hit: Bool = false;
+    while i < n {
+        let c: String = char_at(node, i);
+        if c == "(" {
+            if depth == 0 { start = i + 1;
+            hit = true;
+            }
+            depth = depth + 1;
+        }
+        if c == ")" {
+            depth = depth - 1;
+            if depth == 0 && hit { return str_slice(node, start, i);
+            }
+        }
+        i = i + 1;
+    }
+    return "";
+}
+
+pub fn wasm_clean_cap_type_str(raw: String) -> String {
+    let mut s: String = raw;
+let mut changed: Bool = true;
+while changed { changed = false;
+let n: Int = chars_len(s);
+if n >= 5 && str_slice(s, 0, 5) == "&mut " { s = str_slice(s, 5, n);
+changed = true;
+} else if n >= 1 && char_at(s, 0) == "&" {
+            s = str_slice(s, 1, n);
+            changed = true;
+        } else if n >= 1 && char_at(s, 0) == "*" {
+            s = str_slice(s, 1, n);
+            changed = true;
+        } else if n >= 7 && str_slice(s, 0, 6) == "TyCap(" && char_at(s, n - 1) == ")" {
+            s = str_slice(s, 6, n - 1);
+            changed = true;
+        } else if n >= 7 && str_slice(s, 0, 6) == "TyRef(" && char_at(s, n - 1) == ")" {
+            s = str_slice(s, 6, n - 1);
+            changed = true;
+        } else if n >= 10 && str_slice(s, 0, 9) == "TyRefMut(" && char_at(s, n - 1) == ")" {
+            s = str_slice(s, 9, n - 1);
+            changed = true;
+        } else if n >= 8 && str_slice(s, 0, 7) == "TyName(" && char_at(s, n - 1) == ")" {
+            s = str_slice(s, 7, n - 1);
+            changed = true;
+        }
+    }
+    return s;
+}
+
+pub fn is_cap_type_name(t: String) -> Bool {
+    if t == "FsCap" || t == "FsReadCap" || t == "FsWriteCap" { return true;
+    }
+    if t == "SysCap" || t == "ProcessCap" { return true;
+    }
+    if t == "TimeCap" || t == "RandCap" { return true;
+    }
+    if t == "NetCap" || t == "HttpCap" || t == "TcpCap" || t == "UdpCap" || t == "BindCap" { return true;
+    }
+    if t == "AllocCap" || t == "MemCap" || t == "ArenaCap" { return true;
+    }
+    if t == "ThreadCap" || t == "GpuCap" || t == "EnvCap" { return true;
+    }
+    if t == "UnsafeFFICap" || t == "FfiCap" || t == "HitlCap" || t == "AuditCap" || t == "SignCap" { return true;
+    }
+    if t == "WindowCap" || t == "FrameCap" || t == "AudioCap" || t == "CameraCap" || t == "UsbCap" || t == "HidCap" { return true;
+    }
+    return false;
+}
+
+pub fn is_capability_type_str(raw: String) -> Bool {
+    let clean: String = wasm_clean_cap_type_str(raw);
+return is_cap_type_name(clean);
+}
+
+pub fn wasm_cap_subsumes(granted: String, required: String) -> Bool {
+    let g: String = wasm_clean_cap_type_str(granted);
+    let r: String = wasm_clean_cap_type_str(required);
+    if g == r && g != "" { return true;
+    }
+    if g == "FsCap" && (r == "FsReadCap" || r == "FsWriteCap") { return true;
+    }
+    if g == "SysCap" && r == "ProcessCap" { return true;
+    }
+    if g == "NetCap" && (r == "HttpCap" || r == "TcpCap" || r == "UdpCap" || r == "BindCap") { return true;
+    }
+    if g == "AllocCap" && (r == "ArenaCap" || r == "MemCap") { return true;
+    }
+    if g == "UnsafeFFICap" && r == "FfiCap" { return true;
+    }
+    return false;
+}
+
+pub fn wasm_lower_cap_check(cap_name: String, granted_caps: List[String]) -> Bool {
+    let n: Int = list_len(granted_caps);
+let mut i: Int = 0;
+while i < n { let g: String = list_get(granted_caps, i);
+if wasm_cap_subsumes(g, cap_name) { return true;
+}
+        i = i + 1;
+    }
+    return false;
+}
+
+pub fn wasm_syscall_required_cap(op: String) -> String {
+    if op == "read_file" || op == "fs_read" || op == "path_exists" || op == "file_size" { return "FsReadCap";
+    }
+    if op == "write_file" || op == "fs_write" { return "FsWriteCap";
+    }
+    if op == "sys_exec" || op == "process_exec" || op == "exec" || op == "spawn_process" { return "ProcessCap";
+    }
+    if op == "sys_spawn" || op == "sys_wait" || op == "sys_kill" || op == "lto_xlang_link" { return "ProcessCap";
+    }
+    if op == "now_ms" || op == "sleep_ms" { return "TimeCap";
+    }
+    if op == "random" || op == "random_int" || op == "seed" { return "RandCap";
+    }
+    if op == "fetch" || op == "http_get" || op == "net_get" || op == "downloadData" || op == "query_remote_api" || op == "net_connect" { return "HttpCap";
+    }
+    if op == "tcp_connect" || op == "tcp_write" || op == "tcp_read" || op == "tcp_close" || op == "tls_connect" { return "TcpCap";
+    }
+    if op == "tcp_bind" { return "BindCap";
+    }
+    if op == "bind_udp" || op == "udp_recv" || op == "udp_send" { return "UdpCap";
+    }
+    if op == "sock_raw" || op == "raw_socket" { return "NetCap";
+    }
+    if op == "python_embed" || op == "sys_epoll_create" || op == "sys_inotify_init" || op == "sys_prctl" { return "SysCap";
+    }
+    if op == "landlock_restrict" || op == "enclave_enter" || op == "oo_rlimit_set_mem_mb" || op == "oo_rlimit_set_nofile" || op == "oo_rlimit_set_cpu_sec" { return "SysCap";
+    }
+    if op == "alloc_bytes" || op == "free_bytes" || op == "malloc" || op == "free" || op == "realloc" { return "AllocCap";
+    }
+    if op == "arena_create" || op == "arena_alloc" || op == "arena_reset" { return "ArenaCap";
+    }
+    if op == "dlopen" || op == "dlsym" || op == "dlclose" || op == "chs_build" || op == "host_ast_dump" || op == "host_check" || op == "host_free" { return "UnsafeFFICap";
+    }
+    if op == "thread_spawn" || op == "thread_join" || op == "mutex_lock" || op == "mutex_unlock" || op == "channel_new" || op == "channel_send" || op == "channel_recv" { return "ThreadCap";
+    }
+    if op == "actor_spawn" || op == "actor_send" || op == "actor_recv" { return "ThreadCap";
+    }
+    if op == "gpu_launch" { return "GpuCap";
+    }
+    if op == "env_get" || op == "env_set" || op == "getenv" { return "EnvCap";
+    }
+    return "";
+}
+
+pub fn wasm_assert_syscall_granted(syscall_name: String, granted_caps: List[String]) -> Result[Bool, String] {
+    let req: String = wasm_syscall_required_cap(syscall_name);
+    if req == "" {
+        return Ok(true);
+    }
+    if wasm_lower_cap_check(req, granted_caps) {
+        return Ok(true);
+    }
+    return Err("ERR\tcapability\tSandboxing violation: Function calls sealed effectful builtin '" + syscall_name + "' which requires capability &" + req + " but was not granted.");
+}
+
+pub fn wasm_extract_caps_from_params(args: String, max_param_idx: Int) -> List[String] {
+    let mut caps: List[String] = list_new();
+    let mut i: Int = 1;
+    while i < max_param_idx {
+        let p_item: String = list_get_str(args, i);
+        if p_item != "" && !ast_is(p_item, "SEmpty") {
+            let p_args: String = wasm_ast_args(p_item);
+            let p_ty_str: String = if ast_is(p_item, "AstParam") { list_get_str(p_args, 1) } else { "" };
+            if is_capability_type_str(p_ty_str) {
+                let cap_clean: String = wasm_clean_cap_type_str(p_ty_str);
+                caps = list_push(caps, cap_clean);
+            }
+        }
+        i = i + 1;
+    }
+    return caps;
+}
+
+pub fn wasm_filter_capability_params(param_names: List[String], param_types: List[String]) -> List[String] {
+    let mut out: List[String] = list_new();
+    let n: Int = list_len(param_names);
+    let mut i: Int = 0;
+    while i < n { let p_ty: String = list_get(param_types, i);
+    if !is_capability_type_str(p_ty) { out = list_push(out, list_get(param_names, i));
+    }
+        i = i + 1;
+    }
+    return out;
+}
+
+pub fn wasm_filter_non_cap_types(param_types: List[Int], param_type_strs: List[String]) -> List[Int] {
+    let mut out: List[Int] = list_new();
+    let n: Int = list_len(param_types);
+    let mut i: Int = 0;
+    while i < n { let ty_str: String = list_get(param_type_strs, i);
+    if !is_capability_type_str(ty_str) { out = list_push(out, list_get(param_types, i));
+    }
+        i = i + 1;
+    }
+    return out;
+}

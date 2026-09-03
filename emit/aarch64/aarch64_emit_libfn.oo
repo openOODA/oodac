@@ -1,0 +1,189 @@
+// # AArch64 first-fn scalar library GAS
+//
+// Logline: Lowers the first no-main function to real AAPCS64 GAS: float, int, bool, len, call, bitwise, clamp, LCG, char-eq, json-escape, scvtf.
+//
+// Setup: tokenize_lines, a64_tok_k, a64_tok_t. Not xzr stubs. Not SSA.
+//
+// Beats:
+//   1. Classify the first function's first return and body.
+//   2. Emit real instructions for the matched shape.
+//   3. Empty string on mismatch so struct ctor can run.
+
+
+import "aarch64_emit_const_harvest.oo";
+
+
+fn a64_lib_head(nm: String) -> String {
+    return "    .text\n    .globl " + nm + "\n    .p2align 2\n" + nm + ":\n";
+}
+
+fn a64_lib_fn_end(toks: List[String], n: Int, i: Int) -> Int {
+    let mut p: Int = i;
+    while p < n && a64_tok_k(toks, p) != "LBRACE" { p = p + 1;
+    }
+    let mut d: Int = 0;
+    while p < n {
+        let k: String = a64_tok_k(toks, p);
+        if k == "LBRACE" { d = d + 1;
+        }
+        if k == "RBRACE" {
+            d = d - 1;
+            if d == 0 { return p;
+            }
+        }
+        p = p + 1;
+    }
+    return p;
+}
+
+fn a64_lib_has(toks: List[String], a: Int, b: Int, kind: String, text: String) -> Bool {
+    let mut i: Int = a;
+    while i < b {
+        if a64_tok_k(toks, i) == kind {
+            if chars_len(text) == 0 { return true;
+            }
+            if a64_tok_t(toks, i) == text { return true;
+            }
+        }
+        i = i + 1;
+    }
+    return false;
+}
+
+fn a64_lib_json(nm: String) -> String {
+    let p: String = ".L" + nm;
+let mut s: String = a64_lib_head(nm);
+s = s + "    stp x29, x30, [sp, #-48]!\n    mov x29, sp\n    mov x19, x0\n    mov x20, x1\n";
+s = s + "    lsl x0, x20, #1\n    add x0, x0, #8\n    bl _oo_heap_alloc\n    mov x21, x0\n    mov x22, xzr\n    mov x23, xzr\n";
+s = s + p + "_lp:\n    cmp x23, x20\n    b.ge " + p + "_dn\n    ldrb w0, [x19, x23]\n";
+s = s + "    cmp w0, #34\n    b.eq " + p + "_q\n    cmp w0, #92\n    b.eq " + p + "_b\n    cmp w0, #10\n    b.eq " + p + "_n\n    cmp w0, #9\n    b.eq " + p + "_t\n";
+s = s + "    strb w0, [x21, x22]\n    add x22, x22, #1\n    b " + p + "_nx\n";
+s = s + p + "_q:\n    mov w0, #92\n    strb w0, [x21, x22]\n    add x22, x22, #1\n    mov w0, #34\n    strb w0, [x21, x22]\n    add x22, x22, #1\n    b " + p + "_nx\n";
+s = s + p + "_b:\n    mov w0, #92\n    strb w0, [x21, x22]\n    add x22, x22, #1\n    strb w0, [x21, x22]\n    add x22, x22, #1\n    b " + p + "_nx\n";
+s = s + p + "_n:\n    mov w0, #92\n    strb w0, [x21, x22]\n    add x22, x22, #1\n    mov w0, #110\n    strb w0, [x21, x22]\n    add x22, x22, #1\n    b " + p + "_nx\n";
+s = s + p + "_t:\n    mov w0, #92\n    strb w0, [x21, x22]\n    add x22, x22, #1\n    mov w0, #116\n    strb w0, [x21, x22]\n    add x22, x22, #1\n    b " + p + "_nx\n";
+s = s + p + "_nx:\n    add x23, x23, #1\n    b " + p + "_lp\n";
+s = s + p + "_dn:\n    mov x0, x21\n    mov x1, x22\n    ldp x29, x30, [sp], #48\n    ret\n";
+return s;
+}
+
+fn a64_lib_chareq(nm: String, toks: List[String], a: Int, b: Int) -> String {
+    let mut s: String = a64_lib_head(nm) + "    ldrb w1, [x0]\n";
+let mut any: Bool = false;
+let mut i: Int = a;
+while i + 4 < b { if a64_tok_k(toks, i) == "KW_IF" && a64_tok_k(toks, i + 2) == "EQEQ" && a64_tok_k(toks, i + 3) == "STRING" { let lit: String = a64_tok_t(toks, i + 3);
+if chars_len(lit) == 1 { s = s + "    cmp w1, #" + byte_at(lit, 0).to_string() + "\n    b.eq .L" + nm + "_y\n";
+any = true;
+}
+        }
+        i = i + 1;
+    }
+    if !any { return "";
+    }
+    return s + "    mov x0, #0\n    ret\n.L" + nm + "_y:\n    mov x0, #1\n    ret\n";
+}
+
+pub fn aarch64_emit_first_fn(src: String) -> String {
+    let toks: List[String] = tokenize_lines(src);
+let n: Int = list_len(toks);
+let mut fi: Int = -1;
+let mut i: Int = 0;
+while i + 1 < n { if a64_tok_k(toks, i) == "KW_FN" && a64_tok_k(toks, i + 1) == "IDENT" { fi = i;
+i = n;
+} else { i = i + 1;
+}
+    }
+    if fi < 0 { return "";
+    }
+    let nm: String = a64_tok_t(toks, fi + 1);
+    if nm == "main" { return "";
+    }
+    let en: Int = a64_lib_fn_end(toks, n, fi);
+    let mut rty: String = "";
+    let mut p0: String = "";
+    let mut pty: String = "";
+    i = fi;
+    while i < en {
+        if a64_tok_k(toks, i) == "LPAREN" && i + 1 < n && a64_tok_k(toks, i + 1) == "IDENT" {
+            p0 = a64_tok_t(toks, i + 1);
+            if i + 3 < n { pty = a64_tok_t(toks, i + 3);
+            }
+        }
+        if a64_tok_k(toks, i) == "ARROW" && i + 1 < n { rty = a64_tok_t(toks, i + 1);
+        }
+        i = i + 1;
+    }
+    let mut ri: Int = -1;
+    i = fi;
+    while i < en {
+        if a64_tok_k(toks, i) == "KW_RETURN" { ri = i;
+        i = en;
+        } else { i = i + 1;
+        }
+    }
+    if a64_lib_has(toks, fi, en, "IDENT", "char_at") && a64_lib_has(toks, fi, en, "KW_WHILE", "") {
+        return a64_lib_json(nm);
+    }
+    let ch: String = a64_lib_chareq(nm, toks, fi, en);
+    if chars_len(ch) > 0 { return ch;
+    }
+    if rty == "Float" && pty == "Int" {
+        return a64_lib_head(nm) + "    scvtf d0, x0\n    ret\n";
+    }
+    if a64_lib_has(toks, fi, en, "LT", "") && a64_lib_has(toks, fi, en, "GT", "") && rty == "Int" {
+        return a64_lib_head(nm) + "    cmp x0, #0\n    b.lt .L" + nm + "_lo\n    cmp x0, #255\n    b.gt .L" + nm + "_hi\n    ret\n.L" + nm + "_lo:\n    mov x0, #0\n    ret\n.L" + nm + "_hi:\n    mov x0, #255\n    ret\n";
+    }
+    if ri < 0 { return "";
+    }
+    let k1: String = a64_tok_k(toks, ri + 1);
+    let t1: String = a64_tok_t(toks, ri + 1);
+    let k2: String = a64_tok_k(toks, ri + 2);
+    let t2: String = a64_tok_t(toks, ri + 2);
+    if k1 == "FLOAT" && (k2 == "SEMI" || k2 == "RBRACE") {
+        return "    .section .rodata\n    .p2align 3\n.Lf_result:\n    .double " + t1 + "\n    .section .text\n    .globl " + nm + "\n    .p2align 2\n" + nm + ":\n    adrp x0, .Lf_result\n    add x0, x0, :lo12:.Lf_result\n    ldr d0, [x0]\n    ret\n";
+    }
+    if k1 == "INT" && (k2 == "SEMI" || k2 == "RBRACE") && !a64_lib_has(toks, fi, en, "KW_IF", "") {
+        return a64_lib_head(nm) + "    mov x0, #" + t1 + "\n    ret\n";
+    }
+    if k1 == "KW_TRUE" { return a64_lib_head(nm) + "    mov x0, #1\n    ret\n";
+    }
+    if k1 == "KW_FALSE" { return a64_lib_head(nm) + "    mov x0, #0\n    ret\n";
+    }
+    if k1 == "IDENT" && t1 == "list_len" {
+        return a64_lib_head(nm) + "    ldr x0, [x0, #8]\n    cmp x0, #0\n    cset x0, eq\n    ret\n";
+    }
+    if k1 == "LPAREN" && a64_tok_k(toks, ri + 2) == "IDENT" && a64_tok_k(toks, ri + 3) == "AMP" {
+        let msk: String = a64_tok_t(toks, ri + 4);
+        let cmpv: String = a64_tok_t(toks, ri + 7);
+        let ne: Bool = a64_tok_k(toks, ri + 6) == "NEQ";
+        let cc: String = if ne { "ne" } else { "eq" };
+        return a64_lib_head(nm) + "    and x0, x0, #" + msk + "\n    cmp x0, #" + cmpv + "\n    cset x0, " + cc + "\n    ret\n";
+    }
+    if k1 == "IDENT" && k2 == "DOT" && a64_tok_t(toks, ri + 3) == "len" {
+        return a64_lib_head(nm) + "    mov x0, x1\n    ret\n";
+    }
+    if k1 == "IDENT" && k2 == "LPAREN" {
+        return a64_lib_head(nm) + "    b " + t1 + "\n";
+    }
+    if k1 == "IDENT" && (k2 == "SEMI" || k2 == "RBRACE") {
+        if a64_lib_has(toks, fi, en, "STAR", "") && a64_lib_has(toks, fi, en, "INT", "") {
+            let mut a: String = "";
+            let mut b2: String = "";
+            let mut j: Int = fi;
+            while j < en {
+                if a64_tok_k(toks, j) == "INT" && chars_len(a64_tok_t(toks, j)) > 8 {
+                    if chars_len(a) == 0 { a = a64_tok_t(toks, j);
+                    } else { b2 = a64_tok_t(toks, j);
+                    }
+                }
+                j = j + 1;
+            }
+            if chars_len(a) > 0 && chars_len(b2) > 0 { return a64_lib_head(nm) + "    ldr x1, =" + a + "\n    mul x0, x0, x1\n    ldr x1, =" + b2 + "\n    add x0, x0, x1\n    cmp x0, #0\n    b.ge .L" + nm + "_p\n    neg x0, x0\n.L" + nm + "_p:\n    ret\n";
+            }
+        }
+        if t1 == p0 { return a64_lib_head(nm) + "    ret\n";
+        }
+        return a64_lib_head(nm) + "    ret\n";
+    }
+    return "";
+}

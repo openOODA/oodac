@@ -1,0 +1,138 @@
+// # Encode and decode token TSV lines
+//
+// Logline: Lexes source to token lines, packs kind, line, col, and text with escapes, and pulls a field back with field 3 decoded.
+//
+// Setup: collect_tokens lives in token_stream.oo; a token line is four tab-separated fields.
+//
+// Beats:
+//   1. tokenize_lines collects tokens once (lex ERR is fail-closed there) and caps at 1048576 rows.
+//   2. tok_line escapes tab, newline, and backslash in the text field.
+//   3. field_at slices the which-th field; field 3 runs field_decode3.
+
+import "token_stream.oo";
+
+
+pub fn tokenize_lines(src: String) -> List[String] {
+    // collect_tokens already fail-closes on lex ERR. A prior lex_all
+    // walk doubled cost on every module (174 files on main.oo).
+    let toks: List[String] = collect_tokens(src);
+    if list_len(toks) > 1048576 { println("ERR\tlex\ttoo many tokens");
+    process_exit(1);
+    }
+    return toks;
+}
+
+// Encode tab/newline so TSV token lines stay 4 fields.
+pub fn tok_line(kind: String, line: Int, col: Int, text: String) -> String {
+    let tn = chars_len(text);
+let mut need = false;
+let mut ti = 0;
+while ti < tn { let c = char_at(text, ti);
+if c == "\t" || c == "\n" || c == "\\" { need = true; ti = tn; } else {
+            ti = ti + 1;
+        }
+    }
+    let ls: String = line.to_string();
+    let cs: String = col.to_string();
+    if !need { return kind + "\t" + ls + "\t" + cs + "\t" + text;
+    }
+    let mut enc = "";
+    ti = 0;
+    while ti < tn { let c = char_at(text, ti);
+    if c == "\t" { enc = enc + "\\t";
+    } else if c == "\n" {
+            enc = enc + "\\n";
+        } else if c == "\\" {
+            enc = enc + "\\\\";
+        } else {
+            enc = enc + c;
+        }
+        ti = ti + 1;
+    }
+    return kind + "\t" + ls + "\t" + cs + "\t" + enc;
+}
+
+// Decode field 3 escapes produced by tok_line.
+pub fn field_decode3(raw: String) -> String {
+    let rn = chars_len(raw);
+let mut esc = false;
+let mut k = 0;
+while k < rn { if char_at(raw, k) == "\\" { esc = true; k = rn; } else {
+            k = k + 1;
+        }
+    }
+    if !esc { return raw;
+    }
+    let mut out = "";
+    let mut ri = 0;
+    while ri < rn { let c = char_at(raw, ri);
+    if c == "\\" { if (ri + 1) < rn { let nch = char_at(raw, ri + 1); if nch == "t" { out = out + "\t"; ri = ri + 2; } else if nch == "n" {
+                    out = out + "\n";
+                    ri = ri + 2;
+                } else if nch == "\\" {
+                    out = out + "\\";
+                    ri = ri + 2;
+                } else {
+                    out = out + c;
+                    ri = ri + 1;
+                }
+            } else {
+                out = out + c;
+                ri = ri + 1;
+            }
+        } else {
+            out = out + c;
+            ri = ri + 1;
+        }
+    }
+    return out;
+}
+
+pub fn field_at(line: String, which: Int) -> String {
+    let n = chars_len(line);
+if n == 0 { return "";
+}
+    let mut field = 0;
+    let mut start = 0;
+    let mut i = 0;
+    while i < n { let ch = char_at(line, i);
+    if ch == "\t" { if field == which { if start > i { return "";
+    }
+                let raw = str_slice(line, start, i);
+                if which == 3 { return field_decode3(raw);
+                }
+                return raw;
+            }
+            field = field + 1;
+            start = i + 1;
+        }
+        i = i + 1;
+    }
+    // last field (no trailing tab)
+    if field == which { if start > n { return "";
+    }
+        let raw2 = str_slice(line, start, n);
+        if which == 3 { return field_decode3(raw2);
+        }
+        return raw2;
+    }
+    return "";
+}
+
+// Bounded token-row field. Safe when pos is past toks (emit && hoist).
+pub fn c_tokf(toks: List[String], pos: Int, which: Int) -> String {
+    let n: Int = list_len(toks);
+if pos < 0 { return "";
+}
+    if pos >= n { return "";
+    }
+    return field_at(list_get(toks, pos), which);
+}
+
+pub fn c_tokk(toks: List[String], pos: Int) -> String {
+    return c_tokf(toks, pos, 0);
+}
+
+pub fn c_tokt(toks: List[String], pos: Int) -> String {
+    return c_tokf(toks, pos, 3);
+}

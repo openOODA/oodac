@@ -1,0 +1,79 @@
+// # Seed annotation tables / Fail closed on a typed binary operator
+//
+// Logline: Build alias, lit-env, return, and struct tables that later annotation checks read. When both operands have types, reject divide or modulo by literal zero and reject an operator that cannot combine those types.
+//
+// Setup: Merged cohesive compiler module.
+//
+// Beats:
+//   1. Unified cohesive implementation.
+
+pub fn ann_prep(toks: List[String]) -> List[String] {
+    let n = list_len(toks);
+    let mut aliases = "\t";
+    let mut lit_env: String = build_pure_lit_env(toks);
+    let ret_table: String = build_fn_ret_table(toks);
+    let struct_table: String = build_struct_field_table(toks);
+    let mut ai = 0;
+    while ai < n { let ak: String = field_at(list_get(toks, ai), 0);
+    if ak == "KW_TYPE" { if ai + 1 < n { if field_at(list_get(toks, ai + 1), 0) == "IDENT" { let aname: String = field_at(list_get(toks, ai + 1), 3);
+    if ai + 2 < n { if field_at(list_get(toks, ai + 2), 0) == "EQ" { if ai + 3 < n { if field_at(list_get(toks, ai + 3), 0) == "IDENT" { let base: String = field_at(list_get(toks, ai + 3), 3);
+    if base != "struct" { aliases = aliases + aname + ":" + base + "\t";
+    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        ai = ai + 1;
+    }
+    let mut r: List[String] = list_new();
+    r = list_push(r, aliases);
+    r = list_push(r, lit_env);
+    r = list_push(r, ret_table);
+    r = list_push(r, struct_table);
+    return r;
+}
+
+pub fn ann_check_binop(toks: List[String], i: Int, n: Int, lit_env: String, line: String, col: String) {
+            let lty: String = operand_type_with_env(toks, i, lit_env);
+            if lty != "" {
+                let lend: Int = 0 + operand_end(toks, i);
+                if lend < n { let opk: String = field_at(list_get(toks, lend), 0);
+                if is_type_binop(opk) { if lend + 1 < n { let rpos: Int = lend + 1;
+                let rtok: String = list_get(toks, rpos);
+                let rty: String = operand_type_with_env(toks, rpos, lit_env);
+                if rty != "" { if opk == "SLASH" { let rk: String = field_at(rtok, 0);
+                if rk == "INT" || rk == "FLOAT" { if field_at(rtok, 3) == "0" { tc_err_at(toks, lend, "integer division by zero");
+                }
+                                        if field_at(rtok, 3) == "0.0" {
+                                            tc_err_at(toks, lend, "float division by zero");
+                                        }
+                                    }
+                                }
+                                if opk == "PERCENT" {
+                                    let rk: String = field_at(rtok, 0);
+                                    if rk == "INT" || rk == "FLOAT" {
+                                        if field_at(rtok, 3) == "0" {
+                                            tc_err_at(toks, lend, "integer modulo by zero");
+                                        }
+                                        if field_at(rtok, 3) == "0.0" {
+                                            tc_err_at(toks, lend, "float modulo by zero");
+                                        }
+                                    }
+                                }
+                                let comb: String = combine_binop_types(opk, lty, rty);
+                                if comb == "ERR_BINOP" {
+                                    tc_err_at(
+                                        toks,
+                                        lend,
+                                        "incompatible operand types for binary operator"
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }

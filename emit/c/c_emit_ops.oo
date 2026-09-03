@@ -1,0 +1,249 @@
+// # Lower C binary operators
+//
+// Logline: Rank C-like binary operators and emit left-assoc expressions, with string and Result equality special-cased.
+//
+// Setup: c_emit_ops_str.oo is imported. AMP and PIPE are bitwise; ANDAND and OROR are logic. String helpers live in the sibling file.
+//
+// Beats:
+//   1. c_binop_prec and c_is_binop rank || through * / %.
+//   2. c_binop_apply maps string ==, !=, and + and Result == and != to helpers, then other ops to C text.
+//   3. c_emit_expr_prec is Pratt left-assoc with Builder fold for a+b+c via c_emit_concat_multi (oo_str_concat_multi, single allocation).
+//   4. Emit branch probability hints via __builtin_expect_with_probability for hot/cold conditions.
+
+import "c_emit_ops_str.oo";
+
+// C-like prec (higher binds tighter): || < && < | < ^ < & < cmp < << >> < + - < * / %
+// AMP/PIPE single-char = bitwise; ANDAND/OROR remain logic. No float bit ops / rotate.
+pub fn c_binop_prec(opk: String, opt: String) -> Int {
+    if opk == "OROR" || opt == "||" { return 1;
+    }
+    if opk == "ANDAND" || opt == "&&" { return 2;
+    }
+    if opk == "PIPE" || opt == "|" { return 3;
+    }
+    if opk == "CARET" || opk == "BXOR" || opt == "^" { return 4;
+    }
+    if opk == "AMP" || opt == "&" { return 5;
+    }
+    if opk == "EQEQ" || opk == "NE" || opk == "NEQ" || opk == "LT" || opk == "GT"
+        || opk == "LE" || opk == "GE" || opk == "LTE" || opk == "GTE"
+        || opt == "==" || opt == "!=" || opt == "<" || opt == ">" || opt == "<=" || opt == ">="
+    {
+        return 6;
+    }
+    if opk == "LSHIFT" || opk == "RSHIFT" || opt == "<<" || opt == ">>" { return 7;
+    }
+    if opk == "PLUS" || opk == "MINUS" || opt == "+" || opt == "-" { return 8;
+    }
+    if opk == "STAR" || opk == "SLASH" || opk == "PERCENT"
+        || opt == "*" || opt == "/" || opt == "%"
+    {
+        return 9;
+    }
+    return 0;
+}
+
+pub fn c_is_binop(opk: String, opt: String) -> Bool {
+    return c_binop_prec(opk, opt) > 0;
+}
+
+// Result/OoResS expression? env kind R or ((OoResS) compound.
+pub fn c_expr_is_res_env(e: String, env: String) -> Bool {
+    // FIX: when the user has explicitly typed the binding (e.g. `let len1: Int = match ...`)
+    // the env records the precise C type under `__ty__<e>`. Honor that over the rkind-derived
+    // kind, otherwise the `==` operator on a typed `Int` binding is mis-translated to
+    // `oo_res_eq(left, right)`.
+    let pty: String = c_env_get(env, "__ty__" + e);
+    if pty == "long long" || pty == "int" || pty == "double" || pty == "I" || pty == "F" || pty == "B" || pty == "OoStr" { return false;
+    }
+    let k: String = c_env_get(env, e);
+    if k == "R" || k == "RI" || k == "RII" || k == "RB" || k == "V" {
+        return true;
+    }
+    if chars_len(e) >= 8 { if str_slice(e, 0, 8) == "((OoRes" { return true;
+    }
+    }
+    return false;
+}
+
+// Build C text for left OP right (string == / + special-cased).
+pub fn c_binop_apply(left: String, opk: String, opt: String, right: String, env: String) -> String {
+    if (opk == "EQEQ" || opt == "==") && (c_expr_is_str_env(left, env) || c_expr_is_str_env(right, env)) { return "oo_str_eq(" + left + ", " + right + ")";
+}
+    if (opk == "NE" || opk == "NEQ" || opt == "!=")
+        && (c_expr_is_str_env(left, env) || c_expr_is_str_env(right, env))
+    {
+        return "(!oo_str_eq(" + left + ", " + right + "))";
+    }
+    if (opk == "EQEQ" || opt == "==") && (c_expr_is_res_env(left, env) || c_expr_is_res_env(right, env)) {
+        if c_env_get(env, left) == "RI" || c_env_get(env, right) == "RI" {
+            return "oo_res_eq_i(" + left + ", " + right + ")";
+        }
+        return "oo_res_eq(" + left + ", " + right + ")";
+    }
+    if (opk == "NE" || opk == "NEQ" || opt == "!=")
+        && (c_expr_is_res_env(left, env) || c_expr_is_res_env(right, env))
+    {
+        if c_env_get(env, left) == "RI" || c_env_get(env, right) == "RI" {
+            return "(!oo_res_eq_i(" + left + ", " + right + "))";
+        }
+        return "(!oo_res_eq(" + left + ", " + right + "))";
+    }
+    let mut op = opt;
+    if opk == "PLUS" { op = "+";
+    }
+    if opk == "MINUS" { op = "-";
+    }
+    if opk == "EQEQ" { op = "==";
+    }
+    if opk == "LT" { op = "<";
+    }
+    if opk == "GT" { op = ">";
+    }
+    if opk == "ANDAND" { op = "&&";
+    }
+    if opk == "OROR" { op = "||";
+    }
+    if opk == "NE" || opk == "NEQ" { op = "!=";
+    }
+    if opk == "LSHIFT" { op = "<<";
+    }
+    if opk == "RSHIFT" { op = ">>";
+    }
+    if opk == "AMP" { op = "&";
+    }
+    if opk == "PIPE" { op = "|";
+    }
+    if opk == "CARET" || opk == "BXOR" { op = "^";
+    }
+    if (opk == "PLUS" || op == "+") && (c_env_get(env, left) == "F" || c_env_get(env, right) == "F") {
+        return "(" + left + " + " + right + ")";
+    }
+    if (opk == "PLUS" || op == "+") && (c_expr_is_str_env(left, env) || c_expr_is_str_env(right, env)) {
+        return c_bind_str_temp_if("concat", "oo_str_concat(" + left + ", " + right + ")");
+    }
+    return "(" + left + " " + op + " " + right + ")";
+}
+
+// Pratt left-assoc with string chain Builder fold: a+b+c => oo_str_concat_multi(3,a,b,c)
+pub fn c_emit_expr_prec(toks: List[String], pos: Int, n: Int, env: String, min_prec: Int) -> List[String] {
+    let mut pack: List[String] = c_emit_primary_c(toks, pos, n, env);
+    let mut guard = 0;
+    while guard < 64 { let mut p = 0 + parse_int(list_get(pack, 0));
+    let left = list_get(pack, 1);
+    if p >= n { return pack;
+    }
+        let opk: String = c_tokk(toks, p);
+        let opt: String = c_tokt(toks, p);
+        if opt == "as" {
+            p = p + 1;
+            let cty: String = c_ty_at(toks, p, n);
+            p = c_emit_skip_type(toks, p, n);
+            let mut aso: List[String] = list_new();
+            aso = list_push(aso, p.to_string());
+            aso = list_push(aso, "((" + cty + ")(" + left + "))");
+            pack = aso;
+        } else {
+            let prec = 0 + c_binop_prec(opk, opt);
+            if prec < min_prec {
+                return pack;
+            }
+            // Fold a+b+c chain via single oo_str_concat_multi
+            if (opk == "PLUS" || opt == "+") && prec == 8 && c_expr_is_str_env(left, env) {
+                let mut parts: List[String] = list_new();
+                parts = list_push(parts, left);
+                let mut cur_p = p;
+                let mut chain_end = p;
+                while true {
+                    if cur_p >= n { break;
+                    }
+                    let ck: String = c_tokk(toks, cur_p);
+                    let ct: String = c_tokt(toks, cur_p);
+                    if !(ck == "PLUS" || ct == "+") { break;
+                    }
+                    let cprec: Int = 8;
+                    if cprec < min_prec { break;
+                    }
+                    let np: Int = cur_p + 1;
+                    if np >= n { break;
+                    }
+                    let rp: List[String] = c_emit_expr_prec(toks, np, n, env, cprec + 1);
+                    let rp_pos: Int = parse_int(list_get(rp, 0));
+                    let rp_expr: String = list_get(rp, 1);
+                    if !c_expr_is_str_env(rp_expr, env) { break;
+                    }
+                    parts = list_push(parts, rp_expr);
+                    cur_p = rp_pos;
+                    chain_end = rp_pos;
+                    if cur_p >= n { break;
+                    }
+                    let nk: String = c_tokk(toks, cur_p);
+                    let nt: String = c_tokt(toks, cur_p);
+                    if !(nk == "PLUS" || nt == "+") { break;
+                    }
+                }
+                if list_len(parts) > 1 { let multi: String = c_emit_concat_multi(parts);
+                let mut out: List[String] = list_new();
+                out = list_push(out, chain_end.to_string());
+                out = list_push(out, multi);
+                pack = out;
+                guard = guard + 1;
+                continue;
+                }
+            }
+            p = p + 1;
+            let next_min = prec + 1;
+            let pr: List[String] = c_emit_expr_prec(toks, p, n, env, next_min);
+            p = parse_int(list_get(pr, 0));
+            let right = list_get(pr, 1);
+            let expr: String = c_binop_apply(left, opk, opt, right, env);
+            let mut out: List[String] = list_new();
+            out = list_push(out, p.to_string());
+            out = list_push(out, expr);
+            pack = out;
+        }
+        guard = guard + 1;
+    }
+    return pack;
+}
+
+pub fn c_emit_expr_c(toks: List[String], pos: Int, n: Int, env: String) -> List[String] {
+    return c_emit_expr_prec(toks, pos, n, env, 1);
+}
+
+pub fn c_emit_maybe_binop(toks: List[String], left_pack: List[String], n: Int, env: String) -> List[String] {
+    let p0 = 0 + parse_int(list_get(left_pack, 0));
+    return c_emit_expr_prec(toks, p0, n, env, 1);
+}
+
+pub fn c_emit_expect_prob(expr: String, val: Int, prob: String) -> String {
+    return "__builtin_expect_with_probability((" + expr + "), " + val.to_string() + ", " + prob + ")";
+}
+
+pub fn c_is_cold_cond(cond: String) -> Bool {
+    if str_index_of(cond, "panic") >= 0 || str_index_of(cond, "trap") >= 0 || str_index_of(cond, "abort") >= 0 || str_index_of(cond, "fail") >= 0 || str_index_of(cond, "_null") >= 0 || str_index_of(cond, "== NULL") >= 0 || (str_index_of(cond, "!= 0") >= 0 && str_index_of(cond, "err") >= 0) || str_index_of(cond, "!ok") >= 0 || str_index_of(cond, ".ok == 0") >= 0 { return true;
+}
+    return false;
+}
+
+pub fn c_is_hot_cond(cond: String) -> Bool {
+    if str_index_of(cond, " < ") >= 0 || str_index_of(cond, " <= ") >= 0 || str_index_of(cond, ".ok == 1") >= 0 || str_index_of(cond, ".has_val") >= 0 { return true;
+}
+    return false;
+}
+
+pub fn c_emit_branch_prob_hint(cond: String, env: String) -> String {
+    if str_index_of(cond, "__builtin_expect") >= 0 { return cond;
+}
+    let p_hint: String = c_env_get(env, "__prob__" + cond);
+    if p_hint != "" {
+        return c_emit_expect_prob(cond, 1, p_hint);
+    }
+    if c_is_cold_cond(cond) {
+        return c_emit_expect_prob(cond, 0, "0.999");
+    }
+    if c_is_hot_cond(cond) {
+        return c_emit_expect_prob(cond, 1, "0.95");
+    }
+    return cond;
+}

@@ -1,0 +1,100 @@
+// # C Code Emission Subsystem — Module Entry Door
+//
+// Logline: Re-exports C99 source generation, ARC retain/release runtime, and monomorphization interfaces.
+//
+// Setup: Imports internal C code emission siblings and provides clean public re-exports.
+//
+// Beats:
+//   1. Import C code generator siblings and ARC runtime handlers.
+//   2. Re-export public C streaming and monomorphization interfaces.
+//   3. Preserve strict <= 256 lines limit.
+
+import "lex/ANCHOR.oo";
+import "types/ANCHOR.oo";
+import "c_cache_store.oo";
+import "c_contract_expr.oo";
+import "c_emit.oo";
+import "c_emit_arc.oo";
+import "c_emit_arc_reassign.oo";
+import "c_emit_arc_return.oo";
+import "c_emit_arc_kinds.oo";
+import "c_emit_args.oo";
+import "c_emit_block_arm.oo";
+import "c_emit_call.oo";
+import "c_emit_call_ty.oo";
+import "c_emit_closure.oo";
+import "c_emit_contract.oo";
+import "c_emit_deref.oo";
+import "c_emit_dispatch.oo";
+import "c_emit_dwarf.oo";
+import "c_emit_env.oo";
+import "c_emit_fn.oo";
+import "c_emit_for.oo";
+import "c_emit_helpers.oo";
+import "c_emit_ident.oo";
+import "c_emit_impl_methods.oo";
+import "c_emit_let.oo";
+import "c_emit_let_ext.oo";
+import "c_emit_let_ext_crt.oo";
+import "c_emit_libfloor.oo";
+import "c_emit_list_ty.oo";
+import "c_emit_lower.oo";
+import "c_emit_match_let.oo";
+import "c_emit_match_stmt.oo";
+import "c_emit_max_cycles.oo";
+import "c_emit_meta.oo";
+import "c_emit_meta_drive.oo";
+import "c_emit_mono.oo";
+import "c_emit_netio.oo";
+import "c_emit_olist.oo";
+import "c_emit_ops.oo";
+import "c_emit_ops_str.oo";
+import "c_emit_preamble.oo";
+import "c_emit_print.oo";
+import "c_emit_result.oo";
+import "c_emit_result_ty.oo";
+import "c_emit_secret.oo";
+import "c_emit_secret_alias.oo";
+import "c_emit_secret_check.oo";
+import "c_emit_secret_guard.oo";
+import "c_emit_secret_prop.oo";
+import "c_emit_secret_prop_scan.oo";
+import "c_emit_simd.oo";
+import "c_emit_skip.oo";
+import "c_emit_skip_grant.oo";
+import "c_emit_skip_peek.oo";
+import "c_emit_stmt.oo";
+import "c_emit_struct.oo";
+import "c_emit_sum.oo";
+import "c_emit_sum_spec.oo";
+import "c_emit_sys.oo";
+import "c_emit_temps.oo";
+import "c_emit_ty.oo";
+import "c_emit_ty_ext.oo";
+import "c_emit_type_helpers.oo";
+import "c_emit_verify.oo";
+import "c_emit_walk.oo";
+import "c_int_to_str.oo";
+import "c_mono_chunk.oo";
+import "c_mono_registry.oo";
+import "c_mono_unit.oo";
+import "c_mono_unit_emit.oo";
+
+// ──▓▓ Public C Emitter API ──▓▓──
+
+pub fn emit_c(src: String) -> String {
+    return c_emit_stream(src);
+}
+
+pub fn emit_c_stream(src: String) -> String {
+    return c_emit_stream(src);
+}
+
+pub fn emit_c_headers(src: String) -> String {
+    return c_emit_c_headers(src);
+}
+
+pub fn emit_c_mono(reg: List[String]) -> String {
+    return c_mono_unit_emit_source(reg);
+}
+

@@ -1,0 +1,250 @@
+// # Print the C emit preamble
+//
+// Logline: Prints the C includes, OoStr list and Result typedefs, runtime prototypes, cap grants, and assert macros that every emit-c translation unit needs.
+//
+// Setup: println exists; function bodies live in chs_rt.c; this file only declares them. Residual: no product seccomp-bpf floor — process-local cap tokens only.
+//
+// Beats:
+//   1. Print the std includes and the OoStr, OoIList, OoSList, OoResS, and OoResV typedefs.
+//   2. Declare string, list, ARC, cap-grant, I/O, crypto, net, sys, thread, and math prototypes.
+//   3. Print Token, assert_eq and assert_ne generics, and a comment that seccomp is not emitted.
+
+pub fn c_emit_preamble() {
+    println("#include <stdio.h>");
+    println("#include <stdlib.h>");
+    println("#include <string.h>");
+    println("#include <stdbool.h>");
+    println("#include <stddef.h>");
+    println("#include <stdint.h>");
+    println("#include <unistd.h>");
+    println("/* runtime decls (defined in chs_rt.c) */");
+    println("typedef struct { uint32_t ref_count; uint32_t flags; } OoListHeader;");
+    println("void *oo_list_alloc_payload(size_t elem_size, size_t cap);");
+    println("void oo_list_quota_release_bytes(long long cap, size_t elem_size);");
+    println("void oo_payload_free(void *ptr);");
+    println("typedef struct { char *data; long long len; } OoStr;");
+    println("typedef struct { long long *data; long long len; long long cap; } OoIList;");
+    println("typedef struct { OoStr *data; long long len; long long cap; } OoSList;");
+    println("typedef struct { double *data; long long len; long long cap; } OoFList;");
+    println("typedef struct { int ok; OoStr val; } OoResS;");
+    println("typedef struct { int ok; OoStr err; } OoResV;");
+    println("typedef struct { int ok; long long val; OoStr err; } OoResI;");
+    println("typedef struct { int ok; long long val; long long err; } OoResII;");
+    println("typedef struct { int ok; int val; OoStr err; } OoResB;");
+    println("typedef struct { int ok; double val; OoStr err; } OoResF;");
+    println("typedef struct { int ok; OoIList val; OoStr err; } OoResLI;");
+    println("typedef struct { int ok; OoSList val; OoStr err; } OoResLS;");
+    println("typedef struct { int ok; OoFList val; OoStr err; } OoResLF;");
+    println("void oo_str_retain(OoStr); void oo_str_release(OoStr); void oo_ilist_retain(OoIList); void oo_ilist_release(OoIList); void oo_slist_retain(OoSList); void oo_slist_release(OoSList); void oo_flist_retain(OoFList); void oo_flist_release(OoFList);");
+    println("typedef struct { int ok; int has_val; long long val; OoStr err; } OoResO_I;");
+    println("typedef struct { int ok; int has_val; OoStr val; OoStr err; } OoResO_S;");
+    println("typedef struct { int ok; int has_val; int val; OoStr err; } OoResO_B;");
+    println("typedef struct { int ok; int has_val; double val; OoStr err; } OoResO_F;");
+    println("typedef struct { int ok; int has_val; OoIList val; OoStr err; } OoResO_LI;");
+    println("typedef struct { int ok; int has_val; OoSList val; OoStr err; } OoResO_LS;");
+    println("typedef struct { int ok; int has_val; OoFList val; OoStr err; } OoResO_LF;");
+    println("typedef struct { int has_val; long long val; } OoOpt_I; typedef struct { int has_val; OoStr val; } OoOpt_S; typedef struct { int has_val; int val; } OoOpt_B; typedef struct { int has_val; double val; } OoOpt_F; typedef struct { int has_val; OoIList val; } OoOpt_LI; typedef struct { int has_val; OoSList val; } OoOpt_LS; typedef struct { int has_val; OoFList val; } OoOpt_LF;");
+    println("static inline void oo_retain_OoOpt_I(OoOpt_I v) {} static inline void oo_release_OoOpt_I(OoOpt_I v) {} static inline void oo_retain_OoOpt_S(OoOpt_S v) { if (v.has_val) oo_str_retain(v.val); } static inline void oo_release_OoOpt_S(OoOpt_S v) { if (v.has_val) oo_str_release(v.val); } static inline void oo_retain_OoOpt_B(OoOpt_B v) {} static inline void oo_release_OoOpt_B(OoOpt_B v) {} static inline void oo_retain_OoOpt_F(OoOpt_F v) {} static inline void oo_release_OoOpt_F(OoOpt_F v) {} static inline void oo_retain_OoOpt_LI(OoOpt_LI v) { if (v.has_val) oo_ilist_retain(v.val); } static inline void oo_release_OoOpt_LI(OoOpt_LI v) { if (v.has_val) oo_ilist_release(v.val); } static inline void oo_retain_OoOpt_LS(OoOpt_LS v) { if (v.has_val) oo_slist_retain(v.val); } static inline void oo_release_OoOpt_LS(OoOpt_LS v) { if (v.has_val) oo_slist_release(v.val); } static inline void oo_retain_OoOpt_LF(OoOpt_LF v) { if (v.has_val) oo_flist_retain(v.val); } static inline void oo_release_OoOpt_LF(OoOpt_LF v) { if (v.has_val) oo_flist_release(v.val); }");
+    println("typedef struct { int ok; OoOpt_I val; OoStr err; } OoRes_OoOpt_I; typedef struct { int ok; OoOpt_S val; OoStr err; } OoRes_OoOpt_S; typedef struct { int ok; OoOpt_B val; OoStr err; } OoRes_OoOpt_B; typedef struct { int ok; OoOpt_F val; OoStr err; } OoRes_OoOpt_F; typedef struct { int ok; OoOpt_LI val; OoStr err; } OoRes_OoOpt_LI; typedef struct { int ok; OoOpt_LS val; OoStr err; } OoRes_OoOpt_LS; typedef struct { int ok; OoOpt_LF val; OoStr err; } OoRes_OoOpt_LF;");
+    println("static inline void oo_retain_OoRes_OoOpt_I(OoRes_OoOpt_I v) { if (v.ok) oo_retain_OoOpt_I(v.val); else oo_str_retain(v.err); } static inline void oo_release_OoRes_OoOpt_I(OoRes_OoOpt_I v) { if (v.ok) oo_release_OoOpt_I(v.val); else oo_str_release(v.err); } static inline void oo_retain_OoRes_OoOpt_S(OoRes_OoOpt_S v) { if (v.ok) oo_retain_OoOpt_S(v.val); else oo_str_retain(v.err); } static inline void oo_release_OoRes_OoOpt_S(OoRes_OoOpt_S v) { if (v.ok) oo_release_OoOpt_S(v.val); else oo_str_release(v.err); }");
+    println("static inline void oo_retain_OoRes_OoOpt_B(OoRes_OoOpt_B v) { if (v.ok) oo_retain_OoOpt_B(v.val); else oo_str_retain(v.err); } static inline void oo_release_OoRes_OoOpt_B(OoRes_OoOpt_B v) { if (v.ok) oo_release_OoOpt_B(v.val); else oo_str_release(v.err); } static inline void oo_retain_OoRes_OoOpt_F(OoRes_OoOpt_F v) { if (v.ok) oo_retain_OoOpt_F(v.val); else oo_str_retain(v.err); } static inline void oo_release_OoRes_OoOpt_F(OoRes_OoOpt_F v) { if (v.ok) oo_release_OoOpt_F(v.val); else oo_str_release(v.err); }");
+    println("static inline void oo_retain_OoRes_OoOpt_LI(OoRes_OoOpt_LI v) { if (v.ok) oo_retain_OoOpt_LI(v.val); else oo_str_retain(v.err); } static inline void oo_release_OoRes_OoOpt_LI(OoRes_OoOpt_LI v) { if (v.ok) oo_release_OoOpt_LI(v.val); else oo_str_release(v.err); } static inline void oo_retain_OoRes_OoOpt_LS(OoRes_OoOpt_LS v) { if (v.ok) oo_retain_OoOpt_LS(v.val); else oo_str_retain(v.err); } static inline void oo_release_OoRes_OoOpt_LS(OoRes_OoOpt_LS v) { if (v.ok) oo_release_OoOpt_LS(v.val); else oo_str_release(v.err); } static inline void oo_retain_OoRes_OoOpt_LF(OoRes_OoOpt_LF v) { if (v.ok) oo_retain_OoOpt_LF(v.val); else oo_str_retain(v.err); } static inline void oo_release_OoRes_OoOpt_LF(OoRes_OoOpt_LF v) { if (v.ok) oo_release_OoOpt_LF(v.val); else oo_str_release(v.err); }");
+    println("typedef OoRes_OoOpt_LS OoRes_OoOpt_OoL_S; typedef OoRes_OoOpt_LI OoRes_OoOpt_OoL_I; typedef OoRes_OoOpt_LF OoRes_OoOpt_OoL_F; typedef OoOpt_LS OoOpt_OoL_S; typedef OoOpt_LI OoOpt_OoL_I; typedef OoOpt_LF OoOpt_OoL_F; typedef OoSList OoL_S; typedef OoIList OoL_I; typedef OoFList OoL_F; typedef OoResS OoRes_S; typedef OoResI OoRes_I; typedef struct { int has_val; OoResS val; } OoOpt_OoRes_S;");
+    println("static inline void oo_retain_OoRes_S(OoResS v) { oo_str_retain(v.val); } static inline void oo_release_OoRes_S(OoResS v) { oo_str_release(v.val); } static inline void oo_retain_OoRes_I(OoResI v) { if (!v.ok) oo_str_retain(v.err); } static inline void oo_release_OoRes_I(OoResI v) { if (!v.ok) oo_str_release(v.err); } static inline void oo_retain_OoOpt_OoRes_S(OoOpt_OoRes_S v) { if (v.has_val) oo_retain_OoRes_S(v.val); } static inline void oo_release_OoOpt_OoRes_S(OoOpt_OoRes_S v) { if (v.has_val) oo_release_OoRes_S(v.val); }");
+    println("static inline void oo_retain_OoOpt_OoL_S(OoOpt_LS v) { oo_retain_OoOpt_LS(v); } static inline void oo_release_OoOpt_OoL_S(OoOpt_LS v) { oo_release_OoOpt_LS(v); } static inline void oo_retain_OoOpt_OoL_I(OoOpt_LI v) { oo_retain_OoOpt_LI(v); } static inline void oo_release_OoOpt_OoL_I(OoOpt_LI v) { oo_release_OoOpt_LI(v); } static inline void oo_retain_OoOpt_OoL_F(OoOpt_LF v) { oo_retain_OoOpt_LF(v); } static inline void oo_release_OoOpt_OoL_F(OoOpt_LF v) { oo_release_OoOpt_LF(v); }");
+    println("static inline void oo_retain_OoRes_OoOpt_OoL_S(OoRes_OoOpt_LS v) { oo_retain_OoRes_OoOpt_LS(v); } static inline void oo_release_OoRes_OoOpt_OoL_S(OoRes_OoOpt_LS v) { oo_release_OoRes_OoOpt_LS(v); } static inline void oo_retain_OoRes_OoOpt_OoL_I(OoRes_OoOpt_LI v) { oo_retain_OoRes_OoOpt_LI(v); } static inline void oo_release_OoRes_OoOpt_OoL_I(OoRes_OoOpt_LI v) { oo_release_OoRes_OoOpt_LI(v); } static inline void oo_retain_OoRes_OoOpt_OoL_F(OoRes_OoOpt_LF v) { oo_retain_OoRes_OoOpt_LF(v); } static inline void oo_release_OoRes_OoOpt_OoL_F(OoRes_OoOpt_LF v) { oo_release_OoRes_OoOpt_LF(v); }");
+    println("void oo_reso_I_retain(OoResO_I); void oo_reso_I_release(OoResO_I); void oo_reso_S_retain(OoResO_S); void oo_reso_S_release(OoResO_S); void oo_reso_B_retain(OoResO_B); void oo_reso_B_release(OoResO_B); void oo_reso_F_retain(OoResO_F); void oo_reso_F_release(OoResO_F); void oo_reso_LI_retain(OoResO_LI); void oo_reso_LI_release(OoResO_LI); void oo_reso_LS_retain(OoResO_LS); void oo_reso_LS_release(OoResO_LS); void oo_reso_LF_retain(OoResO_LF); void oo_reso_LF_release(OoResO_LF);");
+    println("static inline void oo_retain_OoResO_I(OoResO_I v) { oo_reso_I_retain(v); } static inline void oo_release_OoResO_I(OoResO_I v) { oo_reso_I_release(v); } static inline void oo_retain_OoResO_S(OoResO_S v) { oo_reso_S_retain(v); } static inline void oo_release_OoResO_S(OoResO_S v) { oo_reso_S_release(v); }");
+    println("typedef struct { OoIList *data; long long len; long long cap; } OoLL_I;");
+    println("OoLL_I oo_ll_I_new(void); OoLL_I oo_ll_I_push(OoLL_I,OoIList);");
+    println("OoIList oo_ll_I_get(OoLL_I,long long); long long oo_ll_I_len(OoLL_I);");
+    println("void oo_ll_I_release(OoLL_I); void oo_ll_I_retain(OoLL_I);");
+    println("OoLL_I oo_ll_I_set(OoLL_I,long long,OoIList);");
+    println("typedef struct { OoSList *data; long long len; long long cap; } OoLL_S;");
+    println("OoLL_S oo_ll_S_new(void); OoLL_S oo_ll_S_push(OoLL_S,OoSList);");
+    println("OoSList oo_ll_S_get(OoLL_S,long long); long long oo_ll_S_len(OoLL_S);");
+    println("void oo_ll_S_release(OoLL_S); void oo_ll_S_retain(OoLL_S);");
+    println("OoLL_S oo_ll_S_set(OoLL_S,long long,OoSList);");
+    println("typedef struct { OoFList *data; long long len; long long cap; } OoLL_F;");
+    println("OoLL_F oo_ll_F_new(void); OoLL_F oo_ll_F_push(OoLL_F,OoFList);");
+    println("OoFList oo_ll_F_get(OoLL_F,long long); long long oo_ll_F_len(OoLL_F);");
+    println("void oo_ll_F_release(OoLL_F); void oo_ll_F_retain(OoLL_F);");
+    println("OoLL_F oo_ll_F_set(OoLL_F,long long,OoFList);");
+    println("typedef struct { OoLL_I *data; long long len; long long cap; } OoLLL_I;");
+    println("OoLLL_I oo_lll_I_new(void); OoLLL_I oo_lll_I_push(OoLLL_I,OoLL_I);");
+    println("OoLL_I oo_lll_I_get(OoLLL_I,long long); long long oo_lll_I_len(OoLLL_I);");
+    println("void oo_lll_I_release(OoLLL_I); void oo_lll_I_retain(OoLLL_I);");
+    println("typedef struct { OoLL_S *data; long long len; long long cap; } OoLLL_S;");
+    println("OoLLL_S oo_lll_S_new(void); OoLLL_S oo_lll_S_push(OoLLL_S,OoLL_S);");
+    println("OoLL_S oo_lll_S_get(OoLLL_S,long long); long long oo_lll_S_len(OoLLL_S);");
+    println("void oo_lll_S_release(OoLLL_S); void oo_lll_S_retain(OoLLL_S);");
+    println("typedef struct { OoLL_F *data; long long len; long long cap; } OoLLL_F; OoLLL_F oo_lll_F_new(void); OoLLL_F oo_lll_F_push(OoLLL_F,OoLL_F); OoLL_F oo_lll_F_get(OoLLL_F,long long); long long oo_lll_F_len(OoLLL_F); void oo_lll_F_release(OoLLL_F); void oo_lll_F_retain(OoLLL_F);");
+    println("typedef struct { OoLLL_I *data; long long len; long long cap; } OoLLLL_I; OoLLLL_I oo_llll_I_new(void); OoLLLL_I oo_llll_I_push(OoLLLL_I,OoLLL_I); OoLLL_I oo_llll_I_get(OoLLLL_I,long long); long long oo_llll_I_len(OoLLLL_I); void oo_llll_I_release(OoLLLL_I); void oo_llll_I_retain(OoLLLL_I);");
+    println("typedef struct { OoLLL_S *data; long long len; long long cap; } OoLLLL_S; OoLLLL_S oo_llll_S_new(void); OoLLLL_S oo_llll_S_push(OoLLLL_S,OoLLL_S); OoLLL_S oo_llll_S_get(OoLLLL_S,long long); long long oo_llll_S_len(OoLLLL_S); void oo_llll_S_release(OoLLLL_S); void oo_llll_S_retain(OoLLLL_S);");
+    println("typedef struct { OoLLL_F *data; long long len; long long cap; } OoLLLL_F; OoLLLL_F oo_llll_F_new(void); OoLLLL_F oo_llll_F_push(OoLLLL_F,OoLLL_F); OoLLL_F oo_llll_F_get(OoLLLL_F,long long); long long oo_llll_F_len(OoLLLL_F); void oo_llll_F_release(OoLLLL_F); void oo_llll_F_retain(OoLLLL_F);");
+    println("typedef struct { int ok; OoLLL_I val; OoStr err; } OoResLLL_I; typedef struct { int ok; int has_val; OoLLL_I val; OoStr err; } OoResO_LLL_I;");
+    println("OoIList oo_ilist_set(OoIList,long long,long long); OoSList oo_slist_set(OoSList,long long,OoStr); OoFList oo_flist_set(OoFList,long long,double);");
+    println("OoStr oo_str_lit(const char*); OoStr oo_str_concat(OoStr,OoStr);");
+    println("OoStr oo_str_concat_list(OoSList); OoStr oo_str_concat_multi(int, ...);");
+    println("OoStr oo_str_xor_lit(const unsigned char*,long long,long long);");
+    // G6 fix: 1-char String from codepoint.
+    println("OoStr oo_chr(long long);");
+    println("long long oo_str_byte_len(OoStr); long long oo_chars_len(OoStr);");
+    println("OoStr oo_char_at(OoStr,long long); OoStr oo_str_slice(OoStr,long long,long long);");
+    println("OoStr oo_tok_line(OoStr,long long,long long,OoStr);");
+    println("void oo_emit_tmp_reset(void); void oo_emit_tmp_enter(void);");
+    println("void oo_emit_tmp_leave(void); void oo_emit_tmp_release_print(void);");
+    println("void oo_emit_tmp_own(OoStr); void oo_emit_tmp_release_all_print(void);");
+    println("OoStr oo_emit_tmp_bind(OoStr);");
+    println("int oo_str_contains(OoStr,OoStr);");
+    println("int oo_char_is_digit(OoStr); int oo_char_is_alpha(OoStr); int oo_char_is_space(OoStr);");
+    println("OoIList oo_ilist_new(void); OoIList oo_ilist_push(OoIList,long long); void oo_ilist_free(OoIList);");
+    println("long long oo_ilist_get(OoIList,long long); long long oo_ilist_len(OoIList);");
+    println("void oo_str_retain(OoStr); void oo_str_release(OoStr);");
+    println("void oo_slist_retain(OoSList); void oo_slist_release(OoSList);");
+    println("void oo_ilist_retain(OoIList); void oo_ilist_release(OoIList);");
+    println("OoSList oo_slist_new(void); OoSList oo_slist_push(OoSList,OoStr); void oo_slist_free(OoSList);");
+    println("OoStr oo_slist_get(OoSList,long long); long long oo_slist_len(OoSList);");
+    println("OoFList oo_flist_new(void); OoFList oo_flist_push(OoFList,double);");
+    println("double oo_flist_get(OoFList,long long); long long oo_flist_len(OoFList);");
+    println("void oo_flist_retain(OoFList); void oo_flist_release(OoFList);");
+    println("static inline void oo_retain_I(long long v) { } static inline void oo_release_I(long long v) { }");
+    println("static inline void oo_retain_F(double v) { } static inline void oo_release_F(double v) { }");
+    println("static inline void oo_retain_B(int v) { } static inline void oo_release_B(int v) { }");
+    println("static inline void oo_retain_V(void) { } static inline void oo_release_V(void) { }");
+    println("static inline void oo_retain_S(OoStr v) { oo_str_retain(v); } static inline void oo_release_S(OoStr v) { oo_str_release(v); }");
+    println("static inline void oo_retain_OoStr(OoStr v) { oo_str_retain(v); } static inline void oo_release_OoStr(OoStr v) { oo_str_release(v); }");
+    println("static inline void oo_retain_OoFList(OoFList v) { oo_flist_retain(v); } static inline void oo_release_OoFList(OoFList v) { oo_flist_release(v); }");
+    println("static inline void oo_retain_OoIList(OoIList v) { oo_ilist_retain(v); } static inline void oo_release_OoIList(OoIList v) { oo_ilist_release(v); }");
+    println("static inline void oo_retain_OoSList(OoSList v) { oo_slist_retain(v); } static inline void oo_release_OoSList(OoSList v) { oo_slist_release(v); }");
+    println("static inline void oo_retain_OoLL_I(OoLL_I v) { if (v.data) { OoListHeader *h = ((OoListHeader*)v.data)-1; __atomic_fetch_add(&h->ref_count, 1, __ATOMIC_ACQ_REL); } } static inline void oo_release_OoLL_I(OoLL_I v) { oo_ll_I_release(v); }");
+    println("static inline void oo_retain_OoLL_S(OoLL_S v) { if (v.data) { OoListHeader *h = ((OoListHeader*)v.data)-1; __atomic_fetch_add(&h->ref_count, 1, __ATOMIC_ACQ_REL); } } static inline void oo_release_OoLL_S(OoLL_S v) { oo_ll_S_release(v); }");
+    println("static inline void oo_retain_OoLL_F(OoLL_F v) { if (v.data) { OoListHeader *h = ((OoListHeader*)v.data)-1; __atomic_fetch_add(&h->ref_count, 1, __ATOMIC_ACQ_REL); } } static inline void oo_release_OoLL_F(OoLL_F v) { oo_ll_F_release(v); }");
+    println("static inline void oo_retain_OoLLL_I(OoLLL_I v) { if (v.data) { OoListHeader *h = ((OoListHeader*)v.data)-1; __atomic_fetch_add(&h->ref_count, 1, __ATOMIC_ACQ_REL); } } static inline void oo_release_OoLLL_I(OoLLL_I v) { oo_lll_I_release(v); }");
+    println("static inline void oo_retain_OoLLL_S(OoLLL_S v) { if (v.data) { OoListHeader *h = ((OoListHeader*)v.data)-1; __atomic_fetch_add(&h->ref_count, 1, __ATOMIC_ACQ_REL); } } static inline void oo_release_OoLLL_S(OoLLL_S v) { oo_lll_S_release(v); }");
+    println("static inline void oo_retain_OoLLL_F(OoLLL_F v) { if (v.data) { OoListHeader *h = ((OoListHeader*)v.data)-1; __atomic_fetch_add(&h->ref_count, 1, __ATOMIC_ACQ_REL); } } static inline void oo_release_OoLLL_F(OoLLL_F v) { oo_lll_F_release(v); }");
+    println("static inline void oo_retain_OoLLLL_I(OoLLLL_I v) { if (v.data) { OoListHeader *h = ((OoListHeader*)v.data)-1; __atomic_fetch_add(&h->ref_count, 1, __ATOMIC_ACQ_REL); } } static inline void oo_release_OoLLLL_I(OoLLLL_I v) { oo_llll_I_release(v); }");
+    println("static inline void oo_retain_OoLLLL_S(OoLLLL_S v) { if (v.data) { OoListHeader *h = ((OoListHeader*)v.data)-1; __atomic_fetch_add(&h->ref_count, 1, __ATOMIC_ACQ_REL); } } static inline void oo_release_OoLLLL_S(OoLLLL_S v) { oo_llll_S_release(v); }");
+    println("static inline void oo_retain_OoLLLL_F(OoLLLL_F v) { if (v.data) { OoListHeader *h = ((OoListHeader*)v.data)-1; __atomic_fetch_add(&h->ref_count, 1, __ATOMIC_ACQ_REL); } } static inline void oo_release_OoLLLL_F(OoLLLL_F v) { oo_llll_F_release(v); }");
+    // Process-local caps: no fixed forgeable magic ints (R1).
+    // Legacy main-inject set (fs/sys/env/net/time/rand/alloc/ffi/thread/gpu).
+    println("long long oo_cap_grant_fs(void); long long oo_cap_grant_sys(void); long long oo_cap_grant_env(void); long long oo_cap_grant_net(void);");
+    println("long long oo_cap_grant_time(void); long long oo_cap_grant_rand(void); long long oo_cap_grant_alloc(void); long long oo_cap_grant_arena(void); long long oo_cap_grant_ffi(void);");
+    println("long long oo_cap_grant_thread(void); long long oo_cap_grant_gpu(void); long long oo_cap_grant_compiler_read(void);");
+    // CAP-G3: granular + V2 grants DE1 main inject may emit (defined chs_rt_sys.c).
+    // Net: http/tcp/udp/bind | Fs: fsread/fswrite | OS: process/sync/mem/sign
+    // HW/UI: audio/camera/usb/hid/window/frame. audit header-only residual (no T).
+    println("long long oo_cap_grant_http(void); long long oo_cap_grant_tcp(void); long long oo_cap_grant_udp(void); long long oo_cap_grant_bind(void);");
+    println("long long oo_cap_grant_fsread(void); long long oo_cap_grant_fswrite(void); long long oo_cap_grant_process(void); long long oo_cap_grant_sync(void);");
+    println("long long oo_cap_grant_mem(void); long long oo_cap_grant_sign(void); long long oo_cap_grant_audio(void); long long oo_cap_grant_camera(void);");
+    println("long long oo_cap_grant_usb(void); long long oo_cap_grant_hid(void); long long oo_cap_grant_window(void); long long oo_cap_grant_frame(void);");
+    println("OoResS oo_dlopen(long long,OoStr); OoResS oo_dlsym(long long,OoStr,OoStr);");
+    println("OoResS oo_dlclose(long long,OoStr);");
+    println("OoStr crypto_md5_internal(OoStr); OoStr crypto_sha1_internal(OoStr);");
+    println("OoStr crypto_aes_encrypt_internal(OoStr,OoStr);");
+    println("long long oo_byte_at(OoStr,long long); long long oo_str_byte_at(OoStr,long long); long long oo_bytes_len(OoStr);");
+    println("long long oo_limb_add(long long,long long,long long,long long*); long long oo_limb_sub(long long,long long,long long,long long*);");
+    println("long long oo_limb_mul(long long,long long,long long,long long*); long long oo_limb_div(long long,long long,long long,long long*); long long oo_limb_cmp(long long,long long);");
+    println("OoStr oo_byte_slice(OoStr,long long,long long); int oo_bytes_eq(OoStr,OoStr);");
+    println("OoStr oo_bytes_from_str(OoStr); OoStr oo_bytes_concat(OoStr,OoStr);");
+    println("OoIList oo_bytes_new(void); OoIList oo_bytes_push(OoIList,long long);");
+    println("long long oo_bytes_get(OoIList,long long); OoStr oo_bytes_to_str(OoIList);");
+    println("OoResS oo_tcp_bind(long long,long long); OoResS oo_tcp_connect(long long,OoStr,long long);");
+    println("OoResS oo_tcp_accept(long long,long long);");
+    println("OoResS oo_bind_udp(long long,long long); OoResS oo_tls_connect(long long,OoStr,long long);");
+    println("OoResS oo_tcp_write(long long,long long,OoStr); OoResS oo_tcp_read(long long,long long,long long);");
+    println("OoResS oo_udp_recv(long long,long long,long long); OoResS oo_tcp_close(long long,long long);");
+    println("OoResS oo_udp_send(long long,long long,OoStr,long long,OoStr);");
+    println("OoResS oo_sock_raw(long long,long long);");
+    println("OoResS oo_sys_spawn(long long,OoStr); OoResS oo_sys_wait(long long,long long);");
+    println("OoResS oo_sys_kill(long long,long long,long long);");
+    println("OoSList sys_args(long long);");
+    println("#define chars_len oo_chars_len");
+    println("OoResS oo_sys_epoll_create(long long,long long); OoResS oo_sys_inotify_init(long long);");
+    println("OoResS oo_sys_prctl(long long,long long);");
+    println("OoResS oo_mutex_lock(long long,long long); OoResS oo_mutex_unlock(long long,long long);");
+    println("OoResS oo_thread_spawn(long long,OoStr); OoResS oo_thread_join(long long,long long);");
+    println("OoResS oo_thread_join_s(long long,OoStr); OoResS oo_gpu_launch(long long,OoStr);");
+    println("OoResS oo_channel_new(long long); OoResS oo_channel_send(long long,long long,OoStr);");
+    println("OoResS oo_channel_recv(long long,long long);");
+    println("OoResS oo_actor_spawn(long long,OoStr); OoResS oo_actor_send(long long,long long,OoStr);");
+    println("OoResS oo_actor_recv(long long,long long);");
+    println("const char *oo_process_policy_getenv(const char*);");
+    println("long long oo_now_ms(long long); void oo_sleep_ms(long long,long long);");
+    println("long long oo_random(long long); void oo_seed(long long,long long);");
+    println("long long oo_alloc_bytes(long long,long long); void oo_free_bytes(long long,long long);");
+    println("long long oo_alloc(long long); void oo_free(long long); void (oo_write_int)(long long,long long,long long); long long (oo_read_int)(long long,long long); long long heap_alloc_test(void);");
+    println("#ifndef oo_write_int\n#define OO_WRITE_INT_GET_MACRO(_1, _2, _3, NAME, ...) NAME\n#define oo_write_int_2(p, v) (oo_write_int)((p), 0LL, (v))\n#define oo_write_int_3(p, o, v) (oo_write_int)((p), (o), (v))\n#define oo_write_int(...) OO_WRITE_INT_GET_MACRO(__VA_ARGS__, oo_write_int_3, oo_write_int_2)(__VA_ARGS__)\n#endif");
+    println("#ifndef oo_read_int\n#define OO_READ_INT_GET_MACRO(_1, _2, NAME, ...) NAME\n#define oo_read_int_1(p) (oo_read_int)((p), 0LL)\n#define oo_read_int_2(p, o) (oo_read_int)((p), (o))\n#define oo_read_int(...) OO_READ_INT_GET_MACRO(__VA_ARGS__, oo_read_int_2, oo_read_int_1)(__VA_ARGS__)\n#endif");
+    println("long long oo_meta_epoch(void);");
+    println("long long oo_meta_mix(long long);");
+    println("int oo_meta_is_path_a(void);");
+    println("void oo_meta_decoy_touch(void);");
+    println("void oo_cap_require(long long,long long,const char*);");
+    println("OoResS oo_read_file(long long,OoStr); OoResV oo_write_file(long long,OoStr,OoStr);");
+    println("int oo_path_exists(long long,OoStr); long long oo_file_size(long long,OoStr); OoResS oo_env_get(long long,OoStr);");
+    println("OoResS oo_sys_exec(long long,int,OoStr*);");
+    println("OoSList oo_sys_args(long long);");
+    println("OoSList oo_fs_read_dir(long long,OoStr); int oo_fs_is_dir(long long,OoStr);");
+    println("OoResV oo_fs_remove_file(long long,OoStr); OoResV oo_fs_rmdir(long long,OoStr); OoResV oo_fs_mkdir(long long,OoStr);");
+    println("OoResV oo_fs_hardlink(long long,OoStr,OoStr); OoResV oo_fs_symlink(long long,OoStr,OoStr);");
+    println("OoResS oo_rlimit_set_mem_mb(long long,long long); OoResS oo_rlimit_set_nofile(long long,long long); OoResS oo_rlimit_set_cpu_sec(long long,long long);");
+    println("OoResS oo_arena_create(long long,long long); OoResS oo_arena_alloc(long long,long long,long long); OoResS oo_arena_reset(long long,long long);");
+    println("long long oo_soa_layout(OoStr); long long oo_dod_layout(long long); long long oo_checkpoint(long long); long long oo_rollback(void);");
+    println("OoResS oo_actor_restart(long long,long long); OoResS oo_otp_supervise(long long,long long);");
+    println("OoResS oo_cap_rpc_send(long long,OoStr); OoResS oo_cap_rpc_recv(long long,OoStr);");
+    println("OoStr oo_read_stdin(void); OoResS oo_read_stdin_chunk(long long); OoStr oo_file_stamp(OoStr);");
+    println("OoStr oo_str_macro_expand(OoStr); OoStr oo_str_ast_macro(OoStr);");
+    println("long long oo_import_c(long long,OoStr); long long oo_ffi_gen(long long,OoStr); long long oo_lto_xlang_link(long long,OoStr,OoStr);");
+    println("int oo_landlock_is_available(void); OoResS oo_landlock_restrict(long long,OoStr,OoStr);");
+    println("OoResS oo_dns_resolve(long long,OoStr); OoResS oo_dns_resolve_ipv4(long long,OoStr);");
+    println("OoResS oo_proc_mem_read(long long,long long,long long);");
+    println("OoResS oo_fetch(long long,OoStr);");
+    println("void oo_print_str(OoStr); void oo_eprint_str(OoStr); void oo_print_int(long long); void oo_print_bool(int); void oo_print_double(double); void oo_println(void); void oo_eprintln(void);");
+    println("double oo_sin(double); double oo_cos(double); double oo_ln(double);");
+    println("double oo_exp(double); double oo_sqrt(double); double oo_pow(double,double);");
+    println("int oo_str_eq(OoStr,OoStr); int oo_str_contains(OoStr,OoStr);");
+    println("OoSList str_split(OoStr,OoStr);");
+    println("OoStr oo_int_to_str(long long); OoStr str_trim(OoStr); OoStr oo_str_trim(OoStr); OoStr oo_str_to_lowercase(OoStr);");
+    println("OoStr oo_str_to_uppercase(OoStr); int oo_str_starts_with(OoStr,OoStr); int oo_str_ends_with(OoStr,OoStr);");
+    println("long long oo_str_index_of(OoStr,OoStr); OoStr oo_str_repeat(OoStr,long long);");
+    // Some/None lower to OoRes* compounds (c_lower_ok_err). No collapsing macros.
+    println("typedef struct { long long kind; OoStr text; } Token;");
+    println("static inline long long oo_str_to_int(OoStr s) { return s.data ? atoll(s.data) : 0LL; }");
+    println("static inline long long oo_str_len(OoStr s) { return s.data ? (long long)strlen(s.data) : 0LL; }");
+    println("static inline void oo_process_exit(long long c) { exit((int)c); }");
+    println("static inline void oo_assert_eq_str(OoStr a, OoStr b) { if (!oo_str_eq(a, b)) { fprintf(stderr, \"Assertion failed: assert_eq\\n\"); exit(1); } }");
+    println("static inline void oo_assert_eq_long(long long a, long long b) { if (a != b) { fprintf(stderr, \"Assertion failed: assert_eq\\n\"); exit(1); } }");
+    println("static inline void oo_assert_eq_double(double a, double b) { if (a != b) { fprintf(stderr, \"Assertion failed: assert_eq\\n\"); exit(1); } }");
+    // M161: Result[String,String] / OoResS structural equality for assert_eq / verify
+    println("static inline int oo_res_eq(OoResS a, OoResS b) { return a.ok == b.ok && oo_str_eq(a.val, b.val); }");
+    println("static inline int oo_res_eq_i(OoResI a, OoResI b) { return a.ok == b.ok && (a.ok ? a.val == b.val : oo_str_eq(a.err, b.err)); }");
+    println("static inline void oo_assert_eq_ress(OoResS a, OoResS b) { if (!oo_res_eq(a, b)) { fprintf(stderr, \"Assertion failed: assert_eq\\n\"); exit(1); } }");
+    println("#define oo_assert_eq(a, b) _Generic((a), OoStr: oo_assert_eq_str, OoResS: oo_assert_eq_ress, double: oo_assert_eq_double, float: oo_assert_eq_double, default: oo_assert_eq_long)((a), (b))");
+    println("#define assert_eq(a, b) oo_assert_eq(a, b)");
+    println("static inline void oo_assert_ne_str(OoStr a, OoStr b) { if (oo_str_eq(a, b)) { fprintf(stderr, \"Assertion failed: assert_ne\\n\"); exit(1); } }");
+    println("static inline void oo_assert_ne_long(long long a, long long b) { if (a == b) { fprintf(stderr, \"Assertion failed: assert_ne\\n\"); exit(1); } }");
+    println("static inline void oo_assert_ne_double(double a, double b) { if (a == b) { fprintf(stderr, \"Assertion failed: assert_ne\\n\"); exit(1); } }");
+    println("static inline void oo_assert_ne_ress(OoResS a, OoResS b) { if (oo_res_eq(a, b)) { fprintf(stderr, \"Assertion failed: assert_ne\\n\"); exit(1); } }");
+    println("#define oo_assert_ne(a, b) _Generic((a), OoStr: oo_assert_ne_str, OoResS: oo_assert_ne_ress, double: oo_assert_ne_double, float: oo_assert_ne_double, default: oo_assert_ne_long)((a), (b))");
+    println("#define assert_ne(a, b) oo_assert_ne(a, b)");
+    println("#define oo_assert(a) do { if (!(a)) { fprintf(stderr, \"Assertion failed: assert\\n\"); exit(1); } } while(0)");
+    println("#define assert(a) oo_assert(a)");
+    println("OoStr crypto_sha256_internal(OoStr); OoStr crypto_sha512_internal(OoStr); OoStr crypto_hmac_sha256_internal(OoStr,OoStr);");
+    println("OoStr crypto_sha3_256_internal(OoStr);");
+    println("OoStr crypto_aes_gcm_seal_internal(OoStr,OoStr,OoStr,OoStr); OoStr crypto_aes_gcm_open_internal(OoStr,OoStr,OoStr,OoStr,OoStr);");
+    println("OoStr crypto_chacha20poly1305_seal_internal(OoStr,OoStr,OoStr,OoStr); OoStr crypto_chacha20poly1305_open_internal(OoStr,OoStr,OoStr,OoStr,OoStr);");
+    println("OoStr crypto_mlkem768_keygen_internal(OoStr); OoStr crypto_mlkem768_encaps_internal(OoStr,OoStr); OoStr crypto_mlkem768_decaps_internal(OoStr,OoStr);");
+    println("OoStr crypto_mldsa65_keygen_internal(OoStr); OoStr crypto_mldsa65_sign_internal(OoStr,OoStr,OoStr); OoStr crypto_mldsa65_verify_internal(OoStr,OoStr,OoStr);");
+    println("OoStr cap_attenuate(OoStr,OoStr); int cap_attenuate_ok(OoStr,OoStr);");
+    println("OoStr oo_cap_attenuate(OoStr,OoStr); int oo_cap_attenuate_ok(OoStr,OoStr);");
+    println("OoStr oo_cap_kernel_seal(long long,OoStr); OoStr oo_enclave_enter(long long,OoStr);");
+    println("OoResS json_parse_internal(OoStr); OoStr json_stringify_internal(OoStr);");
+
+    println("OoResS python_embed_internal(long long,OoStr);");
+    // CAP-G5 path-A honesty: do NOT emit dead oo_seccomp_init. Prior residual filter
+    // was never called, lacked #includes, and broke gcc -c of emit-c output.
+    // Product floor = process-local cap tokens + check refuse — not seccomp-bpf/SIGSYS.
+    // Optional future OS filter is residual research; do not greenwash.
+    println("/* CAP-G5 residual: no product seccomp-bpf floor (process-local caps only) */");
+}

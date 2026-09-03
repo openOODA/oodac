@@ -1,0 +1,217 @@
+// # LLVM struct type definition emitter
+//
+// Logline: Walk the source for type X = struct { ... } aliases and emit %struct.X = type { ... } so GEP and field-access IR is well-formed.
+//
+// Setup: Pure emitter, no FS or sys. Called from llvm_emit_preamble.oo before any function body.
+//
+// Beats:
+//   1. Walk tokens for KW_TYPE IDENT EQ (struct|packed struct) LBRACE ... RBRACE SEMI.
+//   2. For each field, compute the LLVM type via ty_parse_at + ty_to_llvm_typedef.
+//   3. Emit the type definition, deduped against `seen`.
+//
+//
+//   RULES 1.7: <= 256 lines.
+
+
+import "ty_to_llvm.oo";
+
+
+
+fn llvm_emit_field_ty(toks: List[String], pos: Int, n: Int) -> String {
+    if pos >= n { return "i64";
+    }
+    let parsed: List[String] = ty_parse_at(toks, pos, n);
+    let ty_ast: String = list_get(parsed, 1);
+    return ty_to_llvm_typedef(ty_ast);
+}
+
+fn c_emit_skip_type(toks: List[String], pos: Int, n: Int) -> Int {
+    let mut p: Int = pos;
+    if p < n && field_at(list_get(toks, p), 0) == "AMP" { p = p + 1; }
+    if p < n && field_at(list_get(toks, p), 0) == "KW_MUT" { p = p + 1; }
+    if p < n && field_at(list_get(toks, p), 0) == "IDENT" { p = p + 1; }
+    if p < n && field_at(list_get(toks, p), 0) == "LBRACKET" {
+        let mut depth: Int = 1;
+        p = p + 1;
+        while p < n && depth > 0 {
+            let k: String = field_at(list_get(toks, p), 0);
+            if k == "LBRACKET" { depth = depth + 1; }
+            if k == "RBRACKET" { depth = depth - 1; }
+            p = p + 1;
+        }
+    }
+    return p;
+}
+
+fn c_emit_seen_ty(state: String, name: String) -> Bool {
+    let needle_str: String = " " + name + " ";
+    return state.contains(needle_str);
+}
+
+fn c_emit_mark_ty(state: String, name: String) -> String {
+    if c_emit_seen_ty(state, name) { return state; }
+    return state + " " + name + " ";
+}
+
+pub fn llvm_emit_one_type_alias(toks: List[String], pos: Int, n: Int, seen_state: String) -> List[String] {
+    let mut seen: String = seen_state;
+    let mut p: Int = pos;
+    if p < n && c_tokk(toks, p) == "KW_TYPE" { p = p + 1;
+    }
+    if p >= n || c_tokk(toks, p) != "IDENT" {
+        return list_push(list_push(list_new(), skip_until_semi(toks, pos).to_string()), seen);
+    }
+    let name: String = c_tokt(toks, p);
+    if c_emit_seen_ty(seen, name) {
+        return list_push(list_push(list_new(), skip_until_semi(toks, pos).to_string()), seen);
+    }
+    seen = c_emit_mark_ty(seen, name);
+    p = p + 1;
+    if p < n && c_tokk(toks, p) == "EQ" { p = p + 1;
+    }
+    if p < n && c_tokk(toks, p) == "IDENT" && c_tokt(toks, p) == "packed" { p = p + 1;
+    }
+    if p >= n || c_tokk(toks, p) != "IDENT" || c_tokt(toks, p) != "struct" {
+        return list_push(list_push(list_new(), skip_until_semi(toks, pos).to_string()), seen);
+    }
+    p = p + 1;
+    if p >= n || c_tokk(toks, p) != "LBRACE" {
+        return list_push(list_push(list_new(), skip_until_semi(toks, pos).to_string()), seen);
+    }
+    p = p + 1;
+    let mut body: String = "";
+    let mut first: Bool = true;
+    let mut depth: Int = 1;
+    while p < n && depth > 0 {
+        let kp: String = c_tokk(toks, p);
+        if kp == "LBRACE" { depth = depth + 1;
+        }
+        if kp == "RBRACE" {
+            depth = depth - 1;
+            if depth == 0 { break;
+            }
+        }
+        if kp == "COMMA" {
+            p = p + 1;
+        } else if kp == "SEMI" {
+            p = p + 1;
+        } else {
+            // field: IDENT COLON type
+            if kp == "IDENT" {
+                let fname: String = c_tokt(toks, p);
+                p = p + 1;
+                if p < n && c_tokk(toks, p) == "COLON" { p = p + 1;
+                }
+                let fty: String = llvm_emit_field_ty(toks, p, n);
+                p = c_emit_skip_type(toks, p, n);
+                let _u: String = fname;
+                if first { body = fty;
+                first = false;
+                } else {
+                    body = body + ", " + fty;
+                }
+            } else {
+                p = p + 1;
+            }
+        }
+    }
+    if chars_len(body) == 0 { body = "i64";
+    }
+    println("%struct." + name + " = type { " + body + " }");
+    // skip to SEMI
+    while p < n && c_tokk(toks, p) != "SEMI" { p = p + 1;
+    }
+    if p < n { p = p + 1;
+    }
+    return list_push(list_push(list_new(), p.to_string()), seen);
+}
+
+pub fn llvm_emit_type_aliases(toks: List[String]) {
+    let n: Int = list_len(toks);
+    let mut i: Int = 0;
+    let mut seen: String = "";
+    let mut iter: Int = 0;
+    while i < n {
+        iter = iter + 1;
+        if iter > n + 100 { break;
+        }
+        let k: String = c_tokk(toks, i);
+        let mut pub_ty: Bool = k == "KW_PUB" && i + 1 < n && c_tokk(toks, i + 1) == "KW_TYPE";
+        if k == "KW_TYPE" {
+            let r: List[String] = llvm_emit_one_type_alias(toks, i, n, seen);
+            i = parse_int(list_get(r, 0));
+            seen = list_get(r, 1);
+        } else if pub_ty { let r: List[String] = llvm_emit_one_type_alias(toks, i + 1, n, seen);
+        i = parse_int(list_get(r, 0));
+        seen = list_get(r, 1);
+        } else {
+            i = i + 1;
+        }
+    }
+}
+
+fn llvm_local_type_names(toks: List[String], n: Int) -> String {
+    let mut seen: String = "|";
+let mut i: Int = 0;
+while i + 1 < n { if c_tokk(toks, i) == "KW_TYPE" && c_tokk(toks, i + 1) == "IDENT" { seen = seen + c_tokt(toks, i + 1) + "|";
+}
+        if c_tokk(toks, i) == "KW_PUB" && i + 2 < n && c_tokk(toks, i + 1) == "KW_TYPE" && c_tokk(toks, i + 2) == "IDENT" {
+            seen = seen + c_tokt(toks, i + 2) + "|";
+        }
+        i = i + 1;
+    }
+    return seen;
+}
+
+fn llvm_fntab_emit_missing_named(kind: String, name: String, local: String, emitted: String) -> String {
+    if name == "" { return emitted;
+    }
+    if str_index_of(local, "|" + name + "|") >= 0 { return emitted;
+    }
+    let mark: String = "|" + kind + "." + name + "|";
+    if str_index_of(emitted, mark) >= 0 { return emitted;
+    }
+    if kind == "struct" {
+        if name == "Complex" {
+            println("%struct.Complex = type { double, double }");
+        } else {
+            println("%struct." + name + " = type { i64 }");
+        }
+    } else {
+        println("%OoRes." + name + " = type { i32, %struct." + name + ", %OoStr }");
+    }
+    return emitted + kind + "." + name + "|";
+}
+
+pub fn llvm_emit_imported_struct_types(fntab: String, toks: List[String], n: Int) {
+    let local: String = llvm_local_type_names(toks, n);
+    let mut emitted: String = "|";
+    let fl: Int = chars_len(fntab);
+    let mut i: Int = 0;
+    while i < fl { if i + 8 <= fl && str_slice(fntab, i, i + 8) == "%struct." { i = i + 8;
+    let mut name: String = "";
+    while i < fl { let b: Int = byte_at(fntab, i);
+    if (b >= 65 && b <= 90) || (b >= 97 && b <= 122) || (b >= 48 && b <= 57) || b == 95 { name = name + char_at(fntab, i);
+    i = i + 1;
+    } else {
+                    break;
+                }
+            }
+            emitted = llvm_fntab_emit_missing_named("struct", name, local, emitted);
+        } else if i + 7 <= fl && str_slice(fntab, i, i + 7) == "%OoRes." {
+            i = i + 7;
+            let mut name: String = "";
+            while i < fl { let b: Int = byte_at(fntab, i);
+            if (b >= 65 && b <= 90) || (b >= 97 && b <= 122) || (b >= 48 && b <= 57) || b == 95 { name = name + char_at(fntab, i);
+            i = i + 1;
+            } else {
+                    break;
+                }
+            }
+            emitted = llvm_fntab_emit_missing_named("struct", name, local, emitted);
+            emitted = llvm_fntab_emit_missing_named("res", name, local, emitted);
+        } else {
+            i = i + 1;
+        }
+    }
+}

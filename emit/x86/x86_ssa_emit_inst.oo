@@ -1,0 +1,115 @@
+// # x86_64 SSA instruction formatter
+//
+// Logline: Dispatch a single SSA instruction to one or more AT&T x86-64 instructions.
+//
+// Setup: Imported by x86_ssa_emit.oo. Uses base helpers, fp/simd lowers, and remap.
+//
+// Beats:
+//   1. Resolve result/imm/lhs/acc slots for a block.
+//   2. Dispatch opcodes 1-24, 6-10 bitwise, 21/22/46, 23, 24, and 36-40.
+//   3. Emit the integer print helper and string rodata references.
+
+import "emit/llvm/ssa_ir.oo";
+import "x86_ssa_emit_base.oo";
+
+import "x86_ssa_emit_remap.oo";
+
+import "x86_ssa_emit_fp_ops.oo";
+
+import "x86_ssa_lower_simd.oo";
+
+
+fn x86_ssa_format_inst_c(op: Int, res: Int, imm: Int, lhs: Int, acc: Int, max_reg: Int, fn_name: String, block_id: Int, block_local_slots: List[Int], block_names: List[String], inst_id: Int) -> String {
+    let s: String = x86_ssa_slot_for_c(res, block_id, block_local_slots);
+    let s2: String = x86_ssa_slot_for_c(imm, block_id, block_local_slots);
+    let sl: String = x86_ssa_slot_for_c(lhs, block_id, block_local_slots);
+    let sacc: String = x86_ssa_slot_for_c(acc, block_id, block_local_slots);
+    let tbname: String = if imm >= 0 && imm < list_len(block_names) { list_get(block_names, imm) } else { "" };
+    let mut line: String = "    ";
+    if op == 1 { line = line + "movq " + sl + ", %rax\n    addq " + s2 + ", %rax\n    movq %rax, " + s;
+    }
+    else if op == 2 { line = line + "movq " + sl + ", %rax\n    subq " + s2 + ", %rax\n    movq %rax, " + s;
+    }
+    else if op == 3 { line = line + "movq " + sl + ", %rax\n    imulq " + s2 + ", %rax\n    movq %rax, " + s;
+    }
+    else if op == 4 { line = line + "movq " + sl + ", %rax\n    cqto\n    idivq " + s2 + "\n    movq %rax, " + s;
+    }
+    else if op == 5 { line = line + "movq " + sl + ", %rax\n    cqto\n    idivq " + s2 + "\n    movq %rdx, " + s;
+    }
+    else if op == 6 { line = line + "movq " + sl + ", %rax\n    andq " + s2 + ", %rax\n    movq %rax, " + s;
+    }
+    else if op == 7 { line = line + "movq " + sl + ", %rax\n    orq " + s2 + ", %rax\n    movq %rax, " + s;
+    }
+    else if op == 8 { line = line + "movq " + sl + ", %rax\n    xorq " + s2 + ", %rax\n    movq %rax, " + s;
+    }
+    else if op == 9 { line = line + "movq " + sl + ", %rax\n    shlq " + s2 + ", %rax\n    movq %rax, " + s;
+    }
+    else if op == 10 { line = line + "movq " + sl + ", %rax\n    shrq " + s2 + ", %rax\n    movq %rax, " + s;
+    }
+    else if op == 13 { line = line + "# phi (unresolved; mem2reg should have eliminated this)";
+    }
+    else if op == 11 { line = line + "movq " + sl + ", %rax\n    cmpq " + s2 + ", %rax\n    sete %al\n    movzbq %al, %rax\n    movq %rax, " + s;
+    }
+    else if op == 12 { line = line + "movq " + sl + ", %rax\n    cmpq " + s2 + ", %rax\n    setl %al\n    movzbq %al, %rax\n    movq %rax, " + s;
+    }
+    // Opcodes 36-40: extended compare (unsigned ult/ule, signed sgt/sge, not-equal ne).
+    // LLVM lane added these in v0.218.0; v0.220.0 build segfaults on them if not handled here.
+    else if op == 36 { line = line + "movq " + sl + ", %rax\n    cmpq " + s2 + ", %rax\n    setb %al\n    movzbq %al, %rax\n    movq %rax, " + s;
+    }
+    else if op == 37 { line = line + "movq " + sl + ", %rax\n    cmpq " + s2 + ", %rax\n    setbe %al\n    movzbq %al, %rax\n    movq %rax, " + s;
+    }
+    else if op == 38 { line = line + "movq " + sl + ", %rax\n    cmpq " + s2 + ", %rax\n    setg %al\n    movzbq %al, %rax\n    movq %rax, " + s;
+    }
+    else if op == 39 { line = line + "movq " + sl + ", %rax\n    cmpq " + s2 + ", %rax\n    setge %al\n    movzbq %al, %rax\n    movq %rax, " + s;
+    }
+    else if op == 40 { line = line + "movq " + sl + ", %rax\n    cmpq " + s2 + ", %rax\n    setne %al\n    movzbq %al, %rax\n    movq %rax, " + s;
+    }
+    let fp_line: String = x86_ssa_format_fp_inst(op, s, sl, s2);
+    if chars_len(fp_line) > 0 { line = line + fp_line;
+    }
+    else if x86_is_simd_op(op) { line = line + x86_format_simd_inst(op, s, sl, s2);
+    }
+    else if op == 14 { line = line + "# alloca home " + s;
+    }
+    else if op == 15 { line = line + "movq " + s2 + ", %rax\n    movq %rax, " + s;
+    }
+    else if op == 16 {
+        if res > 0 { line = line + "movq " + s2 + ", %rax\n    movq %rax, " + s;
+        }
+        else { line = line + "movq " + sl + ", %rax\n    movq %rax, " + s2;
+        }
+    }
+    else if op == 21 {
+        if imm >= -2147483648 && imm <= 2147483647 { line = line + "movq $" + imm.to_string() + ", " + s;
+        }
+        else { line = line + "movabsq $" + imm.to_string() + ", %rax\n    movq %rax, " + s;
+        }
+    }
+    else if op == 17 { line = line + "jmp .L" + fn_name + "_" + x86_ssa_sanitize_label(tbname);
+    }
+    else if op == 18 { line = line + "movq " + sl + ", %rax\n    testq %rax, %rax\n    je .L" + fn_name + "_" + x86_ssa_sanitize_label(tbname);
+    }
+    else if op == 19 { line = line + "nop";
+    }
+    else if op == 20 || op == 22 {
+        if imm >= -2147483648 && imm <= 2147483647 { line = line + "movq $" + imm.to_string() + ", " + s;
+        }
+        else { line = line + "movabsq $" + imm.to_string() + ", %rax\n    movq %rax, " + s;
+        }
+    }
+    else if op == 23 { line = line + x86_ssa_pi_b(s2, fn_name, inst_id.to_string());
+    }
+    else if op == 24 { line = line + x86_ssa_emit_println_str(imm, fn_name);
+    }
+    else if op == 46 { line = line + "movq " + sl + ", %rdi\n    call " + fn_name + "\n    movq %rax, " + s;
+    }
+    else { line = line + "# unknown op " + op.to_string() + "\nnop";
+    }
+    return line + "\n";
+}
+
+fn x86_ssa_pi_b(src: String, fn_name: String, suffix: String) -> String {
+    let lbl: String = fn_name + "_" + suffix;
+return "    subq $40, %rsp\n    movq " + src + ", %rax\n    movb $10, 39(%rsp)\n    lea 39(%rsp), %rcx\n    mov $1, %r8\n    mov $0, %r9\n    test %rax, %rax\n    jnz .Lxss_pi_nz_" + lbl + "\n    dec %rcx\n    movb $48, (%rcx)\n    inc %r8\n    jmp .Lxss_pi_print_" + lbl + "\n.Lxss_pi_nz_" + lbl + ":\n    test %rax, %rax\n    jns .Lxss_pi_pos_" + lbl + "\n    neg %rax\n    mov $1, %r9\n.Lxss_pi_pos_" + lbl + ":\n.Lxss_pi_loop_" + lbl + ":\n    xor %rdx, %rdx\n    mov $10, %rbx\n    div %rbx\n    addb $48, %dl\n    dec %rcx\n    movb %dl, (%rcx)\n    inc %r8\n    test %rax, %rax\n    jnz .Lxss_pi_loop_" + lbl + "\n    test %r9, %r9\n    jz .Lxss_pi_print_" + lbl + "\n    dec %rcx\n    movb $45, (%rcx)\n    inc %r8\n.Lxss_pi_print_" + lbl + ":\n    mov $1, %rax\n    mov $1, %rdi\n    mov %rcx, %rsi\n    mov %r8, %rdx\n    syscall\n    addq $40, %rsp\n";
+}
+

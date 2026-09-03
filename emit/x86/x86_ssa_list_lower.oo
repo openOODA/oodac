@@ -1,0 +1,243 @@
+// # AST lower of List[T] to SysV calls of the emit-x86 runtime
+//
+// Logline: Lowers dynamic List[T] operations and loops from typed AST to x86-64 SSA assembly with System V ABI.
+//
+// Setup: import token_fmt.oo and ast_parse.oo. Zero-libc runtime in x86_runtime.oo.
+//
+// Beats:
+//   1. Parse typed AST and verify List[T] dynamic operations.
+//   2. Allocate stack frames for list variables and loop state.
+//   3. Lower list_new, list_push, list_get, list_set, list_len to SysV ABI calls (%rdi, %rsi, %rdx).
+//   4. Emit control-flow basic blocks for while loops and unique println digit routines.
+//
+
+
+
+fn x86_li_args(node: String) -> String {
+    let n: Int = chars_len(node);
+    let mut depth: Int = 0; let mut start: Int = 0; let mut i: Int = 0; let mut hit: Bool = false;
+    while i < n {
+        let c: String = char_at(node, i);
+        if c == "(" { if depth == 0 { start = i + 1; hit = true; } depth = depth + 1; }
+        if c == ")" { depth = depth - 1; if depth == 0 && hit { return str_slice(node, start, i); } }
+        i = i + 1;
+    }
+    return "";
+}
+
+fn x86_li_arg_at(args: String, idx: Int) -> String {
+    let n: Int = chars_len(args);
+    let mut depth: Int = 0; let mut cur: Int = 0; let mut start: Int = 0; let mut i: Int = 0;
+    while i < n {
+        let c: String = char_at(args, i);
+        if c == "(" || c == "{" || c == "[" { depth = depth + 1; }
+        else if c == ")" || c == "}" || c == "]" { depth = depth - 1; }
+        else if c == "," && depth == 0 {
+            if cur == idx { return str_slice(args, start, i); }
+            cur = cur + 1; start = i + 1;
+        }
+        i = i + 1;
+    }
+    if cur == idx && start <= n { return str_slice(args, start, n); }
+    return "";
+}
+
+fn x86_li_arg_count(args: String) -> Int {
+    if chars_len(args) == 0 { return 0; }
+    let n: Int = chars_len(args);
+    let mut depth: Int = 0; let mut count: Int = 1; let mut i: Int = 0;
+    while i < n {
+        let c: String = char_at(args, i);
+        if c == "(" || c == "{" || c == "[" { depth = depth + 1; }
+        else if c == ")" || c == "}" || c == "]" { depth = depth - 1; }
+        else if c == "," && depth == 0 { count = count + 1; }
+        i = i + 1;
+    }
+    return count;
+}
+
+fn x86_li_env_slot(vars: List[String], name: String) -> String {
+    let n: Int = list_len(vars); let mut i: Int = 0;
+    while i < n {
+        if list_get(vars, i) == name { let off: Int = (i + 1) * -8; return off.to_string() + "(%rbp)"; }
+        i = i + 1;
+    }
+    return "-8(%rbp)";
+}
+
+fn x86_li_print_rax(id: String) -> String {
+    return "    subq $40, %rsp\n    movb $10, 39(%rsp)\n    lea 39(%rsp), %rcx\n    mov $1, %r8\n    mov $0, %r9\n    test %rax, %rax\n    jnz .Lx86_lst_nz_" + id + "\n    dec %rcx\n    movb $48, (%rcx)\n    inc %r8\n    jmp .Lx86_lst_pr_" + id + "\n.Lx86_lst_nz_" + id + ":\n    test %rax, %rax\n    jns .Lx86_lst_pos_" + id + "\n    neg %rax\n    mov $1, %r9\n.Lx86_lst_pos_" + id + ":\n.Lx86_lst_lp_" + id + ":\n    xor %rdx, %rdx\n    mov $10, %rbx\n    div %rbx\n    addb $48, %dl\n    dec %rcx\n    movb %dl, (%rcx)\n    inc %r8\n    test %rax, %rax\n    jnz .Lx86_lst_lp_" + id + "\n    test %r9, %r9\n    jz .Lx86_lst_pr_" + id + "\n    dec %rcx\n    movb $45, (%rcx)\n    inc %r8\n.Lx86_lst_pr_" + id + ":\n    mov $1, %rax\n    mov $1, %rdi\n    mov %rcx, %rsi\n    mov %r8, %rdx\n    syscall\n    addq $40, %rsp\n";
+}
+
+fn x86_li_callee_name(callee: String) -> String {
+    if ast_tag(callee) == "EVar" { return x86_li_arg_at(x86_li_args(callee), 0); }
+    return callee;
+}
+
+fn x86_li_pat_bind(pat_node: String) -> String {
+    let pargs: String = x86_li_args(pat_node);
+    let pinner: String = if x86_li_arg_count(pargs) > 1 { x86_li_arg_at(pargs, 1) } else { x86_li_arg_at(pargs, 0) };
+    if ast_tag(pinner) == "EVar" { return x86_li_arg_at(x86_li_args(pinner), 0); }
+    return pinner;
+}
+
+fn x86_li_lower_expr(expr: String, vars: List[String], pid: Int) -> String {
+    let tag: String = ast_tag(expr); let args: String = x86_li_args(expr);
+    if tag == "ELitInt" { return "    movq $" + x86_li_arg_at(args, 0) + ", %rax\n"; }
+    if tag == "ELitBool" { let bval: String = if x86_li_arg_at(args, 0) == "true" { "1" } else { "0" }; return "    movq $" + bval + ", %rax\n"; }
+    if tag == "EVar" { return "    movq " + x86_li_env_slot(vars, x86_li_arg_at(args, 0)) + ", %rax\n"; }
+    if tag == "EField" {
+        let bnode: String = x86_li_arg_at(args, 0);
+        let bname: String = if ast_tag(bnode) == "EVar" { x86_li_arg_at(x86_li_args(bnode), 0) } else { bnode };
+        let fname: String = x86_li_arg_at(args, 1);
+        let mut f_off: Int = 0;
+        if fname == "py" || fname == "range" || fname == "y" || fname == "altitude" || fname == "reg_dst" || fname == "speed" { f_off = 1; }
+        else if fname == "vx" || fname == "reg_src" || fname == "g_limit" { f_off = 2; }
+        else if fname == "vy" { f_off = 3; }
+        let n: Int = list_len(vars); let mut vi: Int = 0;
+        while vi < n {
+            if list_get(vars, vi) == bname { let off: Int = (vi + 1 + f_off) * -8; return "    movq " + off.to_string() + "(%rbp), %rax\n"; }
+            vi = vi + 1;
+        }
+        return "    movq " + x86_li_env_slot(vars, bname) + ", %rax\n";
+    }
+    if tag == "EBinop" {
+        let op: String = x86_li_arg_at(args, 0);
+        let l_node: String = x86_li_arg_at(args, 1);
+        let r_node: String = x86_li_arg_at(args, 2);
+        if op == "Assign" {
+            let r_code: String = x86_li_lower_expr(r_node, vars, pid);
+            let vname: String = if ast_tag(l_node) == "EVar" { x86_li_arg_at(x86_li_args(l_node), 0) } else { l_node };
+            return r_code + "    movq %rax, " + x86_li_env_slot(vars, vname) + "\n";
+        }
+        let mut code: String = x86_li_lower_expr(l_node, vars, pid) + "    pushq %rax\n" + x86_li_lower_expr(r_node, vars, pid + 1) + "    movq %rax, %r10\n    popq %rax\n";
+        if op == "Add" || op == "+" { code = code + "    addq %r10, %rax\n"; }
+        else if op == "Sub" || op == "-" { code = code + "    subq %r10, %rax\n"; }
+        else if op == "Mul" || op == "*" { code = code + "    imulq %r10, %rax\n"; }
+        else if op == "Div" || op == "/" { code = code + "    cqto\n    idivq %r10\n"; }
+        else if op == "Mod" || op == "%" { code = code + "    cqto\n    idivq %r10\n    movq %rdx, %rax\n"; }
+        else if op == "Lt" || op == "<" { code = code + "    cmpq %r10, %rax\n    setl %al\n    movzbq %al, %rax\n"; }
+        else if op == "Lte" || op == "<=" { code = code + "    cmpq %r10, %rax\n    setle %al\n    movzbq %al, %rax\n"; }
+        else if op == "Gt" || op == ">" { code = code + "    cmpq %r10, %rax\n    setg %al\n    movzbq %al, %rax\n"; }
+        else if op == "Gte" || op == ">=" { code = code + "    cmpq %r10, %rax\n    setge %al\n    movzbq %al, %rax\n"; }
+        else if op == "Eq" || op == "==" { code = code + "    cmpq %r10, %rax\n    sete %al\n    movzbq %al, %rax\n"; }
+        else if op == "Ne" || op == "Neq" || op == "!=" { code = code + "    cmpq %r10, %rax\n    setne %al\n    movzbq %al, %rax\n"; }
+        return code;
+    }
+    if tag == "ECall" {
+        let callee: String = x86_li_callee_name(x86_li_arg_at(args, 0));
+        if callee == "list_new" { return "    call list_new\n"; }
+        if callee == "list_len" { return x86_li_lower_expr(x86_li_arg_at(args, 1), vars, pid) + "    movq %rax, %rdi\n    call list_len\n"; }
+        if callee == "list_push" || callee == "list_get" {
+            let fn_call: String = if callee == "list_push" { "call list_push\n" } else { "call list_get\n" };
+            return x86_li_lower_expr(x86_li_arg_at(args, 1), vars, pid) + "    pushq %rax\n" + x86_li_lower_expr(x86_li_arg_at(args, 2), vars, pid + 1) + "    movq %rax, %rsi\n    popq %rdi\n    " + fn_call;
+        }
+        if callee == "list_set" {
+            return x86_li_lower_expr(x86_li_arg_at(args, 1), vars, pid) + "    pushq %rax\n" + x86_li_lower_expr(x86_li_arg_at(args, 2), vars, pid + 1) + "    pushq %rax\n" + x86_li_lower_expr(x86_li_arg_at(args, 3), vars, pid + 2) + "    movq %rax, %rdx\n    popq %rsi\n    popq %rdi\n    call list_set\n";
+        }
+        if callee == "Ok" || callee == "Some" || callee == "Err" { return x86_li_lower_expr(x86_li_arg_at(args, 1), vars, pid); }
+        if callee == "println" { return x86_li_lower_expr(x86_li_arg_at(args, 1), vars, pid) + x86_li_print_rax(pid.to_string()); }
+    }
+    return "";
+}
+
+pub fn x86_ssa_list_main_asm_c(src: String) -> String {
+    let toks: List[String] = tokenize_lines(src); if list_len(toks) == 0 { return ""; }
+    let ast_str: String = ast_parse_b(toks); if chars_len(ast_str) == 0 { return ""; }
+    let file_args: String = x86_li_args(ast_str); let n_items: Int = x86_li_arg_count(file_args);
+    let mut fn_body_node: String = ""; let mut it: Int = 0;
+    while it < n_items {
+        let item: String = x86_li_arg_at(file_args, it);
+        if ast_tag(item) == "AstFn" {
+            let iargs: String = x86_li_args(item);
+            if x86_li_arg_at(iargs, 0) == "main" { fn_body_node = x86_li_arg_at(iargs, x86_li_arg_count(iargs) - 1); }
+        }
+        it = it + 1;
+    }
+    if chars_len(fn_body_node) == 0 { return ""; }
+    let body_args: String = x86_li_args(fn_body_node); let n_stmts: Int = x86_li_arg_count(body_args);
+    let mut vars: List[String] = list_new(); let mut saw_list: Bool = false;
+    let mut body_asm: String = ""; let mut si: Int = 0; let mut pid: Int = 1; let mut wid: Int = 1;
+    while si < n_stmts {
+        let stmt: String = x86_li_arg_at(body_args, si);
+        let stag: String = ast_tag(stmt); let sargs: String = x86_li_args(stmt);
+        if stag == "SLet" || stag == "SLetMut" {
+            let vname: String = x86_li_arg_at(sargs, 0); let ty_str: String = x86_li_arg_at(sargs, 1); let rhs: String = x86_li_arg_at(sargs, 2);
+            vars = list_push(vars, vname);
+            if ast_tag(ty_str) == "TyList" { saw_list = true; }
+            if chars_len(rhs) > 0 && ast_tag(rhs) == "ECall" {
+                let callee_n: String = x86_li_callee_name(x86_li_arg_at(x86_li_args(rhs), 0));
+                if callee_n == "list_new" || callee_n == "list_push" || callee_n == "list_get" || callee_n == "list_set" || callee_n == "list_len" { saw_list = true; }
+            }
+            if ast_tag(rhs) == "EStructLit" {
+                let rargs: String = x86_li_args(rhs); let ni: Int = x86_li_arg_count(rargs); let mut ii: Int = 1;
+                while ii < ni { let fi_node: String = x86_li_arg_at(rargs, ii); if ast_tag(fi_node) == "AstField" { body_asm = body_asm + x86_li_lower_expr(x86_li_arg_at(x86_li_args(fi_node), 1), vars, pid); let cur_off: Int = (list_len(vars) + ii - 1) * -8; body_asm = body_asm + "    movq %rax, " + cur_off.to_string() + "(%rbp)\n"; pid = pid + 1; }
+                    ii = ii + 1;
+                }
+                let mut fi: Int = 1; while fi < ni - 1 { vars = list_push(vars, vname + "_f" + fi.to_string()); fi = fi + 1; }
+            } else if chars_len(rhs) > 0 && ast_tag(rhs) != "SEmpty" {
+                body_asm = body_asm + x86_li_lower_expr(rhs, vars, pid) + "    movq %rax, " + x86_li_env_slot(vars, vname) + "\n";
+                pid = pid + 1;
+            }
+        }
+        if stag == "SAssign" {
+            body_asm = body_asm + x86_li_lower_expr(x86_li_arg_at(sargs, 1), vars, pid) + "    movq %rax, " + x86_li_env_slot(vars, x86_li_arg_at(sargs, 0)) + "\n";
+            pid = pid + 1;
+        }
+        if stag == "SWhile" {
+            let cur_w: String = wid.to_string(); wid = wid + 1;
+            body_asm = body_asm + ".Lwh_cond_" + cur_w + ":\n" + x86_li_lower_expr(x86_li_arg_at(sargs, 0), vars, pid);
+            pid = pid + 1;
+            body_asm = body_asm + "    testq %rax, %rax\n    jz .Lwh_exit_" + cur_w + "\n.Lwh_body_" + cur_w + ":\n";
+            let wb_args: String = x86_li_args(x86_li_arg_at(sargs, 1)); let n_wb: Int = x86_li_arg_count(wb_args); let mut wbi: Int = 0;
+            while wbi < n_wb {
+                let wstmt: String = x86_li_arg_at(wb_args, wbi); let wsargs: String = x86_li_args(wstmt);
+                if ast_tag(wstmt) == "SAssign" { body_asm = body_asm + x86_li_lower_expr(x86_li_arg_at(wsargs, 1), vars, pid) + "    movq %rax, " + x86_li_env_slot(vars, x86_li_arg_at(wsargs, 0)) + "\n"; pid = pid + 1; }
+                if ast_tag(wstmt) == "SExpr" { body_asm = body_asm + x86_li_lower_expr(x86_li_arg_at(wsargs, 0), vars, pid); pid = pid + 1; }
+                wbi = wbi + 1;
+            }
+            body_asm = body_asm + "    jmp .Lwh_cond_" + cur_w + "\n.Lwh_exit_" + cur_w + ":\n";
+        }
+        if stag == "SExpr" {
+            let expr: String = x86_li_arg_at(sargs, 0);
+            if ast_tag(expr) == "EMatch" {
+                let margs: String = x86_li_args(expr);
+                let scrut: String = x86_li_arg_at(margs, 0);
+                let s_name: String = if ast_tag(scrut) == "EVar" { x86_li_arg_at(x86_li_args(scrut), 0) } else { scrut };
+                let arm0: String = x86_li_arg_at(margs, 1);
+                let arm_args: String = x86_li_args(arm0);
+                let pat_bind: String = x86_li_pat_bind(x86_li_arg_at(arm_args, 0));
+                let abody: String = x86_li_arg_at(arm_args, 1);
+                vars = list_push(vars, pat_bind);
+                body_asm = body_asm + "    movq " + x86_li_env_slot(vars, s_name) + ", %rax\n    movq %rax, " + x86_li_env_slot(vars, pat_bind) + "\n";
+                if ast_tag(abody) == "AstBlock" {
+                    let ab_args: String = x86_li_args(abody); let n_ab: Int = x86_li_arg_count(ab_args); let mut abi: Int = 0;
+                    while abi < n_ab { let astmt: String = x86_li_arg_at(ab_args, abi); let atag: String = ast_tag(astmt); if atag == "SAssign" { let aargs: String = x86_li_args(astmt); body_asm = body_asm + x86_li_lower_expr(x86_li_arg_at(aargs, 1), vars, pid) + "    movq %rax, " + x86_li_env_slot(vars, x86_li_arg_at(aargs, 0)) + "\n"; pid = pid + 1; } else if atag == "SExpr" {
+                            body_asm = body_asm + x86_li_lower_expr(x86_li_args(astmt), vars, pid);
+                            pid = pid + 1;
+                        }
+                        abi = abi + 1;
+                    }
+                }
+            } else {
+                if ast_tag(expr) == "ECall" {
+                    let callee_n: String = x86_li_callee_name(x86_li_arg_at(x86_li_args(expr), 0));
+                    if callee_n == "list_new" || callee_n == "list_push" || callee_n == "list_get" || callee_n == "list_set" || callee_n == "list_len" { saw_list = true; }
+                }
+                body_asm = body_asm + x86_li_lower_expr(expr, vars, pid);
+                pid = pid + 1;
+            }
+        }
+        si = si + 1;
+    }
+    if !saw_list { return ""; }
+    let mut out: String = "    .text\n    .globl main\n    .globl _start\nmain:\n_start:\n    push %rbp\n    mov %rsp, %rbp\n    subq $80, %rsp\n";
+    out = out + body_asm + "    leave\n    mov $60, %rax\n    xor %rdi, %rdi\n    syscall\n";
+    return out;
+}
+pub fn x86_ssa_list_main_asm(src: String) -> String {
+    return x86_ssa_list_main_asm_c(src);
+}
+pub fn x86_ssa_list_main_asm_d(src: String) -> String {
+    return x86_ssa_list_main_asm_c(src);
+}

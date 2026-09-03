@@ -1,0 +1,135 @@
+// # Expand imports into one source
+//
+// Logline: Recursively load each import line, fail closed on cycles and missing files, and return done paths plus the expanded body.
+//
+// Setup: Callers pass &FsReadCap and a path. parse_import_line, path helpers, list_has, and reject_bad_import_name live in load_import_parse.oo. Missing files and cycles call process_exit.
+//
+// Beats:
+//   1. Normalize the path; an already-done path returns the done list plus an empty body; a path on the stack is a cycle.
+//   2. Read the file, walk lines, resolve each import via dir/std/relative probes, recurse, and splice imported bodies.
+//   3. Append remaining source, mark the path done, and return done paths with the expanded body last.
+
+import "load_import_parse.oo";
+
+
+// Returns done-path list + expanded body as last element (for cli_build module walk).
+pub fn load_expand(fs: &FsReadCap, path_raw: String, stack: List[String], done: List[String]) -> List[String] {
+    let path: String = path_normalize(path_raw);
+    let mut out: List[String] = list_new();
+    if list_has(done, path) {
+        let mut i = 0;
+        let dn = list_len(done);
+        while i < dn { out = list_push(out, list_get(done, i));
+        i = i + 1;
+        }
+        out = list_push(out, "");
+        return out;
+    }
+    if list_has(stack, path) {
+        println("ERR\timport\tcycle involving " + path);
+        process_exit(1);
+    }
+    let mut stack2: List[String] = list_new();
+    let mut s_i = 0;
+    while s_i < list_len(stack) {
+        stack2 = list_push(stack2, list_get(stack, s_i));
+        s_i = s_i + 1;
+    }
+    stack2 = list_push(stack2, path);
+    let src_r = read_file(fs, path);
+    if src_r.is_err() {
+        let e: String = match src_r { Ok(s)    => s, Err(msg) => msg };
+        println("ERR\timport\tmissing " + path + " (" + e + ")");
+        process_exit(1);
+    }
+    let src: String = match src_r { Ok(s)    => s, Err(msg) => msg };
+    let dir: String = path_dirname(path);
+    let mut done_cur: List[String] = list_new();
+    let mut d_i = 0;
+    while d_i < list_len(done) {
+        done_cur = list_push(done_cur, list_get(done, d_i));
+        d_i = d_i + 1;
+    }
+    let mut body: String = "";
+    let mut i = 0;
+    let n = chars_len(src);
+    let mut line_start = 0;
+    let mut chunk_start = 0;
+    while i <= n { let at_end = i == n;
+    let mut c: String = "\n";
+    if !at_end { c = char_at(src, i);
+    }
+        if c == "\n" || at_end { let mut line = "";
+        if i > line_start { line = str_slice(src, line_start, i);
+        }
+            let imp: String = parse_import_line(line);
+            if imp != "" {
+                // Append the chunk of code before this import
+                if line_start > chunk_start { body = body + str_slice(src, chunk_start, line_start);
+                }
+
+                // OPEN-70: import "….h" is a product C-header name, not an .oo module.
+                // Probe /usr/include; always leave // OO_IMPORT_C marker (emit #includes).
+                let ni = chars_len(imp);
+                let mut is_hdr = false;
+                if ni >= 2 { if char_at(imp, ni - 2) == "." { if char_at(imp, ni - 1) == "h" { is_hdr = true;
+                }
+                    }
+                }
+                if is_hdr { let mut base = imp;
+                let mut bk = 0;
+                while bk < ni { if char_at(imp, bk) == "/" { base = str_slice(imp, bk + 1, ni);
+                }
+                        bk = bk + 1;
+                    }
+                    // Probe /usr/include/<imp> or /usr/include/<basename>; marker always.
+                    if path_exists(fs, path_join("/usr/include", imp)) {
+                        body = body + "// OO_IMPORT_C " + imp + "\n";
+                    } else if path_exists(fs, path_join("/usr/include", base)) {
+                        body = body + "// OO_IMPORT_C " + imp + "\n";
+                    } else {
+                        // Missing is a gcc problem at product emit, not load-time fail.
+                        body = body + "// OO_IMPORT_C " + imp + "\n";
+                    }
+                    chunk_start = i + 1;
+                } else {
+                    reject_bad_import_name(imp);
+                    let ipath: String = resolve_import_path(fs, dir, imp);
+                    if chars_len(ipath) == 0 {
+                        println("ERR\timport\tnot found: " + imp);
+                        process_exit(1);
+                    }
+                    let sub: List[String] = load_expand(fs, ipath, stack2, done_cur);
+                    let sub_len = list_len(sub);
+                    done_cur = list_new();
+                    let mut j = 0;
+                    while j < sub_len - 1 { done_cur = list_push(done_cur, list_get(sub, j));
+                    j = j + 1;
+                    }
+                    body = body + list_get(sub, sub_len - 1);
+                    // Next chunk starts right after this import line
+                    chunk_start = i + 1;
+                }
+            }
+            line_start = i + 1;
+            i = i + 1;
+        } else {
+            i = i + 1;
+        }
+    }
+    if n > chunk_start { body = body + str_slice(src, chunk_start, n);
+    }
+    done_cur = list_push(done_cur, path);
+    let mut out_i = 0;
+    while out_i < list_len(done_cur) {
+        out = list_push(out, list_get(done_cur, out_i));
+        out_i = out_i + 1;
+    }
+    out = list_push(out, body);
+    return out;
+}
+
+pub fn load_source_with_imports(fs: &FsReadCap, path: String) -> String {
+    let r: List[String] = load_expand(fs, path, list_new(), list_new());
+return list_get(r, list_len(r) - 1);
+}

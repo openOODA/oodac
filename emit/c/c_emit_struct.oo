@@ -1,0 +1,221 @@
+// # Emit C typedefs for type aliases
+//
+// Logline: Map type Name = struct {..} and simple aliases to C typedefs, and extract a struct-lit type name from a cast.
+//
+// Setup: field_at, list_get, skip_until_semi, c_peek_list_elem, c_emit_skip_type, c_emit_skip_braces, chars_len, char_at, and byte_at exist.
+//
+// Beats:
+//   1. c_struct_field_c_ty maps String, Int, Bool, Float, List, Result, and user names to C types.
+//   2. c_emit_one_type_alias prints typedef struct Name { fields } Name with retain and release destructors.
+//   3. c_emit_type_aliases runs pre-pass monomorphization and walks top-level KW_TYPE with a hang guard.
+
+import "c_emit_mono.oo";
+import "c_mono_registry.oo";
+import "c_emit_env.oo";
+import "c_emit_skip.oo";
+import "c_emit_skip_peek.oo";
+import "c_emit_dispatch.oo";
+import "c_emit_list_ty.oo";
+import "c_emit_sum.oo";
+import "c_emit_olist.oo";
+pub fn c_struct_field_c_ty(toks: List[String], pos: Int, n: Int) -> String {
+    if pos >= n { return "long long";
+}
+    let parsed: List[String] = ty_parse_at(toks, pos, n);
+    let ty_ast: String = list_get(parsed, 1);
+    return ty_to_c_typedef(ty_ast);
+}
+pub fn c_emit_one_type_alias(toks: List[String], pos: Int, n: Int, seen_state: String) -> List[String] {
+    let mut seen: String = seen_state;
+    let mut p: Int = pos;
+    if p < n && c_tokk(toks, p) == "KW_TYPE" { p = p + 1; }
+    if p >= n || c_tokk(toks, p) != "IDENT" { return list_push(list_push(list_new(), skip_until_semi(toks, pos).to_string()), seen); }
+    let name: String = c_tokt(toks, p);
+    if c_emit_seen_ty(seen, name) { return list_push(list_push(list_new(), skip_until_semi(toks, pos).to_string()), seen); }
+    seen = c_emit_mark_ty(seen, name);
+    p = p + 1;
+    if p < n && c_tokk(toks, p) == "EQ" { p = p + 1; }
+    let mut is_packed = false;
+    if p < n && c_tokk(toks, p) == "IDENT" && c_tokt(toks, p) == "packed" {
+        is_packed = true;
+        p = p + 1;
+    }
+    if p < n && c_tokk(toks, p) == "IDENT" && c_tokt(toks, p) == "struct" {
+        p = p + 1;
+        if p < n && c_tokk(toks, p) == "LBRACE" { p = p + 1; }
+        let mut body: String = "";
+        let mut retain: String = "";
+        let mut release: String = "";
+        let mut first: Bool = true;
+        while p < n && c_tokk(toks, p) != "RBRACE" {
+            if c_tokk(toks, p) == "COMMA" { p = p + 1; }
+            if p >= n || c_tokk(toks, p) != "IDENT" { break; }
+            let fname: String = c_tokt(toks, p);
+            p = p + 1;
+            if p < n && c_tokk(toks, p) == "COLON" { p = p + 1; }
+            let fty: String = c_struct_field_c_ty(toks, p, n);
+            p = c_emit_skip_type(toks, p, n);
+            if first { body = fty + " " + fname + ";"; first = false; } else {
+                body = body + " " + fty + " " + fname + ";";
+            }
+            if fty == "OoStr" { retain = retain + " oo_str_retain(v." + fname + ");"; release = release + " oo_str_release(v." + fname + ");"; }
+            else if fty == "OoSList" || fty == "OoL_S" { retain = retain + " oo_slist_retain(v." + fname + ");"; release = release + " oo_slist_release(v." + fname + ");"; }
+            else if fty == "OoIList" || fty == "OoL_I" { retain = retain + " oo_ilist_retain(v." + fname + ");"; release = release + " oo_ilist_release(v." + fname + ");"; }
+            else if fty == "OoFList" || fty == "OoL_F" { retain = retain + " oo_flist_retain(v." + fname + ");"; release = release + " oo_flist_release(v." + fname + ");"; }
+            else if chars_len(fty) > 4 && str_slice(fty, 0, 4) == "OoL_" { retain = retain + " oo_retain_" + fty + "(v." + fname + ");"; release = release + " oo_release_" + fty + "(v." + fname + ");"; }
+            else if chars_len(fty) > 6 && str_slice(fty, 0, 6) == "OoOpt_" { retain = retain + " oo_retain_" + fty + "(v." + fname + ");"; release = release + " oo_release_" + fty + "(v." + fname + ");"; }
+            else if chars_len(fty) > 6 && str_slice(fty, 0, 6) == "OoRes_" { retain = retain + " oo_retain_" + fty + "(v." + fname + ");"; release = release + " oo_release_" + fty + "(v." + fname + ");"; }
+            else if chars_len(fty) > 7 && str_slice(fty, 0, 7) == "OoRes2_" { retain = retain + " oo_retain_" + fty + "(v." + fname + ");"; release = release + " oo_release_" + fty + "(v." + fname + ");"; }
+            else if chars_len(fty) > 5 && str_slice(fty, 0, 5) == "OoLL_" { retain = retain + " oo_retain_" + fty + "(v." + fname + ");"; release = release + " oo_release_" + fty + "(v." + fname + ");"; }
+            else if chars_len(fty) > 6 && str_slice(fty, 0, 6) == "OoLLL_" { retain = retain + " oo_retain_" + fty + "(v." + fname + ");"; release = release + " oo_release_" + fty + "(v." + fname + ");"; }
+            else if chars_len(fty) >= 6 && str_slice(fty, 0, 6) == "OoWeak" { retain = retain + " oo_retain_OoWeakRef(v." + fname + ");"; release = release + " oo_release_OoWeakRef(v." + fname + ");"; }
+            else if chars_len(fty) > 1 && byte_at(fty, 0) >= 65 && byte_at(fty, 0) <= 90 { retain = retain + " oo_retain_" + fty + "(v." + fname + ");"; release = release + " oo_release_" + fty + "(v." + fname + ");"; }
+        }
+        if p < n && c_tokk(toks, p) == "RBRACE" { p = p + 1; }
+        if p < n && c_tokk(toks, p) == "SEMI" { p = p + 1; }
+        println("#ifndef OO_FWD_" + name);
+        println("#define OO_FWD_" + name);
+        println("typedef struct " + name + " " + name + ";");
+        println("static inline void oo_retain_" + name + "(" + name + " v);");
+        println("static inline void oo_release_" + name + "(" + name + " v);");
+        println("#ifndef OO_HAVE_OoL_" + name);
+        println("#define OO_HAVE_OoL_" + name);
+        println("typedef struct OoL_" + name + " { struct " + name + " *data; long long len; long long cap; } OoL_" + name + ";");
+        println("static inline void oo_retain_OoL_" + name + "(OoL_" + name + " v);");
+        println("static inline void oo_release_OoL_" + name + "(OoL_" + name + " v);");
+        println("#endif");
+        println("#endif");
+        println("#ifndef OO_TY_" + name);
+        println("#define OO_TY_" + name);
+        if is_packed {
+            println("typedef struct __attribute__((packed)) " + name + " { " + body + " } " + name + ";");
+            println("static int oo_eq_" + name + "(" + name + " a, " + name + " b) { return memcmp(&a, &b, sizeof(" + name + ")) == 0; }");
+        } else {
+            println("typedef struct " + name + " { " + body + " } " + name + ";");
+        }
+        println("static inline void oo_retain_" + name + "(" + name + " v) {" + retain + " }");
+        println("static inline void oo_release_" + name + "(" + name + " v) {" + release + " }");
+        println("#endif");
+        c_emit_mono_result(name, "S");
+        c_emit_mono_option(name);
+        c_emit_mono_result("OoOpt_" + name, "S");
+        c_emit_mono_list(name);
+        c_emit_mono_list("OoL_" + name);
+        c_emit_mono_list("OoL_OoL_" + name);
+        c_emit_mono_result("OoL_" + name, "S");
+        c_emit_mono_option("OoL_" + name);
+        c_emit_mono_result("OoOpt_OoL_" + name, "S");
+        c_emit_olist_helpers(name);
+        return list_push(list_push(list_new(), p.to_string()), seen);
+    }
+    let after_sum: Int = 0 + c_try_emit_sum_alias(toks, p, n, name);
+    if after_sum != p { return list_push(list_push(list_new(), after_sum.to_string()), seen); }
+    let simple: String = c_struct_field_c_ty(toks, p, n);
+    let mut cty: String = simple;
+    if cty == name { cty = "long long"; }
+    println("#ifndef OO_TY_" + name);
+    println("#define OO_TY_" + name);
+    println("typedef " + cty + " " + name + ";");
+    if cty != "void" && name != "V" && name != "Void" && name != "I" && name != "S" && name != "B" && name != "F" {
+        println("#ifndef OO_TY_RES_" + name);
+        println("#define OO_TY_RES_" + name);
+        println("typedef struct OoRes_" + name + " { int ok; " + name + " val; OoStr err; } OoRes_" + name + ";");
+        println("#endif");
+    }
+    println("#endif");
+    let sk: Int = 0 + skip_until_semi(toks, pos);
+    return list_push(list_push(list_new(), sk.to_string()), seen);
+}
+pub fn c_emit_type_aliases(toks: List[String]) {
+    let n: Int = list_len(toks);
+    let mut j: Int = 0;
+    while j < n { let kj: String = c_tokk(toks, j); let mut is_t: Bool = kj == "KW_TYPE"; if kj == "KW_PUB" && j + 1 < n && c_tokk(toks, j + 1) == "KW_TYPE" { is_t = true; j = j + 1; }
+        let mut is_struct_alias: Bool = false;
+        if is_t && j + 3 < n && c_tokk(toks, j + 1) == "IDENT" && c_tokk(toks, j + 2) == "EQ" {
+            let t3: String = c_tokt(toks, j + 3);
+            if t3 == "struct" { is_struct_alias = true; }
+            else if t3 == "packed" && j + 4 < n && c_tokt(toks, j + 4) == "struct" { is_struct_alias = true; }
+        }
+        if is_struct_alias {
+            let sname: String = c_tokt(toks, j + 1);
+            println("#ifndef OO_FWD_" + sname);
+            println("#define OO_FWD_" + sname);
+            println("typedef struct " + sname + " " + sname + ";");
+            println("static inline void oo_retain_" + sname + "(" + sname + " v);");
+            println("static inline void oo_release_" + sname + "(" + sname + " v);");
+            println("#ifndef OO_HAVE_OoL_" + sname);
+            println("#define OO_HAVE_OoL_" + sname);
+            println("typedef struct OoL_" + sname + " { struct " + sname + " *data; long long len; long long cap; } OoL_" + sname + ";");
+            println("static inline void oo_retain_OoL_" + sname + "(OoL_" + sname + " v);");
+            println("static inline void oo_release_OoL_" + sname + "(OoL_" + sname + " v);");
+            println("#endif");
+            println("#endif");
+        }
+        j = j + 1;
+    }
+    let mut i: Int = 0;
+    let mut seen: String = "";
+    let mut iter: Int = 0;
+    while i < n { iter = iter + 1; if iter > n + 100 { println("ERR\tc_emit\thang guard exceeded at pos " + i.to_string()); process_exit(1); }
+        let prev: Int = i;
+        let k: String = c_tokk(toks, i);
+        let mut pub_ty: Bool = k == "KW_PUB" && i + 1 < n && c_tokk(toks, i + 1) == "KW_TYPE";
+        if k == "KW_TYPE" {
+            let r: List[String] = c_emit_one_type_alias(toks, i, n, seen);
+            i = 0 + parse_int(list_get(r, 0));
+            seen = list_get(r, 1);
+        } else if pub_ty { let r: List[String] = c_emit_one_type_alias(toks, i + 1, n, seen); i = 0 + parse_int(list_get(r, 0)); seen = list_get(r, 1); } else if k == "KW_FN" || k == "KW_PUB" {
+            i = i + 1;
+            while i < n {
+                let kk: String = c_tokk(toks, i);
+                if kk == "SEMI" { i = i + 1; break; }
+                if kk == "LBRACE" { i = c_emit_skip_braces(toks, i, n); break; }
+                if kk == "KW_TYPE" || kk == "EOF" { break; }
+                i = i + 1;
+            }
+        } else {
+            i = i + 1;
+        }
+        if i == prev { println("ERR\tc_emit\tno progress at KW_TYPE"); process_exit(1); }
+    }
+    let mono_reg: List[String] = c_mono_collect_tokens(toks, c_mono_reg_new());
+    c_mono_emit_all(mono_reg);
+}
+pub fn c_struct_lit_ty_name(rhs: String) -> String {
+    if chars_len(rhs) < 6 { return ""; }
+    if char_at(rhs, 0) != "(" || char_at(rhs, 1) != "(" { return ""; }
+    let mut i: Int = 2;
+    let n: Int = chars_len(rhs);
+    let mut name: String = "";
+    while i < n {
+        let c: String = char_at(rhs, i);
+        if c == ")" { break; }
+        if c == " " {
+            i = i + 1;
+        } else {
+            let b: Int = byte_at(c, 0);
+            let mut ok: Bool = c == "_" || (b >= 65 && b <= 90) || (b >= 97 && b <= 122) || (b >= 48 && b <= 57);
+            if !ok { return ""; }
+            name = name + c;
+            i = i + 1;
+        }
+    }
+    if chars_len(name) < 1 { return ""; }
+    let first_b: Int = byte_at(char_at(name, 0), 0);
+    if first_b < 65 || first_b > 90 { return ""; }
+    if i < n && char_at(rhs, i) == ")" {
+        i = i + 1;
+        while i < n && char_at(rhs, i) == " " { i = i + 1; }
+        if i >= n || char_at(rhs, i) != "{" { return ""; }
+    } else {
+        return "";
+    }
+    return name;
+}
+pub fn c_emit_seen_ty(state: String, name: String) -> Bool {
+    let needle_str: String = " " + name + " "; return state.contains(needle_str);
+}
+pub fn c_emit_mark_ty(state: String, name: String) -> String {
+    if c_emit_seen_ty(state, name) { return state; }
+    return state + " " + name + " ";
+}

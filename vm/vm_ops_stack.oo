@@ -1,0 +1,171 @@
+// # Evaluate a VM binary or unary opcode / Grow and shrink the VM operand stack and locals
+//
+// Logline: Applies ADD through OR and NOT or NEG to tagged values and returns a tagged result, or V:0 when the opcode is unknown. Pushes, pops, and peeks tagged values on a list stack, and reads or writes a locals frame that pads missing slots with V:0.
+//
+// Setup: Merged cohesive compiler module.
+//
+// Beats:
+//   1. Unified cohesive implementation.
+
+import "vm_val.oo";
+
+
+pub fn eval_vm_binop(opcode: String, a_val: String, b_val: String) -> String {
+    let sa = "" + val_to_str(a_val);
+let sb = "" + val_to_str(b_val);
+if opcode == "ADD" { if val_type(a_val) == "S" || val_type(b_val) == "S" { return val_str(sa + sb);
+}
+        return val_int(val_to_int(a_val) + val_to_int(b_val));
+    }
+    if opcode == "SUB" { return val_int(val_to_int(a_val) - val_to_int(b_val));
+    }
+    if opcode == "MUL" { return val_int(val_to_int(a_val) * val_to_int(b_val));
+    }
+    if opcode == "DIV" {
+        let bv = 0 + val_to_int(b_val);
+        let mut dres = 0;
+        if bv != 0 { dres = val_to_int(a_val) / bv;
+        }
+        return val_int(dres);
+    }
+    if opcode == "MOD" {
+        let bv = 0 + val_to_int(b_val);
+        if bv == 0 { return val_int(0);
+        }
+        let av = 0 + val_to_int(a_val);
+        return val_int(av - (av / bv) * bv);
+    }
+    if opcode == "EQ" {
+        let mut is_eq = 0;
+        if sa == sb { is_eq = 1;
+        }
+        return val_bool(is_eq);
+    }
+    if opcode == "NE" {
+        let mut is_ne = 0;
+        if sa != sb { is_ne = 1;
+        }
+        return val_bool(is_ne);
+    }
+    if opcode == "LT" {
+        let mut is_lt = 0;
+        if val_to_int(a_val) < val_to_int(b_val) { is_lt = 1;
+        }
+        return val_bool(is_lt);
+    }
+    if opcode == "LE" {
+        let mut is_le = 0;
+        if val_to_int(a_val) <= val_to_int(b_val) { is_le = 1;
+        }
+        return val_bool(is_le);
+    }
+    if opcode == "GT" {
+        let mut is_gt = 0;
+        if val_to_int(a_val) > val_to_int(b_val) { is_gt = 1;
+        }
+        return val_bool(is_gt);
+    }
+    if opcode == "GE" {
+        let mut is_ge = 0;
+        if val_to_int(a_val) >= val_to_int(b_val) { is_ge = 1;
+        }
+        return val_bool(is_ge);
+    }
+    if opcode == "AND" {
+        let mut is_and = 0;
+        if val_to_bool(a_val) {
+            if val_to_bool(b_val) { is_and = 1;
+            }
+        }
+        return val_bool(is_and);
+    }
+    if opcode == "OR" {
+        let mut is_or = 0;
+        if val_to_bool(a_val) { is_or = 1;
+        }
+        if val_to_bool(b_val) { is_or = 1;
+        }
+        return val_bool(is_or);
+    }
+    // M166: BAND/BOR/BXOR/SHL/SHR opcodes reserved; pure VM residual until
+    // seed rebuild can use product bitops. C/LLVM path is product floor.
+    return val_void();
+}
+
+pub fn eval_vm_unop(opcode: String, a_val: String) -> String {
+    if opcode == "NOT" {
+        let mut is_not = 0;
+        if !val_to_bool(a_val) { is_not = 1;
+        }
+        return val_bool(is_not);
+    }
+    if opcode == "NEG" {
+        return val_int(0 - val_to_int(a_val));
+    }
+    return val_void();
+}
+
+pub fn stack_new() -> List[String] {
+    return list_new();
+}
+
+pub fn stack_push(st: List[String], val: String) -> List[String] {
+    return list_push(st, val);
+}
+
+pub fn stack_top(st: List[String]) -> String {
+    let n = list_len(st);
+if n == 0 { return "V:0";
+}
+    return list_get(st, n - 1);
+}
+
+pub fn stack_pop(st: List[String]) -> List[String] {
+    let n = list_len(st);
+    if n <= 1 { return list_new();
+    }
+    let mut out: List[String] = list_new();
+    let mut i = 0;
+    while i < n - 1 { out = list_push(out, list_get(st, i));
+    i = i + 1;
+    }
+    return out;
+}
+
+pub fn locals_new(size: Int) -> List[String] {
+    let mut out: List[String] = list_new();
+    let mut i = 0;
+    while i < size { out = list_push(out, "V:0");
+    i = i + 1;
+    }
+    return out;
+}
+
+pub fn locals_get(loc: List[String], idx: Int) -> String {
+    if idx < 0 || idx >= list_len(loc) { return "V:0";
+}
+    return list_get(loc, idx);
+}
+
+pub fn locals_set(loc: List[String], idx: Int, val: String) -> List[String] {
+    let n = list_len(loc);
+    let mut out: List[String] = list_new();
+    let mut i = 0;
+    if idx < n { while i < n { if i == idx { out = list_push(out, val);
+    } else {
+                out = list_push(out, list_get(loc, i));
+            }
+            i = i + 1;
+        }
+    } else {
+        while i < n {
+            out = list_push(out, list_get(loc, i));
+            i = i + 1;
+        }
+        while i < idx { out = list_push(out, "V:0");
+        i = i + 1;
+        }
+        out = list_push(out, val);
+    }
+    return out;
+}

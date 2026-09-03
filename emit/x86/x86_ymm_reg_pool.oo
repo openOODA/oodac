@@ -1,0 +1,230 @@
+// # x86-64 256-bit YMM Vector Register Pool & System V Vector ABI
+//
+// Logline: Implements 256-bit %ymm0..%ymm15 register allocation, System V AMD64 vector calling conventions, and 32-byte aligned stack spilling.
+//
+// Setup: Pure hardware architecture mapping and linear scan allocator for 256-bit SIMD registers under RFC 0026.
+//
+// Beats:
+//   1. Enumerate 16 hardware vector registers (%ymm0..%ymm15) and string mappings.
+//   2. Enforce System V AMD64 vector ABI (%ymm0..%ymm7 argument registers, %ymm0 return register).
+//   3. Manage 32-byte aligned stack frame sizing and spill offset calculations.
+//   4. Linear scan register allocation over 256-bit virtual vector live intervals.
+
+pub type YmmAllocResult = struct {
+    vregs: List[Int],
+    assigned_regs: List[Int],
+    spill_slots: List[Int],
+    spill_count: Int,
+    frame_size: Int
+};
+
+pub fn ymm_reg_count() -> Int {
+    return 16;
+}
+
+pub fn ymm_reg_name(id: Int) -> String {
+    if id == 0 { return "%ymm0";
+    }
+    if id == 1 { return "%ymm1";
+    }
+    if id == 2 { return "%ymm2";
+    }
+    if id == 3 { return "%ymm3";
+    }
+    if id == 4 { return "%ymm4";
+    }
+    if id == 5 { return "%ymm5";
+    }
+    if id == 6 { return "%ymm6";
+    }
+    if id == 7 { return "%ymm7";
+    }
+    if id == 8 { return "%ymm8";
+    }
+    if id == 9 { return "%ymm9";
+    }
+    if id == 10 { return "%ymm10";
+    }
+    if id == 11 { return "%ymm11";
+    }
+    if id == 12 { return "%ymm12";
+    }
+    if id == 13 { return "%ymm13";
+    }
+    if id == 14 { return "%ymm14";
+    }
+    if id == 15 { return "%ymm15";
+    }
+    return "%ymm0";
+}
+
+pub fn ymm_is_valid_reg(id: Int) -> Bool {
+    return id >= 0 && id <= 15;
+}
+
+pub fn sysv_abi_vector_arg_reg(arg_idx: Int) -> Result[Int, String] {
+    if arg_idx < 0 { return Err("ERR_ABI_INVALID_ARG_INDEX");
+    }
+    if arg_idx > 7 { return Err("ERR_ABI_SPILL_TO_STACK");
+    }
+    return Ok(arg_idx);
+}
+
+pub fn sysv_abi_vector_return_reg() -> Int {
+    return 0;
+}
+
+pub fn ymm_all_reg_ids() -> List[Int] {
+    let mut xs: List[Int] = list_new();
+    let mut i: Int = 0;
+    while i < 16 { xs = list_push(xs, i);
+    i = i + 1;
+    }
+    return xs;
+}
+
+pub fn ymm_arg_reg_ids() -> List[Int] {
+    let mut xs: List[Int] = list_new();
+    let mut i: Int = 0;
+    while i < 8 { xs = list_push(xs, i);
+    i = i + 1;
+    }
+    return xs;
+}
+
+pub fn ymm_scratch_reg_ids() -> List[Int] {
+    let mut xs: List[Int] = list_new();
+    let mut i: Int = 8;
+    while i < 16 { xs = list_push(xs, i);
+    i = i + 1;
+    }
+    return xs;
+}
+
+pub fn ymm_reg_alloc_order() -> List[Int] {
+    return ymm_all_reg_ids();
+}
+
+pub fn ymm_spill_offset(slot: Int) -> Int {
+    return (slot + 1) * -32;
+}
+
+pub fn ymm_frame_align_32(spill_count: Int) -> Int {
+    return (spill_count * 32 + 31) & -32;
+}
+
+pub fn ymm_spill_slot_str(slot: Int) -> String {
+    let off: Int = ymm_spill_offset(slot);
+return off.to_string() + "(%rbp)";
+}
+
+pub fn ymm_get_assigned_reg(res: YmmAllocResult, vreg: Int) -> Int {
+    let n: Int = list_len(res.vregs);
+    let mut i: Int = 0;
+    while i < n {
+        if list_get(res.vregs, i) == vreg { return list_get(res.assigned_regs, i);
+        }
+        i = i + 1;
+    }
+    return -1;
+}
+
+pub fn ymm_get_spill_slot(res: YmmAllocResult, vreg: Int) -> Int {
+    let n: Int = list_len(res.vregs);
+    let mut i: Int = 0;
+    while i < n {
+        if list_get(res.vregs, i) == vreg { return list_get(res.spill_slots, i);
+        }
+        i = i + 1;
+    }
+    return -1;
+}
+
+pub fn ymm_is_vreg_spilled(res: YmmAllocResult, vreg: Int) -> Bool {
+    return ymm_get_assigned_reg(res, vreg) == -1;
+}
+
+pub fn ymm_operand_str(vreg: Int, res: YmmAllocResult) -> String {
+    let preg: Int = ymm_get_assigned_reg(res, vreg);
+    if preg >= 0 && preg < 16 { return ymm_reg_name(preg);
+    }
+    let slot: Int = ymm_get_spill_slot(res, vreg);
+    return ymm_spill_slot_str(slot);
+}
+
+fn ymm_set_at(xs: List[Int], idx: Int, val: Int) -> List[Int] {
+    let n: Int = list_len(xs);
+    let mut out: List[Int] = list_new();
+    let mut k: Int = 0;
+    while k < n {
+        if k == idx { out = list_push(out, val);
+        }
+        else { out = list_push(out, list_get(xs, k));
+        }
+        k = k + 1;
+    }
+    return out;
+}
+
+pub fn ymm_linear_scan_allocate(vregs: List[Int], starts: List[Int], ends: List[Int]) -> YmmAllocResult {
+    let n: Int = list_len(vregs);
+    if n == 0 {
+        let empty_v: List[Int] = list_new();
+        let empty_a: List[Int] = list_new();
+        let empty_s: List[Int] = list_new();
+        let res: YmmAllocResult = YmmAllocResult { vregs: empty_v, assigned_regs: empty_a, spill_slots: empty_s, spill_count: 0, frame_size: 0 };
+        return res;
+    }
+    let mut assigned: List[Int] = list_new();
+    let mut spills: List[Int] = list_new();
+    let mut i: Int = 0;
+    while i < n { assigned = list_push(assigned, -1);
+    spills = list_push(spills, -1);
+    i = i + 1;
+    }
+    let mut free_regs: List[Int] = list_new();
+    let mut r: Int = 0;
+    while r < 16 { free_regs = list_push(free_regs, 1);
+    r = r + 1;
+    }
+    let mut active_indices: List[Int] = list_new();
+    let mut next_spill: Int = 0;
+    let mut k: Int = 0;
+    while k < n {
+        let cur_start: Int = list_get(starts, k);
+        let mut new_active: List[Int] = list_new();
+        let mut a: Int = 0;
+        while a < list_len(active_indices) {
+            let act_idx: Int = list_get(active_indices, a);
+            let act_end: Int = list_get(ends, act_idx);
+            if act_end <= cur_start {
+                let act_reg: Int = list_get(assigned, act_idx);
+                if act_reg >= 0 && act_reg < 16 { free_regs = ymm_set_at(free_regs, act_reg, 1);
+                }
+            } else {
+                new_active = list_push(new_active, act_idx);
+            }
+            a = a + 1;
+        }
+        active_indices = new_active;
+        let mut allocated: Int = -1;
+        let mut cand: Int = 0;
+        while cand < 16 { if list_get(free_regs, cand) == 1 { allocated = cand;
+        break;
+        }
+            cand = cand + 1;
+        }
+        if allocated != -1 { assigned = ymm_set_at(assigned, k, allocated);
+        free_regs = ymm_set_at(free_regs, allocated, 0);
+        active_indices = list_push(active_indices, k);
+        } else {
+            assigned = ymm_set_at(assigned, k, -1);
+            spills = ymm_set_at(spills, k, next_spill);
+            next_spill = next_spill + 1;
+        }
+        k = k + 1;
+    }
+    let fsize: Int = ymm_frame_align_32(next_spill);
+    let res: YmmAllocResult = YmmAllocResult { vregs: vregs, assigned_regs: assigned, spill_slots: spills, spill_count: next_spill, frame_size: fsize };
+    return res;
+}

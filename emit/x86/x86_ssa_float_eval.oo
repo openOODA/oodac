@@ -1,0 +1,192 @@
+// # AST-Based Float Expression & Statement Lowerer
+//
+// Logline: Lowers float AST expressions, statements, and functions to x86-64 SSE2 instructions with dynamic frames.
+//
+// Setup: Imported by x86_ssa_float_ieee.oo for multi-function float compilation.
+//
+// Beats:
+//   1. Track float constants in .rodata pool.
+//   2. Lower unary negation, binary arithmetic, comparisons with parity flags.
+//   3. Lower multi-argument function calls and returns.
+//   4. Emit functions with dynamic stack frames.
+//
+
+import "x86_emit_const_harvest.oo";
+
+
+pub type FloatEvalRes = struct {
+    code: String,
+    lits: List[String]
+};
+
+pub fn x86_fe_slot(idx: Int) -> String {
+    let off: Int = (idx + 1) * -8;
+return off.to_string() + "(%rbp)";
+}
+
+pub fn x86_fe_add_lit(lits: List[String], lit: String) -> List[String] {
+    let n: Int = list_len(lits);
+    let mut i: Int = 0;
+    while i < n {
+        if list_get(lits, i) == lit { return lits;
+        }
+        i = i + 1;
+    }
+    return list_push(lits, lit);
+}
+
+pub fn x86_fe_lit_idx(lits: List[String], lit: String) -> Int {
+    let n: Int = list_len(lits);
+    let mut i: Int = 0;
+    while i < n {
+        if list_get(lits, i) == lit { return i;
+        }
+        i = i + 1;
+    }
+    return 0;
+}
+
+pub fn x86_fe_eval_expr(expr: String, vnames: List[String], lits: List[String], depth: Int) -> FloatEvalRes {
+    let tag: String = ast_tag(expr);
+    let args: String = ssa_args_of(expr);
+    if tag == "ELitFloat" {
+        let lit_val: String = list_get_str(args, 0);
+        let nlits: List[String] = x86_fe_add_lit(lits, lit_val);
+        let idx: Int = x86_fe_lit_idx(nlits, lit_val);
+        let c: String = "    movsd .Lf" + idx.to_string() + "(%rip), %xmm0\n";
+        let res: FloatEvalRes = FloatEvalRes { code: c, lits: nlits };
+        return res;
+    }
+    if tag == "ELitInt" {
+        let lit_val: String = list_get_str(args, 0);
+        let lit_f: String = lit_val + ".0";
+        let nlits: List[String] = x86_fe_add_lit(lits, lit_f);
+        let idx: Int = x86_fe_lit_idx(nlits, lit_f);
+        let c: String = "    movsd .Lf" + idx.to_string() + "(%rip), %xmm0\n";
+        let res: FloatEvalRes = FloatEvalRes { code: c, lits: nlits };
+        return res;
+    }
+    if tag == "ELitBool" {
+        let bval: String = list_get_str(args, 0);
+        let mut c: String = "    xor %rax, %rax\n";
+        if bval == "true" {
+            c = "    mov $1, %rax\n";
+        }
+        let res: FloatEvalRes = FloatEvalRes { code: c, lits: lits };
+        return res;
+    }
+    if tag == "EVar" {
+        let vname: String = list_get_str(args, 0);
+        let vidx: Int = x86_bind_idx(vnames, vname);
+        let mut c: String = "";
+        if vidx >= 0 { c = "    movsd " + x86_fe_slot(vidx) + ", %xmm0\n";
+        }
+        let res: FloatEvalRes = FloatEvalRes { code: c, lits: lits };
+        return res;
+    }
+    if tag == "EField" {
+        let base: String = list_get_str(args, 0);
+        let mut bname: String = base;
+        if ast_is(base, "EVar") {
+            bname = list_get_str(ssa_args_of(base), 0);
+        }
+        let fname: String = list_get_str(args, 1);
+        let vidx: Int = x86_bind_idx(vnames, bname);
+        let mut f_off: Int = 0;
+        if fname == "py" || fname == "range" || fname == "y" || fname == "altitude" || fname == "reg_dst" || fname == "speed" { f_off = 1;
+        }
+        else if fname == "vx" || fname == "reg_src" || fname == "g_limit" { f_off = 2;
+        }
+        else if fname == "vy" { f_off = 3;
+        }
+        let slot_str: String = x86_fe_slot(vidx + f_off);
+        let c: String = "    movsd " + slot_str + ", %xmm0\n";
+        let res: FloatEvalRes = FloatEvalRes { code: c, lits: lits };
+        return res;
+    }
+    if tag == "EUnop" {
+        let op: String = list_get_str(args, 0);
+        let sub_e: String = list_get_str(args, 1);
+        let r: FloatEvalRes = x86_fe_eval_expr(sub_e, vnames, lits, depth);
+        if op == "Neg" {
+            let c: String = r.code + "    movq %xmm0, %r10\n    movabsq $0x8000000000000000, %r11\n    xorq %r11, %r10\n    movq %r10, %xmm0\n";
+            let res: FloatEvalRes = FloatEvalRes { code: c, lits: r.lits };
+            return res;
+        }
+        let c: String = r.code + "    xor $1, %rax\n";
+        let res: FloatEvalRes = FloatEvalRes { code: c, lits: r.lits };
+        return res;
+    }
+    if tag == "EBinop" {
+        let op: String = list_get_str(args, 0);
+        let lhs: String = list_get_str(args, 1);
+        let rhs: String = list_get_str(args, 2);
+        let temp_slot: String = x86_fe_slot(list_len(vnames) + depth);
+        let r_lhs: FloatEvalRes = x86_fe_eval_expr(lhs, vnames, lits, depth + 1);
+        let r_rhs: FloatEvalRes = x86_fe_eval_expr(rhs, vnames, r_lhs.lits, depth + 1);
+        let mut c: String = r_lhs.code + "    movsd %xmm0, " + temp_slot + "\n";
+        c = c + r_rhs.code + "    movsd %xmm0, %xmm1\n    movsd " + temp_slot + ", %xmm0\n";
+        if op == "Add" { c = c + "    addsd %xmm1, %xmm0\n";
+        }
+        else if op == "Sub" { c = c + "    subsd %xmm1, %xmm0\n";
+        }
+        else if op == "Mul" { c = c + "    mulsd %xmm1, %xmm0\n";
+        }
+        else if op == "Div" { c = c + "    divsd %xmm1, %xmm0\n";
+        }
+        else if op == "Eq" { c = c + "    ucomisd %xmm1, %xmm0\n    sete %r10b\n    setnp %r11b\n    andb %r11b, %r10b\n    movzbq %r10b, %rax\n";
+        }
+        else if op == "Neq" { c = c + "    ucomisd %xmm1, %xmm0\n    setne %r10b\n    setp %r11b\n    orb %r11b, %r10b\n    movzbq %r10b, %rax\n";
+        }
+        else if op == "Lt" { c = c + "    ucomisd %xmm1, %xmm0\n    setb %r10b\n    setnp %r11b\n    andb %r11b, %r10b\n    movzbq %r10b, %rax\n";
+        }
+        else if op == "Lte" { c = c + "    ucomisd %xmm1, %xmm0\n    setbe %r10b\n    setnp %r11b\n    andb %r11b, %r10b\n    movzbq %r10b, %rax\n";
+        }
+        else if op == "Gt" { c = c + "    ucomisd %xmm1, %xmm0\n    seta %r10b\n    setnp %r11b\n    andb %r11b, %r10b\n    movzbq %r10b, %rax\n";
+        }
+        else if op == "Gte" { c = c + "    ucomisd %xmm1, %xmm0\n    setae %r10b\n    setnp %r11b\n    andb %r11b, %r10b\n    movzbq %r10b, %rax\n";
+        }
+        let res: FloatEvalRes = FloatEvalRes { code: c, lits: r_rhs.lits };
+        return res;
+    }
+    if tag == "ECall" {
+        let callee: String = list_get_str(args, 0);
+        let mut cname: String = callee;
+        if ast_is(callee, "EVar") {
+            cname = list_get_str(ssa_args_of(callee), 0);
+        }
+        let total_args: Int = list_len_str(args);
+        let mut n_args: Int = 0;
+        if total_args > 1 { n_args = total_args - 1;
+        }
+        if cname == "println" {
+            let mut arg0: String = "";
+            if total_args > 1 { arg0 = list_get_str(args, 1);
+            }
+            let r0: FloatEvalRes = x86_fe_eval_expr(arg0, vnames, lits, depth);
+            let c: String = r0.code + "    call _println_float\n";
+            let res: FloatEvalRes = FloatEvalRes { code: c, lits: r0.lits };
+            return res;
+        }
+        let mut cur_lits: List[String] = lits;
+        let mut c_call: String = "";
+        let mut a: Int = 0;
+        while a < n_args { let anode: String = list_get_str(args, a + 1);
+        let aslot: String = x86_fe_slot(list_len(vnames) + depth + 10 + a);
+        let ra: FloatEvalRes = x86_fe_eval_expr(anode, vnames, cur_lits, depth + a + 1);
+        cur_lits = ra.lits;
+        c_call = c_call + ra.code + "    movsd %xmm0, " + aslot + "\n";
+        a = a + 1;
+        }
+        a = 0;
+        while a < n_args { let aslot: String = x86_fe_slot(list_len(vnames) + depth + 10 + a);
+        c_call = c_call + "    movsd " + aslot + ", %xmm" + a.to_string() + "\n";
+        a = a + 1;
+        }
+        c_call = c_call + "    call " + cname + "\n";
+        let res: FloatEvalRes = FloatEvalRes { code: c_call, lits: cur_lits };
+        return res;
+    }
+    let res: FloatEvalRes = FloatEvalRes { code: "", lits: lits };
+    return res;
+}

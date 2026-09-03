@@ -1,0 +1,48 @@
+// # Emit impl block methods as concrete C functions
+//
+// Logline: Parses methods inside an impl block and emits each method as a C function.
+//
+// Setup: c_emit_fn_mode is in scope.
+//
+// Beats:
+//   1. Scan to LBRACE opening the impl block.
+//   2. Walk methods inside the block and call c_emit_fn_mode for each fn item.
+//   3. Return updated pos and env.
+
+import "c_emit_fn.oo";
+
+pub fn c_emit_impl_methods(toks: List[String], pos0: Int, n: Int, fn_env: String, mode: String) -> List[String] {
+    let mut pos = pos0 + 1;
+    let mut env = fn_env;
+    let mut found = false;
+    while pos < n {
+        if c_tokk(toks, pos) == "LBRACE" {
+            pos = pos + 1;
+            found = true;
+            break;
+        }
+        pos = pos + 1;
+    }
+    let mut cont = found;
+    while cont {
+        if pos >= n {
+            cont = false;
+        } else {
+            let k: String = c_tokk(toks, pos);
+            if k == "RBRACE" {
+                pos = pos + 1;
+                cont = false;
+            } else if k == "KW_PUB" || k == "KW_FN" {
+                let fr: List[String] = c_emit_fn_mode(toks, pos, n, env, mode);
+                pos = parse_int(list_get(fr, 0));
+                env = list_get(fr, 1);
+            } else {
+                pos = pos + 1;
+            }
+        }
+    }
+    let mut out: List[String] = list_new();
+    out = list_push(out, pos.to_string());
+    out = list_push(out, env);
+    return out;
+}

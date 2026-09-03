@@ -1,0 +1,99 @@
+// # Typecheck method receivers
+//
+// Logline: Fail closed when a known receiver type cannot carry the named method, and stay silent when the receiver type is still unknown.
+//
+// Setup: Called from field/method typecheck with mname, rty, struct_table, toks, and i. tc_err_at prints path and caret. is_list_type_name, is_known_struct_type, and is_result_type_name exist.
+//
+// Beats:
+//   1. .len() requires String or List; .contains, .char_at, and .str_slice require String; .push requires List.
+//   2. .to_string is allowed on Int, Bool, Float, and String, and is rejected on a known struct, list, or Result.
+//   3. .is_ok, .is_err, and .unwrap require Result; any other method on a known primitive or struct fails closed.
+
+pub fn check_method_on_recv(
+    mname: String,
+    rty: String,
+    struct_table: String,
+    toks: List[String],
+    i: Int
+) {
+    if mname == "len" {
+        if rty != "String" {
+            if !is_list_type_name(rty) {
+                tc_err_at(
+                    toks,
+                    i,
+                    ".len() requires String or List receiver, found " + rty
+                );
+            }
+        }
+        return;
+    }
+    if mname == "contains" || mname == "char_at" || mname == "str_slice" {
+        if rty != "String" {
+            tc_err_at(
+                toks,
+                i,
+                "unknown method '." + mname + "' on " + rty
+            );
+        }
+        return;
+    }
+    if mname == "push" {
+        if !is_list_type_name(rty) {
+            tc_err_at(
+                toks,
+                i,
+                "unknown method '.push' on " + rty
+            );
+        }
+        return;
+    }
+    if mname == "to_string" {
+        if rty == "Int" || rty == "Bool" || rty == "Float" || rty == "String" {
+            return;
+        }
+        if is_known_struct_type(struct_table, rty)
+            || is_list_type_name(rty)
+            || is_result_type_name(rty) {
+            tc_err_at(
+                toks,
+                i,
+                "unknown method '.to_string' on " + rty
+            );
+        }
+        return;
+    }
+    if mname == "is_ok" || mname == "is_err" || mname == "unwrap" {
+        if is_result_type_name(rty) {
+            return;
+        }
+        if rty == "Int" || rty == "Bool" || rty == "Float" || rty == "String"
+            || is_list_type_name(rty)
+            || is_known_struct_type(struct_table, rty) {
+            tc_err_at(
+                toks,
+                i,
+                "method '."
+                    + mname
+                    + "' requires Result receiver, found "
+                    + rty
+            );
+        }
+        return;
+    }
+    // Unknown method on known primitive — fail-closed.
+    if rty == "Int" || rty == "Bool" || rty == "Float" || rty == "String" {
+        tc_err_at(
+            toks,
+            i,
+            "unknown method '." + mname + "' on " + rty
+        );
+    }
+    if is_known_struct_type(struct_table, rty) {
+        tc_err_at(
+            toks,
+            i,
+            "unknown method '." + mname + "' on " + rty
+        );
+    }
+}

@@ -1,0 +1,254 @@
+// # Emit AArch64 struct layout, instantiation, and field access
+//
+// Logline: Lowers struct layout (8-byte aligned), heap allocation via _alloc (brk syscall 214), field mutation (str x1, [x0, #disp]), and field access (ldr x0, [x0, #disp] then bl _println_int).
+//
+// Setup: tokenize_lines, a64_tok_k, a64_tok_t, a64_bind_idx, and aarch64_emit_int_routine exist in aarch64_emit_harv.oo and aarch64_emit_int.oo.
+//
+// Beats:
+//   1. Scan struct type definitions and record field names and 8-byte offsets.
+//   2. Lower struct instantiation to _alloc(sizeof) and field initialization.
+//   3. Lower field mutation to str x1, [x0, #disp] using x29-relative slot load.
+//   4. Lower field access to ldr x0, [x0, #disp] and int write via bl _println_int.
+
+
+import "aarch64_emit_const_harvest.oo";
+
+import "aarch64_emit_int.oo";
+
+import "aarch64_emit_sys.oo";
+
+
+pub fn aarch64_struct_field_idx(fnames_str: String, field_name: String) -> Int {
+    let n = chars_len(fnames_str);
+    let mut cur = "";
+    let mut idx = 0;
+    let mut i = 0;
+    while i <= n {
+        let mut end = false;
+        if i == n { end = true;
+        } else if char_at(fnames_str, i) == "," { end = true;
+        }
+        if end {
+            if cur == field_name { return idx;
+            }
+            cur = "";
+            idx = idx + 1;
+        } else { cur = cur + char_at(fnames_str, i);
+        }
+        i = i + 1;
+    }
+    return -1;
+}
+
+pub fn aarch64_struct_field_offset(fnames_str: String, field_name: String) -> Int {
+    let idx: Int = 0 + aarch64_struct_field_idx(fnames_str, field_name);
+    if idx < 0 { return -1;
+    }
+    return idx * 8;
+}
+
+pub fn aarch64_struct_field_count(fnames_str: String) -> Int {
+    if chars_len(fnames_str) == 0 { return 0;
+    }
+    let n = chars_len(fnames_str);
+    let mut cnt = 1;
+    let mut i = 0;
+    while i < n {
+        if char_at(fnames_str, i) == "," { cnt = cnt + 1;
+        }
+        i = i + 1;
+    }
+    return cnt;
+}
+
+pub fn aarch64_match_struct(src: String) -> List[String] {
+    let empty: List[String] = list_new();
+    if chars_len(src) == 0 { return empty;
+    }
+    let toks: List[String] = tokenize_lines(src);
+    let n = list_len(toks);
+    let mut i = 0;
+    while i < n { let k: String = a64_tok_k(toks, i);
+    let t: String = a64_tok_t(toks, i);
+    if (k == "KW_TYPE" && i + 3 < n && a64_tok_t(toks, i + 3) == "struct") || (t == "struct" && i + 2 < n && a64_tok_k(toks, i + 2) == "LBRACE") { return list_push(list_new(), "1");
+    }
+        i = i + 1;
+    }
+    return empty;
+}
+
+fn aarch64_extract_struct_defs(toks: List[String], n: Int) -> List[String] {
+    let mut out: List[String] = list_new();
+    let mut i = 0;
+    while i < n { let k: String = a64_tok_k(toks, i);
+    let mut sname = "";
+    let mut p = 0;
+    if k == "KW_TYPE" && i + 4 < n && a64_tok_k(toks, i + 2) == "EQ" && a64_tok_t(toks, i + 3) == "struct" && a64_tok_k(toks, i + 4) == "LBRACE" { sname = a64_tok_t(toks, i + 1);
+    p = i + 5;
+    } else if a64_tok_t(toks, i) == "struct" && i + 2 < n && a64_tok_k(toks, i + 2) == "LBRACE" {
+            sname = a64_tok_t(toks, i + 1);
+            p = i + 3;
+        }
+        if chars_len(sname) > 0 {
+            let mut flist = "";
+            while p < n && a64_tok_k(toks, p) != "RBRACE" {
+                if a64_tok_k(toks, p) == "IDENT" {
+                    let fnm: String = a64_tok_t(toks, p);
+                    if chars_len(flist) > 0 { flist = flist + "," + fnm;
+                    } else { flist = fnm;
+                    }
+                    p = p + 1;
+                    if p < n && a64_tok_k(toks, p) == "COLON" { p = p + 2;
+                    }
+                    if p < n && a64_tok_k(toks, p) == "COMMA" { p = p + 1;
+                    }
+                } else { p = p + 1;
+                }
+            }
+            out = list_push(out, sname);
+            out = list_push(out, flist);
+            i = p;
+        }
+        i = i + 1;
+    }
+    return out;
+}
+
+pub fn aarch64_emit_alloc_routine() {
+    println("    .globl _alloc\n    .p2align 4\n_alloc:");
+    println("    mov x9, x0\n    adrp x10, .Lheap_start\n    add x10, x10, :lo12:.Lheap_start\n    ldr x11, [x10]\n    cbnz x11, .Lalloc_do_brk");
+    println("    mov x8, #214\n    mov x0, #0\n    svc #0\n    mov x11, x0\n    str x11, [x10]");
+    println(".Lalloc_do_brk:\n    add x0, x11, x9\n    mov x8, #214\n    svc #0\n    str x0, [x10]\n    mov x0, x11\n    ret");
+}
+
+pub fn aarch64_emit_struct(src: String) {
+    let mut wrote: Int = 0;
+    let toks: List[String] = tokenize_lines(src);
+    let n = list_len(toks);
+    let sdefs: List[String] = aarch64_extract_struct_defs(toks, n);
+    let mut struct_names: List[String] = list_new();
+    let mut struct_fields: List[String] = list_new();
+    let mut si = 0;
+    let sn = list_len(sdefs);
+    while si + 1 < sn { struct_names = list_push(struct_names, list_get(sdefs, si));
+    struct_fields = list_push(struct_fields, list_get(sdefs, si + 1));
+    si = si + 2;
+    }
+    println("# openOODA aarch64 product floor (GAS, Linux, clang -target aarch64-linux-gnu)");
+    println("    .arch armv8-a\n    .section .data\n    .p2align 3\n.Lheap_start:\n    .quad 0");
+    println("    .section .text\n    .globl _start\n    .globl main");
+    aarch64_emit_alloc_routine();
+    aarch64_emit_int_routine();
+    println("main:\n_start:\n    stp x29, x30, [sp, #-80]!\n    mov x29, sp");
+    let mut var_names: List[String] = list_new();
+    let mut var_structs: List[String] = list_new();
+    let mut var_slots: List[Int] = list_new();
+    let mut p = 0;
+    while p < n {
+        if a64_tok_k(toks, p) == "KW_FN" && p + 1 < n && a64_tok_t(toks, p + 1) == "main" {
+            p = p + 2;
+            while p < n && a64_tok_k(toks, p) != "LBRACE" { p = p + 1;
+            }
+            if p < n { p = p + 1;
+            }
+            break;
+        }
+        p = p + 1;
+    }
+    while p < n && a64_tok_k(toks, p) != "RBRACE" {
+        if a64_tok_k(toks, p) == "KW_LET" {
+            p = p + 1;
+            if p < n && a64_tok_k(toks, p) == "KW_MUT" { p = p + 1;
+            }
+            let vname: String = a64_tok_t(toks, p);
+            p = p + 1;
+            if p < n && a64_tok_k(toks, p) == "COLON" { p = p + 2;
+            }
+            if p < n && a64_tok_k(toks, p) == "EQ" { p = p + 1;
+            }
+            if p < n && a64_tok_k(toks, p) == "IDENT" {
+                let rname: String = a64_tok_t(toks, p);
+                let sidx: Int = 0 + a64_bind_idx(struct_names, rname);
+                if sidx >= 0 && p + 1 < n && a64_tok_k(toks, p + 1) == "LBRACE" {
+                    let fnames: String = list_get(struct_fields, sidx);
+                    let nfields: Int = 0 + aarch64_struct_field_count(fnames);
+                    let sz = nfields * 8;
+                    let slot = 0 - ((list_len(var_names) + 1) * 8);
+                    var_names = list_push(var_names, vname);
+                    var_structs = list_push(var_structs, rname);
+                    var_slots = list_push(var_slots, slot);
+                    println("    mov x0, #" + sz.to_string() + "\n    bl _alloc");
+                    p = p + 2;
+                    while p < n && a64_tok_k(toks, p) != "RBRACE" {
+                        if a64_tok_k(toks, p) == "IDENT" {
+                            let fnm: String = a64_tok_t(toks, p);
+                            p = p + 1;
+                            if p < n && a64_tok_k(toks, p) == "COLON" { p = p + 1;
+                            }
+                            let fval: String = a64_tok_t(toks, p);
+                            let fval_kind: String = a64_tok_k(toks, p);
+                            if fval_kind != "INT" && fval_kind != "MINUS" {
+                                println("ERR\taarch64_emit\tstruct field " + fnm + " must be int literal, got '" + fval + "' (kind " + fval_kind + ")");
+                                process_exit(1);
+                            }
+                            p = p + 1;
+                            let disp: Int = 0 + aarch64_struct_field_offset(fnames, fnm);
+                            println("    mov x1, #" + fval + "\n    str x1, [x0, #" + disp.to_string() + "]");
+                            if p < n && a64_tok_k(toks, p) == "COMMA" { p = p + 1;
+                            }
+                        } else { p = p + 1;
+                        }
+                    }
+                    if p < n && a64_tok_k(toks, p) == "RBRACE" { p = p + 1;
+                    }
+                    println("    str x0, [x29, #" + slot.to_string() + "]");
+                }
+            }
+            if p < n && a64_tok_k(toks, p) == "SEMI" { p = p + 1;
+            }
+        } else if a64_tok_k(toks, p) == "IDENT" && p + 3 < n && a64_tok_k(toks, p + 1) == "DOT" && a64_tok_k(toks, p + 2) == "IDENT" && a64_tok_k(toks, p + 3) == "EQ" {
+            let vname2: String = a64_tok_t(toks, p);
+            let fname2: String = a64_tok_t(toks, p + 2);
+            p = p + 4;
+            let val_tok: String = a64_tok_t(toks, p);
+            let val_kind: String = a64_tok_k(toks, p);
+            if val_kind != "INT" && val_kind != "MINUS" {
+                println("ERR\taarch64_emit\tstruct field assign " + vname2 + "." + fname2 + " must be int literal, got '" + val_tok + "'");
+                process_exit(1);
+            }
+            p = p + 1;
+            if p < n && a64_tok_k(toks, p) == "SEMI" { p = p + 1;
+            }
+            let vidx: Int = 0 + a64_bind_idx(var_names, vname2);
+            if vidx >= 0 { let st_nm: String = list_get(var_structs, vidx);
+            let st_i: Int = 0 + a64_bind_idx(struct_names, st_nm);
+            let fnames2: String = list_get(struct_fields, st_i);
+            let disp2: Int = 0 + aarch64_struct_field_offset(fnames2, fname2);
+            let slot2: Int = list_get(var_slots, vidx);
+            println("    ldr x0, [x29, #" + slot2.to_string() + "]\n    mov x1, #" + val_tok);
+            println("    str x1, [x0, #" + disp2.to_string() + "]");
+            }
+        } else if a64_tok_k(toks, p) == "IDENT" && a64_tok_t(toks, p) == "println" && p + 5 < n && a64_tok_k(toks, p + 1) == "LPAREN" && a64_tok_k(toks, p + 2) == "IDENT" && a64_tok_k(toks, p + 3) == "DOT" && a64_tok_k(toks, p + 4) == "IDENT" && a64_tok_k(toks, p + 5) == "RPAREN" {
+            let pvname: String = a64_tok_t(toks, p + 2);
+            let pfname: String = a64_tok_t(toks, p + 4);
+            p = p + 6;
+            if p < n && a64_tok_k(toks, p) == "SEMI" { p = p + 1;
+            }
+            let pvidx: Int = 0 + a64_bind_idx(var_names, pvname);
+            if pvidx >= 0 { let pst_nm: String = list_get(var_structs, pvidx);
+            let pst_i: Int = 0 + a64_bind_idx(struct_names, pst_nm);
+            let pfnames: String = list_get(struct_fields, pst_i);
+            let pdisp: Int = 0 + aarch64_struct_field_offset(pfnames, pfname);
+            let pslot: Int = list_get(var_slots, pvidx);
+            println("    ldr x0, [x29, #" + pslot.to_string() + "]\n    ldr x0, [x0, #" + pdisp.to_string() + "]");
+            wrote = wrote + 1;
+            println("    bl _println_int");
+            }
+        } else { p = p + 1;
+        }
+    }
+    if wrote == 0 { println("ERR\taarch64_emit\tstruct: body produced no write syscall; add println(p.field) or use a struct field in a println expression");
+    process_exit(1);
+    }
+    println("    mov x0, #0\n    mov x8, #93\n    svc #0");
+}

@@ -1,0 +1,230 @@
+// # Emit for-range and for-in with SIMD and Cache Tiling
+//
+// Logline: Lowers for i in lo..hi and for x in xs to C for-loops with 64-byte alignment and auto-vectorization directives.
+//
+// Setup: c_env_get, c_list_c_name, c_emit_simd, and c_pack_pos_env exist.
+//
+// Beats:
+//   1. Collection for-in emits 64-byte alignment assumption and vectorization pragmas.
+//   2. Range for i in lo..hi lowers with SIMD vectorization annotations and fuel checks.
+//   3. Nested loops (List[List[T]]) and matrices connect to polyhedral tiling routines.
+//   4. Multi-level L3/L2/L1 cache block decomposition for high throughput vector execution.
+
+
+import "c_emit_env.oo";
+
+import "c_emit_ty.oo";
+
+import "c_emit_arc.oo";
+
+import "c_emit_simd.oo";
+
+
+pub fn c_emit_src_line(toks: List[String], pos: Int, env: String) {
+    c_dwarf_emit_src_line(toks, pos, env);
+}
+
+pub fn c_emit_while_fuel_check(mc: String) {
+    if mc != "" {
+        println("  if (--__mc_fuel <= 0) { oo_panic_fuel(); }");
+    }
+}
+
+
+pub fn c_for_bound(toks: List[String], pos: Int, n: Int, env: String) -> List[String] {
+    let mut o: List[String] = list_new();
+    if pos >= n { println("ERR\tc_emit\tfor residual (missing bound)");
+    process_exit(1);
+    return o;
+    }
+    let k: String = c_tokk(toks, pos);
+    if k == "DOTDOT" || k == "LBRACE" || k == "SEMI" {
+        println("ERR\tc_emit\tfor residual (missing bound)");
+        process_exit(1);
+        return o;
+    }
+    let mut p: Int = pos;
+    let mut expr: String = "";
+    let mut depth: Int = 0;
+    while p < n { let tk: String = c_tokk(toks, p);
+    if depth == 0 && (tk == "DOTDOT" || tk == "LBRACE" || tk == "SEMI") { break;
+    }
+        if tk == "LPAREN" || tk == "LBRACKET" {
+            depth = depth + 1;
+        }
+        if tk == "RPAREN" || tk == "RBRACKET" {
+            if depth > 0 { depth = depth - 1;
+            }
+        }
+        let tt: String = c_tokt(toks, p);
+        if expr == "" {
+            expr = tt;
+        } else {
+            expr = expr + " " + tt;
+        }
+        p = p + 1;
+    }
+    // Rewrite OODA list free names to their C runtime names. c_for_bound
+    // collects tokens as text without going through c_emit_expr_c, so list_len
+    // stays as the OODA name. Scan for whole-word matches and replace.
+    let olen: Int = chars_len(expr);
+    let mut out_e: String = "";
+    let mut ri: Int = 0;
+    while ri < olen { if ri + 8 <= olen && str_slice(expr, ri, ri + 8) == "list_len" && (ri + 8 == olen || char_at(expr, ri + 8) == " " || char_at(expr, ri + 8) == "(" || char_at(expr, ri + 8) == "\t") { out_e = out_e + "oo_ilist_len";
+    ri = ri + 8;
+    } else if ri + 8 <= olen && str_slice(expr, ri, ri + 8) == "list_get" && (ri + 8 == olen || char_at(expr, ri + 8) == " " || char_at(expr, ri + 8) == "(" || char_at(expr, ri + 8) == "\t") {
+            out_e = out_e + "oo_ilist_get";
+            ri = ri + 8;
+        } else if ri + 8 <= olen && str_slice(expr, ri, ri + 8) == "list_set" && (ri + 8 == olen || char_at(expr, ri + 8) == " " || char_at(expr, ri + 8) == "(" || char_at(expr, ri + 8) == "\t") {
+            out_e = out_e + "oo_ilist_set";
+            ri = ri + 8;
+        } else {
+            out_e = out_e + char_at(expr, ri);
+            ri = ri + 1;
+        }
+    }
+    expr = out_e;
+    o = list_push(o, p.to_string());
+    o = list_push(o, expr);
+    return o;
+}
+
+pub fn c_emit_for_in_list(toks: List[String], pos: Int, n: Int, env: String, v: String, xs: String) -> List[String] {
+    let mut p: Int = pos;
+    let mut e: String = env;
+    let mut kind: String = c_env_get(e, xs);
+    if kind == "" || kind == "I" { kind = "I";
+    }
+    let ln: String = c_list_c_name("list_len", kind);
+    let gt: String = c_list_c_name("list_get", kind);
+    let mut ety: String = "long long";
+    if kind == "S" || kind == "T" { ety = "OoStr";
+    }
+    if kind == "F" || kind == "LF" { ety = "double";
+    }
+    if ety == "long long" && kind != "I" { ety = kind;
+    }
+    let ix: String = "__fi_" + v;
+    let hn: String = "__fn_" + v;
+    println("{");
+    println("  long long " + ix + " = 0;");
+    println("  long long " + hn + " = " + ln + "(" + xs + ");");
+    if c_simd_is_vectorizable_kind(kind) {
+        c_simd_emit_align_ptr("__" + xs + "_buf", xs + ".data", ety, 64);
+        c_simd_emit_vector_pragmas(4);
+    }
+    c_emit_src_line(toks, pos, e);
+    println("  for (; " + ix + " < " + hn + "; " + ix + "++) {");
+    println("    " + ety + " " + v + " = " + gt + "(" + xs + ", " + ix + ");");
+    let mc: String = c_env_get(e, "__mc__");
+    if mc != "" { c_emit_while_fuel_check(mc);
+    }
+    let br: List[String] = c_emit_block(toks, p, n, e);
+    p = parse_int(list_get(br, 0));
+    e = list_get(br, 1);
+    println("  }");
+    println("}");
+    return c_pack_pos_env(p, e);
+}
+
+pub fn c_emit_for_stmt(toks: List[String], pos: Int, n: Int, env: String) -> List[String] {
+    let mut p: Int = pos + 1;
+    let mut e: String = env;
+    if p >= n || c_tokk(toks, p) != "IDENT" {
+        println("ERR\tc_emit\tfor residual (expected loop IDENT)");
+        process_exit(1);
+    }
+    let v: String = c_tokt(toks, p);
+    p = p + 1;
+    if p >= n || (c_tokk(toks, p) != "KW_IN" && (c_tokk(toks, p) != "IDENT" || c_tokt(toks, p) != "in")) {
+        println("ERR\tc_emit\tfor residual (need 'in')");
+        process_exit(1);
+    }
+    p = p + 1;
+    if p < n && c_tokk(toks, p) == "IDENT" {
+        if p + 1 < n && c_tokk(toks, p + 1) == "LBRACE" {
+            let xs: String = c_tokt(toks, p);
+            p = p + 1;
+            return c_emit_for_in_list(toks, p, n, e, v, xs);
+        }
+        if p + 3 < n && c_tokk(toks, p + 1) == "LPAREN" && c_tokk(toks, p + 2) == "RPAREN" && c_tokk(toks, p + 3) == "LBRACE" {
+            let fn_name: String = c_tokt(toks, p);
+            p = p + 3;
+            let ix: String = "__fi_" + v;
+            let hn: String = "__fn_" + v;
+            let itl: String = "__iter_" + v;
+            println("{");
+            println("  OoIList " + itl + " = " + fn_name + "();");
+            println("  long long " + ix + " = 0;");
+            println("  long long " + hn + " = oo_ilist_len(" + itl + ");");
+            c_simd_emit_align_ptr("__" + itl + "_buf", itl + ".data", "long long", 64);
+            c_simd_emit_vector_pragmas(4);
+            c_emit_src_line(toks, pos, e);
+            println("  for (; " + ix + " < " + hn + "; " + ix + "++) {");
+            println("    long long " + v + " = oo_ilist_get(" + itl + ", " + ix + ");");
+            let br: List[String] = c_emit_block(toks, p, n, e);
+            p = parse_int(list_get(br, 0));
+            e = list_get(br, 1);
+            println("  }");
+            println("}");
+            return c_pack_pos_env(p, e);
+        }
+    }
+
+    let lo_p: List[String] = c_for_bound(toks, p, n, e);
+    p = parse_int(list_get(lo_p, 0));
+    let lo: String = list_get(lo_p, 1);
+    if p >= n || c_tokk(toks, p) != "DOTDOT" {
+        println("ERR\tc_emit\tfor residual (expected .. between bounds)");
+        process_exit(1);
+    }
+    p = p + 1;
+    let hi_p: List[String] = c_for_bound(toks, p, n, e);
+    p = parse_int(list_get(hi_p, 0));
+    let hi: String = list_get(hi_p, 1);
+    let mc_for: String = c_env_get(e, "__mc__");
+
+    // Check for nested 2D matrix loop for polyhedral tiling
+    let has_nest: Bool = c_simd_detect_matrix_nest(toks, p, n);
+    if has_nest { let inner_info: List[String] = c_simd_extract_nest_inner_for(toks, p, n);
+    if list_len(inner_info) >= 3 { let iv: String = list_get(inner_info, 0);
+    let i_hi: String = list_get(inner_info, 2);
+    let nest: SimdLoopNest = c_simd_create_loop_nest(v, iv, hi, i_hi, "double");
+    let cfg: SimdTileConfig = simd_tile_config_default();
+    c_emit_src_line(toks, pos, e);
+    println("/* Polyhedral 2D Tiled Matrix Nest (L3=256, L2=64, L1=16, Reg=4) */");
+    c_simd_emit_tiled_2d_loops(nest, cfg);
+    if mc_for != "" { c_emit_while_fuel_check(mc_for);
+    }
+            let br_nest: List[String] = c_emit_block(toks, p, n, e);
+            p = parse_int(list_get(br_nest, 0));
+            e = list_get(br_nest, 1);
+            c_simd_emit_tiled_2d_close();
+            return c_pack_pos_env(p, e);
+        }
+    }
+
+    c_simd_emit_vector_pragmas(4);
+    c_emit_src_line(toks, pos, e);
+    println(
+        "for (long long "
+            + v
+            + " = "
+            + lo
+            + "; "
+            + v
+            + " < "
+            + hi
+            + "; "
+            + v
+            + "++) {"
+    );
+    if mc_for != "" {
+        c_emit_while_fuel_check(mc_for);
+    }
+    let brf: List[String] = c_emit_block(toks, p, n, e);
+    p = parse_int(list_get(brf, 0));
+    e = list_get(brf, 1);
+    println("}");
+    return c_pack_pos_env(p, e);
+}

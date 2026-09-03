@@ -1,0 +1,244 @@
+// # Lower statements to LLVM
+//
+// Logline: Dispatches let, return, while, if, for, Result match, struct field mutation, and expression statements to LLVM IR emitters. Also lowers top-level verify blocks to a per-name internal void function with an OODA_TEST guard and a @llvm.global_ctors entry.
+//
+// Setup: llvm_emit_let_stmt, llvm_emit_ret_arc, llvm_emit_while_stmt, llvm_emit_if_stmt, llvm_emit_for_range_stmt, llvm_emit_match_stmt, llvm_emit_expr, llvm_emit_block, llvm_env_new, and llvm_env_add_var are in scope.
+//
+// Beats:
+//   1. Lower let and assign statements.
+//   2. Lower return statements with scope ARC cleanup and main truncation.
+//   3. Lower while, if, for, and Result match statements.
+//   4. Lower struct field mutations (s.x = expr;) and expression statements.
+//   5. Lower verify <name> { stmts } to @__oo_verify_<name> with an OODA_TEST guard and a @llvm.global_ctors entry.
+
+
+import "llvm_emit_ty.oo";
+
+import "llvm_emit_env.oo";
+
+import "llvm_emit_mem.oo";
+
+import "llvm_emit_let.oo";
+
+import "llvm_emit_control.oo";
+
+import "llvm_emit_for.oo";
+
+import "llvm_emit_for_list.oo";
+
+import "llvm_emit_arc.oo";
+
+import "llvm_emit_shims.oo";
+
+import "llvm_emit_expr.oo";
+
+import "llvm_emit_match.oo";
+
+import "llvm_emit_sret.oo";
+
+pub fn llvm_emit_stmt(toks: List[String], pos: Int, n: Int, env: List[String]) -> List[String] {
+    let mut p = pos;
+    let mut cur_env: List[String] = env;
+    let tok: String = list_get(toks, p);
+    let k: String = field_at(tok, 0);
+
+    if k == "KW_LET" {
+        return llvm_emit_let_stmt(toks, p, n, cur_env);
+    }
+
+    if k == "KW_RETURN" {
+        p = p + 1;
+        let mut ret_val: String = "";
+        let mut ret_ty: String = "void";
+
+        if p < n && field_at(list_get(toks, p), 0) != "SEMI" && field_at(list_get(toks, p), 0) != "RBRACE" {
+            let expr_res: List[String] = llvm_emit_expr(toks, p, n, cur_env);
+            ret_val = list_get(expr_res, 0);
+            ret_ty = list_get(expr_res, 1);
+            p = parse_int(list_get(expr_res, 2));
+            cur_env = list_new();
+            cur_env = list_push(cur_env, list_get(expr_res, 3));
+            cur_env = list_push(cur_env, list_get(expr_res, 4));
+            cur_env = list_push(cur_env, list_get(expr_res, 5));
+            cur_env = list_push(cur_env, list_get(expr_res, 6));
+            cur_env = list_push(cur_env, list_get(expr_res, 7));
+        }
+
+        let is_main_str: String = llvm_env_get_var_ty(cur_env, "__is_main__");
+        let fret: String = llvm_env_get_var_ty(cur_env, "__fnret_ty__");
+
+        // Release all active ARC variables before return
+        cur_env = llvm_emit_ret_arc(cur_env);
+
+        if (is_main_str == "1" || fret == "i32") && ret_ty == "i64" {
+            let trunc_res: List[String] = llvm_gen_reg(cur_env);
+            let trunc_reg: String = list_get(trunc_res, 0);
+            cur_env = list_new();
+            cur_env = list_push(cur_env, list_get(trunc_res, 1));
+            cur_env = list_push(cur_env, list_get(trunc_res, 2));
+            cur_env = list_push(cur_env, list_get(trunc_res, 3));
+            cur_env = list_push(cur_env, list_get(trunc_res, 4));
+            cur_env = list_push(cur_env, list_get(trunc_res, 5));
+            println("  " + trunc_reg + " = trunc i64 " + ret_val + " to i32");
+            ret_val = trunc_reg;
+            ret_ty = "i32";
+        }
+
+        if is_main_str == "1" && (ret_ty == "void" || ret_val == "") {
+            println("  ret i32 0");
+        } else if ret_ty == "void" || ret_val == "" {
+            println("  ret void");
+        } else if llvm_ty_needs_sret(fret) {
+            llvm_emit_sret_ret(fret, ret_val);
+        } else {
+            println("  ret " + ret_ty + " " + ret_val);
+        }
+
+        // Mark so llvm_emit_fn skips fallthrough ret (avoids double-ret)
+        cur_env = llvm_env_add_var(cur_env, "__did_ret__", "1");
+
+        if p < n && field_at(list_get(toks, p), 0) == "SEMI" { p = p + 1; }
+
+        let mut out: List[String] = list_new();
+        out = list_push(out, p.to_string());
+        out = list_push(out, list_get(cur_env, 0));
+        out = list_push(out, list_get(cur_env, 1));
+        out = list_push(out, list_get(cur_env, 2));
+        out = list_push(out, list_get(cur_env, 3));
+        out = list_push(out, list_get(cur_env, 4));
+        return out;
+    }
+    if k == "KW_WHILE" {
+        return llvm_emit_while_stmt(toks, p, n, cur_env);
+    }
+    if k == "KW_IF" {
+        return llvm_emit_if_stmt(toks, p, n, cur_env);
+    }
+    if k == "KW_FOR" {
+        return llvm_emit_for_range_stmt(toks, p, n, cur_env);
+    }
+    if k == "KW_MATCH" {
+        return llvm_emit_match_stmt(toks, p, n, cur_env);
+    }
+    if k == "IDENT" {
+        let name: String = field_at(list_get(toks, p), 3);
+        if name == "break" || name == "continue" {
+            let mut tgt: String = llvm_env_get_var_ty(cur_env, "__while_end__");
+            if name == "continue" {
+                tgt = llvm_env_get_var_ty(cur_env, "__while_cond__");
+            }
+            if tgt != "" {
+                println("  br label %" + tgt);
+                cur_env = llvm_env_add_var(cur_env, "__did_ret__", "1");
+            }
+            p = p + 1;
+            if p < n && field_at(list_get(toks, p), 0) == "SEMI" { p = p + 1; }
+            let mut outb: List[String] = list_new();
+            outb = list_push(outb, p.to_string());
+            outb = list_push(outb, list_get(cur_env, 0));
+            outb = list_push(outb, list_get(cur_env, 1));
+            outb = list_push(outb, list_get(cur_env, 2));
+            outb = list_push(outb, list_get(cur_env, 3));
+            outb = list_push(outb, list_get(cur_env, 4));
+            return outb;
+        }
+        if p + 3 < n { if field_at(list_get(toks, p + 1), 0) == "DOT" && field_at(list_get(toks, p + 3), 0) == "EQ" { let fname: String = field_at(list_get(toks, p + 2), 3); let stab: String = llvm_env_get_var_ty(cur_env, "__stab__"); let vty: String = llvm_env_get_var_ty(cur_env, name); let mut sname: String = llvm_ty_map(vty); if chars_len(sname) >= 8 && str_slice(sname, 0, 8) == "%struct." { sname = str_slice(sname, 8, chars_len(sname)); }
+                let fidx: Int = 0 + llvm_struct_field_idx(stab, sname, fname);
+                let fty: String = llvm_struct_field_ty(stab, sname, fname);
+                let parent_env: List[String] = cur_env;
+                let rhs_res: List[String] = llvm_emit_expr(toks, p + 4, n, cur_env);
+                let rhs_val: String = list_get(rhs_res, 0);
+                p = parse_int(list_get(rhs_res, 2));
+                cur_env = list_new();
+                cur_env = list_push(cur_env, list_get(rhs_res, 3));
+                cur_env = list_push(cur_env, list_get(rhs_res, 4));
+                cur_env = list_push(cur_env, list_get(rhs_res, 5));
+                cur_env = list_push(cur_env, list_get(rhs_res, 6));
+                cur_env = list_push(cur_env, list_get(rhs_res, 7));
+                let slot_name: String = llvm_env_slot(parent_env, name);
+                let gep_res: List[String] = llvm_emit_struct_gep(sname, slot_name, fidx, cur_env);
+                let fptr: String = list_get(gep_res, 0);
+                cur_env = list_new();
+                cur_env = list_push(cur_env, list_get(gep_res, 1));
+                cur_env = list_push(cur_env, list_get(gep_res, 2));
+                cur_env = list_push(cur_env, list_get(gep_res, 3));
+                cur_env = list_push(cur_env, list_get(gep_res, 4));
+                cur_env = list_push(cur_env, list_get(gep_res, 5));
+                println("  store " + fty + " " + rhs_val + ", " + fty + "* " + fptr + ", align 8");
+                if p < n && field_at(list_get(toks, p), 0) == "SEMI" { p = p + 1; }
+                let mut out_m: List[String] = list_new();
+                out_m = list_push(out_m, p.to_string());
+                out_m = list_push(out_m, list_get(cur_env, 0));
+                out_m = list_push(out_m, list_get(cur_env, 1));
+                out_m = list_push(out_m, list_get(cur_env, 2));
+                out_m = list_push(out_m, list_get(cur_env, 3));
+                out_m = list_push(out_m, list_get(cur_env, 4));
+                return out_m;
+            }
+        }
+        if p + 1 < n { if field_at(list_get(toks, p + 1), 0) == "EQ" { return llvm_emit_assign_stmt(name, toks, p + 1, n, cur_env); }
+        }
+    }
+    let expr_res: List[String] = llvm_emit_expr(toks, p, n, cur_env);
+    p = parse_int(list_get(expr_res, 2));
+    cur_env = list_new();
+    cur_env = list_push(cur_env, list_get(expr_res, 3));
+    cur_env = list_push(cur_env, list_get(expr_res, 4));
+    cur_env = list_push(cur_env, list_get(expr_res, 5));
+    cur_env = list_push(cur_env, list_get(expr_res, 6));
+    cur_env = list_push(cur_env, list_get(expr_res, 7));
+    if p < n && field_at(list_get(toks, p), 0) == "SEMI" { p = p + 1; }
+    let mut out: List[String] = list_new();
+    out = list_push(out, p.to_string());
+    out = list_push(out, list_get(cur_env, 0));
+    out = list_push(out, list_get(cur_env, 1));
+    out = list_push(out, list_get(cur_env, 2));
+    out = list_push(out, list_get(cur_env, 3));
+    out = list_push(out, list_get(cur_env, 4));
+    return out;
+}
+// # Lower verify blocks to LLVM IR
+//
+// Logline: Read verify <name> { stmts } and emit an internal void function @__oo_verify_<name> that guards on getenv("OODA_TEST") and registers a @llvm.global_ctors entry so the verify runs at process startup when ooda test sets OODA_TEST=1.
+//
+// Setup: Called from llvm_emit.oo when KW_VERIFY is encountered. Caller passes the verify name; this function walks past KW_VERIFY/IDENT/LBRACE and returns the position after the matching RBRACE.
+//
+// Beats:
+//   1. Advance past KW_VERIFY and the optional name IDENT, then require LBRACE.
+//   2. Emit the OODA_TEST string constant, the getenv declare, and define internal void @__oo_verify_<name> with entry/vc/vr/vs labels.
+//   3. Lower the inner stmts via llvm_emit_block; branch to %vs unless the block already returned.
+//   4. Emit the function's str_table inline and append a @llvm.global_ctors entry referencing the function.
+pub fn llvm_emit_verify(toks: List[String], pos: Int, n: Int, name: String) -> Int {
+    let mut p: Int = pos;
+    if p < n && field_at(list_get(toks, p), 0) == "KW_VERIFY" { p = p + 1; }
+    if p < n && field_at(list_get(toks, p), 0) == "IDENT" { p = p + 1; }
+    if p >= n { return p; }
+    if field_at(list_get(toks, p), 0) != "LBRACE" { return p; }
+    let fn_name: String = "@__oo_verify_" + name;
+    let str_name: String = "@.str.ooda_v_" + name;
+    let mut env: List[String] = llvm_env_new();
+    env = llvm_env_add_var(env, "__strpfx__", "v_" + name);
+    println(str_name + " = private unnamed_addr constant [10 x i8] c\"OODA_TEST\\00\"");
+    println("declare i8* @getenv(i8*)");
+    println("define internal void " + fn_name + "() {");
+    println("entry:");
+    println("  %envp = call i8* @getenv(i8* getelementptr inbounds ([10 x i8], [10 x i8]* " + str_name + ", i64 0, i64 0))");
+    println("  %isn = icmp eq i8* %envp, null");
+    println("  br i1 %isn, label %vs, label %vc");
+    println("vc:");
+    println("  %c = load i8, i8* %envp, align 1");
+    println("  %ise = icmp eq i8 %c, 0");
+    println("  br i1 %ise, label %vs, label %vr");
+    println("vr:");
+    let br: List[String] = llvm_emit_block(toks, p, n, env);
+    p = parse_int(list_get(br, 0));
+    let vars: String = list_get(br, 4);
+    let str_table: String = list_get(br, 5);
+    if !llvm_env_vars_has(vars, "__did_ret__") { println("  br label %vs"); }
+    println("vs:");
+    println("  ret void");
+    println("}");
+    if str_table != "" { println(str_table); }
+    println("@llvm.global_ctors = appending global [1 x { i32, void ()*, i8* }] [{ i32, void ()*, i8* } { i32 65535, void ()* " + fn_name + ", i8* null }]");
+    return p;
+}

@@ -1,0 +1,41 @@
+// # WebAssembly Source Maps Base64-VLQ Codec
+//
+// Logline: Base64 Variable-Length Quantity (VLQ) encoder and decoder for Source Maps v3 position delta serializations.
+//
+// Setup: Pure character and bitwise codec for Base64 URL-safe alphabet transformations.
+//
+// Beats:
+//   1. Encode signed integers to variable-length Base64-VLQ sequences.
+//   2. Encode 4-element and 5-element Source Map position segments.
+//   3. Handle continuation bits (0x20) and sign bit encapsulation.
+//   4. Decode Base64-VLQ character sequences back to signed delta integers.
+
+pub fn vlq_base64_char(val: Int) -> String {
+    let chars: String = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+let idx: Int = val & 63;
+return char_at(chars, idx);
+}
+
+pub fn vlq_encode_int(val: Int) -> String {
+    let mut vlq: Int = if val < 0 { ((-val) * 2) + 1 } else { val * 2 };
+    let mut out: String = "";
+    let mut more: Bool = true;
+    while more { let mut digit: Int = vlq & 31;
+    vlq = vlq / 32;
+    if vlq > 0 { digit = digit | 32;
+    } else {
+            more = false;
+        }
+        out = out + vlq_base64_char(digit);
+    }
+    return out;
+}
+
+pub fn vlq_encode_segment4(gen_col: Int, src_idx: Int, src_line: Int, src_col: Int) -> String {
+    let mut out: String = "";
+out = out + vlq_encode_int(gen_col);
+out = out + vlq_encode_int(src_idx);
+out = out + vlq_encode_int(src_line);
+out = out + vlq_encode_int(src_col);
+return out;
+}

@@ -1,0 +1,135 @@
+// # Typed AST representation
+//
+// Logline: Provides algebraic type terms, constructors, and structural predicates for recursive AST lowering.
+//
+// Setup: Pure data constructors matching openOODA AST type specifications.
+//
+// Beats:
+//   1. Primitive type constructors: Int, Float, Bool, String, Unit.
+//   2. Composite algebraic constructors: List, Option, Result, Box, Ref, RefMut.
+//   3. Structural inspection accessors and predicate queries.
+
+pub fn ast_ty_int() -> String {
+    return "TyInt";
+}
+pub fn ast_ty_float() -> String {
+    return "TyFloat";
+}
+pub fn ast_ty_bool() -> String {
+    return "TyBool";
+}
+pub fn ast_ty_str() -> String {
+    return "TyStr";
+}
+pub fn ast_ty_unit() -> String {
+    return "TyUnit";
+}
+pub fn ast_ty_f32x8() -> String {
+    return "TyF32x8";
+}
+pub fn ast_ty_f64x4() -> String {
+    return "TyF64x4";
+}
+pub fn ast_ty_list(elem: String) -> String {
+    return "TyList(" + elem + ")";
+}
+pub fn ast_ty_option(elem: String) -> String {
+    return "TyOption(" + elem + ")";
+}
+pub fn ast_ty_result(ok: String, err: String) -> String {
+    return "TyResult(" + ok + "," + err + ")";
+}
+pub fn ast_ty_box(elem: String) -> String {
+    return "TyBox(" + elem + ")";
+}
+pub fn ast_ty_name(name: String) -> String {
+    return "TyName(" + name + ")";
+}
+pub fn ast_ty_cap(name: String) -> String {
+    return "TyCap(" + name + ")";
+}
+pub fn ast_ty_ref(inner: String) -> String {
+    return "TyRef(" + inner + ")";
+}
+pub fn ast_ty_ref_mut(inner: String) -> String {
+    return "TyRefMut(" + inner + ")";
+}
+
+fn ast_ty_tag_inner(ty: String) -> String {
+    let n: Int = chars_len(ty);
+let mut i: Int = 0;
+while i < n { if char_at(ty, i) == "(" { return str_slice(ty, 0, i);
+}
+        i = i + 1;
+    }
+    return ty;
+}
+
+fn ast_ty_arg_inner(ty: String, idx: Int) -> String {
+    let n: Int = chars_len(ty);
+let mut open_p: Int = 0 - 1;
+let mut i: Int = 0;
+while i < n { if char_at(ty, i) == "(" && open_p == 0 - 1 { open_p = i;
+}
+        i = i + 1;
+    }
+    if open_p == 0 - 1 { return "";
+    }
+    let inner: String = str_slice(ty, open_p + 1, n - 1);
+    if idx == 0 { let mut j: Int = 0;
+    let in_len: Int = chars_len(inner);
+    while j < in_len { if char_at(inner, j) == "," { return str_slice(inner, 0, j);
+    }
+            j = j + 1;
+        }
+        return inner;
+    }
+    if idx == 1 { let mut j: Int = 0;
+    let in_len: Int = chars_len(inner);
+    while j < in_len { if char_at(inner, j) == "," { return str_slice(inner, j + 1, in_len);
+    }
+            j = j + 1;
+        }
+    }
+    return "";
+}
+
+pub fn ast_ty_tag(ty: String) -> String {
+    return ast_ty_tag_inner(ty);
+}
+
+pub fn ast_ty_elem(ty: String) -> String {
+    return ast_ty_arg_inner(ty, 0);
+}
+
+pub fn ast_ty_ok(ty: String) -> String {
+    return ast_ty_arg_inner(ty, 0);
+}
+
+pub fn ast_ty_err(ty: String) -> String {
+    return ast_ty_arg_inner(ty, 1);
+}
+
+pub fn ast_ty_name_val(ty: String) -> String {
+    let tag: String = ast_ty_tag_inner(ty);
+if tag == "TyName" || tag == "TyCap" { return ast_ty_arg_inner(ty, 0);
+}
+    return ty;
+}
+
+pub fn ast_ty_is_primitive(ty: String) -> Bool {
+    let tag: String = ast_ty_tag_inner(ty);
+if tag == "TyInt" || tag == "TyFloat" || tag == "TyBool" || tag == "TyStr" || tag == "TyUnit" || tag == "TyCap" || tag == "TyF32x8" || tag == "TyF64x4" { return true;
+}
+    if ty == "Int" || ty == "Float" || ty == "Bool" || ty == "String" || ty == "Void" || ty == "void" || ty == "f32x8" || ty == "f64x4" {
+        return true;
+    }
+    return false;
+}
+
+pub fn ast_ty_is_composite(ty: String) -> Bool {
+    let tag: String = ast_ty_tag_inner(ty);
+if tag == "TyList" || tag == "TyOption" || tag == "TyResult" || tag == "TyBox" { return true;
+}
+    return false;
+}

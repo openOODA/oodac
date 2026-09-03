@@ -1,0 +1,252 @@
+// # WebAssembly Type System & Function Signatures
+//
+// Logline: WebAssembly 1.0 value types, reference types, and binary function type signature encoding.
+//
+// Setup: Import wasm_leb128.oo for type vector length prefix encoding.
+//
+// Beats:
+//   1. Define primitive value types (i32, i64, f32, f64, externref, funcref).
+//   2. Define empty block signatures and type names.
+//   3. Encode composite function type vectors.
+//   4. Validate external import and export type descriptors.
+
+import "wasm_leb128.oo";
+
+
+// Value Type Constants
+pub fn wasm_val_type_i32() -> Int {
+    return 127;
+}
+pub fn wasm_val_type_i64() -> Int {
+    return 126;
+}
+pub fn wasm_val_type_f32() -> Int {
+    return 125;
+}
+pub fn wasm_val_type_f64() -> Int {
+    return 124;
+}
+pub fn wasm_val_type_funcref() -> Int {
+    return 112;
+}
+pub fn wasm_val_type_externref() -> Int {
+    return 111;
+}
+pub fn wasm_val_type_str() -> Int {
+    return wasm_val_type_i32();
+}
+pub fn wasm_block_type_empty() -> Int {
+    return 64;
+}
+
+pub fn wasm_val_type_name(vt: Int) -> String {
+    if vt == 127 { return "i32"; } if vt == 126 { return "i64"; } if vt == 125 { return "f32"; }
+    if vt == 124 { return "f64"; } if vt == 112 { return "funcref"; } if vt == 111 { return "externref"; }
+    if vt == 64 { return "void"; } return "unknown";
+}
+
+pub fn wasm_func_type(params: List[Int], results: List[Int]) -> List[Int] {
+    let mut out: List[Int] = list_new();
+    out = list_push(out, 96);
+    let p_leb: List[Int] = encode_u32_leb128(list_len(params));
+    let mut i: Int = 0;
+    while i < list_len(p_leb) { out = list_push(out, list_get(p_leb, i)); i = i + 1; }
+    i = 0;
+    while i < list_len(params) { out = list_push(out, list_get(params, i)); i = i + 1; }
+    let r_leb: List[Int] = encode_u32_leb128(list_len(results));
+    i = 0;
+    while i < list_len(r_leb) { out = list_push(out, list_get(r_leb, i)); i = i + 1; }
+    i = 0;
+    while i < list_len(results) { out = list_push(out, list_get(results, i)); i = i + 1; }
+    return out;
+}
+
+pub fn wasm_func_type_equal(a: List[Int], b: List[Int]) -> Bool {
+    let na: Int = list_len(a);
+    if na != list_len(b) { return false; }
+    let mut i: Int = 0;
+    while i < na {
+        if list_get(a, i) != list_get(b, i) { return false; }
+        i = i + 1;
+    }
+    return true;
+}
+
+
+type WasmEnv = struct {
+    var_names: List[String],
+    var_indices: List[Int],
+    var_types: List[Int],
+    var_is_str: List[Int],
+    var_count: Int,
+    local_types: List[Int],
+    func_names: List[String],
+    func_indices: List[Int],
+    func_count: Int,
+    loop_break_depths: List[Int],
+    loop_continue_depths: List[Int],
+    current_block_depth: Int,
+    bytecode: List[Int],
+    target_mode: String,
+    default_int_type: Int,
+    field_names: List[String],
+    field_offsets: List[Int],
+    field_types: List[Int]
+};
+
+fn wasm_env_default_int(default_int: Int) -> Int {
+    if default_int == wasm_val_type_i64() { return wasm_val_type_i64(); }
+    return wasm_val_type_i32();
+}
+
+pub fn wasm_env_new(target_mode: String, default_int: Int) -> WasmEnv {
+    return WasmEnv {
+        var_names: list_new(),
+        var_indices: list_new(),
+        var_types: list_new(),
+        var_is_str: list_new(),
+        var_count: 0,
+        local_types: list_new(),
+        func_names: list_new(),
+        func_indices: list_new(),
+        func_count: 0,
+        loop_break_depths: list_new(),
+        loop_continue_depths: list_new(),
+        current_block_depth: 0,
+        bytecode: list_new(),
+        target_mode: target_mode,
+        default_int_type: wasm_env_default_int(default_int),
+        field_names: list_new(),
+        field_offsets: list_new(),
+        field_types: list_new()
+    };
+}
+
+pub fn wasm_env_emit(env: &mut WasmEnv, op: Int) {
+    (*env).bytecode = list_push((*env).bytecode, op);
+}
+pub fn wasm_env_emit_byte(env: &mut WasmEnv, b: Int) {
+    (*env).bytecode = list_push((*env).bytecode, b);
+}
+
+pub fn wasm_env_emit_bytes(env: &mut WasmEnv, bs: List[Int]) {
+    let n: Int = list_len(bs);
+    let mut i: Int = 0;
+    while i < n { (*env).bytecode = list_push((*env).bytecode, list_get(bs, i)); i = i + 1; }
+}
+
+pub fn wasm_env_emit_u32(env: &mut WasmEnv, val: Int) {
+    wasm_env_emit_bytes(env, encode_u32_leb128(val));
+}
+pub fn wasm_env_emit_i32(env: &mut WasmEnv, val: Int) {
+    wasm_env_emit_bytes(env, encode_i32_leb128(val));
+}
+pub fn wasm_env_emit_i64(env: &mut WasmEnv, val: Int) {
+    wasm_env_emit_bytes(env, encode_i64_leb128(val));
+}
+
+pub fn wasm_env_bind_var_ext(env: &mut WasmEnv, name: String, ty: Int, is_str: Int) -> Int {
+    let slot: Int = list_len((*env).local_types); let mut loc_types: List[Int] = (*env).local_types; let mut v_names: List[String] = (*env).var_names; let mut v_indices: List[Int] = (*env).var_indices; let mut v_types: List[Int] = (*env).var_types; let mut v_is_str: List[Int] = (*env).var_is_str; (*env).local_types = list_push(loc_types, ty); (*env).var_names = list_push(v_names, name); (*env).var_indices = list_push(v_indices, slot); (*env).var_types = list_push(v_types, ty); (*env).var_is_str = list_push(v_is_str, is_str); (*env).var_count = (*env).var_count + 1; return slot;
+}
+
+pub fn wasm_env_bind_var(env: &mut WasmEnv, name: String, ty: Int) -> Int {
+    return wasm_env_bind_var_ext(env, name, ty, 0);
+}
+
+pub fn wasm_env_lookup_var(env: &WasmEnv, name: String) -> Int {
+    let v_names: List[String] = (*env).var_names; let v_indices: List[Int] = (*env).var_indices; let mut i: Int = (*env).var_count - 1; while i >= 0 { if list_get(v_names, i) == name { return list_get(v_indices, i);
+}
+        i = i - 1;
+    }
+    return -1;
+}
+
+pub fn wasm_env_lookup_type(env: &WasmEnv, name: String) -> Int {
+    let v_names: List[String] = (*env).var_names; let v_types: List[Int] = (*env).var_types; let mut i: Int = (*env).var_count - 1; while i >= 0 { if list_get(v_names, i) == name { return list_get(v_types, i);
+}
+        i = i - 1;
+    }
+    return (*env).default_int_type;
+}
+
+pub fn wasm_env_lookup_is_str(env: &WasmEnv, name: String) -> Int {
+    let v_names: List[String] = (*env).var_names;
+    let v_is_str: List[Int] = (*env).var_is_str;
+    let mut i: Int = (*env).var_count - 1;
+    while i >= 0 {
+        if list_get(v_names, i) == name {
+            if i < list_len(v_is_str) { return list_get(v_is_str, i); }
+            return 0;
+        }
+        i = i - 1;
+    }
+    return 0;
+}
+
+pub fn wasm_env_reg_field(env: &mut WasmEnv, fname: String, offset: Int, fty: Int) {
+    let mut f_names: List[String] = (*env).field_names;
+    let mut f_offsets: List[Int] = (*env).field_offsets;
+    let mut f_types: List[Int] = (*env).field_types;
+    (*env).field_names = list_push(f_names, fname);
+    (*env).field_offsets = list_push(f_offsets, offset);
+    (*env).field_types = list_push(f_types, fty);
+}
+
+pub fn wasm_env_field_offset(env: &WasmEnv, fname: String) -> Int {
+    let f_names: List[String] = (*env).field_names;
+    let f_offsets: List[Int] = (*env).field_offsets;
+    let n: Int = list_len(f_names);
+    let mut i: Int = n - 1;
+    while i >= 0 {
+        if list_get(f_names, i) == fname { return list_get(f_offsets, i); }
+        i = i - 1;
+    }
+    return 8;
+}
+
+pub fn wasm_env_field_type(env: &WasmEnv, fname: String) -> Int {
+    let f_names: List[String] = (*env).field_names;
+    let f_types: List[Int] = (*env).field_types;
+    let n: Int = list_len(f_names);
+    let mut i: Int = n - 1;
+    while i >= 0 {
+        if list_get(f_names, i) == fname { return list_get(f_types, i); }
+        i = i - 1;
+    }
+    return (*env).default_int_type;
+}
+
+pub fn wasm_env_bind_func(env: &mut WasmEnv, name: String, idx: Int) {
+    let mut fn_names: List[String] = (*env).func_names;
+    let mut fn_indices: List[Int] = (*env).func_indices;
+    (*env).func_names = list_push(fn_names, name);
+    (*env).func_indices = list_push(fn_indices, idx);
+    (*env).func_count = (*env).func_count + 1;
+}
+
+pub fn wasm_env_lookup_func(env: &WasmEnv, name: String) -> Int {
+    let fn_names: List[String] = (*env).func_names; let fn_indices: List[Int] = (*env).func_indices; let mut i: Int = (*env).func_count - 1; while i >= 0 { if list_get(fn_names, i) == name { return list_get(fn_indices, i);
+}
+        i = i - 1;
+    }
+    return -1;
+}
+
+pub fn wasm_env_push_loop(env: &mut WasmEnv, br_d: Int, cont_d: Int) {
+    (*env).loop_break_depths = list_push((*env).loop_break_depths, br_d);
+    (*env).loop_continue_depths = list_push((*env).loop_continue_depths, cont_d);
+}
+
+pub fn wasm_list_truncate(l: List[Int], target_len: Int) -> List[Int] {
+    let mut out: List[Int] = list_new();
+    let mut i: Int = 0;
+    while i < target_len { out = list_push(out, list_get(l, i)); i = i + 1; }
+    return out;
+}
+
+pub fn wasm_env_pop_loop(env: &mut WasmEnv) {
+    let n_b: Int = list_len((*env).loop_break_depths);
+    if n_b > 0 { (*env).loop_break_depths = wasm_list_truncate((*env).loop_break_depths, n_b - 1); (*env).loop_continue_depths = wasm_list_truncate((*env).loop_continue_depths, n_b - 1); }
+}
+
+

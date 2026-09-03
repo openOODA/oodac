@@ -1,0 +1,83 @@
+// # Map call names to C result types
+//
+// Logline: Lowers a few string free names, picks slist vs ilist C names, and returns the C result type of a known call.
+//
+// Setup: emit uses these when lowering a call; empty means unknown or a special form such as Ok/Err.
+//
+// Beats:
+//   1. c_lower_call_name maps chars_len, char_at, str_slice, char_is_*, and str_contains to oo_* and leaves pack_* as-is.
+//   2. c_list_c_name maps list_new, push, get, set, and len onto slist, ilist, flist, oo_l_Name_*, or oo_ll_*.
+//   3. c_call_result_ty returns OoResS, OoResV, OoStr, OoIList, OoSList, long long, double, or int for known names, else empty.
+
+import "c_emit_call_ty.oo";
+
+
+
+pub fn c_lower_call_name(name: String) -> String {
+    if name == "chars_len" { return "oo_chars_len";
+}
+    if name == "char_at" {
+        return "oo_char_at";
+    }
+    if name == "str_slice" {
+        return "oo_str_slice";
+    }
+    if name == "char_is_alpha" {
+        return "oo_char_is_alpha";
+    }
+    if name == "char_is_digit" {
+        return "oo_char_is_digit";
+    }
+    if name == "char_is_space" {
+        return "oo_char_is_space";
+    }
+    if name == "str_contains" {
+        return "oo_str_contains";
+    }
+    if name == "tok_line" {
+        return "oo_tok_line";
+    }
+    if name == "pack_skip" || name == "pack_tok" || name == "pack_err" {
+        return name;
+    }
+    // Ok/Err lowered specially in primary (not via cname)
+    return "";
+}
+
+pub fn c_list_c_name(op: String, kind: String) -> String {
+    let mut k: String = kind;
+if k == "" { k = "I";
+}
+    if k == "LF" {
+        k = "F";
+    }
+    return ty_list_op_name(k, op);
+}
+
+// C type for known call results ("" = unknown).
+pub fn c_call_result_ty(name: String) -> String {
+    if c_is_res_s_call(name) { return "OoResS";
+}
+    if c_is_res_v_call(name) {
+        return "OoResV";
+    }
+    if c_is_str_call(name) {
+        return "OoStr";
+    }
+    if c_is_ilist_call(name) {
+        return "OoIList";
+    }
+    if c_is_slist_call(name) {
+        return "OoSList";
+    }
+    if c_is_i64_call(name) {
+        return "long long";
+    }
+    if c_is_f64_call(name) {
+        return "double";
+    }
+    if c_is_i32_call(name) {
+        return "int";
+    }
+    return "";
+}

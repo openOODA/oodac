@@ -1,0 +1,234 @@
+// # Emit raw AArch64 decimal integer write
+//
+// Logline: Emits AArch64 GAS for println(Int) and let n: Int = INT; by folding the int literal (or INT op INT) into a standalone _println_int routine and a tiny _start that calls it.
+//
+// Setup: tokenize_lines, a64_tok_k, a64_tok_t, a64_int_digits, a64_is_alu, and a64_alu_i exist in aarch64_emit_harv.oo and aarch64_emit_num.oo. The output uses the same GAS dialect (clang -target aarch64-linux-gnu) as aarch64_emit_sys.oo.
+//
+// Beats:
+//   1. Match fn main() { println([MINUS] (INT | INT op INT)); } or top-level let n: Int = [MINUS] (INT | INT op INT);.
+//   2. Emit _println_int routine: x0 input, div by 10 into a 32-byte stack buffer, then svc #0 for SYS_write (64).
+//   3. Emit _start and main that load the int into x0, bl _println_int, and exit via svc #0 for SYS_exit (93).
+//
+// residual: helper calls, -bound-id, and parenthesized ALU are out of scope; the fold reuses a64_alu_i from aarch64_emit_num.oo for the INT op INT cases.
+
+
+import "aarch64_emit_const_harvest.oo";
+
+import "aarch64_emit_num.oo";
+
+
+// Fold [MINUS] (INT | INT ALU INT) starting at p. Returns the folded int as a string, or "" on shape mismatch.
+fn aarch64_fold_int_at(toks: List[String], n: Int, p: Int) -> String {
+    let mut q = p;
+let mut neg = false;
+if q < n && a64_tok_k(toks, q) == "MINUS" { neg = true;
+q = q + 1;
+}
+    if q >= n || a64_tok_k(toks, q) != "INT" {
+        return "";
+    }
+    let base_t: String = a64_tok_t(toks, q);
+    let base_v: Int = 0 + a64_int_digits(base_t);
+    if base_v < 0 { return "";
+    }
+    q = q + 1;
+    if q < n && a64_is_alu(a64_tok_k(toks, q)) {
+        if q + 1 >= n || a64_tok_k(toks, q + 1) != "INT" {
+            return "";
+        }
+        let op: String = a64_tok_k(toks, q);
+        let rhs_v: Int = 0 + a64_int_digits(a64_tok_t(toks, q + 1));
+        if rhs_v < 0 { return "";
+        }
+        let folded: String = a64_alu_i(op, base_v, rhs_v);
+        if folded == "" {
+            return "";
+        }
+        if neg { return "-" + folded;
+        }
+        return folded;
+    }
+    if neg { return "-" + base_t;
+    }
+    return base_t;
+}
+
+// Match fn main() { println([MINUS] (INT | INT op INT)); }.
+// Returns the int literal (with sign) on match, else empty.
+fn aarch64_match_println_int_main(toks: List[String], n: Int) -> List[String] {
+    let empty: List[String] = list_new();
+    let mut i = 0;
+    while i < n { if a64_tok_k(toks, i) == "KW_FN" && i + 1 < n && a64_tok_t(toks, i + 1) == "main" { let p = i + 2;
+    if p + 4 < n && a64_tok_k(toks, p) == "LPAREN" && a64_tok_k(toks, p + 1) == "RPAREN" && a64_tok_k(toks, p + 2) == "LBRACE" && a64_tok_k(toks, p + 3) == "IDENT" && a64_tok_t(toks, p + 3) == "println" && a64_tok_k(toks, p + 4) == "LPAREN" { let folded: String = aarch64_fold_int_at(toks, n, p + 5);
+    if folded == "" { return empty;
+    }
+                let mut q = p + 5;
+                if a64_tok_k(toks, q) == "MINUS" {
+                    q = q + 1;
+                }
+                if a64_tok_k(toks, q) != "INT" {
+                    return empty;
+                }
+                q = q + 1;
+                if q < n && a64_is_alu(a64_tok_k(toks, q)) {
+                    if q + 1 >= n || a64_tok_k(toks, q + 1) != "INT" {
+                        return empty;
+                    }
+                    q = q + 2;
+                }
+                if q < n && a64_tok_k(toks, q) == "RPAREN" {
+                    q = q + 1;
+                    if q < n && a64_tok_k(toks, q) == "SEMI" { q = q + 1;
+                    }
+                    if q < n && a64_tok_k(toks, q) == "RBRACE" {
+                        let mut out: List[String] = list_new();
+                        out = list_push(out, folded);
+                        return out;
+                    }
+                }
+            }
+        }
+        i = i + 1;
+    }
+    return empty;
+}
+
+// Match top-level let n: Int = [MINUS] (INT | INT op INT);.
+// Returns the int literal (with sign) on match, else empty.
+fn aarch64_match_let_int_top(toks: List[String], n: Int) -> List[String] {
+    let empty: List[String] = list_new();
+    let mut i = 0;
+    while i < n { if a64_tok_k(toks, i) == "KW_LET" && i + 6 < n && a64_tok_k(toks, i + 1) == "IDENT" && a64_tok_k(toks, i + 2) == "COLON" && a64_tok_k(toks, i + 3) == "IDENT" && a64_tok_t(toks, i + 3) == "Int" && a64_tok_k(toks, i + 4) == "EQ" { let folded: String = aarch64_fold_int_at(toks, n, i + 5);
+    if folded == "" { return empty;
+    }
+            let mut q = i + 5;
+            if a64_tok_k(toks, q) == "MINUS" {
+                q = q + 1;
+            }
+            if a64_tok_k(toks, q) != "INT" {
+                return empty;
+            }
+            q = q + 1;
+            if q < n && a64_is_alu(a64_tok_k(toks, q)) {
+                if q + 1 >= n || a64_tok_k(toks, q + 1) != "INT" {
+                    return empty;
+                }
+                q = q + 2;
+            }
+            if q < n && a64_tok_k(toks, q) == "SEMI" {
+                let mut out: List[String] = list_new();
+                out = list_push(out, folded);
+                return out;
+            }
+        }
+        i = i + 1;
+    }
+    return empty;
+}
+
+// Public entry point. Try fn-main println first, then top-level let. Returns [] on shape mismatch.
+pub fn aarch64_match_int_write(src: String) -> List[String] {
+    let empty: List[String] = list_new();
+    let total: Int = chars_len(src);
+    if total == 0 { return empty;
+    }
+    let toks: List[String] = tokenize_lines(src);
+    let n = list_len(toks);
+    if n < 6 { return empty;
+    }
+    let p: List[String] = aarch64_match_println_int_main(toks, n);
+    if list_len(p) >= 1 { return p;
+    }
+    let l: List[String] = aarch64_match_let_int_top(toks, n);
+    if list_len(l) >= 1 { return l;
+    }
+    return empty;
+}
+
+// Emit the _println_int routine. x0 = input int. Uses x9 as write pointer (grows down from sp+48).
+// Stack frame is 48 bytes: 16 for the saved pair, 32 for the digit buffer.
+pub fn aarch64_emit_int_routine() {
+    println("    .globl _println_int\n    .p2align 4\n_println_int:");
+    println("    stp x29, x30, [sp, #-48]!");
+    println("    mov x29, sp");
+    println("    mov x10, x0");
+    println("    add x9, sp, #48");
+    println("    mov x11, #0");
+    println("    mov x12, #0");
+    println("    cbnz x10, .Lapi_nonzero");
+    println("    sub x9, x9, #1");
+    println("    mov w13, #48");
+    println("    strb w13, [x9]");
+    println("    mov x12, #1");
+    println("    b .Lapi_write");
+    println(".Lapi_nonzero:");
+    println("    tbnz x10, #63, .Lapi_neg");
+    println("    b .Lapi_loop");
+    println(".Lapi_neg:");
+    println("    neg x10, x10");
+    println("    mov x11, #1");
+    println(".Lapi_loop:");
+    println("    cbz x10, .Lapi_sign");
+    println("    mov x13, #10");
+    println("    udiv x14, x10, x13");
+    println("    msub x15, x14, x13, x10");
+    println("    add x15, x15, #48");
+    println("    sub x9, x9, #1");
+    println("    strb w15, [x9]");
+    println("    add x12, x12, #1");
+    println("    mov x10, x14");
+    println("    b .Lapi_loop");
+    println(".Lapi_sign:");
+    println("    cbz x11, .Lapi_write");
+    println("    sub x9, x9, #1");
+    println("    mov w13, #45");
+    println("    strb w13, [x9]");
+    println("    add x12, x12, #1");
+    println(".Lapi_write:");
+    println("    mov x8, #64");
+    println("    mov x0, #1");
+    println("    mov x1, x9");
+    println("    mov x2, x12");
+    println("    svc #0");
+    println("    ldp x29, x30, [sp], #48");
+    println("    ret");
+}
+// Emit a mov x0, #<num_str> for the int immediate. Small values use a single mov; larger ones split with movz/movk.
+fn aarch64_emit_mov_x0(num_str: String) {
+    let v: Int = parse_int(num_str);
+    if v >= 0 && v <= 65535 { println("    mov x0, #" + v.to_string());
+    return;
+    }
+    let mut u: Int = v;
+    let mut neg = false;
+    if u < 0 { neg = true;
+    u = 0 - u;
+    }
+    let lo = u % 65536;
+    let hi = u / 65536;
+    if neg { println("    mov x0, #0");
+    println("    movk x0, #" + i2s(65536 - lo) + ", lsl #0");
+    if hi > 0 { println("    movk x0, #" + i2s(65536 - hi) + ", lsl #16");
+    }
+        return;
+    }
+    println("    movz x0, #" + lo.to_string() + ", lsl #0");
+    if hi > 0 { println("    movk x0, #" + hi.to_string() + ", lsl #16");
+    }
+}
+// Emit _start + main that load num_str into x0, call _println_int, then exit via SYS_exit (93).
+pub fn aarch64_emit_int_write(num_str: String) {
+    println("# openOODA aarch64 product floor (GAS, Linux, clang -target aarch64-linux-gnu)");
+    println("    .arch armv8-a");
+    println("    .section .text");
+    println("    .globl _start");
+    println("    .globl main");
+    aarch64_emit_int_routine();
+    println("main:");
+    println("_start:");
+    aarch64_emit_mov_x0(num_str);
+    println("    bl _println_int");
+    println("    mov x8, #93");
+    println("    mov x0, #0");
+    println("    svc #0");
+}

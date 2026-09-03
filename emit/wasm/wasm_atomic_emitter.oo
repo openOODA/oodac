@@ -1,0 +1,156 @@
+// # WebAssembly Threads & Atomics Opcodes / WebAssembly Atomic Memory Lowering
+//
+// Logline: WebAssembly Threads (0xFE prefix) atomic sub-opcodes, memory alignment constants, and LEB128 encoders. Lowers atomic operations, shared memory configuration, and memory barriers into WebAssembly atomic bytecodes.
+//
+// Setup: Merged cohesive compiler module.
+//
+// Beats:
+//   1. Unified cohesive implementation.
+
+import "wasm_leb128.oo";
+
+
+pub fn atomic_op_notify() -> Int {
+    return 0;
+}
+pub fn atomic_op_wait32() -> Int {
+    return 1;
+}
+pub fn atomic_op_wait64() -> Int {
+    return 2;
+}
+pub fn atomic_op_fence() -> Int {
+    return 3;
+}
+
+pub fn atomic_op_i32_load() -> Int {
+    return 16;
+}
+pub fn atomic_op_i64_load() -> Int {
+    return 17;
+}
+pub fn atomic_op_i32_store() -> Int {
+    return 23;
+}
+pub fn atomic_op_i64_store() -> Int {
+    return 24;
+}
+
+pub fn atomic_op_i32_rmw_add() -> Int {
+    return 30;
+}
+pub fn atomic_op_i64_rmw_add() -> Int {
+    return 31;
+}
+pub fn atomic_op_i32_rmw_sub() -> Int {
+    return 37;
+}
+pub fn atomic_op_i64_rmw_sub() -> Int {
+    return 38;
+}
+pub fn atomic_op_i32_rmw_and() -> Int {
+    return 44;
+}
+pub fn atomic_op_i64_rmw_and() -> Int {
+    return 45;
+}
+pub fn atomic_op_i32_rmw_or() -> Int {
+    return 51;
+}
+pub fn atomic_op_i64_rmw_or() -> Int {
+    return 52;
+}
+pub fn atomic_op_i32_rmw_xor() -> Int {
+    return 58;
+}
+pub fn atomic_op_i64_rmw_xor() -> Int {
+    return 59;
+}
+pub fn atomic_op_i32_rmw_xchg() -> Int {
+    return 65;
+}
+pub fn atomic_op_i64_rmw_xchg() -> Int {
+    return 66;
+}
+pub fn atomic_op_i32_rmw_cmpxchg() -> Int {
+    return 72;
+}
+pub fn atomic_op_i64_rmw_cmpxchg() -> Int {
+    return 73;
+}
+
+pub fn emit_atomic_simple(sub_op: Int) -> List[Int] {
+    let mut out: List[Int] = list_new();
+    out = list_push(out, 254);
+    // 0xFE
+    let leb: List[Int] = encode_u32_leb128(sub_op);
+    let mut i: Int = 0;
+    while i < list_len(leb) { out = list_push(out, list_get(leb, i));
+    i = i + 1;
+    }
+    return out;
+}
+
+pub fn emit_atomic_mem(sub_op: Int, align_pow: Int, offset: Int) -> List[Int] {
+    let mut out: List[Int] = list_new();
+    out = list_push(out, 254);
+    // 0xFE
+    let leb_op: List[Int] = encode_u32_leb128(sub_op);
+    let mut i: Int = 0;
+    while i < list_len(leb_op) { out = list_push(out, list_get(leb_op, i));
+    i = i + 1;
+    }
+    let leb_a: List[Int] = encode_u32_leb128(align_pow);
+    let mut j: Int = 0;
+    while j < list_len(leb_a) { out = list_push(out, list_get(leb_a, j));
+    j = j + 1;
+    }
+    let leb_o: List[Int] = encode_u32_leb128(offset);
+    let mut k: Int = 0;
+    while k < list_len(leb_o) { out = list_push(out, list_get(leb_o, k));
+    k = k + 1;
+    }
+    return out;
+}
+
+pub fn emit_shared_memory_limits(initial_pages: Int, max_pages: Int) -> List[Int] {
+    let mut out: List[Int] = list_new();
+    out = list_push(out, 3);
+    // flags: 0x03 = has_max + shared
+    let leb_i: List[Int] = encode_u32_leb128(initial_pages);
+    let mut i: Int = 0;
+    while i < list_len(leb_i) { out = list_push(out, list_get(leb_i, i));
+    i = i + 1;
+    }
+    let leb_m: List[Int] = encode_u32_leb128(max_pages);
+    let mut j: Int = 0;
+    while j < list_len(leb_m) { out = list_push(out, list_get(leb_m, j));
+    j = j + 1;
+    }
+    return out;
+}
+
+pub fn lower_atomic_load_i32(offset: Int) -> List[Int] {
+    return emit_atomic_mem(atomic_op_i32_load(), 2, offset);
+    // align=2^2=4 bytes
+}
+
+pub fn lower_atomic_store_i32(offset: Int) -> List[Int] {
+    return emit_atomic_mem(atomic_op_i32_store(), 2, offset);
+}
+
+pub fn lower_atomic_add_i32(offset: Int) -> List[Int] {
+    return emit_atomic_mem(atomic_op_i32_rmw_add(), 2, offset);
+}
+
+pub fn lower_atomic_sub_i32(offset: Int) -> List[Int] {
+    return emit_atomic_mem(atomic_op_i32_rmw_sub(), 2, offset);
+}
+
+pub fn lower_atomic_cmpxchg_i32(offset: Int) -> List[Int] {
+    return emit_atomic_mem(atomic_op_i32_rmw_cmpxchg(), 2, offset);
+}
+
+pub fn lower_atomic_fence() -> List[Int] {
+    return emit_atomic_simple(atomic_op_fence());
+}

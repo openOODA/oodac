@@ -1,0 +1,13 @@
+// # Mangle a C function name by source file
+//
+// Logline: Return a C identifier for a function name, preserving global names for multi-module calls.
+//
+// Setup: C emitter naming shims.
+//
+// Beats:
+//   1. Return unmodified function name for C identifier resolution.
+//   2. Maintain <= 256 lines limit.
+
+pub fn c_mangle_fn_name(name: String, path: String) -> String {
+    return name;
+}

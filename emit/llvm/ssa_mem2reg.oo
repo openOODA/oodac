@@ -1,0 +1,217 @@
+// # Memory-to-Register (mem2reg) SSA Promotion Engine
+//
+// Logline: Promotes stack-allocated variables to SSA virtual registers with iterated dominance frontier (IDF) Phi placement, eliminating all load and store traffic across arbitrary CFGs.
+//
+// Setup: Pure optimization transformation replacing Alloca, Load, and Store instructions with SSA register values; relies on ssa_dominance_frontier for CFG, idom, DF, and IDF analysis.
+//
+// Beats:
+//   1. Identify candidate Alloca stack slots across all basic blocks.
+//   2. Compute dominance frontiers (DF) and iterated dominance frontiers (IDF) for Phi placement.
+//   3. Insert SSA Phi nodes at every block in the IDF of a slot's def blocks.
+//   4. Propagate reaching definitions through a block-ordered walk and rewrite loads and stores.
+
+import "ssa_ir.oo";
+import "ssa_dominance_frontier.oo";
+
+// Cross-block mem2reg entry point. Computes the function dominator tree and
+// dominance frontiers, then promotes all allocas. This is the public surface.
+pub fn ssa_mem2reg_promote_cross_block(fn_data: SsaFunction) -> SsaFunction {
+    return ssa_mem2reg_promote(fn_data);
+}
+
+pub fn ssa_mem2reg_promote(fn_data: SsaFunction) -> SsaFunction {
+    let n: Int = list_len(fn_data.inst_opcodes);
+    if n == 0 { return fn_data; }
+    let n_blocks: Int = fn_data.block_count;
+    let mut slot_count: Int = 0;
+    let mut max_reg: Int = 0;
+    let mut i: Int = 0;
+    while i < n {
+        let op: Int = list_get(fn_data.inst_opcodes, i);
+        let res: Int = list_get(fn_data.inst_results, i);
+        let imm: Int = list_get(fn_data.inst_imm_vals, i);
+        let lh: Int = list_get(fn_data.inst_lhs_vals, i);
+        if res > max_reg { max_reg = res; }
+        if imm > max_reg && op != ssa_op_br() && op != ssa_op_cond_br() { max_reg = imm; }
+        if lh > max_reg { max_reg = lh; }
+        if op == ssa_op_alloca() && res > slot_count { slot_count = res; }
+        i = i + 1;
+    }
+    if slot_count == 0 { return fn_data; }
+
+    let idom: List[Int] = ssa_compute_dominators(fn_data);
+    let df: List[Int] = ssa_compute_dominance_frontiers(fn_data, idom);
+
+    let mut def_blocks: List[Int] = list_new();
+    i = 0;
+    while i < n {
+        let op: Int = list_get(fn_data.inst_opcodes, i);
+        let bid: Int = list_get(fn_data.inst_block_ids, i);
+        if op == ssa_op_store() || op == ssa_op_store_lit() {
+            let slot: Int = list_get(fn_data.inst_imm_vals, i);
+            if slot > 0 && slot <= slot_count {
+                let pair: Int = slot * 10000 + bid;
+                if !ssa_m2r_contains(def_blocks, pair) {
+                    def_blocks = list_push(def_blocks, pair);
+                }
+            }
+        }
+        i = i + 1;
+    }
+
+    let mut next_vreg: Int = max_reg + 1;
+    let mut phi_bids: List[Int] = list_new();
+    let mut phi_slots: List[Int] = list_new();
+    let mut phi_vregs: List[Int] = list_new();
+    let mut s: Int = 1;
+    while s <= slot_count {
+        let mut dlist: List[Int] = list_new();
+        let mut d_i: Int = 0;
+        while d_i < list_len(def_blocks) {
+            let pair: Int = list_get(def_blocks, d_i);
+            if pair / 10000 == s {
+                dlist = list_push(dlist, pair % 10000);
+            }
+            d_i = d_i + 1;
+        }
+        if list_len(dlist) > 0 {
+            let idf: List[Int] = ssa_compute_idf(df, dlist);
+            let mut j: Int = 0;
+            while j < list_len(idf) {
+                let b: Int = list_get(idf, j);
+                phi_bids = list_push(phi_bids, b);
+                phi_slots = list_push(phi_slots, s);
+                phi_vregs = list_push(phi_vregs, next_vreg);
+                next_vreg = next_vreg + 1;
+                j = j + 1;
+            }
+        }
+        s = s + 1;
+    }
+
+    // Initialize per-slot reaching definition to 0 (undefined) and load map.
+    let mut reaching: List[Int] = list_new();
+    let mut load_map_from: List[Int] = list_new();
+    let mut load_map_to: List[Int] = list_new();
+    s = 0;
+    while s <= slot_count {
+        reaching = list_push(reaching, 0);
+        s = s + 1;
+    }
+
+    let mut out_ops: List[Int] = list_new();
+    let mut out_res: List[Int] = list_new();
+    let mut out_imms: List[Int] = list_new();
+    let mut out_lhss: List[Int] = list_new();
+    let mut out_bids: List[Int] = list_new();
+
+    // Walk each basic block in block-id order: emit phis, then rewrite.
+    let mut b: Int = 0;
+    while b < n_blocks {
+        let mut p: Int = 0;
+        while p < list_len(phi_bids) {
+            if list_get(phi_bids, p) == b {
+                let p_slot: Int = list_get(phi_slots, p);
+                let p_vreg: Int = list_get(phi_vregs, p);
+                out_ops = list_push(out_ops, ssa_op_phi());
+                out_res = list_push(out_res, p_vreg);
+                out_imms = list_push(out_imms, p_slot);
+                out_lhss = list_push(out_lhss, p_slot);
+                out_bids = list_push(out_bids, b);
+                reaching = ssa_m2r_set(reaching, p_slot, p_vreg);
+            }
+            p = p + 1;
+        }
+
+        i = 0;
+        while i < n {
+            let bid: Int = list_get(fn_data.inst_block_ids, i);
+            if bid == b {
+                let op: Int = list_get(fn_data.inst_opcodes, i);
+                let res: Int = list_get(fn_data.inst_results, i);
+                let imm: Int = list_get(fn_data.inst_imm_vals, i);
+                let lh: Int = list_get(fn_data.inst_lhs_vals, i);
+
+                if op == ssa_op_alloca() {
+                    // Drop the alloca: the slot lives as SSA registers now.
+                } else if op == ssa_op_store() || op == ssa_op_store_lit() {
+                    let slot: Int = imm;
+                    let val: Int = lh;
+                    let mapped_val: Int = (0 + ssa_m2r_resolve_map(load_map_from, load_map_to, val);
+                    reaching = ssa_m2r_set(reaching, slot, mapped_val);
+                } else if op == ssa_op_load() {
+                    let slot: Int = imm;
+                    let cur_def: Int = list_get(reaching, slot);
+                    load_map_from = list_push(load_map_from, res);
+                    load_map_to = list_push(load_map_to, cur_def);
+                } else {
+                    let new_lh: Int = (0 + ssa_m2r_resolve_map(load_map_from, load_map_to, lh);
+                    let mut new_imm: Int = imm;
+                    if op != ssa_op_br() && op != ssa_op_cond_br() && op != ssa_op_const() && op != ssa_op_const_forced() {
+                        new_imm = (0 + ssa_m2r_resolve_map(load_map_from, load_map_to, imm);
+                    }
+                    out_ops = list_push(out_ops, op);
+                    out_res = list_push(out_res, res);
+                    out_imms = list_push(out_imms, new_imm);
+                    out_lhss = list_push(out_lhss, new_lh);
+                    out_bids = list_push(out_bids, bid);
+                }
+            }
+            i = i + 1;
+        }
+        b = b + 1;
+    }
+
+    return SsaFunction {
+        name: fn_data.name,
+        return_type: fn_data.return_type,
+        block_count: fn_data.block_count,
+        block_names: fn_data.block_names,
+        inst_opcodes: out_ops,
+        inst_results: out_res,
+        inst_imm_vals: out_imms,
+        inst_lhs_vals: out_lhss,
+        inst_block_ids: out_bids
+    };
+}
+
+fn ssa_m2r_contains(xs: List[Int], v: Int) -> Bool {
+    let n: Int = list_len(xs);
+    let mut i: Int = 0;
+    while i < n {
+        if list_get(xs, i) == v { return true; }
+        i = i + 1;
+    }
+    return false;
+}
+
+fn ssa_m2r_set(xs: List[Int], idx: Int, val: Int) -> List[Int] {
+    let n: Int = list_len(xs);
+    let mut out: List[Int] = list_new();
+    let mut k: Int = 0;
+    while k < n {
+        if k == idx { out = list_push(out, val); } else { out = list_push(out, list_get(xs, k)); }
+        k = k + 1;
+    }
+    return out;
+}
+
+fn ssa_m2r_resolve_map(from_list: List[Int], to_list: List[Int], val: Int) -> Int {
+    let n: Int = list_len(from_list);
+    let mut cur: Int = val;
+    let mut guard: Int = 0;
+    let mut changed: Bool = true;
+    while changed && guard < 100 {
+        changed = false;
+        let mut i: Int = 0;
+        while i < n {
+            if list_get(from_list, i) == cur {
+                cur = list_get(to_list, i);
+                changed = true;
+            }
+            i = i + 1;
+        }
+        guard = guard + 1;
+    }
+    return cur;
+}

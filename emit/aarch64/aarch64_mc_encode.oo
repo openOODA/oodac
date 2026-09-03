@@ -1,0 +1,92 @@
+// # AArch64 instruction encodings
+//
+// Logline: Returns 32-bit AAPCS64 encodings for ALU, branches, BL/RET, SVC, and mmap.
+//
+// Setup: Pure integer encodings. No GNU as or ld.
+//
+// Beats:
+//   1. Encode ADD/SUB/MUL/SDIV/LSL/LSR.
+//   2. Encode B, B.cond, CBZ, CBNZ, BL, RET.
+//   3. Encode SVC 0 and MOVZ of mmap 222.
+
+pub fn a64_enc_add(rd: Int, rn: Int, rm: Int) -> Int {
+    let base: Int = 139 * 16777216;
+return base + (rm * 65536) + (rn * 32) + rd;
+}
+
+pub fn a64_enc_sub(rd: Int, rn: Int, rm: Int) -> Int {
+    let base: Int = 203 * 16777216;
+return base + (rm * 65536) + (rn * 32) + rd;
+}
+
+pub fn a64_enc_mul(rd: Int, rn: Int, rm: Int) -> Int {
+    let base: Int = 155 * 16777216 + 124 * 256;
+return base + (rm * 65536) + (rn * 32) + rd;
+}
+
+pub fn a64_enc_sdiv(rd: Int, rn: Int, rm: Int) -> Int {
+    let hi: Int = 154 * 16777216;
+let mid: Int = 192 * 65536;
+let opc: Int = 12 * 256;
+let w_rm: Int = rm * 65536;
+let w_rn: Int = rn * 32;
+return hi + mid + opc + w_rm + w_rn + rd;
+}
+
+pub fn a64_enc_lsl(rd: Int, rn: Int, sh: Int) -> Int {
+    let ubfm: Int = 211 * 16777216 + 64 * 65536;
+let amt: Int = sh & 63;
+let immr: Int = (64 - amt) & 63;
+let imms: Int = 63 - amt;
+let w_immr: Int = immr * 65536;
+let w_imms: Int = imms * 1024;
+let w_rn: Int = rn * 32;
+return ubfm + w_immr + w_imms + w_rn + rd;
+}
+
+pub fn a64_enc_lsr(rd: Int, rn: Int, sh: Int) -> Int {
+    let ubfm: Int = 211 * 16777216 + 64 * 65536;
+let immr: Int = sh & 63;
+let imms: Int = 63;
+let w_immr: Int = immr * 65536;
+let w_imms: Int = imms * 1024;
+let w_rn: Int = rn * 32;
+return ubfm + w_immr + w_imms + w_rn + rd;
+}
+
+pub fn a64_enc_b(imm26: Int) -> Int {
+    return 5 * 67108864 + (imm26 & 67108863);
+}
+
+pub fn a64_enc_bcond(cond: Int, imm19: Int) -> Int {
+    return 84 * 16777216 + ((imm19 & 524287) * 32) + (cond & 15);
+}
+
+pub fn a64_enc_cbz(rt: Int, imm19: Int) -> Int {
+    return 180 * 16777216 + ((imm19 & 524287) * 32) + (rt & 31);
+}
+
+pub fn a64_enc_cbnz(rt: Int, imm19: Int) -> Int {
+    return 181 * 16777216 + ((imm19 & 524287) * 32) + (rt & 31);
+}
+
+pub fn a64_enc_bl(imm26: Int) -> Int {
+    return 37 * 67108864 + (imm26 & 67108863);
+}
+
+pub fn a64_enc_ret() -> Int {
+    return 214 * 16777216 + 95 * 65536 + 3 * 256 + 192;
+}
+
+pub fn a64_enc_svc0() -> Int {
+    return 212 * 16777216 + 1;
+}
+
+pub fn a64_enc_mmap_sysno() -> Int {
+    return 222;
+}
+
+pub fn a64_enc_movz(rd: Int, imm: Int) -> Int {
+    let base: Int = 210 * 16777216 + 128 * 65536;
+return base + ((imm & 65535) * 32) + (rd & 31);
+}

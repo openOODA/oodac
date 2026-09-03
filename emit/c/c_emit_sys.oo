@@ -1,0 +1,206 @@
+// # Lower SysCap free names to C
+//
+// Logline: Map a sys_* free call to an oo_sys_* snippet when the first arg is a SysCap ident, or print ERR and exit, or return empty.
+//
+// Setup: c_arg_is_cap_ident, println, and process_exit exist; the call emitter tries this for sys_* names. Residual: epoll, inotify, and prctl are sealed stubs, not full async I/O.
+//
+// Beats:
+//   1. sys_spawn, sys_wait, and sys_kill require a cap ident in a0 and a nonempty a1, then return the matching oo_sys_* call.
+//   2. sys_epoll_create, sys_inotify_init, and sys_prctl do the same seal; inotify only checks a0.
+//   3. Any other name returns empty.
+
+import "c_emit_args.oo";
+
+pub fn c_emit_sys_call(t: String, a0: String, a1: String, args: String) -> String {
+    if t == "sys_spawn" { if a1 == "" || !c_arg_is_cap_ident(a0) { println("ERR\tc_emit\tsys_spawn requires &ProcessCap first arg");
+process_exit(1);
+}
+        return "oo_sys_spawn(" + a0 + ", " + a1 + ")";
+    }
+    if t == "sys_wait" {
+        if a1 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tsys_wait requires &ProcessCap first arg");
+            process_exit(1);
+        }
+        return "oo_sys_wait(" + a0 + ", " + a1 + ")";
+    }
+    if t == "sys_kill" {
+        if a1 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tsys_kill requires &ProcessCap first arg");
+            process_exit(1);
+        }
+        return "oo_sys_kill(" + args + ")";
+    }
+    // M166 path A: sealed OS syscall stubs under SysCap (residual Err, not product async)
+    if t == "sys_epoll_create" {
+        if a1 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tsys_epoll_create requires &SysCap first arg");
+            process_exit(1);
+        }
+        return "oo_sys_epoll_create(" + a0 + ", " + a1 + ")";
+    }
+    if t == "sys_inotify_init" {
+        if !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tsys_inotify_init requires &SysCap first arg");
+            process_exit(1);
+        }
+        return "oo_sys_inotify_init(" + a0 + ")";
+    }
+    if t == "sys_prctl" {
+        if a1 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tsys_prctl requires &SysCap first arg");
+            process_exit(1);
+        }
+        return "oo_sys_prctl(" + a0 + ", " + a1 + ")";
+    }
+    if t == "landlock_restrict" || t == "oo_landlock_restrict" {
+        if a1 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tlandlock_restrict requires &SysCap first arg");
+            process_exit(1);
+        }
+        return "oo_landlock_restrict(" + args + ")";
+    }
+    if t == "landlock_is_available" || t == "oo_landlock_is_available" {
+        return "oo_landlock_is_available()";
+    }
+    if t == "arena_create" || t == "oo_arena_create" {
+        return "oo_arena_create(" + args + ")";
+    }
+    if t == "arena_alloc" || t == "oo_arena_alloc" {
+        return "oo_arena_alloc(" + args + ")";
+    }
+    if t == "arena_reset" || t == "oo_arena_reset" {
+        return "oo_arena_reset(" + args + ")";
+    }
+    if t == "actor_restart" || t == "oo_actor_restart" {
+        return "oo_actor_restart(" + args + ")";
+    }
+    if t == "soa_layout" || t == "oo_soa_layout" {
+        return "oo_soa_layout(" + args + ")";
+    }
+    if t == "dod_layout" || t == "oo_dod_layout" {
+        return "oo_dod_layout(" + args + ")";
+    }
+    if t == "checkpoint" || t == "oo_checkpoint" {
+        return "oo_checkpoint(" + args + ")";
+    }
+    if t == "rollback" || t == "oo_rollback" {
+        return "oo_rollback()";
+    }
+    if t == "otp_supervise" || t == "oo_otp_supervise" {
+        if a1 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\totp_supervise requires &ThreadCap first arg");
+            process_exit(1);
+        }
+        return "oo_otp_supervise(" + args + ")";
+    }
+    if t == "cap_rpc_send" || t == "oo_cap_rpc_send" {
+        if a1 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tcap_rpc_send requires a cap token first arg");
+            process_exit(1);
+        }
+        return "oo_cap_rpc_send(" + args + ")";
+    }
+    if t == "cap_rpc_recv" || t == "oo_cap_rpc_recv" {
+        if a1 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tcap_rpc_recv requires a cap token first arg");
+            process_exit(1);
+        }
+        return "oo_cap_rpc_recv(" + args + ")";
+    }
+    if t == "oo_read_stdin" {
+        return "oo_read_stdin()";
+    }
+    if t == "oo_read_stdin_chunk" {
+        return "oo_read_stdin_chunk(" + args + ")";
+    }
+    if t == "oo_file_stamp" {
+        return "oo_file_stamp(" + args + ")";
+    }
+    if t == "monotonic_us" || t == "oo_monotonic_us" {
+        return "oo_monotonic_us()";
+    }
+    if t == "proc_mem_read" || t == "oo_proc_mem_read" {
+        return "oo_proc_mem_read(" + args + ")";
+    }
+    // OPEN-89..92 product free names
+    if t == "macro_expand" {
+        return "oo_str_macro_expand(" + args + ")";
+    }
+    if t == "ast_macro" {
+        return "oo_str_ast_macro(" + args + ")";
+    }
+    if t == "oo_rlimit_set_mem_mb" {
+        if a1 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\too_rlimit_set_mem_mb requires &SysCap first arg");
+            process_exit(1);
+        }
+        return "oo_rlimit_set_mem_mb(" + a0 + ", " + a1 + ")";
+    }
+    if t == "oo_rlimit_set_nofile" {
+        if a1 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\too_rlimit_set_nofile requires &SysCap first arg");
+            process_exit(1);
+        }
+        return "oo_rlimit_set_nofile(" + a0 + ", " + a1 + ")";
+    }
+    if t == "oo_rlimit_set_cpu_sec" {
+        if a1 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\too_rlimit_set_cpu_sec requires &SysCap first arg");
+            process_exit(1);
+        }
+        return "oo_rlimit_set_cpu_sec(" + a0 + ", " + a1 + ")";
+    }
+    if t == "process_exec" {
+        if a1 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tprocess_exec requires &ProcessCap as first arg");
+            process_exit(1);
+        }
+        let cmd: String = c_sys_exec_last_arg(args);
+        return "oo_sys_exec(" + a0 + ", (int)(sizeof((OoStr[]){oo_str_lit(\"sh\"), oo_str_lit(\"-c\"), "
+            + cmd + "})/sizeof(OoStr)), (OoStr[]){oo_str_lit(\"sh\"), oo_str_lit(\"-c\"), " + cmd + "})";
+    }
+    if t == "cap_attenuate" || t == "oo_cap_attenuate" {
+        return "cap_attenuate(" + args + ")";
+    }
+    if t == "cap_attenuate_ok" || t == "oo_cap_attenuate_ok" {
+        return "cap_attenuate_ok(" + args + ")";
+    }
+    if t == "oo_cap_kernel_seal" || t == "cap_kernel_seal" {
+        if a1 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\too_cap_kernel_seal requires &SysCap first arg");
+            process_exit(1);
+        }
+        return "oo_cap_kernel_seal(" + a0 + ", " + a1 + ")";
+    }
+    if t == "oo_enclave_enter" || t == "enclave_enter" {
+        if a1 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\too_enclave_enter requires &SysCap first arg");
+            process_exit(1);
+        }
+        return "oo_enclave_enter(" + a0 + ", " + a1 + ")";
+    }
+    // OPEN-70: product C-header / FFI-gen / LTO. Cap first; no ambient lower.
+    if t == "import_c" || t == "oo_import_c" {
+        if a1 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\timport_c requires &UnsafeFFICap first arg");
+            process_exit(1);
+        }
+        return "oo_import_c(" + args + ")";
+    }
+    if t == "ffi_gen" || t == "oo_ffi_gen" {
+        if a1 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tffi_gen requires &UnsafeFFICap first arg");
+            process_exit(1);
+        }
+        return "oo_ffi_gen(" + args + ")";
+    }
+    if t == "lto_xlang_link" || t == "oo_lto_xlang_link" {
+        if a1 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tlto_xlang_link requires &ProcessCap first arg");
+            process_exit(1);
+        }
+        return "oo_lto_xlang_link(" + args + ")";
+    }
+    return "";
+}

@@ -1,0 +1,79 @@
+// # Skip a comma after a match binding / OoOpt typedef emission for custom Option[T] types / Skip `pub type Name = …;` in the fn-return pre-pass
+//
+// Logline: If the token at pos is COMMA, step one; otherwise return pos. Emits a `typedef struct OoOpt_X { int has_val; X val; } OoOpt_X;` for any custom X used in Some/None, so the C compiler can resolve the compound literal. Brace-aware skipper so c_emit.oo's fn-return pre-pass does not read struct fields as fn params.
+//
+// Setup: Merged cohesive compiler module.
+//
+// Beats:
+//   1. Unified cohesive implementation.
+
+
+
+pub fn c_match_skip_comma(toks: List[String], pos: Int, n: Int) -> Int {
+    let mut p = pos;
+if p < n && field_at(list_get(toks, p), 0) == "COMMA" { p = p + 1;
+}
+    return p;
+}
+
+pub fn c_emit_opt_typedef(elem_ty: String) {
+    if elem_ty == "" { return;
+    }
+    if elem_ty == "I" || elem_ty == "S" || elem_ty == "B" || elem_ty == "F" { return;
+    }
+    if elem_ty == "LI" || elem_ty == "LS" || elem_ty == "LF" { return;
+    }
+    if elem_ty == "OoStr" || elem_ty == "OoIList" || elem_ty == "OoSList" || elem_ty == "OoFList" { return;
+    }
+    if elem_ty == "long long" || elem_ty == "int" || elem_ty == "double" || elem_ty == "bool" { return;
+    }
+    if elem_ty == "String" || elem_ty == "Int" || elem_ty == "Float" || elem_ty == "Bool" { return;
+    }
+    let opt_ty: String = "OoOpt_" + elem_ty;
+    println("#ifndef OO_TY_" + opt_ty);
+    println("#define OO_TY_" + opt_ty);
+    println("typedef struct " + opt_ty + " { int has_val; " + elem_ty + " val; } " + opt_ty + ";");
+    println("#endif");
+}
+
+//
+// Beats:
+//   1. Skip KW_PUB, KW_TYPE, IDENT (name) and look for LBRACE / SEMI / EOF.
+//   2. Brace-balanced: when RBRACE closes the struct body, eat the trailing SEMI.
+//   3. EOF safety: stop without eating past the end.
+
+pub fn c_skip_pub_type_def(toks: List[String], pos: Int, n: Int) -> Int {
+    let mut p: Int = pos;
+    if p < n && c_tokk(toks, p) == "KW_PUB" { p = p + 1;
+    }
+    if p < n && c_tokk(toks, p) == "KW_TYPE" { p = p + 1;
+    }
+    if p < n && c_tokk(toks, p) == "IDENT" { p = p + 1;
+    }
+    let mut depth: Int = 0;
+    let mut seen_brace: Bool = false;
+    while p < n { let tk: String = c_tokk(toks, p);
+    if tk == "LBRACE" { depth = depth + 1;
+    seen_brace = true;
+    p = p + 1;
+    } else if tk == "RBRACE" {
+            if depth > 0 { depth = depth - 1;
+            }
+            p = p + 1;
+            if seen_brace && depth == 0 {
+                if p < n && c_tokk(toks, p) == "SEMI" { p = p + 1;
+                }
+                return p;
+            }
+        } else if tk == "SEMI" {
+            if depth == 0 { return p + 1;
+            }
+            p = p + 1;
+        } else if tk == "EOF" {
+            return p;
+        } else {
+            p = p + 1;
+        }
+    }
+    return p;
+}

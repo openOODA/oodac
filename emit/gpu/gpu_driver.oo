@@ -1,0 +1,181 @@
+// # Unified GPU Driver & Dispatch Router
+//
+// Logline: Routes kernel emission and dispatch across Metal, SPIR-V, CUDA PTX, and AMD HIP/ROCm backends.
+//
+// Setup: Pure hardware abstraction interface requiring GpuCap token for kernel dispatch and buffer binding.
+//
+// Beats:
+//   1. Define GpuBackendTarget, GpuBufferDesc, and GpuGridDim configurations.
+//   2. Validate buffer bindings, threadgroup dimensions, and memory alignments.
+//   3. Route kernel compilation to Metal, SPIR-V, or PTX based on target triple.
+//   4. Verify kernel dispatch execution under GpuCap capability token.
+
+import "gpu_metal.oo";
+import "gpu_spirv.oo";
+import "gpu_ptx.oo";
+import "gpu_hip.oo";
+import "gpu_kernel_ir.oo";
+import "gpu_ast_lower.oo";
+import "gpu_spirv_disasm.oo";
+
+type GpuBackendTarget = struct {
+    name: String,
+    is_binary: Bool,
+    default_ext: String
+};
+
+type GpuBufferDesc = struct {
+    name: String,
+    size_bytes: Int,
+    binding: Int,
+    is_output: Bool
+};
+
+type GpuGridDim = struct {
+    grid_x: Int,
+    grid_y: Int,
+    grid_z: Int,
+    block_x: Int,
+    block_y: Int,
+    block_z: Int,
+    shared_mem_bytes: Int
+};
+
+type GpuKernelArtifact = struct {
+    target_name: String,
+    kernel_name: String,
+    code: String,
+    is_binary: Bool,
+    word_count: Int
+};
+
+pub fn gpu_target_metal() -> GpuBackendTarget {
+    return GpuBackendTarget { name: "metal", is_binary: false, default_ext: ".metal" };
+}
+
+pub fn gpu_target_spirv() -> GpuBackendTarget {
+    return GpuBackendTarget { name: "spirv", is_binary: true, default_ext: ".spv" };
+}
+
+pub fn gpu_target_ptx() -> GpuBackendTarget {
+    return GpuBackendTarget { name: "ptx", is_binary: false, default_ext: ".ptx" };
+}
+
+pub fn gpu_target_hip() -> GpuBackendTarget {
+    return GpuBackendTarget { name: "hip", is_binary: false, default_ext: ".hip" };
+}
+
+fn gpu_tile_clamp(v: Int, default_val: Int) -> Int {
+    if v <= 0 { return default_val; }
+    return v;
+}
+
+fn gpu_div_ceil(num: Int, denom: Int) -> Int {
+    return (num + denom - 1) / denom;
+}
+
+pub fn gpu_grid_dim_1d(threads: Int, block_size: Int) -> GpuGridDim {
+    return GpuGridDim {
+        grid_x: gpu_div_ceil(threads, gpu_tile_clamp(block_size, 64)),
+        grid_y: 1,
+        grid_z: 1,
+        block_x: gpu_tile_clamp(block_size, 64),
+        block_y: 1,
+        block_z: 1,
+        shared_mem_bytes: 0
+    };
+}
+
+pub fn gpu_grid_dim_2d(width: Int, height: Int, tile_w: Int, tile_h: Int) -> GpuGridDim {
+    return GpuGridDim {
+        grid_x: gpu_div_ceil(width, gpu_tile_clamp(tile_w, 16)),
+        grid_y: gpu_div_ceil(height, gpu_tile_clamp(tile_h, 16)),
+        grid_z: 1,
+        block_x: gpu_tile_clamp(tile_w, 16),
+        block_y: gpu_tile_clamp(tile_h, 16),
+        block_z: 1,
+        shared_mem_bytes: gpu_tile_clamp(tile_w, 16) * gpu_tile_clamp(tile_h, 16) * 8
+    };
+}
+
+pub fn gpu_compile_ast_loop(target: String, kernel_name: String, loop_ast: String) -> Result[String, String] {
+    let ir_res: Result[GpuKernelIR, String] = gpu_lower_source_to_ir(loop_ast, kernel_name);
+    match ir_res {
+        Ok(ir) => {
+            if target == "metal" || target == "msl" {
+                let code: String = metal_emit_from_ir(ir);
+                return Ok(code);
+            }
+            if target == "spirv" || target == "vulkan" {
+                let words: List[Int] = spirv_build_from_ir(ir);
+                let hex: String = spirv_words_to_hex(words);
+                return Ok(hex);
+            }
+            if target == "ptx" || target == "cuda" {
+                let ptx: String = ptx_emit_from_ir(ir);
+                return Ok(ptx);
+            }
+            if target == "hip" || target == "rocm" {
+                let hip: String = hip_emit_from_ir(ir);
+                return Ok(hip);
+            }
+            return Err("Unsupported GPU target: " + target);
+        },
+        Err(e) => {
+            return Err(e);
+        }
+    }
+}
+
+pub fn gpu_compile_kernel_source(target: String, kernel_name: String, op_type: String) -> Result[String, String] {
+    if target == "metal" || target == "msl" {
+        let mut src: String = "";
+        if op_type == "vec_add" { src = metal_emit_vec_add_kernel(kernel_name); }
+        if op_type == "matmul" { src = metal_emit_matmul_kernel(kernel_name, 16); }
+        if op_type == "rms_norm" { src = metal_emit_rms_norm_kernel(kernel_name, 0.00001); }
+        if op_type == "attention" { src = metal_emit_attention_kernel(kernel_name, 64); }
+        if chars_len(src) == 0 { return Err("Unknown op_type for metal: " + op_type); }
+        return Ok(src);
+    }
+    if target == "spirv" || target == "vulkan" {
+        let mut words: List[Int] = list_new();
+        if op_type == "vec_add" { words = spirv_build_vector_add_kernel(); }
+        if op_type == "matmul" { words = spirv_build_matmul_kernel(); }
+        if op_type == "dot" || op_type == "attention" { words = spirv_build_dot_product_kernel(); }
+        if list_len(words) == 0 { return Err("Unknown op_type for spirv: " + op_type); }
+        let hex: String = spirv_words_to_hex(words);
+        return Ok(hex);
+    }
+    if target == "ptx" || target == "cuda" {
+        let mut src: String = "";
+        if op_type == "vec_add" { src = ptx_emit_vec_add_kernel(kernel_name, "sm_90"); }
+        if op_type == "matmul" { src = ptx_emit_matmul_kernel(kernel_name, "sm_90"); }
+        if op_type == "rms_norm" { src = ptx_emit_rms_norm_kernel(kernel_name, "sm_90"); }
+        if op_type == "attention" { src = ptx_emit_attention_kernel(kernel_name, "sm_90"); }
+        if chars_len(src) == 0 { return Err("Unknown op_type for ptx: " + op_type); }
+        return Ok(src);
+    }
+    if target == "hip" || target == "rocm" {
+        let mut src: String = "";
+        if op_type == "vec_add" { src = hip_emit_vec_add_program(kernel_name); }
+        if op_type == "matmul" { src = hip_emit_matmul_source(kernel_name); }
+        if op_type == "rms_norm" { src = hip_emit_rms_norm_source(kernel_name); }
+        if op_type == "attention" { src = hip_emit_attention_source(kernel_name); }
+        if chars_len(src) == 0 { return Err("Unknown op_type for hip: " + op_type); }
+        return Ok(src);
+    }
+    return Err("Unsupported GPU target: " + target);
+}
+
+pub fn gpu_dispatch_verify(gpu: &GpuCap, artifact: GpuKernelArtifact, grid: GpuGridDim, buffers: List[String]) -> Result[Bool, String] {
+    if grid.grid_x <= 0 || grid.block_x <= 0 {
+        return Err("Invalid GPU grid dimensions");
+    }
+    if list_len(buffers) == 0 {
+        return Err("No buffers bound for GPU dispatch");
+    }
+    if artifact.word_count <= 0 {
+        return Err("Empty kernel artifact payload");
+    }
+    return Ok(true);
+}

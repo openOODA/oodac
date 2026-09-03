@@ -1,0 +1,148 @@
+// # Scan operator and punct tokens
+//
+// Logline: If the cursor sits on punctuation, pack one or two characters as a token or return empty.
+//
+// Setup: chars_len, char_at, pack_tok, and list_new exist; lex_step calls this after ws, string, number, and ident miss; comments stay in try_scan_ws.
+//
+// Beats:
+//   1. Past the end returns empty; slash, plus, star, percent, and single-char punct pack immediately.
+//   2. Two- or three-char lookahead packs ARROW, EQEQ, FATARROW, NEQ, shifts, compares, ANDAND, OROR, DOTDOT, and DOTDOTEQ.
+//   3. Caret and at-symbol pack CARET and AT; any other character returns an empty list.
+
+import "token_scan_whitespace.oo";
+
+
+pub fn try_scan_punct(src: String, i0: Int, line0: Int, col0: Int) -> List[String] {
+    let n: Int = chars_len(src);
+    if i0 >= n { return list_new();
+    }
+    let ch: String = char_at(src, i0);
+    let i: Int = i0;
+    let line: Int = line0;
+    let col: Int = col0;
+    if ch == "/" {
+        return pack_tok(i + 1, line, col + 1, "SLASH", "/", line, col);
+    }
+    if ch == "+" {
+        return pack_tok(i + 1, line, col + 1, "PLUS", "+", line, col);
+    }
+    if ch == "-" {
+        let j: Int = i + 1;
+        if j < n { if char_at(src, j) == ">" { return pack_tok(i + 2, line, col + 2, "ARROW", "->", line, col);
+        }
+        }
+        return pack_tok(i + 1, line, col + 1, "MINUS", "-", line, col);
+    }
+    if ch == "*" {
+        return pack_tok(i + 1, line, col + 1, "STAR", "*", line, col);
+    }
+    if ch == "%" {
+        return pack_tok(i + 1, line, col + 1, "PERCENT", "%", line, col);
+    }
+    if ch == "=" {
+        let j: Int = i + 1;
+        if j < n { let nch: String = char_at(src, j);
+        if nch == "=" { return pack_tok(i + 2, line, col + 2, "EQEQ", "==", line, col);
+        }
+            if nch == ">" {
+                return pack_tok(i + 2, line, col + 2, "FATARROW", "=>", line, col);
+            }
+        }
+        return pack_tok(i + 1, line, col + 1, "EQ", "=", line, col);
+    }
+    if ch == "!" {
+        let j: Int = i + 1;
+        if j < n { if char_at(src, j) == "=" { return pack_tok(i + 2, line, col + 2, "NEQ", "!=", line, col);
+        }
+        }
+        return pack_tok(i + 1, line, col + 1, "BANG", "!", line, col);
+    }
+    if ch == "<" {
+        let j: Int = i + 1;
+        if j < n { let nch: String = char_at(src, j);
+        if nch == "<" { return pack_tok(i + 2, line, col + 2, "LSHIFT", "<<", line, col);
+        }
+            if nch == "=" {
+                return pack_tok(i + 2, line, col + 2, "LTE", "<=", line, col);
+            }
+        }
+        return pack_tok(i + 1, line, col + 1, "LT", "<", line, col);
+    }
+    if ch == ">" {
+        let j: Int = i + 1;
+        if j < n { let nch: String = char_at(src, j);
+        if nch == ">" { return pack_tok(i + 2, line, col + 2, "RSHIFT", ">>", line, col);
+        }
+            if nch == "=" {
+                return pack_tok(i + 2, line, col + 2, "GTE", ">=", line, col);
+            }
+        }
+        return pack_tok(i + 1, line, col + 1, "GT", ">", line, col);
+    }
+    if ch == "&" {
+        let j: Int = i + 1;
+        if j < n { if char_at(src, j) == "&" { return pack_tok(i + 2, line, col + 2, "ANDAND", "&&", line, col);
+        }
+        }
+        // single AMP: bitwise AND (type-position &Cap skipped by emit/check)
+        return pack_tok(i + 1, line, col + 1, "AMP", "&", line, col);
+    }
+    if ch == "|" {
+        let j: Int = i + 1;
+        if j < n { if char_at(src, j) == "|" { return pack_tok(i + 2, line, col + 2, "OROR", "||", line, col);
+        }
+        }
+        // single PIPE: bitwise OR
+        return pack_tok(i + 1, line, col + 1, "PIPE", "|", line, col);
+    }
+
+    if ch == ":" {
+        return pack_tok(i + 1, line, col + 1, "COLON", ":", line, col);
+    }
+    if ch == ";" {
+        return pack_tok(i + 1, line, col + 1, "SEMI", ";", line, col);
+    }
+    if ch == "," {
+        return pack_tok(i + 1, line, col + 1, "COMMA", ",", line, col);
+    }
+    if ch == "." {
+        let j: Int = i + 1;
+        if j < n { if char_at(src, j) == "." { let k: Int = j + 1;
+        if k < n { if char_at(src, k) == "=" { return pack_tok(i + 3, line, col + 3, "DOTDOTEQ", "..=", line, col);
+        }
+                }
+                return pack_tok(i + 2, line, col + 2, "DOTDOT", "..", line, col);
+            }
+        }
+        return pack_tok(i + 1, line, col + 1, "DOT", ".", line, col);
+    }
+    if ch == "(" {
+        return pack_tok(i + 1, line, col + 1, "LPAREN", "(", line, col);
+    }
+    if ch == ")" {
+        return pack_tok(i + 1, line, col + 1, "RPAREN", ")", line, col);
+    }
+    if ch == "{" {
+        return pack_tok(i + 1, line, col + 1, "LBRACE", "{", line, col);
+    }
+    if ch == "}" {
+        return pack_tok(i + 1, line, col + 1, "RBRACE", "}", line, col);
+    }
+    if ch == "[" {
+        return pack_tok(i + 1, line, col + 1, "LBRACKET", "[", line, col);
+    }
+    if ch == "]" {
+        return pack_tok(i + 1, line, col + 1, "RBRACKET", "]", line, col);
+    }
+    if ch == "?" {
+        return pack_tok(i + 1, line, col + 1, "QUESTION", "?", line, col);
+    }
+    // M167: single caret bitwise XOR (path A; free name bit_xor remains)
+    if ch == "^" {
+        return pack_tok(i + 1, line, col + 1, "CARET", "^", line, col);
+    }
+    if ch == "@" {
+        return pack_tok(i + 1, line, col + 1, "AT", "@", line, col);
+    }
+    return list_new();
+}

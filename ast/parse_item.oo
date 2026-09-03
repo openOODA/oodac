@@ -1,0 +1,219 @@
+// # Parse a function item
+//
+// Logline: Parse a pub fn header, dump ITEM and PARAM lines, then parse the body and skip a trailing verify block.
+//
+// Setup: Token stream is positioned at the start of a function item or verify block.
+//
+// Beats:
+//   1. Read optional pub, the fn name, and name:ty params, including & and [ ] type args.
+//   2. Read optional arrow return, skip requires/ensures, and dump the item and params.
+//   3. parse_block_dump the body and skip_verify_block.
+
+import "parse_stmt_nav.oo";
+import "parse_skip.oo";
+
+
+pub fn parse_fn_item(toks: List[String], pos0: Int, item_idx: Int) -> Int {
+    let n = list_len(toks);
+let mut pos = pos0;
+let mut is_pub = false;
+if field_at(list_get(toks, pos), 0) == "KW_PUB" { is_pub = true;
+pos = pos + 1;
+}
+    // KW_FN
+    if field_at(list_get(toks, pos), 0) != "KW_FN" {
+        println("ERR\tparse\texpected fn");
+        process_exit(1);
+    }
+    let fn_line: String = field_at(list_get(toks, pos), 1);
+    let fn_col: String = field_at(list_get(toks, pos), 2);
+    pos = pos + 1;
+    // name
+    let name: String = field_at(list_get(toks, pos), 3);
+    pos = pos + 1;
+    // (
+    pos = pos + 1;
+    // params
+    let mut params: List[String] = list_new();
+    // name/ty/ref
+    let mut cont_p = true;
+    while cont_p { if pos >= n { cont_p = false;
+    } else {
+            let k: String = field_at(list_get(toks, pos), 0);
+            if k == "RPAREN" {
+                cont_p = false;
+            } else {
+                // optional AMP for &Cap
+                let mut is_ref = false;
+                if k == "AMP" {
+                    is_ref = true;
+                    pos = pos + 1;
+                }
+                let pname: String = field_at(list_get(toks, pos), 3);
+                pos = pos + 1;
+                // COLON
+                pos = pos + 1;
+                // type name (IDENT)
+                let mut pty: String = field_at(list_get(toks, pos), 3);
+                pos = pos + 1;
+                // optional [ for Result/Option/List — skip brackets content simply
+                if pos < n { if field_at(list_get(toks, pos), 0) == "LBRACKET" { pos = pos + 1;
+                let mut depth = 1;
+                let mut cont_b = true;
+                while cont_b { if pos >= n { cont_b = false;
+                } else {
+                                let bk: String = field_at(list_get(toks, pos), 0);
+                                if bk == "LBRACKET" {
+                                    depth = depth + 1;
+                                }
+                                if bk == "RBRACKET" {
+                                    depth = depth - 1;
+                                    if depth == 0 { cont_b = false;
+                                    }
+                                }
+                                pos = pos + 1;
+                            }
+                        }
+                        pty = pty + "[...]";
+                    }
+                }
+                let mut ref_s = "false";
+                if is_ref { ref_s = "true";
+                }
+                params = list_push(params, pname + "\t" + pty + "\t" + ref_s);
+                if pos < n { if field_at(list_get(toks, pos), 0) == "COMMA" { pos = pos + 1;
+                }
+                }
+            }
+        }
+    }
+    // )
+    if field_at(list_get(toks, pos), 0) == "RPAREN" {
+        pos = pos + 1;
+    }
+    // optional -> Type
+    let mut ret = "Void";
+    if pos < n { if field_at(list_get(toks, pos), 0) == "ARROW" { pos = pos + 1;
+    ret = field_at(list_get(toks, pos), 3);
+    pos = pos + 1;
+    if pos < n { if field_at(list_get(toks, pos), 0) == "LBRACKET" { pos = pos + 1;
+    let mut depth = 1;
+    let mut cont_b = true;
+    while cont_b { if pos >= n { cont_b = false;
+    } else {
+                            let bk: String = field_at(list_get(toks, pos), 0);
+                            if bk == "LBRACKET" {
+                                depth = depth + 1;
+                            }
+                            if bk == "RBRACKET" {
+                                depth = depth - 1;
+                                if depth == 0 { cont_b = false;
+                                }
+                            }
+                            pos = pos + 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // skip requires/ensures clauses until LBRACE
+    let mut cont_c = true;
+    while cont_c { if pos >= n { cont_c = false;
+    } else {
+            let k: String = field_at(list_get(toks, pos), 0);
+            if k == "LBRACE" {
+                cont_c = false;
+            } else {
+                pos = pos + 1;
+            }
+        }
+    }
+    // body
+    let mut pub_s = "false";
+    if is_pub { pub_s = "true";
+    }
+    let iis: String = item_idx.to_string();
+    println("  ITEM[" + iis + "] FN name=" + name + " pub=" + pub_s + " ret=" + ret + " @" + fn_line + ":" + fn_col);
+    let mut pi = 0;
+    let pn = list_len(params);
+    while pi < pn { let p = list_get(params, pi);
+    let pname: String = field_at(p, 0);
+    let pty: String = field_at(p, 1);
+    let pref: String = field_at(p, 2);
+    let pis: String = pi.to_string();
+    println("    PARAM[" + pis + "] " + pname + " ty=" + pty + " ref=" + pref);
+    pi = pi + 1;
+    }
+    // parse block at pos (LBRACE)
+    pos = parse_block_dump(toks, pos, 2);
+    pos = skip_verify_block(toks, pos);
+    return pos;
+}
+
+pub fn skip_verify_block(toks: List[String], pos0: Int) -> Int {
+    let n = list_len(toks);
+    let mut pos = pos0;
+    while pos < n && field_at(list_get(toks, pos), 0) == "KW_VERIFY" {
+        pos = pos + 1;
+        if pos < n && field_at(list_get(toks, pos), 0) == "IDENT" { pos = pos + 1; }
+        if pos < n && field_at(list_get(toks, pos), 0) == "LBRACE" {
+            pos = skip_balanced(toks, pos);
+        }
+    }
+    return pos;
+}
+
+pub fn skip_trait_or_impl(toks: List[String], pos0: Int) -> Int {
+    let n = list_len(toks);
+    let mut pos = pos0 + 1;
+    while pos < n {
+        if field_at(list_get(toks, pos), 0) == "LBRACE" {
+            return skip_balanced(toks, pos);
+        }
+        pos = pos + 1;
+    }
+    return pos;
+}
+
+pub fn parse_trait_item(toks: List[String], pos0: Int, item_idx: Int) -> Int {
+    let n = list_len(toks);
+    let mut name = "";
+    if pos0 + 1 < n {
+        name = field_at(list_get(toks, pos0 + 1), 3);
+    }
+    let iis: String = item_idx.to_string();
+    println("  ITEM[" + iis + "] TRAIT name=" + name);
+    return skip_trait_or_impl(toks, pos0);
+}
+
+pub fn parse_impl_item(toks: List[String], pos0: Int, item_idx: Int) -> Int {
+    let n = list_len(toks);
+    let mut tname = "";
+    let mut sname = "";
+    if pos0 + 1 < n {
+        tname = field_at(list_get(toks, pos0 + 1), 3);
+    }
+    let mut j = pos0 + 2;
+    while j < n {
+        let k: String = field_at(list_get(toks, j), 0);
+        if k == "LBRACE" {
+            j = n;
+        } else if k == "IDENT" {
+            if field_at(list_get(toks, j), 3) == "for" {
+                if j + 1 < n {
+                    sname = field_at(list_get(toks, j + 1), 3);
+                }
+                j = n;
+            } else {
+                j = j + 1;
+            }
+        } else {
+            j = j + 1;
+        }
+    }
+    let iis: String = item_idx.to_string();
+    println("  ITEM[" + iis + "] IMPL trait=" + tname + " for=" + sname);
+    return skip_trait_or_impl(toks, pos0);
+}
+

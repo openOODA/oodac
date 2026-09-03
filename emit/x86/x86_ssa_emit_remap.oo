@@ -1,0 +1,81 @@
+// # Per-block register remap helpers for x86 SSA emitter
+//
+// Logline: Allocates one slot per (block_id, register) pair so two blocks can write the same SSA reg without clobbering each other. The per-block remap was previously inlined in oodac/x86_ssa_emit.oo; this module extracts it so the main file can stay under the 256-line cap.
+//
+// Setup: Imported by oodac/x86_ssa_emit.oo. Uses ssa_fn_inst_count + the parallel inst arrays (inst_block_ids, inst_results, inst_imm_vals, inst_lhs_vals) from oodac/emit/llvm/ssa_ir.oo. The three exported helpers are pure (no I/O, no globals).
+//
+// Beats:
+//   1. x86_ssa_block_local_slots: walks a block's instructions and returns a list of unique SSA register ids in slot order (first occurrence wins for the index, deduped via x86_ssa_remap_contains).
+//   2. x86_ssa_emit_slot_for: resolves a (reg, block) to a local slot via index_of, with fallback to x86_ssa_slot(reg) for cross-block values or reg <= 0.
+//   3. x86_ssa_block_local_slot_count: returns the sum of per-block local-slot counts so x86_ssa_emit_function can size the stack frame.
+
+import "emit/llvm/ssa_ir.oo";
+
+fn x86_ssa_remap_contains(xs: List[Int], v: Int) -> Int {
+    let n: Int = list_len(xs);
+    let mut i: Int = 0;
+    while i < n { if list_get(xs, i) == v { return 1;
+    } i = i + 1;
+    }
+    return 0;
+}
+
+pub fn x86_ssa_block_local_slots(fn_data: SsaFunction, block_id: Int) -> List[Int] {
+    let mut slots: List[Int] = list_new();
+    let n: Int = ssa_fn_inst_count(fn_data);
+    let bids: List[Int] = fn_data.inst_block_ids;
+    let results: List[Int] = fn_data.inst_results;
+    let imms: List[Int] = fn_data.inst_imm_vals;
+    let lhss: List[Int] = fn_data.inst_lhs_vals;
+    let mut i: Int = 0;
+    while i < n {
+        if list_get(bids, i) == block_id {
+            let r0: Int = list_get(results, i);
+            if r0 > 0 && x86_ssa_remap_contains(slots, r0) == 0 { slots = list_push(slots, r0);
+            }
+            let r1: Int = list_get(imms, i);
+            if r1 > 0 && x86_ssa_remap_contains(slots, r1) == 0 { slots = list_push(slots, r1);
+            }
+            let r2: Int = list_get(lhss, i);
+            if r2 > 0 && x86_ssa_remap_contains(slots, r2) == 0 { slots = list_push(slots, r2);
+            }
+        }
+        i = i + 1;
+    }
+    return slots;
+}
+
+pub fn x86_ssa_slot_for_c(reg: Int, block_id: Int, block_local_slots: List[Int]) -> String {
+    let r: Int = if reg <= 0 { 1 } else { reg };
+    let off: Int = r * -8;
+    return off.to_string() + "(%rbp)";
+}
+
+pub fn x86_ssa_slot_for_b(reg: Int, block_id: Int, block_local_slots: List[Int]) -> String {
+    return x86_ssa_slot_for_c(reg, block_id, block_local_slots);
+}
+
+pub fn x86_ssa_emit_ret_epilogue(fn_data: SsaFunction, is_entry: Int, fn_label: String, ret_reg: Int, ret_block: Int) -> String {
+    return x86_ssa_emit_ret_epilogue_d(fn_data, is_entry, fn_label, ret_reg, ret_block);
+}
+
+pub fn x86_ssa_emit_ret_epilogue_c(fn_data: SsaFunction, is_entry: Int, fn_label: String, ret_reg: Int, ret_block: Int) -> String {
+    return x86_ssa_emit_ret_epilogue_d(fn_data, is_entry, fn_label, ret_reg, ret_block);
+}
+
+pub fn x86_ssa_emit_ret_epilogue_d(fn_data: SsaFunction, is_entry: Int, fn_label: String, ret_reg: Int, ret_block: Int) -> String {
+    let slot: String = x86_ssa_slot_for_c(ret_reg, ret_block, x86_ssa_block_local_slots(fn_data, ret_block));
+if is_entry == 1 { return ".L" + fn_label + "_end:\n    xor %rdi, %rdi\n    leave\n    mov $60, %rax\n    syscall\n";
+}
+    return ".L" + fn_label + "_end:\n    movq " + slot + ", %rax\n    leave\n    ret\n";
+}
+
+pub fn x86_ssa_block_local_slot_count(fn_data: SsaFunction) -> Int {
+    let bc: Int = fn_data.block_count;
+    let mut total: Int = 0;
+    let mut b: Int = 0;
+    while b < bc { total = total + list_len(x86_ssa_block_local_slots(fn_data, b));
+    b = b + 1;
+    }
+    return total;
+}

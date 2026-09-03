@@ -1,0 +1,233 @@
+// # Known builtin and keyword names
+//
+// Logline: Returns true when a free name is a product builtin, sealed helper, residual-forbidden name, or a keyword or type lexed as IDENT.
+//
+// Setup: typecheck_undefined_vars_ext in tc_names.oo calls this; is_sealed_gpu, is_sealed_alloc, is_sealed_ffi, and is_residual_forbidden are in scope.
+//
+// Beats:
+//   1. Return true for print, assert, list, string, file, env, time, alloc, crypto, net, bytes, math, process, and concurrency names.
+//   2. Return true for sealed GPU, alloc, and FFI operations, residual-forbidden names, control keywords, types, caps, and contract words.
+//   3. Return false when the name is none of those.
+
+pub fn is_known_name(name: String) -> Bool {
+    if name == "println" || name == "eprintln" || name == "oo_print_str" { return true;
+    }
+    if name == "assert_eq" { return true;
+    }
+    if name == "assert_ne" { return true;
+    }
+    if name == "assert" { return true;
+    }
+    if name == "list_new" { return true;
+    }
+    if name == "list_push" { return true;
+    }
+    if name == "oo_slist_new" || name == "oo_slist_push" || name == "oo_slist_get" { return true;
+    }
+    if name == "oo_ilist_new" || name == "oo_ilist_push" || name == "oo_ilist_get" { return true;
+    }
+    if name == "oo_flist_new" || name == "oo_flist_push" || name == "oo_flist_get" { return true;
+    }
+    if name == "list_get" { return true;
+    }
+    if name == "list_set" { return true;
+    }
+    if name == "list_len" { return true;
+    }
+    if name == "list_new_int" { return true;
+    }
+    if name == "list_push_int" { return true;
+    }
+    if name == "list_get_int" { return true;
+    }
+    if name == "chars_len" { return true;
+    }
+    if name == "char_at" { return true;
+    }
+    if name == "str_slice" { return true;
+    }
+    if name == "char_is_digit" { return true;
+    }
+    if name == "char_is_alpha" { return true;
+    }
+    if name == "char_is_space" { return true;
+    }
+    if name == "read_file" { return true;
+    }
+    if name == "write_file" { return true;
+    }
+    if name == "path_exists" { return true;
+    }
+    if name == "file_size" { return true;
+    }
+    if name == "fetch" { return true;
+    }
+    // HIGH 6.1: env_set is sealed EnvCap (check_cap_util); setenv/unsetenv
+    // are product SECRETSINK aliases. Known so check reaches secret refuse.
+    if name == "env_get" || name == "env_set" || name == "setenv" || name == "unsetenv" { return true;
+    }
+    if name == "sys_exec" || name == "process_exec" { return true;
+    }
+    // M12: time / entropy sealed builtins
+    if name == "now_ms" { return true;
+    }
+    if name == "monotonic_us" { return true;
+    }
+    if name == "proc_mem_read" { return true;
+    }
+    if name == "oo_proc_mem_read" { return true;
+    }
+    if name == "sleep_ms" { return true;
+    }
+    if name == "random" { return true;
+    }
+    // M17: explicit AllocCap helpers (list_new stays ambient)
+    if name == "alloc_bytes" { return true;
+    }
+    if name == "free_bytes" { return true;
+    }
+    // M166 AllocCap aliases + process + residual free names
+    if name == "malloc" || name == "free" || name == "realloc" || name == "process_exit" || name == "chs_build" { return true;
+    }
+    if name == "heap_alloc_test" || name == "oo_alloc" || name == "oo_free" || name == "oo_write_int" || name == "oo_read_int" { return true;
+    }
+    if is_sealed_gpu(name) || is_sealed_alloc(name) || is_sealed_ffi(name) || name == "UnsafeFFICap" || is_residual_forbidden(name) { return true;
+    }
+    if name == "to_string" || name == "len" || name == "ord" || name == "bit_xor" || name == "index_get" || name == "meta_epoch" || name == "meta_mix" || name == "meta_is_path_a" || name == "meta_decoy_touch" { return true;
+    }
+    if name == "crypto_sha256_internal" || name == "crypto_hmac_sha256_internal" || name == "crypto_sha512_internal"
+        || name == "crypto_md5_internal" || name == "crypto_sha1_internal"
+        || name == "crypto_aes_encrypt_internal"
+        || name == "crypto_sha3_256_internal"
+        || name == "crypto_aes_gcm_seal_internal" || name == "crypto_aes_gcm_open_internal"
+        || name == "crypto_chacha20poly1305_seal_internal" || name == "crypto_chacha20poly1305_open_internal"
+        || name == "crypto_mlkem768_keygen_internal" || name == "crypto_mlkem768_encaps_internal"
+        || name == "crypto_mlkem768_decaps_internal"
+        || name == "crypto_mldsa65_keygen_internal" || name == "crypto_mldsa65_sign_internal"
+        || name == "crypto_mldsa65_verify_internal" { return true;
+        }
+    if name == "tcp_bind" || name == "tcp_connect" || name == "tcp_accept" || name == "bind_udp" || name == "tls_connect"
+        || name == "tcp_write" || name == "tcp_read" || name == "udp_recv" || name == "udp_send" || name == "tcp_close"
+        || name == "unix_bind" || name == "unix_accept" || name == "unix_connect" || name == "unix_read" || name == "unix_write" || name == "unix_close"
+        || name == "sock_raw" || name == "raw_socket" { return true;
+        }
+    if name == "byte_at" || name == "str_byte_at" || name == "oo_str_byte_at" || name == "bytes_len" || name == "byte_slice" || name == "bytes_eq"
+        || name == "bytes_from_str" || name == "bytes_concat" || name == "bytes_new"
+        || name == "bytes_push" || name == "bytes_get" || name == "bytes_to_str"
+        || name == "limb_add" || name == "limb_sub" || name == "limb_mul" || name == "limb_div" || name == "limb_cmp"
+        || name == "oo_limb_add" || name == "oo_limb_sub" || name == "oo_limb_mul" || name == "oo_limb_div" || name == "oo_limb_cmp" { return true;
+        }
+    if name == "str_starts_with" || name == "str_ends_with" || name == "str_index_of" || name == "str_contains"
+        || name == "str_repeat" || name == "str_to_uppercase" || name == "str_to_lowercase" || name == "to_lowercase" || name == "to_uppercase" || name == "trim" || name == "str_split" || name == "str_trim" || name == "oo_fs_read_dir" || name == "oo_fs_remove_file" || name == "oo_fs_rmdir" || name == "oo_fs_mkdir" || name == "oo_fs_hardlink" || name == "oo_fs_symlink" { return true;
+        }
+    if name == "sin" || name == "cos" || name == "ln" || name == "exp" || name == "sqrt" || name == "pow" { return true;
+    }
+    if name == "sys_spawn" || name == "sys_wait" || name == "sys_kill" || name == "oo_sys_spawn" || name == "oo_sys_wait" || name == "oo_sys_kill"
+        || name == "sys_epoll_create" || name == "sys_inotify_init" || name == "sys_prctl" || name == "oo_sys_epoll_create" || name == "oo_sys_inotify_init" || name == "oo_sys_prctl" { return true;
+        }
+    if name == "oo_fs_is_dir" || name == "oo_sys_args" { return true;
+    }
+    if name == "oo_str_eq" || name == "match_rparen" || name == "oo_file_size" || name == "oo_read_file" || name == "oo_write_file" || name == "oo_path_exists" || name == "oo_env_get" || name == "oo_sys_exec" { return true;
+    }
+    if name == "oo_emit_tmp_reset" || name == "oo_emit_tmp_enter" || name == "oo_emit_tmp_leave"
+        || name == "oo_emit_tmp_release_print" || name == "oo_emit_tmp_own"
+        || name == "oo_emit_tmp_release_all_print" || name == "oo_emit_tmp_bind" { return true;
+        }
+    if name == "mutex_lock" || name == "mutex_unlock" || name == "thread_spawn" || name == "thread_join" || name == "gpu_launch" { return true;
+    }
+    if name == "channel_new" || name == "channel_send" || name == "channel_recv"
+        || name == "actor_spawn" || name == "actor_send" || name == "actor_recv" { return true;
+        }
+    if name == "json_parse_internal" || name == "json_stringify_internal"
+        || name == "python_embed_internal" { return true;
+        }
+    if name == "oo_rlimit_set_mem_mb" || name == "oo_rlimit_set_nofile" || name == "oo_rlimit_set_cpu_sec"
+        || name == "oo_landlock_is_available" || name == "oo_landlock_restrict"
+        || name == "landlock_is_available" || name == "landlock_restrict"
+        || name == "oo_dns_resolve" || name == "oo_dns_resolve_ipv4"
+        || name == "oo_arena_create" || name == "arena_create"
+        || name == "oo_arena_alloc" || name == "arena_alloc"
+        || name == "oo_arena_reset" || name == "arena_reset"
+        || name == "oo_actor_restart" || name == "actor_restart"
+        || name == "soa_layout" || name == "dod_layout"
+        || name == "checkpoint" || name == "rollback"
+        || name == "otp_supervise" || name == "cap_rpc_send" || name == "cap_rpc_recv"
+        || name == "oo_read_stdin" || name == "oo_read_stdin_chunk" || name == "oo_file_stamp"
+        || name == "cap_attenuate" || name == "cap_attenuate_ok"
+        || name == "oo_cap_attenuate" || name == "oo_cap_attenuate_ok"
+        || name == "oo_cap_kernel_seal" || name == "cap_kernel_seal"
+        || name == "oo_enclave_enter" || name == "enclave_enter" { return true;
+        }
+    if name == "macro_expand" || name == "ast_macro" { return true;
+    }
+    // Control keywords lexed as IDENT in R1 — not variables.
+    if name == "break" || name == "continue" || name == "return" || name == "for" || name == "in" { return true;
+    }
+    if name == "else" || name == "match" || name == "if" || name == "while" || name == "loop" { return true;
+    }
+    if name == "type" || name == "mut" || name == "let" || name == "fn" || name == "pub" { return true;
+    }
+    if name == "struct" || name == "impl" || name == "trait" || name == "dyn" || name == "use" || name == "import" || name == "as" { return true;
+    }
+    if name == "where" || name == "verify" { return true;
+    }
+    if name == "Int" || name == "String" || name == "Bool" || name == "Float" || name == "Void" || name == "WasmEnv"
+        || name == "f32x8" || name == "f64x4" || name == "TyF32x8" || name == "TyF64x4" { return true;
+        }
+    if name == "f32x8_new" || name == "f32x8_zero" || name == "f32x8_splat"
+        || name == "f32x8_get_lane" || name == "f32x8_insert_lane"
+        || name == "f32x8_add" || name == "f32x8_sub" || name == "f32x8_mul" || name == "f32x8_div"
+        || name == "f32x8_min" || name == "f32x8_max" || name == "f32x8_scale"
+        || name == "f32x8_fma" || name == "f32x8_reduce_sum" || name == "f32x8_dot"
+        || name == "f32x8_reverse" || name == "f32x8_shuffle" || name == "f32x8_interleave_lo"
+        || name == "f32x8_interleave_hi" || name == "f32x8_blend" || name == "f32x8_permute"
+        || name == "f32x8_load_aligned" || name == "f32x8_store_aligned" { return true;
+        }
+    if name == "f64x4_new" || name == "f64x4_zero" || name == "f64x4_splat"
+        || name == "f64x4_get_lane" || name == "f64x4_insert_lane"
+        || name == "f64x4_add" || name == "f64x4_sub" || name == "f64x4_mul" || name == "f64x4_div"
+        || name == "f64x4_min" || name == "f64x4_max" || name == "f64x4_scale"
+        || name == "f64x4_fma" || name == "f64x4_reduce_sum" || name == "f64x4_dot"
+        || name == "f64x4_reverse" || name == "f64x4_shuffle" || name == "f64x4_interleave_lo"
+        || name == "f64x4_interleave_hi" || name == "f64x4_blend" || name == "f64x4_permute"
+        || name == "f64x4_load_aligned" || name == "f64x4_store_aligned" { return true;
+        }
+    if name == "NetCap" || name == "FsCap" || name == "GpuCap" || name == "ThreadCap" { return true;
+    }
+    if name == "EnvCap" || name == "SysCap" || name == "TimeCap" || name == "RandCap" || name == "AllocCap" || name == "ArenaCap" { return true;
+    }
+    if name == "Option" { return true;
+    }
+    if name == "Result" { return true;
+    }
+    if name == "List" { return true;
+    }
+    if name == "list" { return true;
+    }
+    if name == "Ok" { return true;
+    }
+    if name == "Err" { return true;
+    }
+    if name == "Some" { return true;
+    }
+    if name == "None" { return true;
+    }
+    if name == "true" { return true;
+    }
+    if name == "false" { return true;
+    }
+    // Contract surface: ensures/requires may reference result / old
+    if name == "result" { return true;
+    }
+    if name == "old" { return true;
+    }
+    if name == "self" { return true;
+    }
+    if name == "spec" { return true;
+    }
+    // OPEN-70: C-header / FFI-gen / LTO names are product builtins.
+    if name == "import_c" || name == "ffi_gen" || name == "lto_xlang_link"
+        || name == "oo_import_c" || name == "oo_ffi_gen" || name == "oo_lto_xlang_link" { return true;
+        }
+    return false;
+}

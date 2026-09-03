@@ -1,0 +1,182 @@
+// # Native Object & Binary Linker
+//
+// Logline: Assembles textual LLVM IR bitcode into relocatable ELF object files and links standalone native executables with runtime libraries.
+//
+// Setup: Native compilation toolchain driver formatting and executing assembler and linker pipelines under &SysCap.
+//
+// Beats:
+//   1. Configure native linker options, optimization levels, and debug flags.
+//   2. Assemble textual LLVM IR (.ll) into relocatable ELF object files (.o).
+//   3. Link object files with runtime library (chs_rt.o) and system dependencies (-lm -ldl -lpthread).
+//   4. Execute unified end-to-end native compile and link pipeline.
+
+type NativeLinkConfig = struct {
+    output_path: String,
+    opt_level: String,
+    is_debug: Int,
+    extra_flags: String
+};
+
+pub fn native_link_config_default() -> NativeLinkConfig {
+    return NativeLinkConfig {
+        output_path: "a.out",
+        opt_level: "-O3",
+        is_debug: 0,
+        extra_flags: ""
+    };
+}
+
+pub fn native_link_config_new(output_path: String, opt_level: String, is_debug: Int, extra_flags: String) -> NativeLinkConfig {
+    return NativeLinkConfig {
+        output_path: output_path,
+        opt_level: opt_level,
+        is_debug: is_debug,
+        extra_flags: extra_flags
+    };
+}
+
+pub fn native_shell_quote(s: String) -> String {
+    let n: Int = chars_len(s);
+    let mut i: Int = 0;
+    let mut out: String = "'";
+    while i < n {
+        let c: String = char_at(s, i);
+        if c == "'" {
+            out = out + "'\\''";
+        } else {
+            out = out + c;
+        }
+        i = i + 1;
+    }
+    return out + "'";
+}
+
+pub fn native_format_opt_flag(opt: String) -> String {
+    if chars_len(opt) == 0 {
+        return "-O3";
+    }
+    if str_starts_with(opt, "-O") {
+        return opt;
+    }
+    return "-O" + opt;
+}
+
+pub fn native_build_assemble_cmd(ll_path: String, obj_path: String, config: NativeLinkConfig) -> String {
+    let opt_flag: String = native_format_opt_flag(config.opt_level);
+    let mut cmd: String = "clang -c " + opt_flag;
+    if config.is_debug != 0 {
+        cmd = cmd + " -g";
+    }
+    if chars_len(config.extra_flags) > 0 {
+        cmd = cmd + " " + config.extra_flags;
+    }
+    cmd = cmd + " -Wno-override-module -Wno-unused-command-line-argument ";
+    cmd = cmd + native_shell_quote(ll_path) + " -o " + native_shell_quote(obj_path);
+    return cmd;
+}
+
+pub fn native_build_link_cmd(obj_path: String, bin_path: String, runtime_obj: String, config: NativeLinkConfig) -> String {
+    let opt_flag: String = native_format_opt_flag(config.opt_level);
+    let mut cmd: String = "clang " + opt_flag;
+    if config.is_debug != 0 {
+        cmd = cmd + " -g";
+    }
+    if chars_len(config.extra_flags) > 0 {
+        cmd = cmd + " " + config.extra_flags;
+    }
+    cmd = cmd + " " + native_shell_quote(obj_path);
+    cmd = cmd + " " + native_shell_quote(runtime_obj);
+    cmd = cmd + " -lm -ldl -lpthread -o " + native_shell_quote(bin_path);
+    return cmd;
+}
+
+pub fn native_build_direct_cmd(ll_path: String, bin_path: String, runtime_obj: String, config: NativeLinkConfig) -> String {
+    let opt_flag: String = native_format_opt_flag(config.opt_level);
+    let mut cmd: String = "clang " + opt_flag;
+    if config.is_debug != 0 {
+        cmd = cmd + " -g";
+    }
+    if chars_len(config.extra_flags) > 0 {
+        cmd = cmd + " " + config.extra_flags;
+    }
+    cmd = cmd + " -Wno-override-module -Wno-unused-command-line-argument ";
+    cmd = cmd + native_shell_quote(ll_path) + " ";
+    cmd = cmd + native_shell_quote(runtime_obj);
+    cmd = cmd + " -lm -ldl -lpthread -o " + native_shell_quote(bin_path);
+    return cmd;
+}
+
+pub fn native_assemble_obj(sys: &ProcessCap, ll_path: String, obj_path: String, config: NativeLinkConfig) -> Result[String, String] {
+    if chars_len(ll_path) == 0 {
+        return Err("ERR\tllvm_native_bin\tempty_ll_path");
+    }
+    if chars_len(obj_path) == 0 {
+        return Err("ERR\tllvm_native_bin\tempty_obj_path");
+    }
+    if !str_ends_with(ll_path, ".ll") {
+        return Err("ERR\tllvm_native_bin\tinvalid_ll_extension");
+    }
+    if !str_ends_with(obj_path, ".o") {
+        return Err("ERR\tllvm_native_bin\tinvalid_obj_extension");
+    }
+    let cmd: String = native_build_assemble_cmd(ll_path, obj_path, config);
+    let r: Result[String, String] = sys_exec(sys, "sh", "-c", cmd);
+    match r {
+        Ok(_) => {
+            return Ok(obj_path);
+        }
+        Err(e) => {
+            return Err("ERR\tllvm_native_bin\tassemble_failed: " + e);
+        }
+    }
+}
+
+pub fn native_link_binary(sys: &ProcessCap, obj_path: String, bin_path: String, runtime_obj: String, config: NativeLinkConfig) -> Result[String, String] {
+    if chars_len(obj_path) == 0 {
+        return Err("ERR\tllvm_native_bin\tempty_obj_path");
+    }
+    if chars_len(bin_path) == 0 {
+        return Err("ERR\tllvm_native_bin\tempty_bin_path");
+    }
+    if chars_len(runtime_obj) == 0 {
+        return Err("ERR\tllvm_native_bin\tempty_runtime_obj");
+    }
+    if !str_ends_with(obj_path, ".o") {
+        return Err("ERR\tllvm_native_bin\tinvalid_obj_extension");
+    }
+    let cmd: String = native_build_link_cmd(obj_path, bin_path, runtime_obj, config);
+    let r: Result[String, String] = sys_exec(sys, "sh", "-c", cmd);
+    match r {
+        Ok(_) => {
+            return Ok(bin_path);
+        }
+        Err(e) => {
+            return Err("ERR\tllvm_native_bin\tlink_failed: " + e);
+        }
+    }
+}
+
+pub fn native_compile_and_link(sys: &ProcessCap, ll_path: String, bin_path: String, runtime_obj: String, config: NativeLinkConfig) -> Result[String, String] {
+    if chars_len(ll_path) == 0 {
+        return Err("ERR\tllvm_native_bin\tempty_ll_path");
+    }
+    if chars_len(bin_path) == 0 {
+        return Err("ERR\tllvm_native_bin\tempty_bin_path");
+    }
+    if chars_len(runtime_obj) == 0 {
+        return Err("ERR\tllvm_native_bin\tempty_runtime_obj");
+    }
+    if !str_ends_with(ll_path, ".ll") {
+        return Err("ERR\tllvm_native_bin\tinvalid_ll_extension");
+    }
+    let cmd: String = native_build_direct_cmd(ll_path, bin_path, runtime_obj, config);
+    let r: Result[String, String] = sys_exec(sys, "sh", "-c", cmd);
+    match r {
+        Ok(_) => {
+            return Ok(bin_path);
+        }
+        Err(e) => {
+            return Err("ERR\tllvm_native_bin\tcompile_and_link_failed: " + e);
+        }
+    }
+}

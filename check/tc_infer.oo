@@ -1,0 +1,212 @@
+// # Infer typed expression types
+//
+// Logline: Walk a token span and return the type of a literal or env-bound expression, or empty when inference cannot decide.
+//
+// Setup: lit_token_type, resolve_type_alias, method_call_end, method_result_type, is_type_binop, and combine_binop_types exist. lit_env is "\tname:Type\t".
+//
+// Beats:
+//   1. atom_type_with_env types a literal or a name in lit_env; operand_type_with_env prefers a method result over the receiver.
+//   2. infer_typed_expr_type walks binops, flags / and % by 0 as ERR_DIV0, and combines types.
+//   3. infer_typed_expr_type_exact does the same inside [start, end). get_cur_fn_at walks backward to KW_FN.
+
+pub fn infer_pure_lit_expr_type(toks: List[String], pos0: Int) -> String {
+    return infer_typed_expr_type(toks, pos0, "\t");
+}
+
+pub fn get_cur_fn_at(toks: List[String], pos: Int) -> String {
+    let n = list_len(toks);
+let mut fpos = pos;
+if fpos >= n { fpos = n - 1;
+}
+    while fpos >= 0 { if field_at(list_get(toks, fpos), 0) == "KW_FN" { if fpos + 1 < n { return field_at(list_get(toks, fpos + 1), 3);
+    }
+        }
+        fpos = fpos - 1;
+    }
+    return "";
+}
+
+// Type of a single atom: pure lit or IDENT present in lit_env ("\tname:Type\t").
+// Returns "" if unknown (incomplete TC — no false fail).
+pub fn atom_type_with_env(toks: List[String], pos: Int, lit_env: String) -> String {
+    let n = list_len(toks);
+if n > 1000000 { return "";
+}
+    if pos >= n { return "";
+    }
+    let k: String = field_at(list_get(toks, pos), 0);
+    let lit: String = lit_token_type(k);
+    if lit != "" {
+        return lit;
+    }
+    if k == "IDENT" {
+        let name: String = field_at(list_get(toks, pos), 3);
+        let cur_fn: String = get_cur_fn_at(toks, pos);
+        if cur_fn != "" {
+            let got: String = resolve_type_alias(lit_env, cur_fn + "." + name);
+            if got != cur_fn + "." + name { return got;
+            }
+        }
+        let got2: String = resolve_type_alias(lit_env, name);
+        if got2 != name { return got2;
+        }
+    }
+    return "";
+}
+
+// Operand type at pos: method-call result type, else atom.
+// Method form never yields the receiver type (avoids `"x" + n.to_string()` → String+Int).
+pub fn operand_type_with_env(toks: List[String], pos: Int, lit_env: String) -> String {
+    let end: Int = 0 + method_call_end(toks, pos);
+if end > 0 { let rk: String = field_at(list_get(toks, pos), 0);
+let mut rty: String = lit_token_type(rk);
+if rty == "" { let rname: String = field_at(list_get(toks, pos), 3);
+let cur_fn: String = get_cur_fn_at(toks, pos);
+if cur_fn != "" { rty = resolve_type_alias(lit_env, cur_fn + "." + rname);
+if rty == cur_fn + "." + rname { rty = "";
+}
+            }
+            if rty == "" {
+                rty = resolve_type_alias(lit_env, rname);
+            }
+            if rty == rname { rty = "";
+            }
+        }
+        let mut p: Int = pos + 1;
+        while p < end { if field_at(list_get(toks, p), 0) == "DOT" && p + 1 < end && field_at(list_get(toks, p + 1), 0) == "IDENT" { let mname: String = field_at(list_get(toks, p + 1), 3);
+        rty = method_result_type(mname, rty);
+        }
+            p = p + 1;
+        }
+        return rty;
+    }
+    let fend: Int = 0 + field_chain_end(toks, pos);
+    if fend > 0 { let stab: String = build_struct_field_table(toks);
+    return field_chain_type(toks, pos, fend, lit_env, stab);
+    }
+    return atom_type_with_env(toks, pos, lit_env);
+}
+
+// Exclusive end of one operand (method, field chain, or single token).
+pub fn operand_end(toks: List[String], pos: Int) -> Int {
+    let end: Int = 0 + method_call_end(toks, pos);
+if end > 0 { return end;
+}
+    let fend: Int = 0 + field_chain_end(toks, pos);
+    if fend > 0 { return fend;
+    }
+    return pos + 1;
+}
+
+// Like pure-lit chain, but IDENT/method operands may resolve via lit_env.
+// Fixes false fail: `"at " + line.to_string()` (method is String, not Int).
+pub fn infer_typed_expr_type(toks: List[String], pos0: Int, lit_env: String) -> String {
+    let n = list_len(toks);
+if pos0 >= n { return "";
+}
+    let mut pos: Int = pos0;
+    let mut cur: String = operand_type_with_env(toks, pos, lit_env);
+    if cur == "" {
+        return "";
+    }
+    pos = operand_end(toks, pos);
+    let mut cont: Bool = true;
+    while cont { if pos + 1 >= n { cont = false;
+    } else {
+            let opk: String = field_at(list_get(toks, pos), 0);
+            if !is_type_binop(opk) {
+                cont = false;
+            } else {
+                let rpos: Int = pos + 1;
+                let rtok: String = list_get(toks, rpos);
+                let rty: String = operand_type_with_env(toks, rpos, lit_env);
+                if rty == "" {
+                    return "";
+                }
+                if opk == "SLASH" {
+                    let rk: String = field_at(rtok, 0);
+                    if rk == "INT" || rk == "FLOAT" {
+                        let rtxt: String = field_at(rtok, 3);
+                        if rtxt == "0" || rtxt == "0.0" {
+                            return "ERR_DIV0";
+                        }
+                    }
+                }
+                if opk == "PERCENT" {
+                    let rk: String = field_at(rtok, 0);
+                    if rk == "INT" || rk == "FLOAT" {
+                        let rtxt: String = field_at(rtok, 3);
+                        if rtxt == "0" || rtxt == "0.0" {
+                            return "ERR_DIV0";
+                        }
+                    }
+                }
+                let comb: String = combine_binop_types(opk, cur, rty);
+                if comb == "ERR_BINOP" {
+                    return "ERR_BINOP";
+                }
+                cur = comb;
+                pos = operand_end(toks, rpos);
+            }
+        }
+    }
+    return cur;
+}
+
+pub fn infer_typed_expr_type_exact(toks: List[String], start: Int, end: Int, lit_env: String) -> String {
+    let n = list_len(toks);
+if start >= n { return "";
+}
+    let mut pos: Int = start;
+    let mut cur: String = operand_type_with_env(toks, pos, lit_env);
+    if cur == "" {
+        return "";
+    }
+    pos = operand_end(toks, pos);
+    let mut cont: Bool = true;
+    while cont { if pos >= end { cont = false;
+    } else {
+            let opk: String = field_at(list_get(toks, pos), 0);
+            if !is_type_binop(opk) {
+                cont = false;
+            } else {
+                let rpos: Int = pos + 1;
+                if rpos >= end {
+                    return "";
+                }
+                let rtok: String = list_get(toks, rpos);
+                let rty: String = operand_type_with_env(toks, rpos, lit_env);
+                if rty == "" {
+                    return "";
+                }
+                if opk == "SLASH" {
+                    let rk: String = field_at(rtok, 0);
+                    if rk == "INT" || rk == "FLOAT" {
+                        let rtxt: String = field_at(rtok, 3);
+                        if rtxt == "0" || rtxt == "0.0" {
+                            return "ERR_DIV0";
+                        }
+                    }
+                }
+                if opk == "PERCENT" {
+                    let rk: String = field_at(rtok, 0);
+                    if rk == "INT" || rk == "FLOAT" {
+                        let rtxt: String = field_at(rtok, 3);
+                        if rtxt == "0" || rtxt == "0.0" {
+                            return "ERR_DIV0";
+                        }
+                    }
+                }
+                let comb: String = combine_binop_types(opk, cur, rty);
+                if comb == "ERR_BINOP" {
+                    return "ERR_BINOP";
+                }
+                cur = comb;
+                pos = operand_end(toks, rpos);
+            }
+        }
+    }
+    if pos == end { return cur;
+    }
+    return "";
+}

@@ -1,0 +1,152 @@
+// # Typed error reporter for emit-aarch64
+//
+// Logline: Returns a 4-line openOODA-standard diagnostic (ERR kind, --> path, source line, caret).
+//
+// Setup: chars_len, char_at, str_slice, list helpers, field_at, and Int.to_string exist. No capability is needed because the formatter is pure over its inputs.
+//
+// Beats:
+//   1. aarch64_diag_emit returns the 4-line block for any (kind, path, line, col, msg); <source> stands in for the source line when no src is given.
+//   2. aarch64_diag_from_tokens scans src to derive line/col from a bad index and uses the real source line.
+//   3. aarch64_diag_caret_for_src returns the caret line (N spaces + ^) for a given column.
+//
+// residual: aarch64_emit_diag_test returns empty until shape-gate rules are added.
+
+
+
+// Build a run of N spaces. Negative N clamps to zero.
+fn aarch64_diag_spaces(n: Int) -> String {
+    let mut s: String = "";
+    let mut k: Int = 0;
+    let mut m: Int = n;
+    if m < 0 { m = 0;
+    }
+    while k < m { s = s + " ";
+    k = k + 1;
+    }
+    return s;
+}
+
+// Scan src up to bad_index; return [line, col]. line is 1-indexed, col is 0-indexed from line start.
+pub fn aarch64_diag_line_col(src: String, bad_index: Int) -> List[Int] {
+    let total: Int = chars_len(src);
+    let mut stop: Int = bad_index;
+    if stop > total { stop = total;
+    }
+    if stop < 0 { stop = 0;
+    }
+    let mut line: Int = 1;
+    let mut col: Int = 0;
+    let mut i: Int = 0;
+    while i < stop { let c: String = char_at(src, i);
+    if c == "\n" { line = line + 1;
+    col = 0;
+    } else {
+            col = col + 1;
+        }
+        i = i + 1;
+    }
+    let mut o: List[Int] = list_new();
+    o = list_push(o, line);
+    o = list_push(o, col);
+    return o;
+}
+
+// Return the 1-indexed line of src, or "<source>" if not found. The newline itself is dropped.
+pub fn aarch64_diag_src_line(src: String, line: Int) -> String {
+    let total: Int = chars_len(src);
+if line < 1 { return "<source>";
+}
+    let mut cur: Int = 1;
+    let mut start: Int = 0;
+    let mut end: Int = 0;
+    let mut found: Int = 0;
+    let mut i: Int = 0;
+    if line == 1 { found = 0;
+    }
+    while i < total { let c: String = char_at(src, i);
+    if c == "\n" { if cur == line { end = i;
+    found = 1;
+    i = total;
+    } else {
+                cur = cur + 1;
+                if cur == line {
+                    start = i + 1;
+                }
+            }
+        }
+        i = i + 1;
+    }
+    if found == 0 && cur == line { end = total;
+    found = 1;
+    }
+    if found == 0 { return "<source>";
+    }
+    return str_slice(src, start, end);
+}
+
+// Returns the caret line: col spaces + "^". col is bad_index - line_offset (both 0-indexed byte offsets).
+pub fn aarch64_diag_caret_for_src(src: String, bad_index: Int, line_offset: Int) -> String {
+    let mut col: Int = bad_index - line_offset;
+    if col < 0 { col = 0;
+    }
+    return aarch64_diag_spaces(col) + "^";
+}
+
+// Pull SRC_PATH out of token 0, if present. Mirrors tc_diag.tc_src_path_of.
+pub fn aarch64_diag_path_of(toks: List[String], n: Int) -> String {
+    if n <= 0 { return "";
+}
+    let t0: String = list_get(toks, 0);
+    if field_at(t0, 0) == "SRC_PATH" {
+        return field_at(t0, 3);
+    }
+    return "";
+}
+
+// Build the 4-line block from raw inputs. The source line is the literal "<source>" since no read is done.
+pub fn aarch64_diag_emit(kind: String, path: String, line: Int, col: Int, msg: String) -> String {
+    let ls: String = line.to_string();
+let cs: String = col.to_string();
+let loc: String = path + ":" + ls + ":" + cs;
+let head: String = "ERR  " + kind + "  " + loc + ": " + msg;
+let arrow: String = "--> " + loc;
+let src: String = "<source>";
+let caret: String = aarch64_diag_spaces(col) + "^";
+return head + "\n" + arrow + "\n   " + src + "\n   " + caret;
+}
+
+// Same as aarch64_diag_emit but the caller already has the source line in hand.
+pub fn aarch64_diag_emit_with_src(kind: String, path: String, line: Int, col: Int, msg: String, src_line: String) -> String {
+    let ls: String = line.to_string();
+    let cs: String = col.to_string();
+    let loc: String = path + ":" + ls + ":" + cs;
+    let head: String = "ERR  " + kind + "  " + loc + ": " + msg;
+    let arrow: String = "--> " + loc;
+    let caret: String = aarch64_diag_spaces(col) + "^";
+    let body: String = if chars_len(src_line) == 0 { "<source>" } else { src_line };
+    return head + "\n" + arrow + "\n   " + body + "\n   " + caret;
+}
+
+// Derive line/col from src via aarch64_diag_line_col, then render with the real source line. Path comes from token 0.
+pub fn aarch64_diag_from_tokens(toks: List[String], n: Int, bad_index: Int, kind: String, msg: String, src: String) -> String {
+    let lc: List[Int] = aarch64_diag_line_col(src, bad_index);
+let mut line: Int = 1;
+let mut col: Int = 0;
+if list_len(lc) >= 2 { line = list_get(lc, 0);
+col = list_get(lc, 1);
+}
+    let src_line: String = aarch64_diag_src_line(src, line);
+    let path: String = aarch64_diag_path_of(toks, n);
+    return aarch64_diag_emit_with_src(kind, path, line, col, msg, src_line);
+}
+
+// Wire-point gate for the aarch64_emit dispatch. The diag formatter is a pure function over its
+// inputs; on empty source or shape mismatch, return an empty list so the dispatch can fall through
+// to its own ERR. Honors the refuse-don't-miscompile policy: never fabricate error output.
+pub fn aarch64_emit_diag_test(src: String) -> List[String] {
+    let total: Int = chars_len(src);
+    let errs: List[String] = list_new();
+    if total == 0 { return errs;
+    }
+    return errs;
+}

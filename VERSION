@@ -1,0 +1,20 @@
+# oodac version and compat contract
+#
+# Format: NAME=MAJOR.MINOR.PATCH[-PRERELEASE]
+# Bump MAJOR: incompatible API change (consumers must update imports)
+# Bump MINOR: backwards-compatible feature (consumers continue to work)
+# Bump PATCH: backwards-compatible bug fix
+#
+# oodac refuses to run if any of the declared ranges is not satisfied.
+# The api_surface field is a structural check: the loader asserts the
+# oodac ANCHOR.oo exposes exactly 12 public subdirs.
+# The release_tag field is the assertion of the current shipping
+# version; it must match the most recent git tag. See RULES.oot §1.24
+# and rfcs/0006-versioning-and-release-protocol.oot.
+
+oodac=0.1.4
+release_tag=0.1.4
+ooda=2.10.0
+ooda_max=2.99.0
+std=^2.10
+api_surface=12

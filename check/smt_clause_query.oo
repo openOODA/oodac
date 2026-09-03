@@ -1,0 +1,232 @@
+// # SMT Clause Invariant and Contradiction Query Engine
+//
+// Logline: Extracts parameter intervals, narrows environments via requires clauses, and queries proof status.
+//
+// Setup: smt_poly_eval evaluates expressions; provides query functions for compiler check and C emission.
+//
+// Beats:
+//   1. Extract function parameter interval bindings from function signatures.
+//   2. Narrow variable domain intervals from preceding requires clauses.
+//   3. Bridge proof queries (proven invariant vs provably unsat) to C emitter and typechecker.
+
+import "tc_parse_int.oo";
+
+import "smt_poly_interval.oo";
+
+import "smt_poly_sign.oo";
+
+import "smt_poly_eval.oo";
+
+
+pub fn smt_env_new() -> List[String] {
+    let r: List[String] = list_new();
+    return r;
+}
+
+pub fn smt_find_enclosing_fn(toks: List[String], pos: Int) -> Int {
+    let mut i = pos;
+    while i >= 0 {
+        if c_tokk(toks, i) == "KW_FN" { return i;
+        }
+        i = i - 1;
+    }
+    return 0 - 1;
+}
+
+pub fn smt_extract_fn_params(toks: List[String], fn_idx: Int, env: List[String]) -> List[String] {
+    if fn_idx < 0 { return env;
+    }
+    let n = list_len(toks);
+    let mut p = fn_idx + 1;
+    while p < n && c_tokk(toks, p) != "LPAREN" && c_tokk(toks, p) != "LBRACE" { p = p + 1;
+    }
+    if p >= n || c_tokk(toks, p) != "LPAREN" { return env;
+    }
+    p = p + 1;
+    let mut cur_env = env;
+    while p < n && c_tokk(toks, p) != "RPAREN" && c_tokk(toks, p) != "LBRACE" {
+        let k: String = c_tokk(toks, p);
+        if k == "IDENT" {
+            let pname: String = c_tokt(toks, p);
+            let mut inv: Interval = interval_top();
+            let mut s: Int = 0 + sign_tag_top();
+            if p + 2 < n && c_tokk(toks, p + 1) == "COLON" {
+                if c_tokk(toks, p + 2) == "IDENT" && c_tokt(toks, p + 2) == "Int" {
+                    if p + 6 < n && c_tokk(toks, p + 3) == "LBRACK" && c_tokk(toks, p + 5) == "DOTDOT" && c_tokk(toks, p + 7) == "RBRACK" {
+                        let lo: Int = 0 + parse_int(c_tokt(toks, p + 4));
+                        let hi: Int = 0 + parse_int(c_tokt(toks, p + 6));
+                        inv = interval_range(lo, hi);
+                        s = 0 + sign_from_interval(inv);
+                    }
+                }
+            }
+            cur_env = smt_env_set(cur_env, pname, inv, s);
+        }
+        p = p + 1;
+    }
+    return cur_env;
+}
+
+pub fn smt_narrow_from_req(toks: List[String], start: Int, end: Int, env: List[String]) -> List[String] {
+    let mut cur_env: List[String] = env;
+    let mut seg_start: Int = start;
+    while seg_start < end { let mut seg_end: Int = seg_start;
+    while seg_end < end && c_tokk(toks, seg_end) != "ANDAND" { seg_end = seg_end + 1;
+    }
+        let seg_len: Int = seg_end - seg_start;
+        let mut name: String = "";
+        let mut op: String = "";
+        let mut val: Int = 0;
+        let mut is_atom: Bool = false;
+        let mut flip: Bool = false;
+        if seg_len == 3 { let k0: String = c_tokk(toks, seg_start);
+        let k2: String = c_tokk(toks, seg_start + 2);
+        if k0 == "IDENT" && k2 == "INT" { name = c_tokt(toks, seg_start);
+        op = c_tokk(toks, seg_start + 1);
+        val = 0 + parse_int(c_tokt(toks, seg_start + 2));
+        is_atom = true;
+        } else if k0 == "INT" && k2 == "IDENT" {
+                name = c_tokt(toks, seg_start + 2);
+                op = c_tokk(toks, seg_start + 1);
+                val = 0 + parse_int(c_tokt(toks, seg_start));
+                is_atom = true;
+                flip = true;
+            }
+        } else if seg_len == 4 { let k0: String = c_tokk(toks, seg_start);
+        let k1: String = c_tokk(toks, seg_start + 1);
+        let k2: String = c_tokk(toks, seg_start + 2);
+        let k3: String = c_tokk(toks, seg_start + 3);
+        if k0 == "IDENT" && k2 == "MINUS" && k3 == "INT" { name = c_tokt(toks, seg_start);
+        op = k1;
+        val = 0 - parse_int(c_tokt(toks, seg_start + 3));
+        is_atom = true;
+        } else if k0 == "MINUS" && k1 == "INT" && k3 == "IDENT" {
+                name = c_tokt(toks, seg_start + 3);
+                op = k2;
+                val = 0 - parse_int(c_tokt(toks, seg_start + 1));
+                is_atom = true;
+                flip = true;
+            }
+        }
+        if is_atom {
+            let mut narrow_inv: Interval = interval_top();
+            let mut valid: Bool = true;
+            if flip {
+                if op == "LTE" { narrow_inv = interval_range(val, 2147483647);
+                }
+                else if op == "LT" { narrow_inv = interval_range(val + 1, 2147483647);
+                }
+                else if op == "GTE" { narrow_inv = interval_range(0 - 2147483647, val);
+                }
+                else if op == "GT" { narrow_inv = interval_range(0 - 2147483647, val - 1);
+                }
+                else if op == "EQEQ" { narrow_inv = interval_const(val);
+                }
+                else { valid = false;
+                }
+            } else {
+                if op == "GTE" { narrow_inv = interval_range(val, 2147483647);
+                }
+                else if op == "GT" { narrow_inv = interval_range(val + 1, 2147483647);
+                }
+                else if op == "LTE" { narrow_inv = interval_range(0 - 2147483647, val);
+                }
+                else if op == "LT" { narrow_inv = interval_range(0 - 2147483647, val - 1);
+                }
+                else if op == "EQEQ" { narrow_inv = interval_const(val);
+                }
+                else { valid = false;
+                }
+            }
+            if valid { let old_inv: Interval = smt_env_get_inv(cur_env, name);
+            let old_s: Int = 0 + smt_env_get_sign(cur_env, name);
+            let mut new_inv: Interval = interval_meet(old_inv, narrow_inv);
+            let mut new_s: Int = 0 + sign_meet(old_s, sign_from_interval(new_inv));
+            new_inv = interval_meet(new_inv, sign_to_interval(new_s));
+            cur_env = smt_env_set(cur_env, name, new_inv, new_s);
+            }
+        }
+        seg_start = seg_end + 1;
+    }
+    return cur_env;
+}
+
+
+pub fn smt_build_clause_env(toks: List[String], start: Int) -> List[String] {
+    let mut env: List[String] = smt_env_new();
+    let fn_idx: Int = 0 + smt_find_enclosing_fn(toks, start);
+    env = smt_extract_fn_params(toks, fn_idx, env);
+    if fn_idx >= 0 {
+        let mut i: Int = fn_idx;
+        while i < start {
+            if c_tokk(toks, i) == "KW_REQUIRES" {
+                let req_start: Int = i + 1;
+                let mut req_end: Int = req_start;
+                while req_end < start {
+                    let k: String = c_tokk(toks, req_end);
+                    if k == "KW_REQUIRES" || k == "KW_ENSURES" || k == "LBRACE" { break;
+                    }
+                    if k == "IDENT" && (c_tokt(toks, req_end) == "spec" || c_tokt(toks, req_end) == "caps") { break;
+                    }
+                    req_end = req_end + 1;
+                }
+                env = smt_narrow_from_req(toks, req_start, req_end, env);
+            }
+            i = i + 1;
+        }
+    }
+    return env;
+}
+
+pub fn smt_clause_is_proven(toks: List[String], start: Int, end: Int, kind: String) -> Bool {
+    let env: List[String] = smt_build_clause_env(toks, start);
+    let res: Int = 0 + smt_prove_clause(toks, start, end, env);
+    if res == 1 { return true;
+    }
+    return false;
+}
+
+pub fn smt_clause_is_unsat(toks: List[String], start: Int, end: Int, kind: String) -> Bool {
+    let mut env: List[String] = smt_build_clause_env(toks, start);
+    if kind == "requires" { env = smt_narrow_from_req(toks, start, end, env);
+    }
+    let res: Int = 0 + smt_prove_clause(toks, start, end, env);
+    if res == 0 { return true;
+    }
+    return false;
+}
+
+pub fn smt_clause_unsat_exit(toks: List[String], at: Int, kind: String) {
+    let line: String = c_tokf(toks, at, 1);
+    let col: String = c_tokf(toks, at, 2);
+    println("ERR\tsmt\tunsat " + kind + " at " + line + ":" + col);
+    process_exit(1);
+}
+
+pub fn smt_has_dynamic_ensures(toks: List[String], pos: Int, n: Int) -> Bool {
+    let mut p: Int = pos;
+    while p < n {
+        let k: String = c_tokk(toks, p);
+        if k == "LBRACE" { return false;
+        }
+        if k == "KW_ENSURES" {
+            let e_start: Int = p + 1;
+            let mut end: Int = e_start;
+            while end < n {
+                let k2: String = c_tokk(toks, end);
+                if k2 == "KW_REQUIRES" || k2 == "KW_ENSURES" || k2 == "LBRACE" { break;
+                }
+                if k2 == "IDENT" && (c_tokt(toks, end) == "spec" || c_tokt(toks, end) == "caps") { break;
+                }
+                end = end + 1;
+            }
+            if !smt_clause_is_proven(toks, e_start, end, "ensures") {
+                return true;
+            }
+            p = end;
+        } else {
+            p = p + 1;
+        }
+    }
+    return false;
+}

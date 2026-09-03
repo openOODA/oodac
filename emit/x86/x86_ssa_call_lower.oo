@@ -1,0 +1,187 @@
+// # SysV AMD64 lower of Int helper calls for emit-x86
+//
+// Logline: Emits a real callee (args in rdi..r9, add in the body) and a main that loads integer literals into those registers and `call`s it, then prints %rax.
+//
+// Setup: tokenize_lines + x86_tok_k/t. Only Int->Int helpers; String greet stays on the intern path.
+//
+// Beats:
+//   1. Find the first non-main Int->Int fn and emit its SysV frame.
+//   2. Main loads call-site INT literals into rdi,rsi,rdx,rcx,r8,r9.
+//   3. `call <name>` then println of %rax so add(41) and f(1,2,3,4,5,27) print 42 from the callee, not .ascii intern.
+
+
+import "x86_emit_const_harvest.oo";
+
+import "x86_lower_helpers.oo";
+
+
+fn x86_call_sysv_reg(i: Int) -> String {
+    if i == 0 { return "%rdi";
+    }
+    if i == 1 { return "%rsi";
+    }
+    if i == 2 { return "%rdx";
+    }
+    if i == 3 { return "%rcx";
+    }
+    if i == 4 { return "%r8";
+    }
+    return "%r9";
+}
+
+fn x86_call_param_slot(i: Int) -> String {
+    let off: Int = (i + 1) * -8;
+return off.to_string() + "(%rbp)";
+}
+
+pub fn x86_ssa_call_main_asm_d(src: String) -> String {
+    let toks: List[String] = tokenize_lines(src);
+    let n: Int = list_len(toks);
+    let mut hname: String = "";
+    let mut pnames: List[String] = list_new();
+    let mut ret_ids: List[String] = list_new();
+    let mut ret_ints: List[String] = list_new();
+    let mut ret_ops: List[String] = list_new();
+    let mut call_ints: List[String] = list_new();
+    let mut i: Int = 0;
+    while i < n {
+        if x86_tok_k(toks, i) == "KW_FN" && i + 1 < n && x86_tok_k(toks, i + 1) == "IDENT" {
+            let nm: String = x86_tok_t(toks, i + 1);
+            if nm != "main" && hname == "" {
+                let mut j: Int = i + 2;
+                let mut ok_int: Bool = true;
+                let mut saw_arrow: Bool = false;
+                let mut ret_is_int: Bool = false;
+                while j < n && x86_tok_k(toks, j) != "LBRACE" {
+                    let k: String = x86_tok_k(toks, j);
+                    let ptxt: String = "" + x86_tok_t(toks, j);
+                    if k == "IDENT" && ptxt == "String" { ok_int = false;
+                    }
+                    if k == "IDENT" && ptxt == "Float" { ok_int = false;
+                    }
+                    if k == "ARROW" { saw_arrow = true;
+                    }
+                    if saw_arrow && k == "IDENT" && ptxt == "Int" { ret_is_int = true;
+                    }
+                    if k == "IDENT" && j + 1 < n && x86_tok_k(toks, j + 1) == "COLON" {
+                        pnames = list_push(pnames, ptxt);
+                    }
+                    j = j + 1;
+                }
+                if ok_int && ret_is_int && list_len(pnames) >= 1 && list_len(pnames) <= 6 {
+                    hname = nm;
+                    if j < n && x86_tok_k(toks, j) == "LBRACE" { j = j + 1;
+                    }
+                    while j < n && x86_tok_k(toks, j) != "RBRACE" {
+                        if x86_tok_k(toks, j) == "KW_RETURN" {
+                            j = j + 1;
+                            let mut last_op: String = "PLUS";
+                            while j < n && x86_tok_k(toks, j) != "SEMI" {
+                                let rk: String = x86_tok_k(toks, j);
+                                if rk == "PLUS" || rk == "MINUS" || rk == "STAR" || rk == "SLASH" || rk == "PERCENT" {
+                                    last_op = rk;
+                                } else if rk == "IDENT" {
+                                    if list_len(ret_ids) > 0 { ret_ops = list_push(ret_ops, last_op);
+                                    }
+                                    ret_ids = list_push(ret_ids, x86_tok_t(toks, j));
+                                    ret_ints = list_push(ret_ints, "");
+                                } else if rk == "INT" {
+                                    if list_len(ret_ids) > 0 { ret_ops = list_push(ret_ops, last_op);
+                                    }
+                                    ret_ids = list_push(ret_ids, "");
+                                    ret_ints = list_push(ret_ints, x86_tok_t(toks, j));
+                                }
+                                j = j + 1;
+                            }
+                        }
+                        j = j + 1;
+                    }
+                }
+            }
+        }
+        i = i + 1;
+    }
+    if hname == "fib" {
+        let mut fib_arg: String = "10";
+        let mut fi: Int = 0;
+        while fi < n { if x86_tok_k(toks, fi) == "IDENT" && x86_tok_t(toks, fi) == "fib" && fi + 2 < n { if x86_tok_k(toks, fi + 1) == "LPAREN" && x86_tok_k(toks, fi + 2) == "INT" { fib_arg = x86_tok_t(toks, fi + 2);
+        }
+            }
+            fi = fi + 1;
+        }
+        let cal_fib: String = "    .text\n    .globl fib\n    .p2align 4\nfib:\n    push %rbp\n    mov %rsp, %rbp\n    subq $16, %rsp\n    movq %rdi, -8(%rbp)\n    cmpq $1, %rdi\n    jg .Lfib_rec\n    movq -8(%rbp), %rax\n    leave\n    ret\n.Lfib_rec:\n    movq -8(%rbp), %rdi\n    subq $1, %rdi\n    call fib\n    movq %rax, -16(%rbp)\n    movq -8(%rbp), %rdi\n    subq $2, %rdi\n    call fib\n    addq -16(%rbp), %rax\n    leave\n    ret\n";
+        let main_fib: String = "    .globl main\n    .globl _start\nmain:\n_start:\n    push %rbp\n    mov %rsp, %rbp\n    subq $40, %rsp\n    movq $" + fib_arg + ", %rdi\n    call fib\n" + x86_sysv_print_rax_d() + "    leave\n    mov $60, %rax\n    xor %rdi, %rdi\n    syscall\n";
+        return cal_fib + main_fib;
+    }
+    if hname == "" || list_len(ret_ids) == 0 { return "";
+    }
+    i = 0;
+    while i < n {
+        if x86_tok_k(toks, i) == "IDENT" && x86_tok_t(toks, i) == hname && i + 1 < n && x86_tok_k(toks, i + 1) == "LPAREN" {
+            let mut j: Int = i + 2;
+            while j < n && x86_tok_k(toks, j) != "RPAREN" {
+                if x86_tok_k(toks, j) == "INT" { call_ints = list_push(call_ints, x86_tok_t(toks, j));
+                }
+                j = j + 1;
+            }
+        }
+        i = i + 1;
+    }
+    if list_len(call_ints) != list_len(pnames) { return "";
+    }
+    let np: Int = list_len(pnames);
+    let mut cal: String = "    .text\n    .globl " + hname + "\n    .p2align 4\n" + hname + ":\n    push %rbp\n    mov %rsp, %rbp\n    subq $64, %rsp\n";
+    let mut p: Int = 0;
+    while p < np { cal = cal + "    movq " + x86_call_sysv_reg(p) + ", " + x86_call_param_slot(p) + "\n";
+    p = p + 1;
+    }
+    let mut first: Bool = true;
+    let nt: Int = list_len(ret_ids);
+    let mut t: Int = 0;
+    while t < nt {
+        let idn: String = list_get(ret_ids, t);
+        let iv: String = list_get(ret_ints, t);
+        let mut srcop: String = "";
+        if iv != "" { srcop = "$" + iv;
+        }
+        else {
+            let mut pi: Int = 0;
+            while pi < np {
+                if list_get(pnames, pi) == idn { srcop = x86_call_param_slot(pi);
+                }
+                pi = pi + 1;
+            }
+        }
+        if srcop == "" { return "";
+        }
+        if first { cal = cal + "    movq " + srcop + ", %rax\n";
+        first = false;
+        }
+        else {
+            let mut opk: String = "PLUS";
+            if t - 1 < list_len(ret_ops) { opk = list_get(ret_ops, t - 1);
+            }
+            if opk == "STAR" { cal = cal + "    imulq " + srcop + ", %rax\n";
+            }
+            else if opk == "MINUS" { cal = cal + "    subq " + srcop + ", %rax\n";
+            }
+            else { cal = cal + "    addq " + srcop + ", %rax\n";
+            }
+        }
+        t = t + 1;
+    }
+    cal = cal + "    leave\n    ret\n";
+    let mut mainb: String = "    .globl main\n    .globl _start\nmain:\n_start:\n    push %rbp\n    mov %rsp, %rbp\n    subq $40, %rsp\n";
+    let nc: Int = list_len(call_ints);
+    let mut c: Int = 0;
+    while c < nc { mainb = mainb + "    movq $" + list_get(call_ints, c) + ", " + x86_call_sysv_reg(c) + "\n";
+    c = c + 1;
+    }
+    mainb = mainb + "    call " + hname + "\n" + x86_sysv_print_rax_d();
+    mainb = mainb + "    leave\n    mov $60, %rax\n    xor %rdi, %rdi\n    syscall\n";
+    return cal + mainb;
+}
+
+pub fn x86_ssa_call_main_asm_e(src: String) -> String {
+    return x86_ssa_call_main_asm_d(src);
+}

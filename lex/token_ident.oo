@@ -1,0 +1,90 @@
+// # Scan an identifier or keyword / Print a token and classify keywords
+//
+// Logline: If the cursor sits on a letter or underscore, eat the rest of the name and pack it as a keyword kind or IDENT. Print a kind/line/col/text token row and map reserved idents to KW_* kinds.
+//
+// Setup: Merged cohesive compiler module.
+//
+// Beats:
+//   1. Unified cohesive implementation.
+
+pub fn try_scan_ident(src: String, i0: Int, line0: Int, col0: Int) -> List[String] {
+    let n = chars_len(src);
+    if i0 >= n { return list_new();
+    }
+    let ch = char_at(src, i0);
+    if !(char_is_alpha(ch) || ch == "_") {
+        return list_new();
+    }
+    let sl = line0;
+    let sc = col0;
+    let mut i = i0 + 1;
+    let mut col = col0 + 1;
+    let mut line = line0;
+    let mut cont_id = true;
+    while cont_id { if i >= n { cont_id = false;
+    } else {
+            let c2 = char_at(src, i);
+            if char_is_alpha(c2) || char_is_digit(c2) || c2 == "_" {
+                i = i + 1;
+                col = col + 1;
+            } else {
+                cont_id = false;
+            }
+        }
+    }
+    let id: String = str_slice(src, i0, i);
+    return pack_tok(i, line, col, keyword_kind(id), id, sl, sc);
+}
+
+pub fn emit_tok(kind: String, line: Int, col: Int, text: String) {
+    let ls: String = line.to_string();
+    let cs: String = col.to_string();
+    println(kind + "\t" + ls + "\t" + cs + "\t" + text);
+}
+
+pub fn keyword_kind(id: String) -> String {
+    if id == "fn" { return "KW_FN";
+    }
+    if id == "pub" { return "KW_PUB";
+    }
+    if id == "let" { return "KW_LET";
+    }
+    if id == "mut" { return "KW_MUT";
+    }
+    if id == "import" { return "KW_IMPORT";
+    }
+    if id == "requires" { return "KW_REQUIRES";
+    }
+    if id == "ensures" { return "KW_ENSURES";
+    }
+    if id == "verify" { return "KW_VERIFY";
+    }
+    if id == "if" { return "KW_IF";
+    }
+    if id == "else" { return "KW_ELSE";
+    }
+    if id == "match" { return "KW_MATCH";
+    }
+    if id == "for" { return "KW_FOR";
+    }
+    if id == "in" { return "KW_IN";
+    }
+    if id == "while" { return "KW_WHILE";
+    }
+    if id == "return" { return "KW_RETURN";
+    }
+    if id == "type" { return "KW_TYPE";
+    }
+    if id == "where" { return "KW_WHERE";
+    }
+    if id == "true" { return "KW_TRUE";
+    }
+    if id == "false" { return "KW_FALSE";
+    }
+    if id == "gpu" { return "KW_GPU";
+    }
+    return "IDENT";
+}
+
+// ===== Real AST dump in .oo: recursive descent over re-tokenized stream =====
+// Produces the same structural lines as stage-0 `ooda dump ast` (spans from tokens).

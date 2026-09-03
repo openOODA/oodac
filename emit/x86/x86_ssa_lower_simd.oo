@@ -1,0 +1,138 @@
+// # x86-64 SSA SIMD & AVX2 Machine Code Lowerer
+//
+// Logline: Lowers typed SSA SIMD vector operations to AT&T x86-64 AVX2 machine instructions allocating %ymm0..%ymm15.
+//
+// Setup: Sub-pass for x86_ssa_lower_ops.oo and x86_ssa_emit.oo implementing 256-bit SIMD lowering under RFC 0026.
+//
+// Beats:
+//   1. Lower f32x8 vector arithmetic, broadcasting, and FMA instructions.
+//   2. Lower f64x4 vector arithmetic, broadcasting, and FMA instructions.
+//   3. Lower 32-byte aligned vector memory loads and stores (vmovaps, vmovapd).
+//   4. Lower horizontal vector sum reductions and scalar FMA.
+
+import "emit/llvm/ssa_ir.oo";
+import "x86_ssa_emit_base.oo";
+
+
+pub fn x86_is_simd_op(op: Int) -> Bool {
+    return op >= 56 && op <= 78;
+}
+
+pub fn x86_lower_simd_inst(op: Int, s_r: String, s_lh: String, s_imm: String) -> List[String] {
+    let mut lines: List[String] = list_new();
+    // Every aligned 256-bit memory access is preceded by a 32-byte alignment
+    // check (testb $0x1F, addr; jz ok; jmp trap). The trap is fail-closed
+    // and never reachable when the prologue aligned %rsp to 32 bytes AND
+    // the buffer base is also 32-byte aligned. The label is per-op to keep
+    // the check colocated with the load/store it guards.
+    let ck_load: String  = x86_ssa_simd_align_check("%r10", "load");
+    let ck_store: String = x86_ssa_simd_align_check("%r10", "store");
+    if op == ssa_op_f32x8_splat() {
+        lines = list_push(lines, "    vbroadcastss " + s_lh + ", %ymm0\n");
+        lines = list_push(lines, "    vmovaps %ymm0, " + s_r + "\n");
+    } else if op == ssa_op_f32x8_get_lane() {
+        lines = list_push(lines, "    vmovaps " + s_lh + ", %ymm0\n");
+        lines = list_push(lines, "    vmovaps %ymm0, " + s_r + "\n");
+    } else if op == ssa_op_f32x8_insert_lane() {
+        lines = list_push(lines, "    vmovaps " + s_lh + ", %ymm0\n");
+        lines = list_push(lines, "    vmovaps %ymm0, " + s_r + "\n");
+    } else if op == ssa_op_f32x8_add() {
+        lines = list_push(lines, "    vmovaps " + s_lh + ", %ymm0\n");
+        lines = list_push(lines, "    vaddps " + s_imm + ", %ymm0, %ymm0\n");
+        lines = list_push(lines, "    vmovaps %ymm0, " + s_r + "\n");
+    } else if op == ssa_op_f32x8_sub() {
+        lines = list_push(lines, "    vmovaps " + s_lh + ", %ymm0\n");
+        lines = list_push(lines, "    vsubps " + s_imm + ", %ymm0, %ymm0\n");
+        lines = list_push(lines, "    vmovaps %ymm0, " + s_r + "\n");
+    } else if op == ssa_op_f32x8_mul() {
+        lines = list_push(lines, "    vmovaps " + s_lh + ", %ymm0\n");
+        lines = list_push(lines, "    vmulps " + s_imm + ", %ymm0, %ymm0\n");
+        lines = list_push(lines, "    vmovaps %ymm0, " + s_r + "\n");
+    } else if op == ssa_op_f32x8_div() {
+        lines = list_push(lines, "    vmovaps " + s_lh + ", %ymm0\n");
+        lines = list_push(lines, "    vdivps " + s_imm + ", %ymm0, %ymm0\n");
+        lines = list_push(lines, "    vmovaps %ymm0, " + s_r + "\n");
+    } else if op == ssa_op_f32x8_fma() {
+        lines = list_push(lines, "    vmovaps " + s_lh + ", %ymm0\n");
+        lines = list_push(lines, "    vfmadd213ps " + s_imm + ", %ymm0, %ymm0\n");
+        lines = list_push(lines, "    vmovaps %ymm0, " + s_r + "\n");
+    } else if op == ssa_op_f32x8_reduce_sum() {
+        lines = list_push(lines, "    vmovaps " + s_lh + ", %ymm0\n");
+        lines = list_push(lines, "    vextractf128 $1, %ymm0, %xmm1\n");
+        lines = list_push(lines, "    vaddps %xmm1, %xmm0, %xmm0\n");
+        lines = list_push(lines, "    vhaddps %xmm0, %xmm0, %xmm0\n");
+        lines = list_push(lines, "    vhaddps %xmm0, %xmm0, %xmm0\n");
+        lines = list_push(lines, "    vmovss %xmm0, " + s_r + "\n");
+    } else if op == ssa_op_f32x8_load_aligned() {
+        lines = list_push(lines, "    movq " + s_lh + ", %r10\n");
+        lines = list_push(lines, ck_load);
+        lines = list_push(lines, "    vmovaps (%r10), %ymm0\n");
+        lines = list_push(lines, "    vmovaps %ymm0, " + s_r + "\n");
+    } else if op == ssa_op_f32x8_store_aligned() {
+        lines = list_push(lines, "    movq " + s_lh + ", %r10\n");
+        lines = list_push(lines, "    vmovaps " + s_imm + ", %ymm0\n");
+        lines = list_push(lines, ck_store);
+        lines = list_push(lines, "    vmovaps %ymm0, (%r10)\n");
+    } else if op == ssa_op_f64x4_splat() {
+        lines = list_push(lines, "    vbroadcastsd " + s_lh + ", %ymm0\n");
+        lines = list_push(lines, "    vmovapd %ymm0, " + s_r + "\n");
+    } else if op == ssa_op_f64x4_get_lane() {
+        lines = list_push(lines, "    vmovapd " + s_lh + ", %ymm0\n");
+        lines = list_push(lines, "    vmovapd %ymm0, " + s_r + "\n");
+    } else if op == ssa_op_f64x4_insert_lane() {
+        lines = list_push(lines, "    vmovapd " + s_lh + ", %ymm0\n");
+        lines = list_push(lines, "    vmovapd %ymm0, " + s_r + "\n");
+    } else if op == ssa_op_f64x4_add() {
+        lines = list_push(lines, "    vmovapd " + s_lh + ", %ymm0\n");
+        lines = list_push(lines, "    vaddpd " + s_imm + ", %ymm0, %ymm0\n");
+        lines = list_push(lines, "    vmovapd %ymm0, " + s_r + "\n");
+    } else if op == ssa_op_f64x4_sub() {
+        lines = list_push(lines, "    vmovapd " + s_lh + ", %ymm0\n");
+        lines = list_push(lines, "    vsubpd " + s_imm + ", %ymm0, %ymm0\n");
+        lines = list_push(lines, "    vmovapd %ymm0, " + s_r + "\n");
+    } else if op == ssa_op_f64x4_mul() {
+        lines = list_push(lines, "    vmovapd " + s_lh + ", %ymm0\n");
+        lines = list_push(lines, "    vmulpd " + s_imm + ", %ymm0, %ymm0\n");
+        lines = list_push(lines, "    vmovapd %ymm0, " + s_r + "\n");
+    } else if op == ssa_op_f64x4_div() {
+        lines = list_push(lines, "    vmovapd " + s_lh + ", %ymm0\n");
+        lines = list_push(lines, "    vdivpd " + s_imm + ", %ymm0, %ymm0\n");
+        lines = list_push(lines, "    vmovapd %ymm0, " + s_r + "\n");
+    } else if op == ssa_op_f64x4_fma() {
+        lines = list_push(lines, "    vmovapd " + s_lh + ", %ymm0\n");
+        lines = list_push(lines, "    vfmadd213pd " + s_imm + ", %ymm0, %ymm0\n");
+        lines = list_push(lines, "    vmovapd %ymm0, " + s_r + "\n");
+    } else if op == ssa_op_f64x4_reduce_sum() {
+        lines = list_push(lines, "    vmovapd " + s_lh + ", %ymm0\n");
+        lines = list_push(lines, "    vextractf128 $1, %ymm0, %xmm1\n");
+        lines = list_push(lines, "    vaddpd %xmm1, %xmm0, %xmm0\n");
+        lines = list_push(lines, "    vhaddpd %xmm0, %xmm0, %xmm0\n");
+        lines = list_push(lines, "    vmovsd %xmm0, " + s_r + "\n");
+    } else if op == ssa_op_f64x4_load_aligned() {
+        lines = list_push(lines, "    movq " + s_lh + ", %r10\n");
+        lines = list_push(lines, ck_load);
+        lines = list_push(lines, "    vmovapd (%r10), %ymm0\n");
+        lines = list_push(lines, "    vmovapd %ymm0, " + s_r + "\n");
+    } else if op == ssa_op_f64x4_store_aligned() {
+        lines = list_push(lines, "    movq " + s_lh + ", %r10\n");
+        lines = list_push(lines, "    vmovapd " + s_imm + ", %ymm0\n");
+        lines = list_push(lines, ck_store);
+        lines = list_push(lines, "    vmovapd %ymm0, (%r10)\n");
+    } else if op == ssa_op_scalar_fma() {
+        lines = list_push(lines, "    vmovsd " + s_lh + ", %xmm0\n");
+        lines = list_push(lines, "    vfmadd213sd " + s_imm + ", %xmm0, %xmm0\n");
+        lines = list_push(lines, "    vmovsd %xmm0, " + s_r + "\n");
+    }
+    return lines;
+}
+
+pub fn x86_format_simd_inst(op: Int, s_r: String, s_lh: String, s_imm: String) -> String {
+    let ls: List[String] = x86_lower_simd_inst(op, s_r, s_lh, s_imm);
+let mut out: String = "";
+let n: Int = list_len(ls);
+let mut i: Int = 0;
+while i < n { out = out + list_get(ls, i);
+i = i + 1;
+}
+    return out;
+}

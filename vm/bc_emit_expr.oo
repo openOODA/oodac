@@ -1,0 +1,201 @@
+// # Lower an expression to bytecode / Lower a bytecode primary
+//
+// Logline: Pratt-parses a token expression into bytecode and returns the next pos, env, label counter, and code. Emits PUSH, CALL, LOAD_LOCAL, or nested match, if, struct, Ok, or Err for one primary and returns pos, env, label counter, and code.
+//
+// Setup: Merged cohesive compiler module.
+//
+// Beats:
+//   1. Unified cohesive implementation.
+
+
+import "bc_emit_env.oo";
+
+import "bc_emit_surface.oo";
+
+import "bc_emit_expr_if.oo";
+
+
+pub fn bc_emit_expr(toks: List[String], pos: Int, n: Int, env: String, label_ctr: Int) -> List[String] {
+    return bc_emit_expr_bp(toks, pos, n, env, label_ctr, 0);
+}
+
+pub fn bc_emit_expr_bp(toks: List[String], pos: Int, n: Int, env: String, label_ctr: Int, min_bp: Int) -> List[String] {
+    let mut p = pos;
+    let mut e: String = env;
+    let mut lc = label_ctr;
+    let mut code: String = "";
+    if p >= n { let mut out: List[String] = list_new();
+    out = list_push(out, p.to_string());
+    out = list_push(out, e);
+    out = list_push(out, lc.to_string());
+    out = list_push(out, "");
+    return out;
+    }
+
+    let k0: String = field_at(list_get(toks, p), 0);
+    if k0 == "BANG" || k0 == "MINUS" {
+        p = p + 1;
+        let sub: List[String] = bc_emit_expr_bp(toks, p, n, e, lc, 100);
+        p = parse_int(list_get(sub, 0));
+        e = list_get(sub, 1);
+        lc = parse_int(list_get(sub, 2));
+        let sub_code: String = list_get(sub, 3);
+        let mut un_op: String = "NEG";
+        if k0 == "BANG" { un_op = "NOT";
+        }
+        code = sub_code + "\n" + un_op;
+    } else {
+        let prim: List[String] = bc_emit_primary(toks, p, n, e, lc);
+        p = parse_int(list_get(prim, 0));
+        e = list_get(prim, 1);
+        lc = parse_int(list_get(prim, 2));
+        code = list_get(prim, 3);
+    }
+
+    let mut cont = true;
+    while cont { if p >= n { cont = false;
+    } else {
+            let k: String = field_at(list_get(toks, p), 0);
+            let bp = 0 + bin_bp(k);
+            if bp == 0 || bp < min_bp {
+                cont = false;
+            } else {
+                p = p + 1;
+                let right: List[String] = bc_emit_expr_bp(toks, p, n, e, lc, bp + 1);
+                p = parse_int(list_get(right, 0));
+                e = list_get(right, 1);
+                lc = parse_int(list_get(right, 2));
+                let right_code: String = list_get(right, 3);
+                let bin_inst: String = bc_bin_opcode(k);
+                code = code + "\n" + right_code + "\n" + bin_inst;
+            }
+        }
+    }
+
+    let mut res: List[String] = list_new();
+    res = list_push(res, p.to_string());
+    res = list_push(res, e);
+    res = list_push(res, lc.to_string());
+    res = list_push(res, code);
+    return res;
+}
+
+pub fn bc_emit_primary(toks: List[String], pos: Int, n: Int, env: String, label_ctr: Int) -> List[String] {
+    let mut p = pos;
+    let mut e: String = env;
+    let mut lc = label_ctr;
+    let mut code: String = "";
+
+    let tok: String = list_get(toks, p);
+    let k: String = field_at(tok, 0);
+    let text: String = field_at(tok, 3);
+
+    if k == "INT" {
+        code = "PUSH_INT " + text;
+        p = p + 1;
+    } else if k == "STRING" {
+        code = "PUSH_STR " + text;
+        p = p + 1;
+    } else if k == "KW_TRUE" {
+        code = "PUSH_BOOL 1";
+        p = p + 1;
+    } else if k == "KW_FALSE" {
+        code = "PUSH_BOOL 0";
+        p = p + 1;
+    } else if k == "LPAREN" {
+        p = p + 1;
+        let inner: List[String] = bc_emit_expr(toks, p, n, e, lc);
+        p = parse_int(list_get(inner, 0));
+        e = list_get(inner, 1);
+        lc = parse_int(list_get(inner, 2));
+        code = list_get(inner, 3);
+        if p < n && field_at(list_get(toks, p), 0) == "RPAREN" {
+            p = p + 1;
+        }
+    } else if k == "KW_MATCH" {
+        let m: List[String] = bc_emit_match_expr(toks, p, n, e, lc);
+        p = parse_int(list_get(m, 0));
+        e = list_get(m, 1);
+        lc = parse_int(list_get(m, 2));
+        code = list_get(m, 3);
+    } else if k == "IDENT" {
+        let name: String = text;
+        p = p + 1;
+        let mut handled: Bool = false;
+        if p < n { let pk: String = field_at(list_get(toks, p), 0);
+        if (name == "Ok" || name == "Err") && pk == "LPAREN" { let oe: List[String] = bc_emit_ok_err(toks, p - 1, n, e, lc, name);
+        p = parse_int(list_get(oe, 0));
+        e = list_get(oe, 1);
+        lc = parse_int(list_get(oe, 2));
+        code = list_get(oe, 3);
+        handled = true;
+        } else if pk == "LBRACE" && p + 2 < n { if field_at(list_get(toks, p + 1), 0) == "IDENT" && field_at(list_get(toks, p + 2), 0) == "COLON" { let sl: List[String] = bc_emit_struct_lit(toks, p - 1, n, e, lc);
+        p = parse_int(list_get(sl, 0));
+        e = list_get(sl, 1);
+        lc = parse_int(list_get(sl, 2));
+        code = list_get(sl, 3);
+        handled = true;
+        }
+            } else if pk == "LPAREN" {
+                p = p + 1;
+                let mut argc = 0;
+                let mut args_code: String = "";
+                while p < n && field_at(list_get(toks, p), 0) != "RPAREN" {
+                    if field_at(list_get(toks, p), 0) == "COMMA" {
+                        p = p + 1;
+                    } else {
+                        let arg_res: List[String] = bc_emit_expr(toks, p, n, e, lc);
+                        p = parse_int(list_get(arg_res, 0));
+                        e = list_get(arg_res, 1);
+                        lc = parse_int(list_get(arg_res, 2));
+                        let ac: String = list_get(arg_res, 3);
+                        if args_code == "" { args_code = ac;
+                        } else { args_code = args_code + "\n" + ac;
+                        }
+                        argc = argc + 1;
+                    }
+                }
+                if p < n && field_at(list_get(toks, p), 0) == "RPAREN" {
+                    p = p + 1;
+                }
+                let argc_str: String = argc.to_string();
+                let call_inst: String = "CALL " + name + " " + argc_str;
+                if args_code == "" { code = call_inst;
+                } else { code = args_code + "\n" + call_inst;
+                }
+                handled = true;
+            }
+        }
+        if !handled { let slot = 0 + bc_env_lookup(e, name);
+        if slot >= 0 { let slot_str: String = slot.to_string();
+        code = "LOAD_LOCAL " + slot_str;
+        } else {
+                code = "PUSH_INT 0";
+            }
+        }
+        while p < n && field_at(list_get(toks, p), 0) == "DOT" {
+            p = p + 1;
+            if p < n && field_at(list_get(toks, p), 0) == "IDENT" {
+                let fname: String = field_at(list_get(toks, p), 3);
+                p = p + 1;
+                code = bc_emit_field_get(code, fname);
+            }
+        }
+    } else if k == "KW_IF" {
+        let if_res: List[String] = bc_emit_if_expr(toks, p, n, e, lc);
+        p = parse_int(list_get(if_res, 0));
+        e = list_get(if_res, 1);
+        lc = parse_int(list_get(if_res, 2));
+        code = list_get(if_res, 3);
+    } else {
+        code = "PUSH_INT 0";
+        p = p + 1;
+    }
+
+    let mut res: List[String] = list_new();
+    res = list_push(res, p.to_string());
+    res = list_push(res, e);
+    res = list_push(res, lc.to_string());
+    res = list_push(res, code);
+    return res;
+}

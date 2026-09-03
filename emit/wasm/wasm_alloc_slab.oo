@@ -1,0 +1,184 @@
+// # WebAssembly Linear Memory Slab Allocator
+//
+// Logline: Multi-class slab memory allocator with freelist bins for high-throughput small object allocations in Wasm linear memory.
+//
+// Setup: Import wasm_leb128.oo for memory sizing and offset encoding.
+//
+// Beats:
+//   1. Define slab size classes (16B, 32B, 64B, 128B, 256B, 512B).
+//   2. Manage freelist bitmaps and chunk headers in linear memory.
+
+import "wasm_binary_builder.oo";
+//   3. Allocate and deallocate slab blocks with zero fragmentation.
+//   4. Export slab pool statistics and diagnostic bounds.
+
+import "wasm_leb128.oo";
+
+type SlabPool = struct {
+    base_address: Int,
+    current_offset: Int,
+    capacity_bytes: Int,
+    class_count: Int,
+    block_sizes: List[Int],
+    blocks_per_slab: List[Int],
+    free_heads: List[Int],
+    alloc_counts: List[Int],
+    freed_counts: List[Int],
+    active_slabs: Int
+};
+
+type SlabStats = struct {
+    total_bytes_managed: Int,
+    total_bytes_used: Int,
+    active_allocations: Int,
+    slab_class_count: Int
+};
+
+fn slab_init_block_sizes() -> List[Int] {
+    let mut bsz: List[Int] = list_new();
+    bsz = list_push(bsz, 16);
+    bsz = list_push(bsz, 32);
+    bsz = list_push(bsz, 64);
+    bsz = list_push(bsz, 128);
+    bsz = list_push(bsz, 256);
+    bsz = list_push(bsz, 512);
+    return bsz;
+}
+
+fn slab_init_bps() -> List[Int] {
+    let mut bps: List[Int] = list_new();
+    bps = list_push(bps, 64);
+    bps = list_push(bps, 64);
+    bps = list_push(bps, 32);
+    bps = list_push(bps, 32);
+    bps = list_push(bps, 16);
+    bps = list_push(bps, 8);
+    return bps;
+}
+
+fn slab_init_zeros() -> List[Int] {
+    let mut l: List[Int] = list_new();
+    let mut i: Int = 0;
+    while i < 6 {
+        l = list_push(l, 0);
+        i = i + 1;
+    }
+    return l;
+}
+
+pub fn slab_pool_new(base_addr: Int, capacity: Int) -> SlabPool {
+    return SlabPool {
+        base_address: base_addr,
+        current_offset: base_addr,
+        capacity_bytes: capacity,
+        class_count: 6,
+        block_sizes: slab_init_block_sizes(),
+        blocks_per_slab: slab_init_bps(),
+        free_heads: slab_init_zeros(),
+        alloc_counts: slab_init_zeros(),
+        freed_counts: slab_init_zeros(),
+        active_slabs: 0
+    };
+}
+
+pub fn slab_class_for_size(req_size: Int) -> Int {
+    if req_size <= 16 { return 0; }
+    if req_size <= 32 { return 1; }
+    if req_size <= 64 { return 2; }
+    if req_size <= 128 { return 3; }
+    if req_size <= 256 { return 4; }
+    if req_size <= 512 { return 5; }
+    return -1;
+}
+
+pub fn slab_class_size(class_idx: Int) -> Int {
+    if class_idx == 0 { return 16; }
+    if class_idx == 1 { return 32; }
+    if class_idx == 2 { return 64; }
+    if class_idx == 3 { return 128; }
+    if class_idx == 4 { return 256; }
+    if class_idx == 5 { return 512; }
+    return 0;
+}
+
+pub fn slab_pool_alloc(mut pool: SlabPool, req_size: Int) -> Int {
+    let mut pool: SlabPool = pool;
+    let c_idx: Int = (0 + slab_class_for_size(req_size));
+    if c_idx < 0 { return 0; }
+    let fh: Int = list_get(pool.free_heads, c_idx);
+    if fh > 0 {
+        pool.free_heads = wasm_ilist_set(pool.free_heads, c_idx, 0);
+        let cur_ac: Int = list_get(pool.alloc_counts, c_idx);
+        pool.alloc_counts = wasm_ilist_set(pool.alloc_counts, c_idx, cur_ac + 1);
+        return fh;
+    }
+    let bsz: Int = list_get(pool.block_sizes, c_idx);
+    let bps: Int = list_get(pool.blocks_per_slab, c_idx);
+    let needed: Int = bsz * bps;
+    let used: Int = pool.current_offset + needed;
+    let cap: Int = pool.base_address + pool.capacity_bytes;
+    if used > cap {
+        return 0;
+    }
+    let ptr: Int = pool.current_offset;
+    pool.current_offset = pool.current_offset + needed;
+    pool.active_slabs = pool.active_slabs + 1;
+    let cur_ac: Int = list_get(pool.alloc_counts, c_idx);
+    pool.alloc_counts = wasm_ilist_set(pool.alloc_counts, c_idx, cur_ac + 1);
+    return ptr;
+}
+
+pub fn slab_pool_free(mut pool: SlabPool, ptr: Int, req_size: Int) -> Bool {
+    let mut pool: SlabPool = pool;
+    let c_idx: Int = (0 + slab_class_for_size(req_size));
+    let base: Int = pool.base_address;
+    let cur: Int = pool.current_offset;
+    if c_idx < 0 {
+        return false;
+    }
+    if ptr < base {
+        return false;
+    }
+    if ptr >= cur {
+        return false;
+    }
+    pool.free_heads = wasm_ilist_set(pool.free_heads, c_idx, ptr);
+    let cur_fc: Int = list_get(pool.freed_counts, c_idx);
+    pool.freed_counts = wasm_ilist_set(pool.freed_counts, c_idx, cur_fc + 1);
+    return true;
+}
+
+fn slab_compute_total_used(acs: List[Int], fcs: List[Int], bszs: List[Int], cnt: Int) -> Int {
+    let mut total_used: Int = 0;
+    let mut i: Int = 0;
+    while i < cnt {
+        let active: Int = list_get(acs, i) - list_get(fcs, i);
+        if active > 0 {
+            total_used = total_used + (active * list_get(bszs, i));
+        }
+        i = i + 1;
+    }
+    return total_used;
+}
+
+fn slab_compute_total_active(acs: List[Int], fcs: List[Int], cnt: Int) -> Int {
+    let mut total_active: Int = 0;
+    let mut i: Int = 0;
+    while i < cnt {
+        let active: Int = list_get(acs, i) - list_get(fcs, i);
+        if active > 0 {
+            total_active = total_active + active;
+        }
+        i = i + 1;
+    }
+    return total_active;
+}
+
+pub fn slab_pool_get_stats(pool: SlabPool) -> SlabStats {
+    return SlabStats {
+        total_bytes_managed: pool.capacity_bytes,
+        total_bytes_used: slab_compute_total_used(pool.alloc_counts, pool.freed_counts, pool.block_sizes, pool.class_count),
+        active_allocations: slab_compute_total_active(pool.alloc_counts, pool.freed_counts, pool.class_count),
+        slab_class_count: pool.class_count
+    };
+}

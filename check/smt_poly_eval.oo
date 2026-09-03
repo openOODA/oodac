@@ -1,0 +1,244 @@
+// # Non-Linear Polynomial and Sign Expression Evaluator
+//
+// Logline: Evaluates polynomial token spans with interval math, dedicated squaring, and sign propagation.
+//
+// Setup: Interval and sign lattice in scope; parse_int and token helpers used.
+//
+// Beats:
+//   1. Implement token comparison helper for structural square detection.
+//   2. Parse and evaluate primary, multiplicative, additive, and relational expressions.
+//   3. Compute polynomial interval and sign bounds under active variable environments.
+import "tc_parse_int.oo";
+import "smt_poly_interval.oo";
+import "smt_poly_sign.oo";
+pub type PolyVal = struct {
+    pos: Int,
+    inv: Interval,
+    sign: Int
+};
+pub fn smt_env_find(env: List[String], name: String) -> Int {
+    let n: Int = list_len(env);
+    let mut i: Int = 0;
+    while i < n {
+        if field_at(list_get(env, i), 0) == name { return i; }
+        i = i + 1;
+    }
+    return 0 - 1;
+}
+pub fn smt_env_get_inv(env: List[String], name: String) -> Interval {
+    let idx: Int = smt_env_find(env, name);
+    if idx < 0 { return interval_top(); }
+    let low: Int = parse_int(field_at(list_get(env, idx), 1));
+    let high: Int = parse_int(field_at(list_get(env, idx), 2));
+    let bot_str: String = field_at(list_get(env, idx), 4);
+    let is_bot: Bool = (bot_str == "true" || bot_str == "1");
+    let res: Interval = Interval { low: low, high: high, is_bottom: is_bot };
+    return res;
+}
+pub fn smt_env_get_sign(env: List[String], name: String) -> Int {
+    let idx: Int = smt_env_find(env, name);
+    if idx < 0 { return sign_tag_top(); }
+    return parse_int(field_at(list_get(env, idx), 3));
+}
+pub fn smt_env_set(env: List[String], name: String, inv: Interval, sign_tag: Int) -> List[String] {
+    let mut bot_val: Int = 0;
+    if inv.is_bottom { bot_val = 1; }
+    let row: String = name + "\t" + (inv).low.to_string() + "\t" + (inv).high.to_string() + "\t" + sign_tag.to_string() + "\t" + bot_val.to_string();
+    let idx: Int = smt_env_find(env, name);
+    let n: Int = list_len(env);
+    if idx >= 0 {
+        let mut out: List[String] = list_new();
+        let mut j: Int = 0;
+        while j < n {
+            if j == idx { out = list_push(out, row); } else { out = list_push(out, list_get(env, j)); }
+            j = j + 1;
+        }
+        return out;
+    }
+    return list_push(env, row);
+}
+pub fn smt_env_is_feasible(env: List[String]) -> Bool {
+    let n: Int = list_len(env);
+    let mut i: Int = 0;
+    while i < n {
+        let entry: String = list_get(env, i);
+        let s_tag: Int = parse_int(field_at(entry, 3));
+        let bot_s: String = field_at(entry, 4);
+        if s_tag == sign_tag_bot() || bot_s == "true" || bot_s == "1" { return false; }
+        i = i + 1;
+    }
+    return true;
+}
+pub fn c_tokk(toks: List[String], i: Int) -> String {
+    if i >= list_len(toks) { return ""; }
+    return field_at(list_get(toks, i), 0);
+}
+pub fn c_tokt(toks: List[String], i: Int) -> String {
+    if i >= list_len(toks) { return ""; }
+    return field_at(list_get(toks, i), 1);
+}
+pub fn tok_slice_eq(toks: List[String], p1: Int, e1: Int, p2: Int, e2: Int) -> Bool {
+    let len1: Int = e1 - p1;
+    let len2: Int = e2 - p2;
+    if len1 != len2 { return false; }
+    let mut i: Int = 0;
+    while i < len1 {
+        if c_tokt(toks, p1 + i) != c_tokt(toks, p2 + i) || c_tokk(toks, p1 + i) != c_tokk(toks, p2 + i) { return false; }
+        i = i + 1;
+    }
+    return true;
+}
+pub fn smt_eval_prim(toks: List[String], pos: Int, end: Int, env: List[String]) -> PolyVal {
+    if pos >= end { let res: PolyVal = PolyVal { pos: pos, inv: interval_bottom(), sign: sign_tag_bot() };
+ return res; }
+    let k: String = c_tokk(toks, pos);
+    let v: String = c_tokt(toks, pos);
+    if k == "INT" {
+        let val: Int = parse_int(v);
+        let res: PolyVal = PolyVal { pos: pos + 1, inv: interval_const(val), sign: sign_from_int(val) };
+        return res;
+    }
+    if k == "KW_TRUE" { let res: PolyVal = PolyVal { pos: pos + 1, inv: interval_const(1), sign: sign_tag_pos() };
+ return res; }
+    if k == "KW_FALSE" { let res: PolyVal = PolyVal { pos: pos + 1, inv: interval_const(0), sign: sign_tag_zero() };
+ return res; }
+    if k == "IDENT" {
+        let inv_v: Interval = smt_env_get_inv(env, v);
+        let sign_v: Int = smt_env_get_sign(env, v);
+        let res: PolyVal = PolyVal { pos: pos + 1, inv: inv_v, sign: sign_v };
+        return res;
+    }
+    if k == "LPAREN" {
+        let inner: PolyVal = smt_eval_or_expr(toks, pos + 1, end, env);
+        let mut p: Int = inner.pos;
+        if p < end && c_tokk(toks, p) == "RPAREN" { p = p + 1; }
+        let res: PolyVal = PolyVal { pos: p, inv: inner.inv, sign: inner.sign };
+        return res;
+    }
+    if k == "MINUS" {
+        let inner2: PolyVal = smt_eval_prim(toks, pos + 1, end, env);
+        let sub_inv: Interval = interval_sub(interval_const(0), inner2.inv);
+        let mul_sign: Int = sign_mul(inner2.sign, sign_tag_neg());
+        let res: PolyVal = PolyVal { pos: inner2.pos, inv: sub_inv, sign: mul_sign };
+        return res;
+    }
+    let top_inv: Interval = interval_top();
+    let top_sign: Int = sign_tag_top();
+    let res: PolyVal = PolyVal { pos: pos + 1, inv: top_inv, sign: top_sign };
+    return res;
+}
+pub fn smt_eval_mul_expr(toks: List[String], pos: Int, end: Int, env: List[String]) -> PolyVal {
+    let lhs_start: Int = pos;
+    let left: PolyVal = smt_eval_prim(toks, pos, end, env);
+    let lhs_end: Int = left.pos;
+    let mut p: Int = lhs_end;
+    let mut cur_inv: Interval = left.inv;
+    let mut cur_sign: Int = left.sign;
+    let mut is_first: Bool = true;
+    let mut more: Bool = true;
+    while more {
+        if p >= end { more = false; }
+        else if c_tokk(toks, p) == "STAR" {
+            let rhs_start: Int = p + 1;
+            let right: PolyVal = smt_eval_prim(toks, rhs_start, end, env);
+            p = right.pos;
+            if is_first && tok_slice_eq(toks, lhs_start, lhs_end, rhs_start, p) {
+                cur_inv = interval_sqr(left.inv);
+                cur_sign = sign_sqr(left.sign);
+            } else {
+                cur_inv = interval_mul(cur_inv, right.inv);
+                cur_sign = sign_mul(cur_sign, right.sign);
+            }
+            cur_inv = interval_meet(cur_inv, sign_to_interval(cur_sign));
+            cur_sign = sign_meet(cur_sign, sign_from_interval(cur_inv));
+            is_first = false;
+        } else { more = false; }
+    }
+    let res: PolyVal = PolyVal { pos: p, inv: cur_inv, sign: cur_sign };
+    return res;
+}
+pub fn smt_eval_add_expr(toks: List[String], pos: Int, end: Int, env: List[String]) -> PolyVal {
+    let left: PolyVal = smt_eval_mul_expr(toks, pos, end, env);
+    let mut p: Int = left.pos;
+    let mut cur_inv: Interval = left.inv;
+    let mut cur_sign: Int = left.sign;
+    let mut more: Bool = true;
+    while more {
+        if p >= end { more = false; }
+        else if c_tokk(toks, p) == "PLUS" {
+            let right: PolyVal = smt_eval_mul_expr(toks, p + 1, end, env);
+            p = right.pos;
+            cur_inv = interval_add(cur_inv, right.inv);
+            cur_sign = sign_from_interval(cur_inv);
+        } else if c_tokk(toks, p) == "MINUS" {
+            let right2: PolyVal = smt_eval_mul_expr(toks, p + 1, end, env);
+            p = right2.pos;
+            cur_inv = interval_sub(cur_inv, right2.inv);
+            cur_sign = sign_from_interval(cur_inv);
+        } else { more = false; }
+    }
+    let res: PolyVal = PolyVal { pos: p, inv: cur_inv, sign: cur_sign };
+    return res;
+}
+pub fn smt_eval_cmp_expr(toks: List[String], pos: Int, end: Int, env: List[String]) -> PolyVal {
+    let left: PolyVal = smt_eval_add_expr(toks, pos, end, env);
+    let mut p: Int = left.pos;
+    if p >= end { return left; }
+    let k: String = c_tokk(toks, p);
+    if k == "EQEQ" || k == "NEQ" || k == "GT" || k == "LT" || k == "GTE" || k == "LTE" {
+        let mut op: String = "==";
+        if k == "NEQ" { op = "!="; } else if k == "GT" { op = ">"; } else if k == "LT" { op = "<"; } else if k == "GTE" { op = ">="; } else if k == "LTE" { op = "<="; }
+        let right: PolyVal = smt_eval_add_expr(toks, p + 1, end, env);
+        p = right.pos;
+        let r_inv: Int = interval_eval_rel(op, left.inv, right.inv);
+        let r_sign: Int = sign_eval_rel(op, left.sign, right.sign);
+        let mut status: Int = 0 - 1;
+        if r_inv == 1 || r_sign == 1 { status = 1; } else if r_inv == 0 || r_sign == 0 { status = 0; }
+        let res: PolyVal = PolyVal { pos: p, inv: interval_const(status), sign: status };
+        return res;
+    }
+    return left;
+}
+pub fn smt_eval_and_expr(toks: List[String], pos: Int, end: Int, env: List[String]) -> PolyVal {
+    let left: PolyVal = smt_eval_cmp_expr(toks, pos, end, env);
+    let mut p: Int = left.pos;
+    if p >= end || c_tokk(toks, p) != "ANDAND" { return left; }
+    let mut status: Int = left.sign;
+    let mut more: Bool = true;
+    while more {
+        if p >= end { more = false; }
+        else if c_tokk(toks, p) == "ANDAND" {
+            let right: PolyVal = smt_eval_cmp_expr(toks, p + 1, end, env);
+            p = right.pos;
+            let s2: Int = right.sign;
+            if status == 0 || s2 == 0 { status = 0; } else if status == 1 && s2 == 1 { status = 1; } else { status = 0 - 1; }
+        } else { more = false; }
+    }
+    let res: PolyVal = PolyVal { pos: p, inv: interval_const(status), sign: status };
+    return res;
+}
+pub fn smt_eval_or_expr(toks: List[String], pos: Int, end: Int, env: List[String]) -> PolyVal {
+    let left: PolyVal = smt_eval_and_expr(toks, pos, end, env);
+    let mut p: Int = left.pos;
+    if p >= end { return left; }
+    let k0: String = c_tokk(toks, p);
+    if k0 != "PIPEPIPE" && k0 != "OROR" { return left; }
+    let mut status: Int = left.sign;
+    let mut more: Bool = true;
+    while more {
+        if p >= end { more = false; }
+        else if c_tokk(toks, p) == "PIPEPIPE" || c_tokk(toks, p) == "OROR" {
+            let right: PolyVal = smt_eval_and_expr(toks, p + 1, end, env);
+            p = right.pos;
+            let s2: Int = right.sign;
+            if status == 1 || s2 == 1 { status = 1; } else if status == 0 && s2 == 0 { status = 0; } else { status = 0 - 1; }
+        } else { more = false; }
+    }
+    let res: PolyVal = PolyVal { pos: p, inv: interval_const(status), sign: status };
+    return res;
+}
+pub fn smt_prove_clause(toks: List[String], start: Int, end: Int, env: List[String]) -> Int {
+    if !smt_env_is_feasible(env) { return 0; }
+    let res: PolyVal = smt_eval_or_expr(toks, start, end, env);
+    return res.sign;
+}

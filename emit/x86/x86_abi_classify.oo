@@ -1,0 +1,210 @@
+// # System V AMD64 Eightbyte Type Classification & Register Mapping
+//
+// Logline: Implements System V AMD64 §3.2.3 eightbyte classification for scalar types, structs, Option[T], and Result[T, E].
+//
+// Setup: Pure ABI classification engine for openOODA sovereign x86-64 backend.
+//
+// Beats:
+//   1. Define ABI classification classes: NO_CLASS, INTEGER, SSE, and MEMORY (SRet).
+//   2. Compute size and alignment for primitive, composite, Option, and Result types.
+//   3. Classify aggregate eightbyte chunks into INTEGER/SSE register pairs or MEMORY.
+//   4. Map classified eightbytes to hardware parameter and return registers (%rax+%rdx, %rdi+%rsi).
+
+
+
+pub fn x86_abi_class_none() -> Int {
+    return 0;
+}
+pub fn x86_abi_class_integer() -> Int {
+    return 1;
+}
+pub fn x86_abi_class_sse() -> Int {
+    return 2;
+}
+pub fn x86_abi_class_memory() -> Int {
+    return 3;
+}
+
+pub fn x86_abi_type_size(ty: String) -> Int {
+    if ty == "Int" || ty == "Int64" || ty == "i64" || ty == "UInt64" || ty == "u64" { return 8;
+    }
+    if ty == "Int32" || ty == "i32" || ty == "UInt32" || ty == "u32" { return 4;
+    }
+    if ty == "Int16" || ty == "i16" || ty == "UInt16" || ty == "u16" { return 2;
+    }
+    if ty == "Int8" || ty == "i8" || ty == "UInt8" || ty == "u8" || ty == "Byte" || ty == "Bool" || ty == "bool" { return 1;
+    }
+    if ty == "Float" || ty == "Float64" || ty == "f64" || ty == "Float32" || ty == "f32" { return 8;
+    }
+    if ty == "String" || ty == "StringBuf" || ty == "Pointer" { return 8;
+    }
+    if chars_len(ty) >= 7 && str_slice(ty, 0, 7) == "Option[" { return 16;
+    }
+    if chars_len(ty) >= 7 && str_slice(ty, 0, 7) == "Result[" {
+        // Multi-word results with >8 byte payloads are classified as >16 bytes
+        if chars_len(ty) >= 11 && str_slice(ty, 0, 11) == "Result[OoRes" { return 24;
+        }
+        if chars_len(ty) >= 11 && str_slice(ty, 0, 11) == "Result[List" { return 24;
+        }
+        return 16;
+    }
+    if chars_len(ty) >= 6 && str_slice(ty, 0, 6) == "%OoRes" { return 24;
+    }
+    if chars_len(ty) >= 5 && str_slice(ty, 0, 5) == "List[" { return 8;
+    }
+    if chars_len(ty) >= 4 && str_slice(ty, 0, 4) == "Map[" { return 8;
+    }
+    return 8;
+}
+
+pub fn x86_abi_is_float_type(ty: String) -> Bool {
+    return ty == "Float" || ty == "Float64" || ty == "f64" || ty == "Float32" || ty == "f32";
+}
+
+pub fn x86_abi_classify_type(ty_name: String, ty_size: Int) -> Int {
+    if ty_size == 0 { return x86_abi_class_none();
+    }
+    if ty_size > 16 { return x86_abi_class_memory();
+    }
+    if x86_abi_is_float_type(ty_name) { return x86_abi_class_sse();
+    }
+    return x86_abi_class_integer();
+}
+
+pub fn x86_abi_classify_eightbytes(ty_name: String, ty_size: Int) -> List[Int] {
+    let mut classes: List[Int] = list_new();
+    if ty_size == 0 { return classes;
+    }
+    if ty_size > 16 { classes = list_push(classes, x86_abi_class_memory());
+    return classes;
+    }
+    let n_eightbytes: Int = (ty_size + 7) / 8;
+    if chars_len(ty_name) >= 7 && str_slice(ty_name, 0, 7) == "Option[" {
+        classes = list_push(classes, x86_abi_class_integer());
+        if n_eightbytes > 1 {
+            let is_flt: Bool = chars_len(ty_name) >= 13 && str_slice(ty_name, 7, 12) == "Float";
+            if is_flt { classes = list_push(classes, x86_abi_class_sse());
+            }
+            else { classes = list_push(classes, x86_abi_class_integer());
+            }
+        }
+        return classes;
+    }
+    if chars_len(ty_name) >= 7 && str_slice(ty_name, 0, 7) == "Result[" {
+        classes = list_push(classes, x86_abi_class_integer());
+        if n_eightbytes > 1 {
+            let is_flt: Bool = chars_len(ty_name) >= 13 && str_slice(ty_name, 7, 12) == "Float";
+            if is_flt { classes = list_push(classes, x86_abi_class_sse());
+            }
+            else { classes = list_push(classes, x86_abi_class_integer());
+            }
+        }
+        return classes;
+    }
+    let mut i: Int = 0;
+    while i < n_eightbytes { if x86_abi_is_float_type(ty_name) { classes = list_push(classes, x86_abi_class_sse());
+    } else {
+            classes = list_push(classes, x86_abi_class_integer());
+        }
+        i = i + 1;
+    }
+    return classes;
+}
+
+pub fn x86_abi_is_sret(ty_name: String, ty_size: Int) -> Bool {
+    if ty_size > 16 { return true;
+    }
+    let eb: List[Int] = x86_abi_classify_eightbytes(ty_name, ty_size);
+    if list_len(eb) == 1 && list_get(eb, 0) == x86_abi_class_memory() { return true;
+    }
+    return false;
+}
+
+pub fn x86_abi_gpr_arg_reg(idx: Int) -> String {
+    if idx == 0 { return "%rdi";
+    }
+    if idx == 1 { return "%rsi";
+    }
+    if idx == 2 { return "%rdx";
+    }
+    if idx == 3 { return "%rcx";
+    }
+    if idx == 4 { return "%r8";
+    }
+    if idx == 5 { return "%r9";
+    }
+    return "";
+}
+
+pub fn x86_abi_sse_arg_reg(idx: Int) -> String {
+    if idx == 0 { return "%xmm0";
+    }
+    if idx == 1 { return "%xmm1";
+    }
+    if idx == 2 { return "%xmm2";
+    }
+    if idx == 3 { return "%xmm3";
+    }
+    if idx == 4 { return "%xmm4";
+    }
+    if idx == 5 { return "%xmm5";
+    }
+    if idx == 6 { return "%xmm6";
+    }
+    if idx == 7 { return "%xmm7";
+    }
+    return "";
+}
+
+pub fn x86_abi_arg_regs(ty_name: String, ty_size: Int, gpr_idx: Int, sse_idx: Int) -> List[String] {
+    let mut regs: List[String] = list_new();
+    let eb: List[Int] = x86_abi_classify_eightbytes(ty_name, ty_size);
+    let n: Int = list_len(eb);
+    let mut cur_gpr: Int = gpr_idx;
+    let mut cur_sse: Int = sse_idx;
+    let mut i: Int = 0;
+    while i < n { let c: Int = list_get(eb, i);
+    if c == x86_abi_class_integer() { let r: String = x86_abi_gpr_arg_reg(cur_gpr);
+    if chars_len(r) > 0 { regs = list_push(regs, r);
+    cur_gpr = cur_gpr + 1;
+    }
+        } else if c == x86_abi_class_sse() {
+            let r: String = x86_abi_sse_arg_reg(cur_sse);
+            if chars_len(r) > 0 { regs = list_push(regs, r);
+            cur_sse = cur_sse + 1;
+            }
+        }
+        i = i + 1;
+    }
+    return regs;
+}
+
+pub fn x86_abi_return_regs(ty_name: String, ty_size: Int) -> OoSList {
+    let mut regs: OoSList = list_new();
+    if ty_size == 0 { return regs;
+    }
+    let eb: List[Int] = x86_abi_classify_eightbytes(ty_name, ty_size);
+    let n: Int = list_len(eb);
+    if n == 0 || (n == 1 && list_get(eb, 0) == x86_abi_class_memory()) { return regs;
+    }
+    let c0: Int = list_get(eb, 0);
+    if c0 == x86_abi_class_sse() { regs = list_push(regs, "%xmm0");
+    }
+    else { regs = list_push(regs, "%rax");
+    }
+    if n > 1 {
+        let c1: Int = list_get(eb, 1);
+        if c1 == x86_abi_class_sse() {
+            if c0 == x86_abi_class_sse() { regs = list_push(regs, "%xmm1");
+            }
+            else { regs = list_push(regs, "%xmm0");
+            }
+        } else {
+            if c0 == x86_abi_class_sse() { regs = list_push(regs, "%rax");
+            }
+            else { regs = list_push(regs, "%rdx");
+            }
+        }
+    }
+    return regs;
+}

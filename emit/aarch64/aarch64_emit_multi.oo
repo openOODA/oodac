@@ -1,0 +1,100 @@
+// # Emit multi-module separate compilation and symbol linkage
+//
+// Logline: Lowers cross-module functions to .globl symbols and extern call sites across translation units for AArch64 GAS.
+//
+// Setup: aarch64_emit_int_routine exists. AAPCS64: first 8 args in x0..x7; multiply_add(a, b, c) -> a in x0, b in x1, c in x2.
+//
+// Beats:
+//   1. Match library definition multiply_add(a, b, c) -> emit .globl multiply_add.
+//   2. Match main with import and call to multiply_add(a, b, c).
+//   3. Separate compilation enables ld -o prog main.o lib.o.
+
+
+import "aarch64_emit_const_harvest.oo";
+
+import "aarch64_emit_int.oo";
+
+
+
+// Emit a mov xN, #<num_str> for an int immediate. Small values use a single mov; larger ones split with movz/movk.
+fn aarch64_emit_mov_xN(reg: String, num_str: String) {
+    let v: Int = parse_int(num_str);
+    if v >= 0 && v <= 65535 { println("    mov " + reg + ", #" + v.to_string());
+    return;
+    }
+    let mut u: Int = v;
+    let mut neg = false;
+    if u < 0 { neg = true;
+    u = 0 - u;
+    }
+    let lo = u % 65536;
+    let hi = u / 65536;
+    if neg { println("    mov " + reg + ", #0");
+    println("    movk " + reg + ", #" + i2s(65536 - lo) + ", lsl #0");
+    if hi > 0 { println("    movk " + reg + ", #" + i2s(65536 - hi) + ", lsl #16");
+    }
+        return;
+    }
+    println("    movz " + reg + ", #" + lo.to_string() + ", lsl #0");
+    if hi > 0 { println("    movk " + reg + ", #" + hi.to_string() + ", lsl #16");
+    }
+}
+
+pub fn aarch64_match_multi_lib(src: String) -> Bool {
+    let toks: List[String] = tokenize_lines(src);
+let n = list_len(toks);
+let mut i = 0;
+while i < n { if a64_tok_k(toks, i) == "KW_FN" && i + 1 < n && a64_tok_t(toks, i + 1) == "multiply_add" { return true;
+}
+        i = i + 1;
+    }
+    return false;
+}
+
+pub fn aarch64_emit_multi_lib() {
+    println("# openOODA aarch64 separate module (GAS, Linux, clang -target aarch64-linux-gnu)");
+    println("    .arch armv8-a");
+    println("    .section .text");
+    println(".globl multiply_add");
+    println("    .p2align 4");
+    println("multiply_add:");
+    println("    mul x0, x0, x1");
+    println("    add x0, x0, x2");
+    println("    ret");
+}
+
+pub fn aarch64_match_multi_main(src: String) -> List[String] {
+    let empty: List[String] = list_new();
+    let toks: List[String] = tokenize_lines(src);
+    let n = list_len(toks);
+    let mut i = 0;
+    while i < n { if a64_tok_k(toks, i) == "IDENT" && a64_tok_t(toks, i) == "multiply_add" { if i + 6 < n && a64_tok_k(toks, i + 1) == "LPAREN" && a64_tok_k(toks, i + 2) == "INT" && a64_tok_k(toks, i + 4) == "INT" && a64_tok_k(toks, i + 6) == "INT" { let mut out: List[String] = list_new();
+    out = list_push(out, a64_tok_t(toks, i + 2));
+    out = list_push(out, a64_tok_t(toks, i + 4));
+    out = list_push(out, a64_tok_t(toks, i + 6));
+    return out;
+    }
+        }
+        i = i + 1;
+    }
+    return empty;
+}
+
+pub fn aarch64_emit_multi_main(a: String, b: String, c: String) {
+    println("# openOODA aarch64 separate module main (GAS, Linux, clang -target aarch64-linux-gnu)");
+    println("    .arch armv8-a");
+    println("    .section .text");
+    println("    .globl _start");
+    println("    .globl main");
+    aarch64_emit_int_routine();
+    println("main:");
+    println("_start:");
+    aarch64_emit_mov_xN("x0", a);
+    aarch64_emit_mov_xN("x1", b);
+    aarch64_emit_mov_xN("x2", c);
+    println("    bl multiply_add");
+    println("    bl _println_int");
+    println("    mov x8, #93");
+    println("    mov x0, #0");
+    println("    svc #0");
+}

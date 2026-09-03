@@ -1,0 +1,144 @@
+// # Walk top-level items for C emit
+//
+// Logline: Advance through pub, fn, type, import, verify, trait, and impl tokens and emit in the given mode.
+//
+// Setup: toks is already tokenized. Hang guard matches check_drive (iter bound and pos==prev).
+//
+// Beats:
+//   1. Skip type decls by brace depth (optional trailing semi); imports to semi.
+//   2. Emit or skip each fn through c_emit_fn_mode. Stray SEMI/COMMA/RBRACE/KW_ELSE
+//      and unhandled top-level tokens fail closed with ERR\tc_emit\tresidual.
+//   3. Fail closed when a step does not move pos.
+
+import "c_emit_fn.oo";
+import "c_emit_skip.oo";
+import "c_emit_type_helpers.oo";
+import "c_emit_skip_grant.oo";
+import "c_emit_skip_peek.oo";
+import "c_emit_meta.oo";
+import "c_emit_meta_drive.oo";
+import "c_emit_verify.oo";
+import "c_emit_impl_methods.oo";
+
+fn c_skip_type_decl(toks: List[String], pos: Int, n: Int) -> Int {
+    let mut p: Int = pos;
+if p < n { if c_tokk(toks, p) == "KW_PUB" { p = p + 1;
+}
+    }
+    if p < n { if c_tokk(toks, p) == "KW_TYPE" { p = p + 1;
+    }
+    }
+    let mut depth: Int = 0;
+    let mut seen_brace: Bool = false;
+    while p < n { let k: String = c_tokk(toks, p);
+    if k == "LBRACE" { depth = depth + 1;
+    seen_brace = true;
+    p = p + 1;
+    } else if k == "RBRACE" {
+            if depth > 0 { depth = depth - 1;
+            }
+            p = p + 1;
+            if seen_brace { if depth == 0 { if p < n { if c_tokk(toks, p) == "SEMI" { p = p + 1;
+            }
+                    }
+                    return p;
+                }
+            }
+        } else if k == "SEMI" {
+            if depth == 0 { return p + 1;
+            }
+            p = p + 1;
+        } else if k == "EOF" {
+            return p;
+        } else {
+            p = p + 1;
+        }
+    }
+    return p;
+}
+
+pub fn c_emit_walk_items(toks: List[String], n: Int, fn_env0: String, mode: String, meta_emit: Bool) -> String {
+    let mut pos: Int = 0;
+let mut fn_env: String = fn_env0;
+let mut meta_idx: Int = 0;
+let mut iter: Int = 0;
+while pos < n { iter = iter + 1;
+if iter > n + 100 { println("ERR\tc_emit\thang guard exceeded at pos " + pos.to_string());
+process_exit(1);
+}
+        let prev_pos: Int = pos;
+        let k: String = c_tokk(toks, pos);
+        if k == "EOF" {
+            pos = n;
+        } else if k == "LINEFILE" {
+            let fp: String = c_tokt(toks, pos);
+            if fp != "" {
+                if mode != "protos" && mode != "protos_noarc" {
+                    println("#line 1 \"" + fp + "\"");
+                }
+                if !fp.contains("=") && !fp.contains(";") {
+                    fn_env = c_env_put(fn_env, "__file__", fp);
+                }
+            }
+            pos = pos + 1;
+        } else if k == "KW_PUB" {
+            let mut pub_ty: Bool = false;
+            if pos + 1 < n { if c_tokk(toks, pos + 1) == "KW_TYPE" { pub_ty = true;
+            }
+            }
+            if pub_ty { pos = c_skip_type_decl(toks, pos, n);
+            } else {
+                let fr: List[String] = c_emit_fn_mode(toks, pos, n, fn_env, mode);
+                pos = parse_int(list_get(fr, 0));
+                fn_env = list_get(fr, 1);
+                if meta_emit {
+                    c_drive_after_fn(meta_idx, c_drive_fn_name_at(toks, prev_pos, n));
+                    meta_idx = meta_idx + 1;
+                }
+            }
+        } else if k == "KW_FN" {
+            let fr: List[String] = c_emit_fn_mode(toks, pos, n, fn_env, mode);
+            pos = parse_int(list_get(fr, 0));
+            fn_env = list_get(fr, 1);
+            if meta_emit { c_drive_after_fn(meta_idx, c_drive_fn_name_at(toks, prev_pos, n));
+            meta_idx = meta_idx + 1;
+            }
+        } else if k == "KW_VERIFY" {
+            pos = c_emit_verify_ctor(toks, pos, n, fn_env);
+        } else if k == "KW_TYPE" {
+            pos = c_skip_type_decl(toks, pos, n);
+        } else if k == "KW_IMPORT" {
+            pos = skip_until_semi(toks, pos);
+        } else if k == "SEMI" {
+            println("ERR\tc_emit\tresidual: stray SEMI at pos " + pos.to_string());
+            process_exit(1);
+        } else if k == "COMMA" || k == "KW_ELSE" {
+            println("ERR\tc_emit\tresidual: stray " + k + " at pos " + pos.to_string());
+            process_exit(1);
+        } else if k == "RBRACE" {
+            println("ERR\tc_emit\tresidual: unmatched RBRACE at pos " + pos.to_string());
+            process_exit(1);
+        } else if k == "IDENT" {
+            let nm: String = c_tokt(toks, pos);
+            if nm == "trait" {
+                pos = skip_trait_or_impl(toks, pos);
+            } else if nm == "impl" {
+                let ir: List[String] = c_emit_impl_methods(toks, pos, n, fn_env, mode);
+                pos = parse_int(list_get(ir, 0));
+                fn_env = list_get(ir, 1);
+            } else if nm == "import_c" {
+                pos = skip_until_semi(toks, pos);
+            } else {
+                println("ERR\tc_emit\tresidual: unexpected top-level expression or identifier '" + nm + "'");
+                process_exit(1);
+            }
+        } else {
+            println("ERR\tc_emit\tresidual: unexpected top-level token " + k);
+            process_exit(1);
+        }
+        if pos == prev_pos { println("ERR\tc_emit\tno progress at " + k + " pos " + pos.to_string());
+        process_exit(1);
+        }
+    }
+    return fn_env;
+}
