@@ -9,7 +9,7 @@
 //   2. FrameTable manages stack of lexical scopes with enter and leave operations using primitive list vectors.
 //   3. CFG borrow analysis checks static reference count invariants and elides redundant retain/release calls.
 
-import "tc_parse_int.oo";
+import "lex/token_parse_int.oo";
 
 pub type SymVar = struct {
     name: String, ty_ast: String, c_ty: String, is_formal: Bool, is_managed: Bool, is_borrow: Bool, borrow_root: String

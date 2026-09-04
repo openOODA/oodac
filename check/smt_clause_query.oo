@@ -9,7 +9,7 @@
 //   2. Narrow variable domain intervals from preceding requires clauses.
 //   3. Bridge proof queries (proven invariant vs provably unsat) to C emitter and typechecker.
 
-import "tc_parse_int.oo";
+import "lex/token_parse_int.oo";
 
 import "smt_poly_interval.oo";
 

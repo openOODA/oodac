@@ -11,43 +11,11 @@
 
 import "check_cap_util.oo";
 import "lex/token_fmt.oo";
-
-
-
-pub fn skip_until_semi(toks: List[String], pos0: Int) -> Int {
-    let n = list_len(toks);
-let mut pos = pos0;
-while pos < n { if c_tokk(toks, pos) == "SEMI" { return pos + 1;
-}
-        pos = pos + 1;
-    }
-    return pos;
-}
+import "types/token_search.oo";
 
 fn check_fn_trunc() {
     println("ERR\tcheck\ttruncated fn header");
     process_exit(1);
-}
-
-fn check_skip_braces(toks: List[String], pos: Int, n: Int) -> Int {
-    let mut p: Int = pos;
-    while p < n && c_tokk(toks, p) != "LBRACE" {
-        p = p + 1;
-    }
-    if p >= n { return p; }
-    let mut depth: Int = 0;
-    while p < n {
-        let k: String = c_tokk(toks, p);
-        if k == "LBRACE" { depth = depth + 1; }
-        if k == "RBRACE" {
-            depth = depth - 1;
-            p = p + 1;
-            if depth == 0 { return p; }
-        } else {
-            p = p + 1;
-        }
-    }
-    return p;
 }
 
 // Check one function for sealed-effect capability violations. Returns pos after fn.
@@ -139,7 +107,7 @@ if pos < n { if c_tokk(toks, pos) == "KW_PUB" { pos = pos + 1;
     if !saw_rparen { check_fn_trunc();
     }
     while pos < n { if c_tokk(toks, pos) == "LBRACE" { let body_start = pos + 1;
-    let sb = check_skip_braces(toks, pos, n);
+    let sb = skip_balanced(toks, pos);
     let body_end = 0 + sb - 1;
     if sb <= pos { pos = pos + 1;
     return pos;
@@ -184,24 +152,12 @@ if pos < n { if c_tokk(toks, pos) == "KW_PUB" { pos = pos + 1;
                 }
                 i = i + 1;
             }
-            let nb = check_skip_braces(toks, pos, n);
+            let nb = skip_balanced(toks, pos);
             if nb <= pos { pos = pos + 1;
             } else {
                 pos = nb;
             }
-            if pos < n && c_tokk(toks, pos) == "KW_VERIFY" {
-                pos = pos + 1;
-                if pos < n && c_tokk(toks, pos) == "IDENT" {
-                    pos = pos + 1;
-                }
-                if pos < n && c_tokk(toks, pos) == "LBRACE" {
-                    let vb = check_skip_braces(toks, pos, n);
-                    if vb <= pos { pos = pos + 1;
-                    } else {
-                        pos = vb;
-                    }
-                }
-            }
+            pos = skip_verify_block(toks, pos);
             return pos;
         }
         pos = pos + 1;

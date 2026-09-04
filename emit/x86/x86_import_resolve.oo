@@ -11,9 +11,8 @@
 
 
 import "x86_emit_diag.oo";
-
-
 import "x86_emit_const_harvest.oo";
+import "ast/load_import_parse.oo";
 
 
 fn x86_imp_line_col(src: String, needle: String) -> List[Int] {
@@ -84,15 +83,6 @@ fn x86_imp_strip(src: String) -> String {
     return out;
 }
 
-fn x86_imp_list_has(xs: List[String], v: String) -> Bool {
-    let n: Int = list_len(xs);
-    let mut i: Int = 0;
-    while i < n { if list_get(xs, i) == v { return true;
-    } i = i + 1;
-    }
-    return false;
-}
-
 fn x86_imp_err(d: String) -> List[String] {
     let mut o: List[String] = list_new();
     o = list_push(o, "__ERR__");
@@ -106,7 +96,7 @@ fn x86_imp_is_err(xs: List[String]) -> Bool {
 
 fn x86_imp_walk(fs: &FsReadCap, path: String, stack: List[String], acc: List[String]) -> List[String] {
     let np: String = path_normalize(path);
-    if x86_imp_list_has(acc, np) { return acc;
+    if list_has(acc, np) { return acc;
     }
     let src_r: Result[String, String] = read_file(fs, np);
     if src_r.is_err() {
@@ -135,7 +125,7 @@ fn x86_imp_walk(fs: &FsReadCap, path: String, stack: List[String], acc: List[Str
             if imp != "" {
                 reject_bad_import_name(imp);
                 let child: String = path_normalize(path_join(dir, imp));
-                if x86_imp_list_has(stack2, child) {
+                if list_has(stack2, child) {
                     let d: String = x86_imp_diag("import", np, src, "import \"" + imp + "\"", "import cycle: " + np + " -> " + child);
                     return x86_imp_err(d);
                 }

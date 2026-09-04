@@ -17,6 +17,7 @@ import "c_emit_skip_grant.oo";
 import "c_emit_skip_peek.oo";
 import "c_emit_verify.oo";
 import "c_emit_impl_methods.oo";
+import "c_emit_dispatch.oo";
 
 fn c_skip_type_decl(toks: List[String], pos: Int, n: Int) -> Int {
     let mut p: Int = pos;
@@ -70,7 +71,9 @@ process_exit(1);
         } else if k == "LINEFILE" {
             let fp: String = c_tokt(toks, pos);
             if fp != "" {
-                if mode != "protos" && mode != "protos_noarc" {
+                let target: String = c_env_get(fn_env, "__target__");
+                let is_cur: Bool = target == "" || c_same_file(target, fp);
+                if is_cur && mode != "protos" && mode != "protos_noarc" {
                     println("#line 1 \"" + fp + "\"");
                 }
                 if !fp.contains("=") && !fp.contains(";") {
@@ -94,7 +97,13 @@ process_exit(1);
             pos = parse_int(list_get(fr, 0));
             fn_env = list_get(fr, 1);
         } else if k == "KW_VERIFY" {
-            pos = c_emit_verify_ctor(toks, pos, n, fn_env);
+            let target: String = c_env_get(fn_env, "__target__");
+            let fp: String = c_env_get(fn_env, "__file__");
+            if target == "" || fp == "" || c_same_file(target, fp) {
+                pos = c_emit_verify_ctor(toks, pos, n, fn_env);
+            } else {
+                pos = c_emit_skip_verify(toks, pos, n);
+            }
         } else if k == "KW_TYPE" {
             pos = c_skip_type_decl(toks, pos, n);
         } else if k == "KW_IMPORT" {

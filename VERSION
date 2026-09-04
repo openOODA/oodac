@@ -12,8 +12,8 @@
 # version; it must match the most recent git tag. See RULES.oot §1.24
 # and rfcs/0006-versioning-and-release-protocol.oot.
 
-oodac=0.2.2
-release_tag=0.2.2
+oodac=0.2.4
+release_tag=0.2.4
 ooda=2.10.0
 ooda_max=2.99.0
 std=^2.10

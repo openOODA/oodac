@@ -1,0 +1,8 @@
+// # Test Dep
+// Logline: A test dependency module.
+// Setup: None.
+// Beats: 1. Return greeting.
+
+pub fn dep_greet() -> String {
+    return "hello from dep";
+}

@@ -6,8 +6,25 @@
 //
 // Beats:
 //   1. Return unmodified function name for C identifier resolution.
-//   2. Maintain <= 256 lines limit.
+//   2. Compare two source paths normalizing leading dot-slash prefixes.
 
 pub fn c_mangle_fn_name(name: String, path: String) -> String {
     return name;
+}
+
+pub fn c_same_file(p1: String, p2: String) -> Bool {
+    if p1 == p2 {
+        return true;
+    }
+    let mut a: String = p1;
+    let mut b: String = p2;
+    let na: Int = chars_len(a);
+    let nb: Int = chars_len(b);
+    if na >= 2 && char_at(a, 0) == "." && char_at(a, 1) == "/" {
+        a = str_slice(a, 2, na);
+    }
+    if nb >= 2 && char_at(b, 0) == "." && char_at(b, 1) == "/" {
+        b = str_slice(b, 2, nb);
+    }
+    return a == b;
 }

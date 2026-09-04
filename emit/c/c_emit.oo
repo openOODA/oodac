@@ -109,6 +109,9 @@ pub fn c_emit_stream_toks_at_core(src: String, toks: List[String], mode: String,
     let mut fn_env: String = "";
     if path != "" && !path.contains("=") && !path.contains(";") {
         fn_env = c_env_put(fn_env, "__file__", path);
+        if mode != "once" && mode != "once_noarc" {
+            fn_env = c_env_put(fn_env, "__target__", path);
+        }
     }
     if is_plain {
         fn_env = c_env_put(fn_env, "__plain__", "1");

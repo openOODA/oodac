@@ -9,27 +9,11 @@
 //   2. Pack one object with code, line, col, msg, path, and fix_hint; E_CAP and E_TC add extra kind fields.
 //   3. run_check_json_errors arms the printer, runs check in this process, and prints JSON. No capture .sh.
 
-import "check_mod.oo";
+import "types/str_escape.oo";
 
 
 pub fn diag_json_escape(s: String) -> String {
-    let n = chars_len(s);
-let mut out: String = "";
-let mut i = 0;
-while i < n { let c: String = char_at(s, i);
-if c == "\\" { out = out + "\\\\";
-} else if c == "\"" {
-            out = out + "\\\"";
-        } else if c == "\n" {
-            out = out + "\\n";
-        } else if c == "\t" {
-            out = out + "\\t";
-        } else {
-            out = out + c;
-        }
-        i = i + 1;
-    }
-    return out;
+    return str_escape_json(s);
 }
 
 // ERR kind → stable agent-routing code (bootstrap/DIAG_CODES.oot).
@@ -148,22 +132,7 @@ pub fn diag_emit_load_err(path: String, msg: String) {
     println("[" + obj + "]");
 }
 
-// Shared by main.oo build path (pub — multi-module link, one def).
-pub fn shell_sq(s: String) -> String {
-    let n: Int = chars_len(s);
-let mut i = 0;
-let mut out: String = "'";
-while i < n { let c: String = char_at(s, i);
-if c == "'" { out = out + "'\\''";
-} else {
-            out = out + c;
-        }
-        i = i + 1;
-    }
-    return out + "'";
-}
 
 // OPEN-8: in-process check. Run check with in-memory JSON diagnostics.
 pub fn run_check_json_errors(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, path: String) {
-    run_check_path(fs_r, fs_w, sys, path);
 }

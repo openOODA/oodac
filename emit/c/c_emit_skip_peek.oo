@@ -9,8 +9,7 @@
 //   2. Peek list element types.
 //   3. Skip brace-balanced regions and verify blocks.
 //   4. Treat {} or { ident: as a struct literal.
-
-
+import "types/token_search.oo";
 
 pub fn c_skip_amp_mut(toks: List[String], pos: Int, n: Int) -> Int {
     let mut p: Int = pos;
@@ -89,63 +88,13 @@ pub fn c_peek_list_elem(toks: List[String], pos: Int, n: Int) -> String {
     return "S";
 }
 
-// Skip brace-balanced region starting at LBRACE (or find next LBRACE).
+// Skip brace-balanced region delegating to canonical skip_balanced.
 pub fn c_emit_skip_braces(toks: List[String], pos: Int, n: Int) -> Int {
-    let mut p: Int = pos;
-while p < n && field_at(list_get(toks, p), 0) != "LBRACE" { p = p + 1;
-}
-    if p >= n { return p;
-    }
-    let mut depth: Int = 0;
-    while p < n { let k: String = field_at(list_get(toks, p), 0);
-    if k == "LBRACE" { depth = depth + 1;
-    }
-        if k == "RBRACE" {
-            depth = depth - 1;
-            p = p + 1;
-            if depth == 0 { return p;
-            }
-        } else {
-            p = p + 1;
-        }
-    }
-    return p;
+    return skip_balanced(toks, pos);
 }
 
 pub fn c_emit_skip_verify(toks: List[String], pos: Int, n: Int) -> Int {
-    let mut p: Int = pos;
-if p < n && field_at(list_get(toks, p), 0) == "KW_VERIFY" { p = p + 1;
-if p < n && field_at(list_get(toks, p), 0) == "IDENT" { p = p + 1;
-}
-        if p < n && field_at(list_get(toks, p), 0) == "LBRACE" {
-            p = c_emit_skip_braces(toks, p, n);
-        }
-    }
-    return p;
-}
-
-pub fn skip_until_semi(toks: List[String], pos0: Int) -> Int {
-    let n: Int = list_len(toks);
-    let mut pos: Int = pos0;
-    while pos < n {
-        if field_at(list_get(toks, pos), 0) == "SEMI" {
-            return pos + 1;
-        }
-        pos = pos + 1;
-    }
-    return pos;
-}
-
-pub fn skip_trait_or_impl(toks: List[String], pos0: Int) -> Int {
-    let n = list_len(toks);
-    let mut pos = pos0 + 1;
-    while pos < n {
-        if field_at(list_get(toks, pos), 0) == "LBRACE" {
-            return c_emit_skip_braces(toks, pos, n);
-        }
-        pos = pos + 1;
-    }
-    return pos;
+    return skip_verify_block(toks, pos);
 }
 
 

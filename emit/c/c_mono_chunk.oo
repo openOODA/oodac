@@ -14,19 +14,7 @@
 import "c_mono_unit_emit.oo";
 
 
-fn c_mono_chunk_sq(s: String) -> String {
-    let n: Int = chars_len(s);
-let mut i: Int = 0;
-let mut out: String = "'";
-while i < n { let c: String = char_at(s, i);
-if c == "'" { out = out + "'\\''";
-} else {
-            out = out + c;
-        }
-        i = i + 1;
-    }
-    return out + "'";
-}
+import "types/str_escape.oo";
 
 pub fn c_mono_type_weight(ty: String) -> Int {
     let tag: String = ty_tag(ty);
@@ -146,7 +134,7 @@ pub fn c_mono_emit_all_chunks(fs: &FsWriteCap, sys: &ProcessCap, types: List[Str
     let chk_h: String = crypto_sha256_internal(chunk_src);
     let chunk_file: String = out_dir + "/.pb_types_chunk_" + i.to_string() + "_" + str_slice(chk_h, 0, 16) + ".c";
     let r_w: Result[Void, String] = write_file(fs, chunk_file, chunk_src);
-    if r_w.is_err() { let cmd: String = "mkdir -p $(dirname " + c_mono_chunk_sq(chunk_file) + ") && cat << 'EOF_CHUNK' > " + c_mono_chunk_sq(chunk_file) + "\n" + chunk_src + "\nEOF_CHUNK\n";
+    if r_w.is_err() { let cmd: String = "mkdir -p $(dirname " + shell_sq(chunk_file) + ") && cat << 'EOF_CHUNK' > " + shell_sq(chunk_file) + "\n" + chunk_src + "\nEOF_CHUNK\n";
     let _r: Result[String, String] = sys_exec(sys, "sh", "-c", cmd);
     }
             out_paths = list_push(out_paths, chunk_file);

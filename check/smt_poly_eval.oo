@@ -8,7 +8,7 @@
 //   1. Implement token comparison helper for structural square detection.
 //   2. Parse and evaluate primary, multiplicative, additive, and relational expressions.
 //   3. Compute polynomial interval and sign bounds under active variable environments.
-import "tc_parse_int.oo";
+import "lex/token_parse_int.oo";
 import "smt_poly_interval.oo";
 import "smt_poly_sign.oo";
 pub type PolyVal = struct {

@@ -1,0 +1,10 @@
+// # Test Main
+// Logline: A test main module.
+// Setup: None.
+// Beats: 1. Call greeting.
+
+import "test_dep.oo";
+
+pub fn main() {
+    println(dep_greet());
+}

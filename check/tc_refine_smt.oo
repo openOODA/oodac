@@ -9,7 +9,7 @@
 //   2. Run non-linear polynomial interval and sign prover on clause spans.
 //   3. Refuse unsatisfiable clauses with ERR smt unsat <kind> at <line>:<col> and exit code 1.
 
-import "tc_parse_int.oo";
+import "lex/token_parse_int.oo";
 
 import "smt_poly_interval.oo";
 

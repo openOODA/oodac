@@ -10,19 +10,7 @@
 //   3. Supports compilation of both module translation units and monomorphization chunks (.pb_types_chunk_<n>.c).
 //   4. Links all compiled objects and chs_rt.c with lld/clang/gcc, repro, and ssl flags.
 
-fn cc_shell_sq(s: String) -> String {
-    let n: Int = chars_len(s);
-let mut i: Int = 0;
-let mut out: String = "'";
-while i < n { let c: String = char_at(s, i);
-if c == "'" { out = out + "'\\''";
-} else {
-            out = out + c;
-        }
-        i = i + 1;
-    }
-    return out + "'";
-}
+import "types/str_escape.oo";
 
 fn probe_src_root() -> String {
     let mut s: String = "OODA_SRC_ROOT=\"${OODA_SRC_ROOT:-${OODA_REPO_ROOT:-.}}\"; ";
@@ -83,14 +71,14 @@ pub fn run_native_cc(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, pbs:
 
     let n: Int = list_len(pbs);
     let pf: String = ".ooda-cache/ooda-tmp/proto_" + str_slice(crypto_sha256_internal(out), 0, 16) + ".protos.c";
-    let mut acmd: String = "mkdir -p .ooda-cache/ooda-tmp && : > " + cc_shell_sq(pf);
+    let mut acmd: String = "mkdir -p .ooda-cache/ooda-tmp && : > " + shell_sq(pf);
     if n > 0 {
         acmd = "mkdir -p .ooda-cache/ooda-tmp && awk '/^#line /{nextfile} {print}'";
         let mut a: Int = 0;
-        while a < n { acmd = acmd + " " + cc_shell_sq(list_get(pbs, a));
+        while a < n { acmd = acmd + " " + shell_sq(list_get(pbs, a));
         a = a + 1;
         }
-        acmd = acmd + " > " + cc_shell_sq(pf);
+        acmd = acmd + " > " + shell_sq(pf);
     }
     let rp: Result[String, String] = sys_exec(sys, "sh", "-c", acmd);
     if !rp.is_ok() { println("ERR\tbuild\tproto bundle failed");
@@ -103,7 +91,7 @@ pub fn run_native_cc(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, pbs:
     let mut i: Int = 0;
     while i < n { let cf: String = list_get(pbs, i);
     let ofile: String = str_slice(cf, 0, chars_len(cf) - 5) + ".o";
-    if !objs.contains(ofile) { objs = objs + " " + cc_shell_sq(ofile);
+    if !objs.contains(ofile) { objs = objs + " " + shell_sq(ofile);
     }
         let mut hit: Bool = false;
         if path_exists(fs_r, ofile) {
@@ -111,7 +99,7 @@ pub fn run_native_cc(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, pbs:
         }
         if hit { skipc = skipc + 1;
         } else {
-            let single_job: String = "mkdir -p $(dirname " + cc_shell_sq(ofile) + ") && TMP_O=$(mktemp /tmp/oo_obj.XXXXXX.o) && TMP_TU=$(mktemp /tmp/oo_tu.XXXXXX.c) && cat " + cc_shell_sq(pre) + " " + cc_shell_sq(pf) + " " + cc_shell_sq(cf) + " > \"$TMP_TU\" && $CC -x c -c $OO_AV -g -Werror=implicit-function-declaration -Werror=return-type -Werror=uninitialized" + san_flags + " -I\"$OODA_SRC_ROOT/runtime\" \"$TMP_TU\" -o \"$TMP_O\" && mv -f \"$TMP_O\" " + cc_shell_sq(ofile) + " && rm -f \"$TMP_TU\"";
+            let single_job: String = "mkdir -p $(dirname " + shell_sq(ofile) + ") && TMP_O=$(mktemp /tmp/oo_obj.XXXXXX.o) && TMP_TU=$(mktemp /tmp/oo_tu.XXXXXX.c) && cat " + shell_sq(pre) + " " + shell_sq(pf) + " " + shell_sq(cf) + " > \"$TMP_TU\" && $CC -x c -c $OO_AV -g -Werror=implicit-function-declaration -Werror=return-type -Werror=uninitialized" + san_flags + " -I\"$OODA_SRC_ROOT/runtime\" \"$TMP_TU\" -o \"$TMP_O\" && mv -f \"$TMP_O\" " + shell_sq(ofile) + " && rm -f \"$TMP_TU\"";
             jobs = list_push(jobs, single_job);
         }
         i = i + 1;
@@ -133,10 +121,10 @@ pub fn run_native_cc(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, pbs:
         let batch_file: String = ".ooda-cache/ooda-tmp/batch_cc_" + str_slice(b_hash, 0, 16) + ".txt";
         let r_bw: Result[Void, String] = write_file(fs_w, batch_file, batch_body);
         if r_bw.is_err() {
-            let cmd_bw: String = "mkdir -p .ooda-cache/ooda-tmp && cat << 'EOF_BATCH' > " + cc_shell_sq(batch_file) + "\n" + batch_body + "EOF_BATCH\n";
+            let cmd_bw: String = "mkdir -p .ooda-cache/ooda-tmp && cat << 'EOF_BATCH' > " + shell_sq(batch_file) + "\n" + batch_body + "EOF_BATCH\n";
             let _rbw: Result[String, String] = sys_exec(sys, "sh", "-c", cmd_bw);
         }
-        let batch_sh: String = probe_src_root() + probe_cc() + probe_autovec() + probe_nproc() + "cat " + cc_shell_sq(batch_file) + " | xargs -P\"$NPROC\" -I{} sh -c '{}'";
+        let batch_sh: String = probe_src_root() + probe_cc() + probe_autovec() + probe_nproc() + "cat " + shell_sq(batch_file) + " | xargs -P\"$NPROC\" -I{} sh -c '{}'";
         let rc_b: Result[String, String] = sys_exec(sys, "sh", "-c", batch_sh);
         let _rm_b: Result[String, String] = sys_exec(sys, "rm", "-f", batch_file);
         if !rc_b.is_ok() { println("ERR\tbuild\tparallel cc -c failed");
@@ -158,7 +146,7 @@ pub fn run_native_cc(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, pbs:
     gcc_cmd = gcc_cmd + "RT_KEY=$( (echo \"$CC $OO_AV $OO_SSL_C " + san_flags + "\"; ls -l \"$RT_DIR\"/chs_rt* 2>/dev/null) | (sha256sum 2>/dev/null || shasum -a 256 2>/dev/null || md5sum) | cut -c1-16 ); ";
     gcc_cmd = gcc_cmd + "RT_OBJ=\".ooda-cache/runtime/chs_rt_${RT_KEY}.o\"; ";
     gcc_cmd = gcc_cmd + "if [ ! -f \"$RT_OBJ\" ]; then mkdir -p .ooda-cache/runtime && TMP_RT_O=$(mktemp /tmp/oo_rt.XXXXXX.o) && cat $RT_SRCS > \"$RT_DIR/_rt_all.c\" && $CC -x c -c $OO_AV -g -Werror=implicit-function-declaration -Werror=return-type -Werror=uninitialized " + san_flags + " -I\"$RT_DIR\" $OO_SSL_C \"$RT_DIR/_rt_all.c\" -o \"$TMP_RT_O\" && rm -f \"$RT_DIR/_rt_all.c\" && mv -f \"$TMP_RT_O\" \"$RT_OBJ\"; fi; ";
-    gcc_cmd = gcc_cmd + "SOURCE_DATE_EPOCH=\"${SOURCE_DATE_EPOCH:-0}\" $CC $OO_AV -g -Werror=implicit-function-declaration -Werror=return-type -Werror=uninitialized " + repro + san_flags + " $OO_LLD -I\"$RT_DIR\" $OO_SSL_C " + objs + " \"$RT_OBJ\" -lm -ldl -lpthread $OO_SSL_L -o " + cc_shell_sq(out);
+    gcc_cmd = gcc_cmd + "SOURCE_DATE_EPOCH=\"${SOURCE_DATE_EPOCH:-0}\" $CC $OO_AV -g -Werror=implicit-function-declaration -Werror=return-type -Werror=uninitialized " + repro + san_flags + " $OO_LLD -I\"$RT_DIR\" $OO_SSL_C " + objs + " \"$RT_OBJ\" -lm -ldl -lpthread $OO_SSL_L -o " + shell_sq(out);
 
     let r_gcc: Result[String, String] = sys_exec(sys, "sh", "-c", gcc_cmd);
     let _rm_pf: Result[String, String] = sys_exec(sys, "rm", "-f", pf);

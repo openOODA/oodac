@@ -20,19 +20,7 @@ import "c_mono_unit_emit.oo";
 import "c_mono_chunk.oo";
 
 
-fn c_mono_shell_sq(s: String) -> String {
-    let n: Int = chars_len(s);
-let mut i: Int = 0;
-let mut out: String = "'";
-while i < n { let c: String = char_at(s, i);
-if c == "'" { out = out + "'\\''";
-} else {
-            out = out + c;
-        }
-        i = i + 1;
-    }
-    return out + "'";
-}
+import "types/str_escape.oo";
 
 pub fn c_mono_unit_collect_modules(fs: &FsReadCap, mods: List[String]) -> List[String] {
     let mut reg: List[String] = c_mono_reg_new();
@@ -74,7 +62,7 @@ pub fn c_mono_emit_unified_tu_sys(fs: &FsWriteCap, sys: &ProcessCap, reg: List[S
     let src: String = c_mono_unit_emit_source(reg);
     let r_w: Result[Void, String] = write_file(fs, out_path, src);
     if r_w.is_err() {
-        let cmd: String = "mkdir -p $(dirname " + c_mono_shell_sq(out_path) + ") && cat << 'EOF_OO_TYPES' > " + c_mono_shell_sq(out_path) + "\n" + src + "\nEOF_OO_TYPES\n";
+        let cmd: String = "mkdir -p $(dirname " + shell_sq(out_path) + ") && cat << 'EOF_OO_TYPES' > " + shell_sq(out_path) + "\n" + src + "\nEOF_OO_TYPES\n";
         let _r: Result[String, String] = sys_exec(sys, "sh", "-c", cmd);
     }
 }

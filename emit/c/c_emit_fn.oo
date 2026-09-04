@@ -122,6 +122,17 @@ pub fn c_emit_fn_mode(toks: List[String], pos: Int, n: Int, fn_env: String, mode
         p = c_emit_skip_type(toks, p, n);
     }
 
+    let target_path: String = c_env_get(fn_env, "__target__");
+    let is_other: Bool = target_path != "" && src_path != "" && !c_same_file(target_path, src_path);
+    if is_other {
+        p = c_emit_skip_contracts(toks, p, n);
+        p = c_emit_skip_braces(toks, p, n);
+        p = c_emit_skip_verify(toks, p, n);
+        let mut out: List[String] = list_new();
+        out = list_push(out, p.to_string());
+        return list_push(out, out_fn);
+    }
+
     if mode == "protos" || mode == "protos_noarc" {
         if fn_name != "main" {
             let fn_attr: String = c_fn_attributes(fn_name, env);

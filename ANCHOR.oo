@@ -14,6 +14,7 @@
 import "lex/ANCHOR.oo";
 import "ast/ANCHOR.oo";
 import "check/ANCHOR.oo";
+import "types/ANCHOR.oo";
 import "emit/c/ANCHOR.oo";
 import "emit/x86/ANCHOR.oo";
 import "emit/aarch64/ANCHOR.oo";

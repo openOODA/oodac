@@ -76,7 +76,7 @@ import "tc_names_sum.oo";
 import "tc_ops_cmp.oo";
 import "tc_ops_logic.oo";
 import "tc_ops_unary.oo";
-import "tc_parse_int.oo";
+import "lex/token_parse_int.oo";
 import "tc_read_result.oo";
 import "tc_refine.oo";
 import "tc_refine_bind.oo";
@@ -100,6 +100,7 @@ import "types/ty.oo";
 import "types/ty_mangle.oo";
 import "types/ty_parse.oo";
 import "types/types_core.oo";
+import "types/token_search.oo";
 
 // ──▓▓ Public Type Checking & Verification API ──▓▓──
 

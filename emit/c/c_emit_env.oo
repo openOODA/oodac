@@ -33,7 +33,7 @@ if i == 0 { at_bound = true;
             let mut k = start;
             while k < en && byte_at(env, k) != 59 { k = k + 1;
             }
-                found = str_slice(env, start, k);
+                found = byte_slice(env, start, k);
             }
         }
         i = i + 1;
@@ -82,7 +82,7 @@ while si + 1 < en { if byte_at(env, si) == 123 && byte_at(env, si + 1) == 59 { l
         }
         i = i + 1;
     }
-    if match_start >= 0 { return str_slice(env, 0, match_start) + name + "=" + kind + ";" + str_slice(env, match_end, en);
+    if match_start >= 0 { return byte_slice(env, 0, match_start) + name + "=" + kind + ";" + byte_slice(env, match_end, en);
     }
     return env + name + "=" + kind + ";";
 }
@@ -115,7 +115,7 @@ if i == 0 { at_bound = true;
     }
     if last_i < 0 { return env + name + "=" + kind + ";";
     }
-    let mut out = str_slice(env, 0, last_i);
+    let mut out = byte_slice(env, 0, last_i);
     out = out + name + "=" + kind + ";";
     let mut k = last_i + kn;
     while k < en { let b = byte_at(env, k);
@@ -123,7 +123,7 @@ if i == 0 { at_bound = true;
     if b == 59 { break;
     }
     }
-    if k < en { out = out + str_slice(env, k, en);
+    if k < en { out = out + byte_slice(env, k, en);
     }
     return out;
 }
