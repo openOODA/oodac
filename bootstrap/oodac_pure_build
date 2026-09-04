@@ -320,6 +320,9 @@ done
 echo "pure_build: emit_cache skip=$emit_skip of ${#MODS[@]}"
 
 awk '/^(#line 1 "|#ifndef OO_FN_|[A-Za-z_][A-Za-z0-9_]*[[:space:]]+[A-Za-z0-9_]+\([^;]*\)[[:space:]]*\{)/{exit} {print}' "${MCS[0]}" >"$TMP/preamble.c"
+if ! grep -q '<stdint.h>' "$TMP/preamble.c"; then
+  sed -i '1i #include <stdint.h>' "$TMP/preamble.c"
+fi
 # Keep the longest complete `{` body per name. A prototype-only or empty
 # OO_FN_ block must not mark the name seen (that dropped c_emit_expr_stmt).
 python3 - "$TMP" "${MCS[@]}" <<'PY'

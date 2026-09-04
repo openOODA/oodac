@@ -115,7 +115,7 @@ if i == 0 { at_bound = true;
     }
     if last_i < 0 { return env + name + "=" + kind + ";";
     }
-    let mut out = byte_slice(env, 0, last_i);
+    let mut out: String = byte_slice(env, 0, last_i);
     out = out + name + "=" + kind + ";";
     let mut k = last_i + kn;
     while k < en { let b = byte_at(env, k);
