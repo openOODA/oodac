@@ -1,0 +1,8 @@
+// # oodac tier2 leftover
+//
+// Logline: Front door after unauthorized .sh runners were deleted.
+//
+// Setup: Structural ANCHOR only.
+//
+// Beats:
+//   1. Mark this directory as a product tree.

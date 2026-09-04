@@ -1,0 +1,8 @@
+// # oodac tests tree
+//
+// Logline: Front door for remaining .oo fixtures under tests/.
+//
+// Setup: Shell runners were deleted. Fixtures and tier4 apps stay as .oo.
+//
+// Beats:
+//   1. Mark tests/ as a product directory.

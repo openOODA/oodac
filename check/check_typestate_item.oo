@@ -8,7 +8,6 @@
 //   1. Walk trait T {..} or impl T for S {..} using canonical skip_trait_or_impl.
 //   2. parse_trait_item / parse_impl_item dump TRAIT / IMPL rows.
 //   3. c_emit_impl_methods emits impl fns as concrete C functions.
-import "ast/ANCHOR.oo";
 import "types/token_search.oo";
 
 pub fn parse_trait_item(toks: List[String], pos0: Int, item_idx: Int) -> Int {

@@ -1,52 +1,30 @@
 // # CLI Subsystem — Module Entry Door
 //
-// Logline: Command-line interface orchestration, dispatch, reflection, and REPL entry.
+// Logline: Command-line parse, C-backend build, and emit-c dispatch.
 //
-// Setup: Imports CLI tools, argument parsers, and command drivers.
+// Setup: Imports CLI parse, build, and emit-c plus the C-path compiler ANCHORs.
 //
 // Beats:
-//   1. Import CLI parser, emitter orchestration, reflection, and outline siblings.
-//   2. Re-export public CLI driver APIs and AST reflection interfaces.
-//   3. Preserve <= 256 lines limit and standard capability security.
+//   1. Import parser, build, and emit-c siblings.
+//   2. Re-export parse_cli_argv, run_build_san, and run_emit_c_family.
+//   3. Preserve <= 256 lines.
 
 import "lex/ANCHOR.oo";
-import "types/ANCHOR.oo";
 import "ast/ANCHOR.oo";
 import "check/ANCHOR.oo";
+import "types/ANCHOR.oo";
 import "emit/c/ANCHOR.oo";
-import "emit/x86/ANCHOR.oo";
-import "emit/aarch64/ANCHOR.oo";
-import "emit/wasm/ANCHOR.oo";
-import "emit/llvm/ANCHOR.oo";
-import "emit/gpu/ANCHOR.oo";
-import "vm/ANCHOR.oo";
-import "cli_ast.oo";
 import "cli_build.oo";
-import "cli_build_cc.oo";
-import "cli_build_sovereign.oo";
-import "cli_build_targets.oo";
 import "cli_emit.oo";
-import "cli_emit_llvm.oo";
-import "cli_gpu_emit.oo";
-import "cli_outline.oo";
 import "cli_parse.oo";
-import "cli_reflect.oo";
-import "cli_repl.oo";
 
 // ──▓▓ Public CLI API ──▓▓──
+// parse_cli_argv, run_build_san, and run_emit_c_family are pub on the imports.
 
 pub fn cli_parse_args(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, argv: List[String]) -> List[String] {
     return parse_cli_argv(fs_r, fs_w, sys, argv);
 }
 
-pub fn cli_run_ast(fs: &FsReadCap, sys: &ProcessCap, args: List[String]) {
-    run_cli_ast(fs, sys, args);
-}
-
-pub fn cli_run_emit_c(fs: &FsReadCap, sys: &ProcessCap, cmd: String, path: String, is_plain: Bool) {
-    run_emit_c_family(fs, sys, cmd, path, is_plain);
-}
-
-pub fn cli_ast_dump(src: String) -> String {
-    return ast_dump_source(src);
+pub fn cli_run_emit_c(fs: &FsReadCap, cmd: String, path: String, is_plain: Bool) {
+    run_emit_c_family(fs, cmd, path, is_plain);
 }

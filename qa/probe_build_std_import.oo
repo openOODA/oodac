@@ -1,0 +1,15 @@
+// # Probe: oodac build of a std import
+//
+// Logline: Product program that imports std path_join. oodac build must emit a native ELF whose stdout is a/b.
+//
+// Setup: Polyrepo std/ must resolve. No ProcessCap. Observable output is the joined path.
+//
+// Beats:
+//   1. Import std/fs/file/path.oo (not a dir-join of the importer).
+//   2. Print path_join("a", "b") which must be a/b.
+
+import "std/fs/file/path.oo";
+
+pub fn main() {
+    println(path_join("a", "b"));
+}

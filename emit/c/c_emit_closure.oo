@@ -32,9 +32,9 @@ pub fn c_closure_encode_cap(c: ClosureCapture) -> String {
 pub fn c_closure_decode_cap(s: String) -> ClosureCapture {
     let parts: List[String] = str_split(s, "\t");
     if list_len(parts) < 5 {
-        return ClosureCapture { name: "", ty_ast: "", c_ty: "", is_managed: false, offset_idx: 0 };
+        return c_closure_capture_new("", "", "", 0);
     }
-    return ClosureCapture { name: list_get(parts, 0), ty_ast: list_get(parts, 1), c_ty: list_get(parts, 2), is_managed: list_get(parts, 3) == "1", offset_idx: parse_int(list_get(parts, 4)) };
+    return c_closure_capture_new(list_get(parts, 0), list_get(parts, 1), list_get(parts, 2), parse_int(list_get(parts, 4)));
 }
 
 pub fn c_closure_is_escaping(context: String, usage: String) -> Bool {

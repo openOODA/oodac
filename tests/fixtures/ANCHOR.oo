@@ -1,0 +1,8 @@
+// # oodac test fixtures
+//
+// Logline: Front door for compiler test fixtures.
+//
+// Setup: Structural ANCHOR only.
+//
+// Beats:
+//   1. Mark tests/fixtures as a product directory.

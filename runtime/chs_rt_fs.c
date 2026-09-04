@@ -277,3 +277,43 @@ r.err = oo_str_lit("fs_symlink denied: policy path"); return r; }
 if (symlink(ctarget, clink) == 0) { r.ok = 1; r.err = oo_str_lit(""); }
 return r;
 }
+
+/* Compiler ELF only: default OODAC_BIN and OODA_FS_READDIR from /proc/self/exe. */
+static void oo_oodac_env_defaults(void) __attribute__((constructor));
+static void oo_oodac_env_defaults(void) {
+  char exe[PATH_MAX];
+  char root[PATH_MAX];
+  char stdp[PATH_MAX];
+  char poly[PATH_MAX];
+  char cwd[PATH_MAX];
+  char *base;
+  ssize_t n = readlink("/proc/self/exe", exe, sizeof(exe) - 1);
+  int slash = 0;
+  ssize_t i;
+  struct stat st;
+  if (n <= 0) return;
+  exe[n] = '\0';
+  base = strrchr(exe, '/');
+  base = base ? base + 1 : exe;
+  if (!strstr(base, "oodac")) return;
+  if (!getenv("OODAC_BIN")) setenv("OODAC_BIN", exe, 0);
+  if (!getcwd(cwd, sizeof cwd)) cwd[0] = '\0';
+  if (!getenv("OODA_FS_WRITEDIR") || !getenv("OODA_FS_WRITEDIR")[0]) {
+    if (cwd[0]) setenv("OODA_FS_WRITEDIR", cwd, 0);
+  }
+  if (getenv("OODA_FS_READDIR") && getenv("OODA_FS_READDIR")[0]) return;
+  memcpy(root, exe, (size_t)n + 1);
+  for (i = n - 1; i >= 0; i--) {
+    if (root[i] != '/') continue;
+    root[i] = '\0';
+    slash++;
+    if (slash == 2) break;
+  }
+  if (slash < 2) return;
+  snprintf(stdp, sizeof stdp, "%s/../std", root);
+  if (stat(stdp, &st) == 0) {
+    snprintf(poly, sizeof poly, "%s/..", root);
+    if (realpath(poly, exe)) setenv("OODA_FS_READDIR", exe, 0);
+    return;
+  }
+}

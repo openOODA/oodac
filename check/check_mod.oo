@@ -13,7 +13,7 @@
 // residual: RAM-cold typecheck stays ~523s; disk-warm new-process uses g_ stamp snapshot.
 
 import "check_cache.oo";
-import "ast/ANCHOR.oo";
+import "ast/load_import.oo";
 
 
 fn persist_graph(fs: &FsWriteCap, sys: &ProcessCap, root: String, listing: String) {

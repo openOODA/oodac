@@ -148,6 +148,15 @@ fn tsv_escape(text: String) -> String {
     return enc;
 }
 
+fn typed_token_new(k: Int, ln: Int, cl: Int, tx: String) -> TypedToken {
+    let mut t: TypedToken = TypedToken { kind: 0, line: 0, col: 0, text: "" };
+    t.kind = k;
+    t.line = ln;
+    t.col = cl;
+    t.text = tx;
+    return t;
+}
+
 fn tsv_parse_token(row: String) -> TypedToken {
     let n: Int = chars_len(row);
     let mut f0: String = "";
@@ -172,7 +181,7 @@ fn tsv_parse_token(row: String) -> TypedToken {
         let raw: String = str_slice(row, start, n);
         f3 = tsv_unescape(raw);
     }
-    return TypedToken { kind: kind_to_int(f0), line: f1, col: f2, text: f3 };
+    return typed_token_new(kind_to_int(f0), f1, f2, f3);
 }
 
 pub fn tokens_from_tsv(tsv_toks: List[String]) -> List[TypedToken] {

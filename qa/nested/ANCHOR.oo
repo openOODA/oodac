@@ -1,0 +1,10 @@
+// # Nested import-join probes
+//
+// Logline: Front door for nested-cwd std import probes.
+//
+// Setup: Re-exports probe_import_join.oo.
+//
+// Beats:
+//   1. Re-export the nested std-import probe.
+
+import "probe_import_join.oo";

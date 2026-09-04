@@ -1,18 +1,83 @@
-// # oodac Compiler api_surface Probe — Self-Test
+// # Probe: oodac ANCHOR imports exist on disk
 //
-// Logline: Verify the 12 domain subdirs match the api_surface=12 declaration in VERSION.
+// Logline: Read oodac/ANCHOR.oo (or ./ANCHOR.oo), count import lines, and require each import path to exist under oodac/.
 //
-// Setup: Pure compute. Returns Result[Int, String]; Ok(0) on pass.
+// Setup: Needs &FsReadCap. Does not lock the import count. Exit 0 iff ANCHOR exists and every import file exists.
 //
 // Beats:
-//   1. Print api_surface confirmation and return 0.
+//   1. Resolve ANCHOR.oo under the FS jail (cwd or oodac/).
+//   2. Count lines that start with import ".
+//   3. Resolve each import path relative to oodac/ and fail closed if any file is missing.
 
-pub fn probe_api_surface_run() -> Int {
-    println("probe: oodac api_surface = 12");
+fn import_relpath(line: String) -> String {
+    let n: Int = chars_len(line);
+    if n < 8 { return ""; }
+    if str_slice(line, 0, 8) != "import \"" { return ""; }
+    let mut i: Int = 8;
+    while i < n {
+        if char_at(line, i) == "\"" {
+            return str_slice(line, 8, i);
+        }
+        i = i + 1;
+    }
+    return "";
+}
+
+fn join_oodac(root: String, rel: String) -> String {
+    if root == "" { return rel; }
+    return root + "/" + rel;
+}
+
+pub fn probe_api_surface_run(fs: &FsReadCap) -> Int {
+    let mut root: String = "";
+    let mut path: String = "ANCHOR.oo";
+    if !path_exists(fs, path) {
+        path = "oodac/ANCHOR.oo";
+        root = "oodac";
+    }
+    if !path_exists(fs, path) {
+        println("FAIL api_surface missing ANCHOR.oo");
+        return 1;
+    }
+    let rr: Result[String, String] = read_file(fs, path);
+    if rr.is_err() {
+        println("FAIL api_surface unreadable ANCHOR.oo");
+        return 1;
+    }
+    let src: String = match rr { Ok(s) => s, Err(_) => "" };
+    let nsrc: Int = chars_len(src);
+    let mut i: Int = 0;
+    let mut ls: Int = 0;
+    let mut c: Int = 0;
+    while i <= nsrc {
+        let at_end: Bool = i == nsrc;
+        let mut ch: String = "\n";
+        if !at_end { ch = char_at(src, i); }
+        if ch == "\n" || at_end {
+            let line: String = if i > ls { str_slice(src, ls, i) } else { "" };
+            if chars_len(line) >= 8 && str_slice(line, 0, 8) == "import \"" {
+                let rel: String = import_relpath(line);
+                if rel == "" {
+                    println("FAIL api_surface malformed import");
+                    return 1;
+                }
+                let full: String = join_oodac(root, rel);
+                if !path_exists(fs, full) {
+                    println("FAIL api_surface missing import " + rel);
+                    return 1;
+                }
+                c = c + 1;
+            }
+            ls = i + 1;
+        }
+        i = i + 1;
+    }
+    println("PASS api_surface imports=" + c.to_string());
     return 0;
 }
 
-pub fn main(p: &ProcessCap, fs_r: &FsReadCap, sys: &SysCap, env: &EnvCap, time: &TimeCap, fs_w: &FsWriteCap, alloc: &AllocCap, args: List[String]) -> Result[Int, String] {
-    let _rc: Int = probe_api_surface_run();
+pub fn main(fs_r: &FsReadCap) -> Result[Int, String] {
+    let rc: Int = probe_api_surface_run(fs_r);
+    if rc != 0 { return Err("api_surface"); }
     return Ok(0);
 }

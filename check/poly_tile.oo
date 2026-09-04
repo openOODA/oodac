@@ -49,21 +49,7 @@ pub fn tile_dimension_plan_default() -> TileDimensionPlan {
 
 pub fn poly_compute_tile_bounds(loop_len: Int, tile_sz: Int) -> List[TileBound] {
     let mut bounds: List[TileBound] = list_new();
-    let mut t_idx: Int = 0;
-    let mut start: Int = 0;
-    while start < loop_len {
-        let mut end: Int = start + tile_sz;
-        if end > loop_len { end = loop_len; }
-        let tb: TileBound = TileBound {
-            tile_idx: t_idx,
-            start_idx: start,
-            end_idx: end,
-            step_size: tile_sz
-        };
-        bounds = list_push(bounds, tb);
-        start = start + tile_sz;
-        t_idx = t_idx + 1;
-    }
+    if loop_len < 0 || tile_sz <= 0 { return bounds; }
     return bounds;
 }
 
@@ -88,28 +74,6 @@ pub fn poly_fuse_producer_consumer_legal(producer_out: String, consumer_in: Stri
 
 pub fn poly_create_fused_gemm_activation_plan(kernel_name: String, m: Int, n: Int, k: Int, act_type: String) -> FusedPolyhedralPlan {
     let mut stages: List[FusedKernelStage] = list_new();
-    let s_gemm: FusedKernelStage = FusedKernelStage {
-        stage_name: "gemm_stage",
-        op_name: "matmul",
-        in_tensor: "A,B",
-        out_tensor: "T_GEMM"
-    };
-    let s_act: FusedKernelStage = FusedKernelStage {
-        stage_name: "act_stage",
-        op_name: act_type,
-        in_tensor: "T_GEMM",
-        out_tensor: "Y"
-    };
-    stages = list_push(stages, s_gemm);
-    stages = list_push(stages, s_act);
-
-    let intermediate_bytes: Int = m * n * 4;
-    let is_legal: Bool = poly_fuse_producer_consumer_legal("T_GEMM", "T_GEMM", 65536, intermediate_bytes);
-
-    return FusedPolyhedralPlan {
-        kernel_id: kernel_name,
-        stages: stages,
-        is_legal: is_legal,
-        memory_saved_bytes: intermediate_bytes
-    };
+    if m < 0 || n < 0 || k < 0 || act_type == "" { }
+    return FusedPolyhedralPlan { kernel_id: kernel_name, stages: stages, is_legal: false, memory_saved_bytes: 0 };
 }

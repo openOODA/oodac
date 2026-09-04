@@ -1,154 +1,41 @@
 // # Run the emit-c family
 //
-// Logline: Turns emit-c family, emit-llvm, or emit-x86 into streamed C, LLVM IR, or x86_64 .s for one source path.
+// Logline: Stream C for emit-c, emit-preamble, emit-protos, and emit-bodies.
 //
-// Setup: load_import, c_emit, cli_emit_llvm, and x86_emit are imported. Caps are FsReadCap and ProcessCap.
+// Setup: load_expand and c_emit. One concat emit.
 //
 // Beats:
-//   1. Map cmd to mode all/preamble/protos/bodies and append _noarc when PURE_NO_ARC is set.
-//   2. When EMIT_NO_CONCAT is set, read the file and call c_emit_stream_mode_at with the path, or fail unreadable.
-//   3. Otherwise load imports, tokenize each file with LINEFILE, and stream C or LLVM IR.
-//   4. emit-llvm delegates to cli_emit_llvm; emit-x86 writes .s.
-// RULES.oot 1.7: Under 256 lines.
+//   1. Map cmd to mode once/preamble/protos/bodies.
+//   2. Load imports, tokenize each file with LINEFILE, stream C.
 
+import "ast/load_import.oo";
+import "emit/c/ANCHOR.oo";
 
-
-
-import "cli_emit_llvm.oo";
-
-
-
-
-pub fn run_emit_c_family(fs: &FsReadCap, sys: &ProcessCap, cmd: String, path: String, is_plain: Bool) {
-    let probe = "if [ -n \"$EMIT_NO_CONCAT\" ] || [ -n \"$OODA_EMIT_NO_CONCAT\" ]; then exit 0; else exit 1; fi";
-    let no_concat = sys_exec(sys, "sh", "-c", probe);
-    let arc_probe = "if [ \"$PURE_NO_ARC\" = \"1\" ] || [ \"$OODA_PURE_NO_ARC\" = \"1\" ]; then exit 0; else exit 1; fi";
-    let no_arc_res = sys_exec(sys, "sh", "-c", arc_probe);
-    let mut no_arc = false;
-    if no_arc_res.is_ok() { no_arc = true;
+pub fn run_emit_c_family(fs: &FsReadCap, cmd: String, path: String, is_plain: Bool) {
+    let mut m: String = "once";
+    if cmd == "emit-preamble" { m = "preamble"; }
+    else if cmd == "emit-protos" { m = "protos"; }
+    else if cmd == "emit-bodies" { m = "bodies"; }
+    if m == "preamble" {
+        c_emit_stream_mode("", "preamble");
+        return;
     }
-
-    let mut m = "";
-    if cmd == "emit-preamble" { m = "preamble";
-    }
-    else if cmd == "emit-protos" { m = "protos";
-    }
-    else if cmd == "emit-bodies" { m = "bodies";
-    }
-    else { m = "all";
-    }
-    if no_arc { m = m + "_noarc";
-    }
-
-    if no_concat.is_ok() {
-        let src_r = read_file(fs, path);
-        if src_r.is_err() {
-            println("ERR\tload\tunreadable file: " + path);
+    let le: List[String] = load_expand(fs, path, list_new(), list_new());
+    let nle: Int = list_len(le);
+    let src: String = list_get(le, nle - 1);
+    let mut toks: List[String] = list_new();
+    let mut i: Int = 0;
+    while i < nle - 1 {
+        let p: String = list_get(le, i);
+        let pr: Result[String, String] = read_file(fs, p);
+        if pr.is_err() {
+            println("ERR\tload\tunreadable file: " + p);
             process_exit(1);
         }
-        let src: String = match src_r { Ok(s) => s, Err(msg) => msg };
-        let toks: List[String] = tokenize_lines(src);
-        let le: List[String] = load_expand(fs, path, list_new(), list_new());
-        let nle: Int = list_len(le);
-        let mut itoks: List[String] = list_new();
-        let mut pi: Int = 0;
-        while pi < nle - 1 { let pr: Result[String, String] = read_file(fs, list_get(le, pi));
-        if pr.is_err() { println("ERR\tload\tunreadable file: " + list_get(le, pi));
-        process_exit(1);
-        }
-            let fsx: String = match pr { Ok(s) => s, Err(e) => e };
-            itoks = c_toks_append_file_at(itoks, tokenize_lines(fsx), list_get(le, pi));
-            pi = pi + 1;
-        }
-        itoks = c_toks_append_eof(itoks);
-        c_emit_stream_toks_at(src, itoks, m, path, is_plain);
-    } else {
-        if m == "preamble" || m == "preamble_noarc" {
-            c_emit_stream_mode("", "preamble");
-            return;
-        }
-        let le: List[String] = load_expand(fs, path, list_new(), list_new());
-        let nle: Int = list_len(le);
-        let src: String = list_get(le, nle - 1);
-        let mut em: String = m;
-        if m == "all" { em = "once"; }
-        if m == "all_noarc" { em = "once_noarc"; }
-        let mut toks: List[String] = list_new();
-        let mut pi: Int = 0;
-        while pi < nle - 1 {
-            let pr: Result[String, String] = read_file(fs, list_get(le, pi));
-            if pr.is_err() {
-                println("ERR\tload\tunreadable file: " + list_get(le, pi));
-                process_exit(1);
-            }
-            let fsx: String = match pr { Ok(s) => s, Err(e) => e };
-            toks = c_toks_append_file_at(toks, tokenize_lines(fsx), list_get(le, pi));
-            pi = pi + 1;
-        }
-        toks = c_toks_append_eof(toks);
-        c_emit_stream_toks_at(src, toks, em, path, is_plain);
+        let fsx: String = pr.val;
+        toks = c_toks_append_file_at(toks, tokenize_lines(fsx), p);
+        i = i + 1;
     }
-}
-
-pub fn run_emit_x86_b(fs: &FsReadCap, path: String) {
-    let src_r = read_file(fs, path);
-    if src_r.is_err() {
-        println("ERR\tload\tunreadable file: " + path);
-        process_exit(1);
-    }
-    let src: String = match src_r { Ok(s) => s, Err(msg) => msg };
-    x86_emit_stream_b(src);
-}
-
-pub fn run_emit_x86_c(fs: &FsReadCap, path: String) {
-    let src_r: Result[String, String] = x86_import_concat_e(fs, path);
-    if src_r.is_err() {
-        let e: String = match src_r { Ok(_) => "", Err(m) => m };
-        println(e);
-        process_exit(1);
-    }
-    let src: String = match src_r { Ok(s) => s, Err(m) => m };
-    if !x86_src_has_main_e(src) {
-        let nd: String = x86_diag_emit_with_src("x86_emit", path, 1, 0, "need fn main", x86_diag_src_line(src, 1));
-        println(nd);
-        process_exit(1);
-    }
-    x86_emit_stream_c(src, path);
-}
-
-pub fn run_emit_x86_ssa(fs: &FsReadCap, sys: &ProcessCap, path: String) {
-    let src_r = read_file(fs, path);
-    if src_r.is_err() {
-        println("ERR\tload\tunreadable file: " + path);
-        process_exit(1);
-    }
-    let src: String = match src_r { Ok(s) => s, Err(msg) => msg };
-    let r: X86CompileResult = x86_ssa_compile_program(src);
-    if r.ok { let code: String = r.asm_code;
-    println(code);
-    return;
-    }
-    let msg: String = r.err_msg;
-    println(msg);
-    process_exit(1);
-}
-
-pub fn run_emit_aarch64(fs: &FsReadCap, path: String) {
-    let src_r: Result[String, String] = read_file(fs, path);
-    if src_r.is_err() {
-        println("ERR\tload\tunreadable file: " + path);
-        process_exit(1);
-    }
-    let src: String = match src_r { Ok(s) => s, Err(msg) => msg };
-    aarch64_emit_stream(src);
-}
-
-pub fn run_emit_aarch64_e(fs: &FsReadCap, path: String) {
-    let src_r: Result[String, String] = read_file(fs, path);
-    if src_r.is_err() {
-        println("ERR\tload\tunreadable file: " + path);
-        process_exit(1);
-    }
-    let src: String = match src_r { Ok(s) => s, Err(msg) => msg };
-    aarch64_emit_stream_e(src, path);
+    toks = c_toks_append_eof(toks);
+    c_emit_stream_toks_at(src, toks, m, path, is_plain);
 }

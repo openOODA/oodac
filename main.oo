@@ -1,27 +1,23 @@
 // # Dispatch oodac commands
 //
-// Logline: Parse argv and run build, emit, check, tokens, ast, outline, reflect, run, or a backend emit.
+// Logline: Parse argv and run check, build, emit-c, or tokens on the C backend.
 //
-// Setup: Command line arguments and compiler options are parsed for command dispatch.
+// Setup: C-path only. Dispatch check, build, emit-c, tokens.
 //
 // Beats:
-//   1. Unpack cmd/path/out/backend.
-//   2. Dispatch build, emit, check, or run.
+//   1. Unpack cmd/path/out.
+//   2. Dispatch check, build, emit-c family, or tokens.
 //   3. Unknown cmd exits 2.
-
 
 import "lex/ANCHOR.oo";
 import "ast/ANCHOR.oo";
 import "check/ANCHOR.oo";
 import "types/ANCHOR.oo";
 import "emit/c/ANCHOR.oo";
-import "emit/x86/ANCHOR.oo";
-import "emit/aarch64/ANCHOR.oo";
-import "emit/wasm/ANCHOR.oo";
-import "emit/llvm/ANCHOR.oo";
-import "emit/gpu/ANCHOR.oo";
-import "vm/ANCHOR.oo";
-import "cli/ANCHOR.oo";
+import "cli/cli_parse.oo";
+import "cli/cli_build.oo";
+import "cli/cli_emit.oo";
+
 pub fn main(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, args: List[String]) {
     let a: List[String] = parse_cli_argv(fs_r, fs_w, sys, args);
     let cmd: String = list_get(a, 0);
@@ -29,154 +25,26 @@ pub fn main(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, args: List[St
     let out_arg: String = list_get(a, 2);
     let backend: String = list_get(a, 3);
     let json_errors: Bool = list_get(a, 4) == "1";
-    let is_json: Bool = list_get(a, 5) == "1";
-    let target_triple: String = list_get(a, 6);
-    let runtime_cap_required: Bool = list_get(a, 7) == "1";
-    let opt_level: String = list_get(a, 8);
-    let lto: Bool = list_len(a) > 9 && list_get(a, 9) == "1";
-    let release: Bool = list_len(a) > 10 && list_get(a, 10) == "1";
-    let is_dbg: Bool = list_len(a) > 11 && list_get(a, 11) == "1";
-    let pgo_gen: Bool = list_len(a) > 12 && list_get(a, 12) == "1";
-    let mut pgo_use: String = "";
-    if list_len(a) > 13 { pgo_use = list_get(a, 13);
-    }
-    let mut sanitizers: String = "";
-    if list_len(a) > 14 { sanitizers = list_get(a, 14);
-    }
+    let is_dbg: Bool = false;
+    if list_len(a) > 11 { is_dbg = list_get(a, 11) == "1"; }
 
     if cmd == "build" {
-        run_build_san(fs_r, fs_w, sys, path, out_arg, backend, opt_level, lto, release, is_dbg, false, target_triple, pgo_gen, pgo_use, sanitizers);
-        if runtime_cap_required {
-            let mut cap_bin: String = out_arg;
-            if cap_bin == "" { cap_bin = path + ".bin";
-            }
-            let cap_script: String = "bin=" + shell_sq(cap_bin) + "\nfor sym in oo_cap_require_fs oo_cap_require_sys oo_cap_require_env oo_cap_require_net oo_cap_require_time oo_cap_require_rand oo_cap_require_alloc oo_cap_require_thread oo_cap_require_gpu oo_cap_require_ffi oo_cap_require_audit; do\n  nm \"$bin\" 2>/dev/null | grep -wq \"$sym\" || { printf 'ERR\\tlink\\tmissing cap require: %s\\n' \"$sym\" 1>&2; exit 1; }\ndone";
-            let cr_res: Result[String, String] = sys_exec(sys, "sh", "-c", cap_script);
-            if !cr_res.is_ok() { process_exit(1);
-            }
-        }
+        run_build_san(fs_r, fs_w, sys, path, out_arg, backend);
         return;
     }
-    if cmd == "emit-c" || cmd == "emit-protos" || cmd == "emit-bodies" || cmd == "emit-preamble" { run_emit_c_family(fs_r, sys, cmd, path, is_dbg);
-    return;
-    }
-    if cmd == "check" { if json_errors { run_check_json_errors(fs_r, fs_w, sys, path);
-    return;
-    } run_check_path(fs_r, fs_w, sys, path);
-    return;
-    }
-    if cmd == "tokens" { dump_tokens(load_source_with_imports(fs_r, path));
-    return;
-    }
-    if cmd == "ast" {
-        let rf: Result[String, String] = read_file(fs_r, path);
-        if !rf.is_ok() { println("ERR\tast\tunreadable: " + path);
-        process_exit(1);
-        }
-        let src: String = match rf { Ok(s) => s, Err(_) => "" };
-        let out: String = ast_dump_source(src);
-        if chars_len(out) > 0 { println(out);
-        }
+    if cmd == "emit-c" || cmd == "emit-protos" || cmd == "emit-bodies" || cmd == "emit-preamble" {
+        run_emit_c_family(fs_r, cmd, path, is_dbg);
         return;
     }
-    if cmd == "outline" {
-        let rf: Result[String, String] = read_file(fs_r, path);
-        if !rf.is_ok() { println("ERR\toutline\tunreadable: " + path);
-        process_exit(1);
-        }
-        let src: String = match rf { Ok(s) => s, Err(_) => "" };
-        if is_json || out_arg == "--json" { let out_json: String = outline_render_source_json(src);
-        println(out_json);
-        }
-        else { let out: String = outline_render_source(src);
-        if chars_len(out) > 0 { println(out);
-        } }
-        return;
-    }
-    if cmd == "reflect" {
-        let rf: Result[String, String] = read_file(fs_r, path);
-        if !rf.is_ok() { println("ERR\treflect\tunreadable: " + path);
-        process_exit(1);
-        }
-        let src: String = match rf { Ok(s) => s, Err(_) => "" };
-        let out: String = reflect_symbols_filtered(src, out_arg);
-        if chars_len(out) > 0 { println(out);
-        }
-        return;
-    }
-    if cmd == "run" {
+    if cmd == "check" {
+        if json_errors { run_check_json_errors(fs_r, fs_w, sys, path); return; }
         run_check_path(fs_r, fs_w, sys, path);
-        let mut bin: String = out_arg;
-        if bin == "" { bin = ".ooda-cache/ooda-tmp/oodac_run.bin";
-        }
-        let _mk: Result[String, String] = sys_exec(sys, "mkdir", "-p", ".ooda-cache/ooda-tmp");
-        run_build_san(fs_r, fs_w, sys, path, bin, backend, opt_level, lto, release, is_dbg, true, target_triple, pgo_gen, pgo_use, sanitizers);
-        let ran: Result[String, String] = sys_exec(sys, bin);
-        if ran.is_ok() { let out_str: String = match ran { Ok(s) => s, Err(_) => "" };
-        println(out_str);
-        return;
-        }
-        let err_str: String = match ran { Ok(_) => "", Err(e) => e };
-        println(err_str);
-        process_exit(1);
-    }
-    if cmd == "run-bc" {
-        run_check_path(fs_r, fs_w, sys, path);
-        let src: String = load_source_with_imports(fs_r, path);
-        let bc: String = bc_emit_program(src);
-        let rc: Int = vm_run_bytecode_caps(fs_r, fs_w, sys, bc);
-        process_exit(rc);
-    }
-    if cmd == "emit-bc" { let src: String = load_source_with_imports(fs_r, path);
-    let out: String = bc_emit_program(src);
-    println(out);
-    return;
-    }
-    if cmd == "emit-wasm" {
-        let src: String = load_source_with_imports(fs_r, path);
-        if chars_len(src) > 32768 { println("ERR\twasm_emit\texpanded source too large");
-        process_exit(1);
-        }
-        if chars_len(src) <= 24576 { run_check_core(sys, src);
-        }
-        let bytes: List[Int] = wasm_driver_compile_source(src, "wasi");
-        let s: String = bytes_to_str(bytes);
-        if out_arg != "" { let _w: Result[Void, String] = write_file(fs_w, out_arg, s);
-        }
-        else { println(s);
-        }
         return;
     }
-    if cmd == "emit-llvm" { run_emit_llvm_san(fs_r, sys, path, backend, is_dbg, target_triple, sanitizers);
-    return;
+    if cmd == "tokens" {
+        dump_tokens(load_source_with_imports(fs_r, path));
+        return;
     }
-    if cmd == "emit-graph" { run_print_llvm_graph(fs_r, path);
-    return;
-    }
-    if cmd == "emit-fntab" { run_print_llvm_fntab(fs_r, path);
-    return;
-    }
-    if cmd == "emit-mods" { run_emit_llvm_mods(fs_r, sys, path, out_arg);
-    return;
-    }
-    if cmd == "emit-x86" { run_emit_x86_c(fs_r, path);
-    return;
-    }
-    if cmd == "emit-x86-ssa" { run_emit_x86_ssa(fs_r, sys, path);
-    return;
-    }
-    if cmd == "emit-aarch64" { run_emit_aarch64_e(fs_r, path);
-    return;
-    }
-    if is_gpu_command(cmd) { if !run_emit_gpu_cmd(fs_r, fs_w, sys, cmd, path, out_arg) { process_exit(1);
-    } return;
-    }
-    if cmd == "eval" { run_ooda_eval(fs_r, sys, args);
-    return;
-    }
-    if cmd == "repl" { run_ooda_repl(fs_r, sys, args);
-    return;
-    }
-    println("oodac: unknown command");
+    println("ERR\tcmd\tresidual: " + cmd);
     process_exit(2);
 }

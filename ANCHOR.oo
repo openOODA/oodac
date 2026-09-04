@@ -1,27 +1,20 @@
 // # oodac Compiler Core — Canonical ANCHOR Entry
 //
-// Logline: Re-exports the canonical sovereign compiler surface for toolchain consumers (cli, lsp, vscode, run-time, double-run proofs).
+// Logline: Re-exports the C-backend compiler surface for toolchain consumers.
 //
-// Setup: Compiles the canonical surface from the flat layout. Subsystem boundaries: lex → parse → check → tc → emit (x86_64, aarch64, wasm, llvm, c) → runtime. This ANCHOR.oo restores FORMAT.oot §1.4 compliance for the ooda/oodac/ parent directory.
+// Setup: Compiles the canonical surface from the flat layout. Subsystem boundaries: lex → parse → check → tc → emit/c. This ANCHOR.oo is the oodac/ parent directory entry.
 //
 // Beats:
 //   1. Re-export the lexical scanner surface (lex_all).
 //   2. Re-export the parser surface (ast/, parse_expr, parse_stmt, parse_file).
 //   3. Re-export the typechecker surface (types/, check_caps, check_types).
-//   4. Boundary: internal refactor of any individual emitter stays local; toolchain imports this single file.
-
+//   4. Boundary: internal refactor of the C emitter stays local; toolchain imports this single file.
 
 import "lex/ANCHOR.oo";
 import "ast/ANCHOR.oo";
 import "check/ANCHOR.oo";
 import "types/ANCHOR.oo";
 import "emit/c/ANCHOR.oo";
-import "emit/x86/ANCHOR.oo";
-import "emit/aarch64/ANCHOR.oo";
-import "emit/wasm/ANCHOR.oo";
-import "emit/llvm/ANCHOR.oo";
-import "emit/gpu/ANCHOR.oo";
-import "vm/ANCHOR.oo";
 import "cli/ANCHOR.oo";
 // ──▓▓ Sovereign Lattice ── OODAC ANCHOR ──▓▓──
 // :: public: oodac_lex_all, oodac_parse_expr, oodac_parse_stmt, oodac_parse_file ::

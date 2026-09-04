@@ -11,11 +11,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Verify VERSION + api_surface
+      - name: Count ANCHOR imports
         run: |
-          echo "Declared api_surface: $(grep '^api_surface=' VERSION | cut -d= -f2)"
-          test "$(grep '^api_surface=' VERSION | cut -d= -f2)" = "12" || (echo "api_surface drift"; exit 1)
-          echo "api_surface verified: 12"
+          n=$(grep -c '^import "' ANCHOR.oo)
+          echo "ANCHOR imports: $n"
+          test "$n" = "12"
+      - name: Compiler core is ELF
+        run: |
+          test -x bin/oodac_bin.core
+          file bin/oodac_bin.core | grep -q 'ELF 64-bit'
   auto-release:
     needs: test
     uses: openOODA/openOODA/.github/workflows/auto-release.yml@v1.0.6

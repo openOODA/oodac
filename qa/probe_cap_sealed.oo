@@ -1,0 +1,14 @@
+// # Probe: sealed read_file without FsReadCap
+//
+// Logline: Hostile program. oodac check must fail closed with a capability error, not emit.
+//
+// Setup: main calls read_file with no &FsReadCap. Default-deny.
+//
+// Beats:
+//   1. Call the sealed builtin without a cap token.
+//   2. Compiler must print ERR capability and exit nonzero.
+
+pub fn main() {
+    let s: String = read_file("x.oo");
+    println(s);
+}

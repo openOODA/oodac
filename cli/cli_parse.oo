@@ -1,6 +1,6 @@
 // # Parse oodac CLI argv
 //
-// Logline: Walks argv for backend (c|wasm|llvm|x86), flags, opt level, target triple, and positionals, then packs slots or exits.
+// Logline: Walks argv for C-backend flags and positionals, then packs slots or exits.
 //
 // Setup: path_exists, file_size, shell_sq, sys_exec, and process_exit exist; main.oo imports this file and must keep that barrel.
 //
@@ -15,7 +15,7 @@ fn san_combine(cur: String, add: String) -> String {
 }
 
 pub fn parse_cli_argv(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, args: List[String]) -> List[String] {
-    if list_len(args) < 1 { println("oodac: usage: [--backend c|wasm|wasm-gc|wasm-linear|wasm-dual|llvm|x86|x86-ssa] [--x86-elf-pure] tokens|ast|check|build|run|emit-c|emit-wasm|emit-llvm|emit-x86|emit-x86-ssa|outline|reflect <file>"); process_exit(2); }
+    if list_len(args) < 1 { println("oodac: usage: tokens|check|build|emit-c|emit-protos|emit-bodies|emit-preamble <file>"); process_exit(2); }
     let mut cmd: String = "";
     let mut path: String = "";
     let mut out_arg: String = "";
@@ -171,17 +171,18 @@ pub fn parse_cli_argv(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, arg
         }
     }
     if cmd == "" {
-        cmd = "build";
-        path = "test.oo";
-        out_arg = "test.bin";
-        backend = "llvm";
+        println("oodac: usage: tokens|check|build|emit-c|emit-protos|emit-bodies|emit-preamble <file>");
+        process_exit(2);
     }
-    // P5.48: --prefer-llvm flips the default backend from "c" to "llvm"
-    // unless the user passed an explicit --backend (which always wins).
-    if prefer_llvm && !explicit_backend && backend == "c" {
-        backend = "llvm";
+    if backend != "c" {
+        println("ERR\tbackend\tresidual: " + backend);
+        process_exit(2);
     }
-    if cmd != "eval" && cmd != "repl" {
+    if cmd != "tokens" && cmd != "check" && cmd != "build" && cmd != "emit-c" && cmd != "emit-protos" && cmd != "emit-bodies" && cmd != "emit-preamble" {
+        println("ERR\tcmd\tresidual: " + cmd);
+        process_exit(2);
+    }
+    {
         if path == "" {
             println("oodac: missing file argument");
             process_exit(2);

@@ -1,0 +1,15 @@
+// # Probe: nested-cwd std import
+//
+// Logline: From oodac/qa/nested, import std/fs/file/path.oo must not become nested/std/... .
+//
+// Setup: File lives two directories below oodac/. Sibling walk must find polyrepo std/.
+//
+// Beats:
+//   1. Import the polyrepo std path module.
+//   2. Print path_join("x", "y") which must be x/y.
+
+import "std/fs/file/path.oo";
+
+pub fn main() {
+    println(path_join("x", "y"));
+}

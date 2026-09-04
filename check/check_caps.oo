@@ -7,7 +7,7 @@
 // Beats:
 //   1. Walk each fn item.
 //   2. Grant bags come from check_cap_grant.
-//   3. Prefer exact caps; FsCap/NetCap still supersede.
+//   3. Exact preferred caps only. No supersede.
 
 import "check_cap_util.oo";
 import "lex/token_fmt.oo";

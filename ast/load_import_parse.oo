@@ -155,13 +155,31 @@ pub fn probe_candidate(fs: &FsReadCap, cand: String) -> String {
     return "";
 }
 
+pub fn probe_parent_walk(fs: &FsReadCap, imp: String) -> String {
+    let mut prefix: String = "..";
+    let mut i: Int = 0;
+    while i < 8 {
+        let hit: String = probe_candidate(fs, path_join(prefix, imp));
+        if chars_len(hit) > 0 { return hit; }
+        prefix = prefix + "/..";
+        i = i + 1;
+    }
+    return "";
+}
+
 pub fn probe_sibling_walk(fs: &FsReadCap, dir: String, imp: String) -> String {
     let mut cur: String = dir;
     let mut i: Int = 0;
-    while i < 8 && chars_len(cur) > 0 && cur != "." && cur != "/" {
-        let next_cur: String = path_dirname(cur);
-        if next_cur == cur { return ""; }
-        cur = next_cur;
+    while i < 8 {
+        if cur == "" || cur == "/" { return ""; }
+        if cur == "." {
+            cur = "..";
+        } else {
+            let next_cur: String = path_dirname(cur);
+            if next_cur == cur { return ""; }
+            cur = next_cur;
+            if cur == "." { cur = ".."; }
+        }
         let cand: String = path_join(cur, imp);
         let hit: String = probe_candidate(fs, cand);
         if chars_len(hit) > 0 { return hit; }
@@ -184,10 +202,7 @@ pub fn resolve_import_path(fs: &FsReadCap, dir: String, imp: String) -> String {
     hit = probe_candidate(fs, imp);
     if chars_len(hit) > 0 { return hit; }
 
-    hit = probe_candidate(fs, path_join("..", imp));
-    if chars_len(hit) > 0 { return hit; }
-
-    hit = probe_candidate(fs, path_join("../..", imp));
+    hit = probe_parent_walk(fs, imp);
     if chars_len(hit) > 0 { return hit; }
 
     hit = probe_sibling_walk(fs, dir, imp);

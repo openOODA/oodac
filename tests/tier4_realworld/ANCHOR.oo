@@ -1,0 +1,8 @@
+// # oodac tier4 apps
+//
+// Logline: Front door for remaining .oo tier4 apps.
+//
+// Setup: Structural ANCHOR only.
+//
+// Beats:
+//   1. Mark tests/tier4_realworld as a product directory.

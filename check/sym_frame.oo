@@ -1,18 +1,12 @@
 // # Structured lexical symbol frame table
-//
-// Logline: Tracks nested lexical block frames, CFG borrow analysis, and emits reverse-order ARC destruction hooks.
-//
-// Setup: Lexical frames manage variable lifetimes; integrates with C emitter for ARC elision.
-//
-// Beats:
-//   1. SymVar tracks variable name, AST type, C type, formal status, managed status, and borrow root.
-//   2. FrameTable manages stack of lexical scopes with enter and leave operations using primitive list vectors.
-//   3. CFG borrow analysis checks static reference count invariants and elides redundant retain/release calls.
+// Logline: Nested lexical frames, CFG borrow analysis, reverse-order ARC exit hooks.
+// Setup: Frames own variable lifetimes for the C emitter.
+// Beats: SymVar flags formal=1 borrow=2; FrameTable enter/leave/bind; borrow elides ARC.
 
 import "lex/token_parse_int.oo";
 
 pub type SymVar = struct {
-    name: String, ty_ast: String, c_ty: String, is_formal: Bool, is_managed: Bool, is_borrow: Bool, borrow_root: String
+    name: String, ty_ast: String, c_ty: String, flags: Int, borrow_root: String
 };
 
 pub type FrameTable = struct {
@@ -33,25 +27,31 @@ pub fn c_is_managed_type(c_ty: String) -> Bool {
     return first_b >= 65 && first_b <= 90;
 }
 
-pub fn c_frame_var_new(name: String, ty_ast: String, c_ty: String, is_formal: Bool) -> SymVar {
-    return SymVar { name: name, ty_ast: ty_ast, c_ty: c_ty, is_formal: is_formal, is_managed: c_is_managed_type(c_ty), is_borrow: false, borrow_root: "" };
+fn sv_pack(name: String, ty_ast: String, c_ty: String, flags: Int, borrow_root: String) -> SymVar {
+    let res: SymVar = SymVar { name: name, ty_ast: ty_ast, c_ty: c_ty, flags: flags, borrow_root: borrow_root };
+    return res;
 }
-
+fn sv_flags(is_formal: Bool, is_borrow: Bool) -> Int {
+    if is_formal { if is_borrow { return 3; } return 1; } if is_borrow { return 2; } return 0;
+}
+pub fn c_frame_var_new(name: String, ty_ast: String, c_ty: String, is_formal: Bool) -> SymVar {
+    return sv_pack(name, ty_ast, c_ty, sv_flags(is_formal, false), "");
+}
 pub fn c_frame_var_borrow_new(name: String, ty_ast: String, c_ty: String, is_formal: Bool, is_borrow: Bool, borrow_root: String) -> SymVar {
-    return SymVar { name: name, ty_ast: ty_ast, c_ty: c_ty, is_formal: is_formal, is_managed: c_is_managed_type(c_ty), is_borrow: is_borrow, borrow_root: borrow_root };
+    return sv_pack(name, ty_ast, c_ty, sv_flags(is_formal, is_borrow), borrow_root);
 }
 
 fn c_symvar_encode(v: SymVar) -> String {
-    let f: String = if v.is_formal { "1" } else { "0" };
-    let m: String = if v.is_managed { "1" } else { "0" };
-    let b: String = if v.is_borrow { "1" } else { "0" };
+    let f: String = if v.flags == 1 || v.flags == 3 { "1" } else { "0" };
+    let m: String = if c_is_managed_type(v.c_ty) { "1" } else { "0" };
+    let b: String = if v.flags == 2 || v.flags == 3 { "1" } else { "0" };
     return v.name + "\t" + v.ty_ast + "\t" + v.c_ty + "\t" + f + "\t" + m + "\t" + b + "\t" + v.borrow_root;
 }
 
 fn c_symvar_decode(s: String) -> SymVar {
     let parts: List[String] = str_split(s, "\t");
-    if list_len(parts) < 7 { return SymVar { name: "", ty_ast: "", c_ty: "", is_formal: false, is_managed: false, is_borrow: false, borrow_root: "" }; }
-    return SymVar { name: list_get(parts, 0), ty_ast: list_get(parts, 1), c_ty: list_get(parts, 2), is_formal: list_get(parts, 3) == "1", is_managed: list_get(parts, 4) == "1", is_borrow: list_get(parts, 5) == "1", borrow_root: list_get(parts, 6) };
+    if list_len(parts) < 7 { return c_frame_var_borrow_new("", "", "", false, false, ""); }
+    return c_frame_var_borrow_new(list_get(parts, 0), list_get(parts, 1), list_get(parts, 2), list_get(parts, 3) == "1", list_get(parts, 5) == "1", list_get(parts, 6));
 }
 
 pub fn c_frame_table_new() -> FrameTable {
@@ -112,7 +112,7 @@ pub fn c_frame_lookup(tbl: FrameTable, name: String) -> SymVar {
         }
         cur = list_get(tbl.parents, cur);
     }
-    return SymVar { name: "", ty_ast: "", c_ty: "", is_formal: false, is_managed: false, is_borrow: false, borrow_root: "" };
+    return c_frame_var_borrow_new("", "", "", false, false, "");
 }
 
 pub fn c_frame_borrow_check(table: FrameTable, var_name: String, scope_id: Int) -> Bool {
@@ -131,7 +131,7 @@ pub fn c_frame_borrow_check(table: FrameTable, var_name: String, scope_id: Int) 
     if dot_idx > 0 { clean_name = str_slice(clean_name, 0, dot_idx); }
     let v: SymVar = c_frame_lookup(table, clean_name);
     if v.name == "" { return false; }
-    if v.is_formal || v.is_borrow { return true; }
+    if v.flags != 0 { return true; }
     let mut cur: Int = table.active_frame;
     let tbl_fvars: List[String] = table.frame_vars;
     while cur >= 0 {
@@ -179,7 +179,7 @@ pub fn c_frame_emit_exit(tbl: FrameTable) -> String {
     let mut i: Int = list_len(lines) - 1;
     while i >= 0 {
         let v: SymVar = c_symvar_decode(list_get(lines, i));
-        if v.is_managed && !v.is_formal && !v.is_borrow { out = out + c_arc_kind_release_sym(v.c_ty, v.name); }
+        if c_is_managed_type(v.c_ty) && v.flags == 0 { out = out + c_arc_kind_release_sym(v.c_ty, v.name); }
         i = i - 1;
     }
     return out;

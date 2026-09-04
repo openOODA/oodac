@@ -1,0 +1,13 @@
+// # Probe: flags-only argv must not default to a file
+//
+// Logline: `oodac --backend c` with no command and no path must print usage and exit 2.
+//
+// Setup: Shipped bin/oodac. Old bug compiled test.oo. This file is not that default.
+//
+// Beats:
+//   1. Invoke oodac with only --backend c.
+//   2. Observe usage on stdout and exit 2. No ELF, no test.oo.
+
+pub fn probe_flags_only_sentinel() -> String {
+    return "flags-only-must-not-compile-this";
+}
