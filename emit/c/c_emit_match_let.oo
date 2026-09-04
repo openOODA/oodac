@@ -152,13 +152,18 @@ pub fn c_emit_match_let_core(name: String, toks: List[String], pos: Int, n: Int,
             p = rbrace + 1;
         }
     } else {
-        oo_emit_tmp_enter();
-        let pr_ok: List[String] = c_emit_expr_c(toks, p, n, eok);
-        p = parse_int(list_get(pr_ok, 0));
-        let mut okx = list_get(pr_ok, 1);
-        oo_emit_tmp_own(okx);
-        if decl == 0 { c_emit_reassign_arc(name, okx, eok); } else { println("    " + name + " = " + okx + ";"); }
-        oo_emit_tmp_leave();
+        if p < n && c_tokk(toks, p) == "KW_RETURN" {
+            let st_ok: List[String] = c_emit_stmt(toks, p, n, eok);
+            p = parse_int(list_get(st_ok, 0));
+        } else {
+            oo_emit_tmp_enter();
+            let pr_ok: List[String] = c_emit_expr_c(toks, p, n, eok);
+            p = parse_int(list_get(pr_ok, 0));
+            let mut okx = list_get(pr_ok, 1);
+            oo_emit_tmp_own(okx);
+            if decl == 0 { c_emit_reassign_arc(name, okx, eok); } else { println("    " + name + " = " + okx + ";"); }
+            oo_emit_tmp_leave();
+        }
     }
     if p < n && c_tokk(toks, p) == "SEMI" { p = p + 1; }
     p = c_match_skip_comma(toks, p, n);
@@ -178,7 +183,7 @@ pub fn c_emit_match_let_core(name: String, toks: List[String], pos: Int, n: Int,
     }
     if p < n && c_tokk(toks, p) == "FATARROW" { p = p + 1; }
     if use_res {
-        if rkind == "R" { println("    OoStr " + err_bind + " = __ml.val;"); c_emit_arm_retain("OoStr", err_bind); }
+        if rkind == "R" || rkind == "" || rkind == "OoResS" { println("    OoStr " + err_bind + " = __ml.val;"); c_emit_arm_retain("OoStr", err_bind); }
         else if rkind == "RII" { println("    long long " + err_bind + " = __ml.err;"); }
         else { println("    OoStr " + err_bind + " = __ml.err;"); c_emit_arm_retain("OoStr", err_bind); }
     }
@@ -207,13 +212,18 @@ pub fn c_emit_match_let_core(name: String, toks: List[String], pos: Int, n: Int,
             p = rbrace + 1;
         }
     } else {
-        oo_emit_tmp_enter();
-        let pr_er: List[String] = c_emit_expr_c(toks, p, n, eerr);
-        p = parse_int(list_get(pr_er, 0));
-        let erx = list_get(pr_er, 1);
-        oo_emit_tmp_own(erx);
-        if decl == 0 { c_emit_reassign_arc(name, erx, eerr); } else { println("    " + name + " = " + erx + ";"); }
-        oo_emit_tmp_leave();
+        if p < n && c_tokk(toks, p) == "KW_RETURN" {
+            let st_er: List[String] = c_emit_stmt(toks, p, n, eerr);
+            p = parse_int(list_get(st_er, 0));
+        } else {
+            oo_emit_tmp_enter();
+            let pr_er: List[String] = c_emit_expr_c(toks, p, n, eerr);
+            p = parse_int(list_get(pr_er, 0));
+            let erx = list_get(pr_er, 1);
+            oo_emit_tmp_own(erx);
+            if decl == 0 { c_emit_reassign_arc(name, erx, eerr); } else { println("    " + name + " = " + erx + ";"); }
+            oo_emit_tmp_leave();
+        }
     }
     if p < n && c_tokk(toks, p) == "SEMI" { p = p + 1; }
     p = c_match_skip_comma(toks, p, n);

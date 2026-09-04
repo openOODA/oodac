@@ -139,11 +139,17 @@ while i + 1 < en { if byte_at(env, i) == 123 && byte_at(env, i + 1) == 59 { d = 
     return d;
 }
 
+pub fn c_c_ident(name: String) -> String {
+    let k: String = "\tdefault\tregister\tauto\tvolatile\trestrict\tinline\t";
+    if k.contains("\t" + name + "\t") { return "oo_" + name; }
+    return name;
+}
+
 pub fn c_env_cvar(env: String, name: String) -> String {
     let cv: String = c_env_get(env, "__cvar__" + name);
 if cv != "" { return cv;
 }
-    return name;
+    return c_c_ident(name);
 }
 
 pub fn c_pack_pos_env(p: Int, e: String) -> List[String] {

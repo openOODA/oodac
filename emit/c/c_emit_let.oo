@@ -78,7 +78,8 @@ pub fn c_emit_let_stmt(toks: List[String], pos: Int, n: Int, env: String) -> Lis
         if c_env_get(e, "__decl__" + name) == "" && c_env_get(e, "__formal__" + name) == "" {
             c_emit_need_ty(lty);
             println("  " + lty + " " + c_var_if + " = {0};");
-            e = c_env_put(e, "__cvar__" + name, c_var_if);
+            e = c_env_put_last(e, "__cvar__" + name, c_var_if);
+            e = c_env_put_last(e, "__ssa__" + name, c_var_if);
             e = c_env_put(e, "__decl__" + c_var_if, "1");
             e = c_env_put(e, "__decl__" + name, "1");
         }
@@ -215,7 +216,8 @@ pub fn c_emit_let_stmt(toks: List[String], pos: Int, n: Int, env: String) -> Lis
     rhs = c_coerce_let_rhs(lty, rhs, e);
     c_emit_need_ty(lty);
     println("  " + lty + " " + c_var + " = " + rhs + ";");
-    e = c_env_put(e, "__cvar__" + name, c_var);
+    e = c_env_put_last(e, "__cvar__" + name, c_var);
+    e = c_env_put_last(e, "__ssa__" + name, c_var);
     if bind_kind != "" { e = c_env_put(e, c_var, bind_kind); }
     e = c_env_put(e, "__ty__" + c_var, lty);
     e = c_env_put(e, "__ty__" + name, lty);

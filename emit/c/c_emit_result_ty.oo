@@ -45,6 +45,9 @@ pub fn c_emit_unary_c(toks: List[String], pos: Int, n: Int, env: String, k: Stri
         p = parse_int(list_get(pru, 0));
         inner = list_get(pru, 1);
     }
+    if k == "AMP" && inner.contains("(") {
+        return c_emit_pack2(p.to_string(), "({ __auto_type __amp = " + inner + "; &__amp; })");
+    }
     // !(p).f / &mut (p).f: postfix field binds tighter than unary ! and &.
     let grouped: String = "(" + inner + ")";
     if k == "BANG" || k == "AMP" {

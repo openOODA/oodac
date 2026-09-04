@@ -94,7 +94,7 @@ pub fn c_emit_fn_mode(toks: List[String], pos: Int, n: Int, fn_env: String, mode
                 env = c_env_put(env, "__list_formal__" + pname, "1");
                 list_formals = list_push(list_formals, pname);
             }
-            if first { plist = pty + " " + pname; first = false; } else { plist = plist + ", " + pty + " " + pname; }
+            if first { plist = pty + " " + c_c_ident(pname); first = false; } else { plist = plist + ", " + pty + " " + c_c_ident(pname); }
         } else {
             p = p + 1;
         }
@@ -118,7 +118,8 @@ pub fn c_emit_fn_mode(toks: List[String], pos: Int, n: Int, fn_env: String, mode
         }
         env = c_result_bind_fn_env(env, ret_ty);
         c_emit_need_ty(ret_ty);
-        if ret_ty != "void" && ret_ty != "" { env = c_env_put(env, "__ret_c_ty__", ret_ty); }
+        env = c_env_put_last(env, "__fn__", fn_name);
+        if ret_ty != "void" && ret_ty != "" { env = c_env_put_last(env, "__ret_c_ty__", ret_ty); }
         p = c_emit_skip_type(toks, p, n);
     }
 

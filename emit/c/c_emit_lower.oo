@@ -86,8 +86,11 @@ pub fn c_emit_primary_c(toks: List[String], pos: Int, n: Int, env: String) -> Li
                 if fkind != "" && c_tokk(toks, p) == "IDENT" && c_tokt(toks, p) == "list_new" && c_tokk(toks, p + 1) == "LPAREN" {
                     p = p + 2;
                     fval = c_list_c_name("list_new", fkind) + "()"; if p < n && c_tokk(toks, p) == "RPAREN" { p = p + 1; }
+                } else if p + 1 < n && c_tokk(toks, p) == "IDENT" && (c_tokk(toks, p + 1) == "COMMA" || c_tokk(toks, p + 1) == "RBRACE") {
+                    fval = c_bare_ctor_or_name(c_tokt(toks, p), env); p = p + 1;
                 } else {
-                    let fenv: String = if fkind != "" { c_env_put(env, "__ann__", fkind); } else { env; };
+                    let mut fenv: String = byte_slice(env, 0, bytes_len(env));
+                    if fkind != "" { fenv = c_env_put(fenv, "__ann__", fkind); }
                     let prf: List[String] = c_emit_expr_c(toks, p, n, fenv);
                     p = parse_int(list_get(prf, 0));
                     fval = list_get(prf, 1);

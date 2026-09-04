@@ -157,7 +157,14 @@ if op == "list_new" { if ann0 != "" { return ann0;
     }
     let fld: String = c_expr_last_field(a0);
     if fld != "" {
-        let fk: String = c_env_get(env, "__fldelem__" + fld);
+        let recv: String = c_expr_field_recv(a0);
+        let mut fk: String = "";
+        if recv != "" {
+            let mut rty: String = c_env_get(env, recv);
+            if rty == "" { rty = c_env_get(env, "__ty__" + recv); }
+            if rty != "" { fk = c_env_get(env, "__fldelem__" + rty + "." + fld); }
+        }
+        if fk == "" { fk = c_env_get(env, "__fldelem__" + fld); }
         if fk != "" {
             return fk;
         }
@@ -166,6 +173,22 @@ if op == "list_new" { if ann0 != "" { return ann0;
         }
     }
     return "I";
+}
+
+pub fn c_expr_field_recv(e: String) -> String {
+    let n: Int = chars_len(e);
+    let mut dot: Int = -1;
+    let mut i: Int = n - 1;
+    while i >= 0 {
+        if char_at(e, i) == "." { dot = i; i = -1; } else { i = i - 1; }
+    }
+    if dot <= 0 { return ""; }
+    let mut a: Int = 0;
+    let mut b: Int = dot;
+    if a < b && char_at(e, a) == "(" { a = a + 1; }
+    if b > a && char_at(e, b - 1) == ")" { b = b - 1; }
+    if b > a { return str_slice(e, a, b); }
+    return "";
 }
 
 // Last `.name` or `->name` in a C expr such as `(tree).nodes` / `(p)->nodes`.

@@ -29,6 +29,11 @@ pub fn run_emit_c_family(fs: &FsReadCap, cmd: String, path: String, is_plain: Bo
     let mut i: Int = 0;
     while i < nle - 1 {
         let p: String = list_get(le, i);
+        let pn: Int = chars_len(p);
+        if pn >= 9 && str_slice(p, pn - 9, pn) == "ANCHOR.oo" {
+            i = i + 1;
+            continue;
+        }
         let pr: Result[String, String] = read_file(fs, p);
         if pr.is_err() {
             println("ERR\tload\tunreadable file: " + p);

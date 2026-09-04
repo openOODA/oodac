@@ -130,7 +130,11 @@ pub fn c_emit_ident_stmt(toks: List[String], pos: Int, n: Int, env: String) -> L
             if c_env_get(e, "__ptr__" + id) == "1" || c_env_get(e, "__ptr__" + c_recv) == "1" { lhs = c_recv + "->" + fname; }
             p = p + 4;
             let rhs_pos: Int = p;
-            let pra: List[String] = c_emit_expr_c(toks, p, n, e);
+            let mut env_rhs: String = e;
+            let mut fk: String = c_env_get(e, "__fldelem__" + fname);
+            if fk == "" { fk = c_env_get(e, "__fldelem__" + id + "." + fname); }
+            if fk != "" { env_rhs = c_env_put(e, "__ann__", fk); }
+            let pra: List[String] = c_emit_expr_c(toks, p, n, env_rhs);
             p = parse_int(list_get(pra, 0));
             let rhs: String = list_get(pra, 1);
             oo_emit_tmp_own(rhs);

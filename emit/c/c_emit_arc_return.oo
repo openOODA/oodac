@@ -17,8 +17,37 @@ import "c_emit_ops_str.oo";
 import "c_emit_temps.oo";
 import "c_emit_list_ty.oo";
 
+fn c_compound_c_ty(ret_val: String) -> String {
+    if chars_len(ret_val) < 5 { return ""; }
+    if str_slice(ret_val, 0, 2) != "((" { return ""; }
+    let n: Int = chars_len(ret_val);
+    let mut i: Int = 2;
+    while i < n {
+        let c: String = char_at(ret_val, i);
+        if c == "(" || c == " " { return ""; }
+        if c == ")" {
+            if i + 1 < n && char_at(ret_val, i + 1) == "{" { return str_slice(ret_val, 2, i); }
+            return "";
+        }
+        i = i + 1;
+    }
+    return "";
+}
+
 pub fn c_emit_ret_arc(env: String, mut ret_val: String) {
     if c_env_get(env, "__main__") == "1" {
+        if ret_val != "" && ret_val != "void" && ret_val != "0" {
+            let rctm: String = c_env_get(env, "__ret_c_ty__");
+            let cret: String = c_env_cvar(env, ret_val);
+            if chars_len(rctm) > 5 && str_slice(rctm, 0, 5) == "OoRes" && chars_len(cret) > 1 && str_slice(cret, 0, 2) == "((" {
+                println("  " + rctm + " __ret_val = " + cret + ";");
+                c_emit_all_scope_releases(env);
+                oo_emit_tmp_release_all_print();
+                println("  return __ret_val.ok ? (int)__ret_val.val : 1;");
+                return;
+            }
+            println("  (void)(" + cret + ");");
+        }
         c_emit_all_scope_releases(env);
         oo_emit_tmp_release_all_print();
         println("  return 0;");
@@ -58,6 +87,15 @@ pub fn c_emit_ret_arc(env: String, mut ret_val: String) {
     }
     let precise_k: String = c_env_get(env, "__ty__" + ret_val);
     if precise_k != "" && (rct == "" || rct == "void") { rty2 = precise_k; }
+    if rty2 == "long long" || rct == "" || rct == "void" {
+        let fnn: String = c_env_get(env, "__fn__");
+        if fnn != "" {
+            let fr: String = c_env_get(env, "__frty__" + fnn);
+            if fr != "" && fr != "void" { rty2 = fr; }
+        }
+    }
+    let ct: String = c_compound_c_ty(ret_val);
+    if ct != "" { rty2 = ct; }
 
     if ret_kind == "V" {
         if c_env_get(env, ret_val) == "R" {

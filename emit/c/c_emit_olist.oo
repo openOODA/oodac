@@ -126,9 +126,16 @@ pub fn c_list_field_env(toks: List[String], env0: String) -> String {
     let n: Int = list_len(toks);
 let mut e: String = env0;
 let mut i: Int = 0;
+let mut sname: String = "";
 while i + 4 < n { let k0: String = c_tokk(toks, i);
+if k0 == "KW_TYPE" { if i + 1 < n { if c_tokk(toks, i + 1) == "IDENT" { sname = c_tokt(toks, i + 1);
+}
+        }
+        }
 if k0 == "IDENT" { if c_tokk(toks, i + 1) == "COLON" { if c_tokk(toks, i + 2) == "IDENT" { if c_tokt(toks, i + 2) == "List" { if c_tokk(toks, i + 3) == "LBRACKET" { if c_tokk(toks, i + 4) == "IDENT" { let fname: String = c_tokt(toks, i);
 let kind: String = c_peek_list_elem2(toks, i + 2, n);
+if sname != "" { e = c_env_put(e, "__fldelem__" + sname + "." + fname, kind);
+}
 e = c_env_put(e, "__fldelem__" + fname, kind);
 }
                         }

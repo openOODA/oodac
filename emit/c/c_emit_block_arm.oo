@@ -112,10 +112,15 @@ pub fn c_block_arm_emit_value(toks: List[String], pre_start: Int, expr_start: In
     let mut e2: String = e;
 if expr_start > pre_start + 1 { let _p: String = c_block_arm_emit_pre(toks, pre_start, expr_start, e2);
 }
+    if expr_start >= rbrace {
+        println("    memset(&" + name + ", 0, sizeof(" + name + "));");
+        return rbrace.to_string();
+    }
     oo_emit_tmp_enter();
     let pr_e: List[String] = c_emit_expr_c(toks, expr_start, rbrace, e2);
     let p_after: Int = parse_int(list_get(pr_e, 0));
     let mut vex: String = list_get(pr_e, 1);
+    if vex == "" { println("    memset(&" + name + ", 0, sizeof(" + name + "));"); oo_emit_tmp_leave(); return p_after.to_string(); }
     oo_emit_tmp_own(vex);
     println("    " + name + " = " + vex + ";");
     oo_emit_tmp_leave();

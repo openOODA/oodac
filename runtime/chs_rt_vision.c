@@ -235,5 +235,5 @@ long long oo_emit_ptx_cap(long long cap, OoStr unused) {
   return (long long)n;
 }
 
-OoStr macro_expand(OoStr src) { return oo_str_macro_expand(src); }
-OoStr ast_macro(OoStr src) { return oo_str_ast_macro(src); }
+__attribute__((weak)) OoStr macro_expand(OoStr src) { return oo_str_macro_expand(src); }
+__attribute__((weak)) OoStr ast_macro(OoStr src) { return oo_str_ast_macro(src); }
