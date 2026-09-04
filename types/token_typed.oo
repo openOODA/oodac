@@ -1,13 +1,14 @@
 // # Typed Token ◈ ZERO-DRAG
 //
-// Logline: Provides packed Token struct to replace TSV bag.
+// Logline: Provides packed Token struct to replace TSV bag with full enum mapping.
 //
-// Setup: Pure typed token, no TSV escape.
+// Setup: Pure typed token representation with bi-directional TSV bridge.
 //
 // Beats:
-//   1. Define Token with kind Int and line, col, text.
-//   2. Convert TSV List[String] to List[TypedToken] typed.
-//   3. Access kind, line, col, text via direct field.
+//   1. Define TypedToken struct with kind, line, col, text fields.
+//   2. Map token kind strings to unique integer identifiers and reverse.
+//   3. Provide boundary-guarded field accessors for typed token streams.
+//   4. Implement bi-directional TSV converters for progressive migration.
 
 // ──▓▓ Sovereign Lattice ── TYPED ──▓▓──
 // :: TSV→typed ::  kind:Int ::
@@ -20,53 +21,184 @@ pub type TypedToken = struct {
 };
 
 pub fn kind_to_int(k: String) -> Int {
-  if k == "IDENT" { return 0;
-  }
-  if k == "INT" { return 1;
-  }
-  if k == "STRING" { return 2;
-  }
-  if k == "KW_FN" { return 10;
-  }
-  if k == "KW_LET" { return 11;
-  }
-  if k == "EOF" { return 99;
-  }
+  if k == "IDENT" { return 0; } if k == "INT" { return 1; } if k == "FLOAT" { return 2; } if k == "STRING" { return 3; }
+  if k == "LINEFILE" { return 4; } if k == "SRC_PATH" { return 5; } if k == "KW_FN" { return 10; } if k == "KW_LET" { return 11; }
+  if k == "KW_PUB" { return 12; } if k == "KW_MUT" { return 13; } if k == "KW_IMPORT" { return 14; } if k == "KW_REQUIRES" { return 15; }
+  if k == "KW_ENSURES" { return 16; } if k == "KW_VERIFY" { return 17; } if k == "KW_IF" { return 18; } if k == "KW_ELSE" { return 19; }
+  if k == "KW_MATCH" { return 20; } if k == "KW_FOR" { return 21; } if k == "KW_IN" { return 22; } if k == "KW_WHILE" { return 23; }
+  if k == "KW_RETURN" { return 24; } if k == "KW_TYPE" { return 25; } if k == "KW_WHERE" { return 26; } if k == "KW_TRUE" { return 27; }
+  if k == "KW_FALSE" { return 28; } if k == "KW_GPU" { return 29; } if k == "KW_BREAK" { return 30; } if k == "KW_CONTINUE" { return 31; }
+  if k == "KW_TRAIT" { return 32; } if k == "KW_IMPL" { return 33; } if k == "SLASH" { return 40; } if k == "PLUS" { return 41; }
+  if k == "MINUS" { return 42; } if k == "STAR" { return 43; } if k == "PERCENT" { return 44; } if k == "EQEQ" { return 45; }
+  if k == "FATARROW" { return 46; } if k == "EQ" { return 47; } if k == "NEQ" { return 48; } if k == "LSHIFT" { return 49; }
+  if k == "RSHIFT" { return 50; } if k == "LTE" { return 51; } if k == "LT" { return 52; } if k == "GTE" { return 53; }
+  if k == "GT" { return 54; } if k == "ANDAND" { return 55; } if k == "AMP" { return 56; } if k == "OROR" { return 57; }
+  if k == "PIPE" { return 58; } if k == "CARET" { return 59; } if k == "COLON" { return 60; } if k == "SEMI" { return 61; }
+  if k == "COMMA" { return 62; } if k == "DOTDOTEQ" { return 63; } if k == "DOTDOT" { return 64; } if k == "DOT" { return 65; }
+  if k == "LPAREN" { return 66; } if k == "RPAREN" { return 67; } if k == "LBRACE" { return 68; } if k == "RBRACE" { return 69; }
+  if k == "LBRACKET" { return 70; } if k == "RBRACKET" { return 71; } if k == "QUESTION" { return 72; } if k == "AT" { return 73; }
+  if k == "BANG" { return 74; } if k == "EOF" { return 99; }
   return 0 - 1;
 }
 
 pub fn int_to_kind(k: Int) -> String {
-  if k == 0 { return "IDENT";
-  }
-  if k == 1 { return "INT";
-  }
-  if k == 2 { return "STRING";
-  }
-  if k == 10 { return "KW_FN";
-  }
-  if k == 11 { return "KW_LET";
-  }
-  if k == 99 { return "EOF";
-  }
+  if k == 0 { return "IDENT"; } if k == 1 { return "INT"; } if k == 2 { return "FLOAT"; } if k == 3 { return "STRING"; }
+  if k == 4 { return "LINEFILE"; } if k == 5 { return "SRC_PATH"; } if k == 10 { return "KW_FN"; } if k == 11 { return "KW_LET"; }
+  if k == 12 { return "KW_PUB"; } if k == 13 { return "KW_MUT"; } if k == 14 { return "KW_IMPORT"; } if k == 15 { return "KW_REQUIRES"; }
+  if k == 16 { return "KW_ENSURES"; } if k == 17 { return "KW_VERIFY"; } if k == 18 { return "KW_IF"; } if k == 19 { return "KW_ELSE"; }
+  if k == 20 { return "KW_MATCH"; } if k == 21 { return "KW_FOR"; } if k == 22 { return "KW_IN"; } if k == 23 { return "KW_WHILE"; }
+  if k == 24 { return "KW_RETURN"; } if k == 25 { return "KW_TYPE"; } if k == 26 { return "KW_WHERE"; } if k == 27 { return "KW_TRUE"; }
+  if k == 28 { return "KW_FALSE"; } if k == 29 { return "KW_GPU"; } if k == 30 { return "KW_BREAK"; } if k == 31 { return "KW_CONTINUE"; }
+  if k == 32 { return "KW_TRAIT"; } if k == 33 { return "KW_IMPL"; } if k == 40 { return "SLASH"; } if k == 41 { return "PLUS"; }
+  if k == 42 { return "MINUS"; } if k == 43 { return "STAR"; } if k == 44 { return "PERCENT"; } if k == 45 { return "EQEQ"; }
+  if k == 46 { return "FATARROW"; } if k == 47 { return "EQ"; } if k == 48 { return "NEQ"; } if k == 49 { return "LSHIFT"; }
+  if k == 50 { return "RSHIFT"; } if k == 51 { return "LTE"; } if k == 52 { return "LT"; } if k == 53 { return "GTE"; }
+  if k == 54 { return "GT"; } if k == 55 { return "ANDAND"; } if k == 56 { return "AMP"; } if k == 57 { return "OROR"; }
+  if k == 58 { return "PIPE"; } if k == 59 { return "CARET"; } if k == 60 { return "COLON"; } if k == 61 { return "SEMI"; }
+  if k == 62 { return "COMMA"; } if k == 63 { return "DOTDOTEQ"; } if k == 64 { return "DOTDOT"; } if k == 65 { return "DOT"; }
+  if k == 66 { return "LPAREN"; } if k == 67 { return "RPAREN"; } if k == 68 { return "LBRACE"; } if k == 69 { return "RBRACE"; }
+  if k == 70 { return "LBRACKET"; } if k == 71 { return "RBRACKET"; } if k == 72 { return "QUESTION"; } if k == 73 { return "AT"; }
+  if k == 74 { return "BANG"; } if k == 99 { return "EOF"; }
   return "UNKNOWN";
 }
 
 pub fn typed_k(toks: List[TypedToken], i: Int) -> String {
+    if i < 0 || i >= list_len(toks) { return ""; }
     let t: TypedToken = list_get(toks, i);
     return int_to_kind(t.kind);
 }
 
 pub fn typed_t(toks: List[TypedToken], i: Int) -> String {
+    if i < 0 || i >= list_len(toks) { return ""; }
     let t: TypedToken = list_get(toks, i);
     return t.text;
 }
 
 pub fn typed_line(toks: List[TypedToken], i: Int) -> Int {
+    if i < 0 || i >= list_len(toks) { return 0; }
     let t: TypedToken = list_get(toks, i);
     return t.line;
 }
 
 pub fn typed_col(toks: List[TypedToken], i: Int) -> Int {
+    if i < 0 || i >= list_len(toks) { return 0; }
     let t: TypedToken = list_get(toks, i);
     return t.col;
+}
+
+fn tsv_parse_int(s: String) -> Int {
+    let n: Int = chars_len(s);
+    let mut v: Int = 0;
+    let mut i: Int = 0;
+    while i < n {
+        let b: Int = byte_at(s, i);
+        if b >= 48 && b <= 57 { v = v * 10 + (b - 48); }
+        i = i + 1;
+    }
+    return v;
+}
+
+fn tsv_unescape(raw: String) -> String {
+    let rn: Int = chars_len(raw);
+    let mut esc: Bool = false;
+    let mut k: Int = 0;
+    while k < rn {
+        if char_at(raw, k) == "\\" { esc = true; k = rn; }
+        else { k = k + 1; }
+    }
+    if !esc { return raw; }
+    let mut out: String = "";
+    let mut ri: Int = 0;
+    while ri < rn {
+        let c: String = char_at(raw, ri);
+        if c == "\\" && ri + 1 < rn {
+            let nch: String = char_at(raw, ri + 1);
+            if nch == "t" { out = out + "\t"; ri = ri + 2; }
+            else if nch == "n" { out = out + "\n"; ri = ri + 2; }
+            else if nch == "\\" { out = out + "\\"; ri = ri + 2; }
+            else { out = out + c; ri = ri + 1; }
+        } else {
+            out = out + c;
+            ri = ri + 1;
+        }
+    }
+    return out;
+}
+
+fn tsv_escape(text: String) -> String {
+    let tn: Int = chars_len(text);
+    let mut need: Bool = false;
+    let mut ti: Int = 0;
+    while ti < tn {
+        let c: String = char_at(text, ti);
+        if c == "\t" || c == "\n" || c == "\\" { need = true; ti = tn; }
+        else { ti = ti + 1; }
+    }
+    if !need { return text; }
+    let mut enc: String = "";
+    ti = 0;
+    while ti < tn {
+        let c: String = char_at(text, ti);
+        if c == "\t" { enc = enc + "\\t"; }
+        else if c == "\n" { enc = enc + "\\n"; }
+        else if c == "\\" { enc = enc + "\\\\"; }
+        else { enc = enc + c; }
+        ti = ti + 1;
+    }
+    return enc;
+}
+
+fn tsv_parse_token(row: String) -> TypedToken {
+    let n: Int = chars_len(row);
+    let mut f0: String = "";
+    let mut f1: Int = 0;
+    let mut f2: Int = 0;
+    let mut f3: String = "";
+    let mut field: Int = 0;
+    let mut start: Int = 0;
+    let mut i: Int = 0;
+    while i < n {
+        if char_at(row, i) == "\t" {
+            let part: String = str_slice(row, start, i);
+            if field == 0 { f0 = part; }
+            else if field == 1 { f1 = tsv_parse_int(part); }
+            else if field == 2 { f2 = tsv_parse_int(part); }
+            field = field + 1;
+            start = i + 1;
+        }
+        i = i + 1;
+    }
+    if field == 3 {
+        let raw: String = str_slice(row, start, n);
+        f3 = tsv_unescape(raw);
+    }
+    return TypedToken { kind: kind_to_int(f0), line: f1, col: f2, text: f3 };
+}
+
+pub fn tokens_from_tsv(tsv_toks: List[String]) -> List[TypedToken] {
+    let n: Int = list_len(tsv_toks);
+    let mut out: List[TypedToken] = list_new();
+    let mut i: Int = 0;
+    while i < n {
+        out = list_push(out, tsv_parse_token(list_get(tsv_toks, i)));
+        i = i + 1;
+    }
+    return out;
+}
+
+pub fn tokens_to_tsv(typed_toks: List[TypedToken]) -> List[String] {
+    let n: Int = list_len(typed_toks);
+    let mut out: List[String] = list_new();
+    let mut i: Int = 0;
+    while i < n {
+        let t: TypedToken = list_get(typed_toks, i);
+        let t_line: Int = t.line;
+        let t_col: Int = t.col;
+        let ls: String = t_line.to_string();
+        let cs: String = t_col.to_string();
+        let row: String = int_to_kind(t.kind) + "\t" + ls + "\t" + cs + "\t" + tsv_escape(t.text);
+        out = list_push(out, row);
+        i = i + 1;
+    }
+    return out;
 }

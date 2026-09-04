@@ -1,0 +1,103 @@
+// # String and Shell Escaping Utilities
+//
+// Logline: Canonical routines for POSIX shell quoting and literal escaping across backends.
+//
+// Setup: Pure string manipulation primitives. No ambient authority.
+//
+// Beats:
+//   1. shell_sq quotes string with single quotes for POSIX shell commands.
+//   2. str_escape_c escapes special characters for C string literals.
+//   3. str_escape_llvm escapes bytes for LLVM constant string definitions.
+//   4. str_escape_json escapes characters for JSON diagnostic output.
+//   5. str_join_list concatenates a list of strings into one.
+
+pub fn shell_sq(s: String) -> String {
+    let n: Int = chars_len(s);
+    let mut i: Int = 0;
+    let mut out: String = "'";
+    while i < n {
+        let c: String = char_at(s, i);
+        if c == "'" {
+            out = out + "'\\''";
+        } else {
+            out = out + c;
+        }
+        i = i + 1;
+    }
+    return out + "'";
+}
+
+pub fn str_escape_c_byte(b: Int) -> String {
+    if b == 13 { return "\\r"; }
+    if b == 8 { return "\\b"; }
+    if b == 12 { return "\\f"; }
+    if b == 11 { return "\\v"; }
+    if b == 0 { return "\\0"; }
+    return "";
+}
+
+pub fn str_escape_c(t: String) -> String {
+    let n: Int = chars_len(t);
+    if n == 0 { return ""; }
+    let mut out: String = "";
+    let mut i: Int = 0;
+    while i < n {
+        let c: String = char_at(t, i);
+        if c == "\\" { out = out + "\\\\"; }
+        else if c == "\"" { out = out + "\\\""; }
+        else if c == "\n" { out = out + "\\n"; }
+        else if c == "\t" { out = out + "\\t"; }
+        else {
+            let esc: String = str_escape_c_byte(byte_at(c, 0));
+            if esc != "" { out = out + esc; }
+            else { out = out + c; }
+        }
+        i = i + 1;
+    }
+    return out;
+}
+
+pub fn str_escape_llvm(s: String) -> String {
+    let slen: Int = chars_len(s);
+    let mut esc_str: String = "";
+    let mut i: Int = 0;
+    while i < slen {
+        let c: String = char_at(s, i);
+        if c == "\"" { esc_str = esc_str + "\\22"; }
+        else if c == "\\" { esc_str = esc_str + "\\5C"; }
+        else if c == "\n" { esc_str = esc_str + "\\0A"; }
+        else if c == "\t" { esc_str = esc_str + "\\09"; }
+        else { esc_str = esc_str + c; }
+        i = i + 1;
+    }
+    return esc_str + "\\00";
+}
+
+pub fn str_escape_json(s: String) -> String {
+    let n: Int = chars_len(s);
+    let mut out: String = "";
+    let mut i: Int = 0;
+    while i < n {
+        let c: String = char_at(s, i);
+        if c == "\\" { out = out + "\\\\"; }
+        else if c == "\"" { out = out + "\\\""; }
+        else if c == "\n" { out = out + "\\n"; }
+        else if c == "\t" { out = out + "\\t"; }
+        else { out = out + c; }
+        i = i + 1;
+    }
+    return out;
+}
+
+pub fn str_join_list(parts: List[String]) -> String {
+    let n: Int = list_len(parts);
+    if n == 0 { return ""; }
+    if n == 1 { return list_get(parts, 0); }
+    let mut res: String = "";
+    let mut i: Int = 0;
+    while i < n {
+        res = res + list_get(parts, i);
+        i = i + 1;
+    }
+    return res;
+}

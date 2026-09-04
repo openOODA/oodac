@@ -19,19 +19,7 @@ import "cli_build_targets.oo";
 
 
 
-fn build_shell_sq(s: String) -> String {
-    let n: Int = chars_len(s);
-let mut i: Int = 0;
-let mut out: String = "'";
-while i < n { let c: String = char_at(s, i);
-if c == "'" { out = out + "'\\''";
-} else {
-            out = out + c;
-        }
-        i = i + 1;
-    }
-    return out + "'";
-}
+import "types/str_escape.oo";
 
 fn sys_env_var(sys: &ProcessCap, key: String) -> String {
     let r: Result[String, String] = sys_exec(sys, "sh", "-c", "printf %s \"$" + key + "\"");
@@ -127,8 +115,8 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, path
     let tmp_all_c: String = ".ooda-cache/ooda-tmp/all_" + str_slice(tmp_h, 0, 16) + ".tmp.c";
     let _mk_tmp: Result[String, String] = sys_exec(sys, "sh", "-c", "mkdir -p .ooda-cache/ooda-tmp");
 
-    let extra_decls: String = "printf 'OoLL_S oo_ll_S_new(void); OoLL_S oo_ll_S_push(OoLL_S,OoSList); OoLL_S oo_ll_S_set(OoLL_S,long long,OoSList); OoSList oo_ll_S_get(OoLL_S,long long); long long oo_ll_S_len(OoLL_S); void oo_ll_S_release(OoLL_S); void oo_ll_S_retain(OoLL_S);\\nOoLL_I oo_ll_I_new(void); OoLL_I oo_ll_I_push(OoLL_I,OoIList); OoLL_I oo_ll_I_set(OoLL_I,long long,OoIList); OoIList oo_ll_I_get(OoLL_I,long long); long long oo_ll_I_len(OoLL_I); void oo_ll_I_release(OoLL_I); void oo_ll_I_retain(OoLL_I);\\nOoLL_F oo_ll_F_new(void); OoLL_F oo_ll_F_push(OoLL_F,OoFList); OoLL_F oo_ll_F_set(OoLL_F,long long,OoFList); OoFList oo_ll_F_get(OoLL_F,long long); long long oo_ll_F_len(OoLL_F); void oo_ll_F_release(OoLL_F); void oo_ll_F_retain(OoLL_F);\\n' >> " + build_shell_sq(tmp_all_c);
-    let r_pre: Result[String, String] = sys_exec(sys, "sh", "-c", "export OODAC_BIN=\"${OODAC_BIN:-" + host + "}\" && OODA_EMIT_NO_CONCAT=1 OODA_EMIT_NO_PREAMBLE=1 EMIT_NO_CONCAT=1 EMIT_NO_PREAMBLE=1 $OODAC_BIN emit-preamble " + build_shell_sq(path) + " > " + build_shell_sq(tmp_all_c) + " && " + extra_decls);
+    let extra_decls: String = "printf 'OoLL_S oo_ll_S_new(void); OoLL_S oo_ll_S_push(OoLL_S,OoSList); OoLL_S oo_ll_S_set(OoLL_S,long long,OoSList); OoSList oo_ll_S_get(OoLL_S,long long); long long oo_ll_S_len(OoLL_S); void oo_ll_S_release(OoLL_S); void oo_ll_S_retain(OoLL_S);\\nOoLL_I oo_ll_I_new(void); OoLL_I oo_ll_I_push(OoLL_I,OoIList); OoLL_I oo_ll_I_set(OoLL_I,long long,OoIList); OoIList oo_ll_I_get(OoLL_I,long long); long long oo_ll_I_len(OoLL_I); void oo_ll_I_release(OoLL_I); void oo_ll_I_retain(OoLL_I);\\nOoLL_F oo_ll_F_new(void); OoLL_F oo_ll_F_push(OoLL_F,OoFList); OoLL_F oo_ll_F_set(OoLL_F,long long,OoFList); OoFList oo_ll_F_get(OoLL_F,long long); long long oo_ll_F_len(OoLL_F); void oo_ll_F_release(OoLL_F); void oo_ll_F_retain(OoLL_F);\\n' >> " + shell_sq(tmp_all_c);
+    let r_pre: Result[String, String] = sys_exec(sys, "sh", "-c", "export OODAC_BIN=\"${OODAC_BIN:-" + host + "}\" && OODA_EMIT_NO_CONCAT=1 OODA_EMIT_NO_PREAMBLE=1 EMIT_NO_CONCAT=1 EMIT_NO_PREAMBLE=1 $OODAC_BIN emit-preamble " + shell_sq(path) + " > " + shell_sq(tmp_all_c) + " && " + extra_decls);
     if !r_pre.is_ok() { println("ERR\tbuild\tpreamble failed");
     process_exit(1);
     }
@@ -136,7 +124,7 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, path
     let cdir: String = ".ooda-cache/oodac_emit";
     let _mk: Result[String, String] = sys_exec(sys, "sh", "-c", "mkdir -p " + cdir);
     let pre_c: String = cdir + "/preamble_" + stamp_s + ".c";
-    let r_cp: Result[String, String] = sys_exec(sys, "sh", "-c", "cp " + build_shell_sq(tmp_all_c) + " " + build_shell_sq(pre_c));
+    let r_cp: Result[String, String] = sys_exec(sys, "sh", "-c", "cp " + shell_sq(tmp_all_c) + " " + shell_sq(pre_c));
     if !r_cp.is_ok() { println("ERR\tbuild\tpreamble cache failed");
     process_exit(1);
     }
@@ -151,7 +139,7 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, path
         let of: String = cdir + "/" + stamp_s + "_" + h + ".o";
         let hit: Bool = c_cache_verify_hit(fs_r, cf, of);
         if !hit {
-            let cmd_emit: String = "export OODAC_BIN=\"${OODAC_BIN:-" + host + "}\" && mkdir -p " + build_shell_sq(cdir) + " && TMPF=$(mktemp /tmp/oo_pb.XXXXXX.c) && env -u PURE_NO_ARC -u OODA_PURE_NO_ARC OODA_EMIT_NO_CONCAT=1 OODA_EMIT_NO_PREAMBLE=1 EMIT_NO_CONCAT=1 EMIT_NO_PREAMBLE=1 $OODAC_BIN emit-protos " + build_shell_sq(m) + " > \"$TMPF\" && OODA_EMIT_NO_CONCAT=1 OODA_EMIT_NO_PREAMBLE=1 EMIT_NO_CONCAT=1 EMIT_NO_PREAMBLE=1 $OODAC_BIN emit-bodies " + build_shell_sq(m) + " >> \"$TMPF\" && mv -f \"$TMPF\" " + build_shell_sq(cf);
+            let cmd_emit: String = "export OODAC_BIN=\"${OODAC_BIN:-" + host + "}\" && mkdir -p " + shell_sq(cdir) + " && TMPF=$(mktemp /tmp/oo_pb.XXXXXX.c) && env -u PURE_NO_ARC -u OODA_PURE_NO_ARC OODA_EMIT_NO_CONCAT=1 OODA_EMIT_NO_PREAMBLE=1 EMIT_NO_CONCAT=1 EMIT_NO_PREAMBLE=1 $OODAC_BIN emit-protos " + shell_sq(m) + " > \"$TMPF\" && OODA_EMIT_NO_CONCAT=1 OODA_EMIT_NO_PREAMBLE=1 EMIT_NO_CONCAT=1 EMIT_NO_PREAMBLE=1 $OODAC_BIN emit-bodies " + shell_sq(m) + " >> \"$TMPF\" && mv -f \"$TMPF\" " + shell_sq(cf);
             let r_emit: Result[String, String] = sys_exec(sys, "sh", "-c", cmd_emit);
             if !r_emit.is_ok() { println("ERR\tbuild\temit failed on " + m);
             process_exit(1);
@@ -160,7 +148,7 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, path
             skip = skip + 1;
         }
         pbs = list_push(pbs, cf);
-        let rcat: Result[String, String] = sys_exec(sys, "sh", "-c", "cat " + build_shell_sq(cf) + " >> " + build_shell_sq(tmp_all_c));
+        let rcat: Result[String, String] = sys_exec(sys, "sh", "-c", "cat " + shell_sq(cf) + " >> " + shell_sq(tmp_all_c));
         if !rcat.is_ok() { println("ERR\tbuild\tcache cat failed on " + m);
         process_exit(1);
         }

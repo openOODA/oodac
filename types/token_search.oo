@@ -1,0 +1,121 @@
+// # Token Search and Navigation Utilities
+//
+// Logline: Consolidated routines for token skipping and balanced delimiter navigation.
+//
+// Setup: Pure token stream navigation across AST, check, and backend modules.
+//
+// Beats:
+//   1. tok_row_kind extracts the token kind string from a TSV row.
+//   2. skip_until_semi advances cursor past the next SEMI token.
+//   3. skip_balanced navigates brace-delimited blocks handling nesting.
+//   4. skip_trait_or_impl skips trait or impl definitions up to closing brace.
+//   5. skip_verify_block skips verification blocks if present.
+
+import "types/token_typed.oo";
+
+fn tok_row_kind(row: String) -> String {
+    let n: Int = chars_len(row);
+    let mut i: Int = 0;
+    while i < n {
+        if char_at(row, i) == "\t" {
+            return str_slice(row, 0, i);
+        }
+        i = i + 1;
+    }
+    return row;
+}
+
+pub fn skip_until_semi(toks: List[String], pos0: Int) -> Int {
+    let n: Int = list_len(toks);
+    let mut pos: Int = pos0;
+    while pos < n {
+        if tok_row_kind(list_get(toks, pos)) == "SEMI" {
+            return pos + 1;
+        }
+        pos = pos + 1;
+    }
+    return pos;
+}
+
+pub fn skip_balanced(toks: List[String], pos0: Int) -> Int {
+    let n: Int = list_len(toks);
+    let mut pos: Int = pos0;
+    while pos < n && tok_row_kind(list_get(toks, pos)) != "LBRACE" {
+        pos = pos + 1;
+    }
+    if pos >= n { return pos; }
+    let mut depth: Int = 0;
+    while pos < n {
+        let k: String = tok_row_kind(list_get(toks, pos));
+        if k == "LBRACE" {
+            depth = depth + 1;
+        } else if k == "RBRACE" {
+            depth = depth - 1;
+            pos = pos + 1;
+            if depth == 0 { return pos; }
+            continue;
+        }
+        pos = pos + 1;
+    }
+    return pos;
+}
+
+pub fn skip_trait_or_impl(toks: List[String], pos0: Int) -> Int {
+    let n: Int = list_len(toks);
+    let mut pos: Int = pos0 + 1;
+    while pos < n {
+        if tok_row_kind(list_get(toks, pos)) == "LBRACE" {
+            return skip_balanced(toks, pos);
+        }
+        pos = pos + 1;
+    }
+    return pos;
+}
+
+pub fn skip_verify_block(toks: List[String], pos0: Int) -> Int {
+    let n: Int = list_len(toks);
+    let mut pos: Int = pos0;
+    while pos < n && tok_row_kind(list_get(toks, pos)) == "KW_VERIFY" {
+        pos = pos + 1;
+        if pos < n && tok_row_kind(list_get(toks, pos)) == "IDENT" { pos = pos + 1; }
+        if pos < n && tok_row_kind(list_get(toks, pos)) == "LBRACE" {
+            pos = skip_balanced(toks, pos);
+        }
+    }
+    return pos;
+}
+
+pub fn tok_skip_until_semi(toks: List[TypedToken], pos0: Int) -> Int {
+    let n: Int = list_len(toks);
+    let mut pos: Int = pos0;
+    while pos < n {
+        if typed_k(toks, pos) == "SEMI" {
+            return pos + 1;
+        }
+        pos = pos + 1;
+    }
+    return pos;
+}
+
+pub fn tok_skip_balanced(toks: List[TypedToken], pos0: Int) -> Int {
+    let n: Int = list_len(toks);
+    let mut pos: Int = pos0;
+    while pos < n && typed_k(toks, pos) != "LBRACE" {
+        pos = pos + 1;
+    }
+    if pos >= n { return pos; }
+    let mut depth: Int = 0;
+    while pos < n {
+        let k: String = typed_k(toks, pos);
+        if k == "LBRACE" {
+            depth = depth + 1;
+        } else if k == "RBRACE" {
+            depth = depth - 1;
+            pos = pos + 1;
+            if depth == 0 { return pos; }
+            continue;
+        }
+        pos = pos + 1;
+    }
+    return pos;
+}

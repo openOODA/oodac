@@ -6,17 +6,21 @@
 //
 // Beats:
 //   1. ast_type_def.oo — type definitions in the AST (struct, enum, type alias).
-//   2. token_typed.oo — typed tokens produced by the lexer.
-//   3. ty.oo — type representation (the central type algebra).
-//   4. ty_parse.oo — parse a type expression into a ty.oo value.
-//   5. ty_mangle.oo — mangle a type into a stable linker symbol.
-//   6. types_core.oo — primitive type constructors and operations.
+//   2. token_typed.oo — typed tokens produced by the lexer and TSV converters.
+//   3. str_escape.oo — canonical shell and string escaping routines.
+//   4. token_search.oo — canonical delimiter and token skipping utilities.
+//   5. ty.oo — type representation (the central type algebra).
+//   6. ty_parse.oo — parse a type expression into a ty.oo value.
+//   7. ty_mangle.oo — mangle a type into a stable linker symbol.
+//   8. types_core.oo — primitive type constructors and operations.
 
 import "ty.oo";
 import "ty_parse.oo";
 import "ty_mangle.oo";
 import "types_core.oo";
-
+import "token_typed.oo";
+import "str_escape.oo";
+import "token_search.oo";
 
 // ──▓▓ Public Types Subsystem API ──▓▓──
 
@@ -48,3 +52,22 @@ pub fn types_mangle(raw: String) -> String {
     return ty_mangle(raw);
 }
 
+pub fn token_typed_from_tsv(tsv_toks: List[String]) -> List[TypedToken] {
+    return tokens_from_tsv(tsv_toks);
+}
+
+pub fn token_typed_to_tsv(typed_toks: List[TypedToken]) -> List[String] {
+    return tokens_to_tsv(typed_toks);
+}
+
+pub fn str_escape_shell_sq(s: String) -> String {
+    return shell_sq(s);
+}
+
+pub fn token_search_until_semi(toks: List[String], pos: Int) -> Int {
+    return skip_until_semi(toks, pos);
+}
+
+pub fn token_search_balanced(toks: List[String], pos: Int) -> Int {
+    return skip_balanced(toks, pos);
+}
