@@ -126,7 +126,7 @@ pub fn ssa_opt_const_fold(fn_data: SsaFunction) -> SsaFunction {
 }
 
 pub fn ssa_opt_dce(fn_data: SsaFunction) -> SsaFunction {
-    let n: Int = (0 + ssa_fn_inst_count(fn_data);
+    let n: Int = (0 + ssa_fn_inst_count(fn_data));
     if n == 0 {
         return fn_data;
     }

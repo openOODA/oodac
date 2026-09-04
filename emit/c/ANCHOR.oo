@@ -79,16 +79,16 @@ import "c_mono_unit_emit.oo";
 
 // ──▓▓ Public C Emitter API ──▓▓──
 
-pub fn emit_c(src: String) -> String {
-    return c_emit_stream(src);
+pub fn emit_c(src: String) {
+    c_emit_stream(src);
 }
 
-pub fn emit_c_stream(src: String) -> String {
-    return c_emit_stream(src);
+pub fn emit_c_stream(src: String) {
+    c_emit_stream(src);
 }
 
-pub fn emit_c_headers(src: String) -> String {
-    return c_emit_c_headers(src);
+pub fn emit_c_headers(src: String) {
+    c_emit_c_headers(src);
 }
 
 pub fn emit_c_mono(reg: List[String]) -> String {

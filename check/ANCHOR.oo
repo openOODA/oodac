@@ -127,6 +127,7 @@ pub fn check_run_typestate(src: String) -> Int {
     return check_typestate(src);
 }
 
-pub fn check_run_smt(src: String) -> Int {
-    return smt_verify_pass_run(src);
+pub fn check_run_smt(toks: List[String]) -> Int {
+    if smt_verify_pass_run(toks) { return 0; }
+    return 1;
 }

@@ -24,7 +24,7 @@ fn ssa_inline_update_list_local(xs: List[Int], idx: Int, val: Int) -> List[Int] 
 }
 
 pub fn ssa_opt_inline(fn_data: SsaFunction) -> SsaFunction {
-    let n: Int = (0 + ssa_fn_inst_count(fn_data);
+    let n: Int = (0 + ssa_fn_inst_count(fn_data));
     if n == 0 { return fn_data; }
 
     // Opcodes. ssa_op_call=46, ssa_op_ret=19. Marker opcode 0 is reserved for

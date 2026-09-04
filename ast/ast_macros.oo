@@ -67,11 +67,11 @@ pub fn macro_table_new() -> MacroTable {
     };
 }
 
-pub fn macro_def_new(name: String, params: List[String], tmpl: List[String]) -> MacroDef {
+pub fn macro_def_new(name: String, params: List[String], tok_list: List[String]) -> MacroDef {
     return MacroDef {
         name: name,
         params: params,
-        template_tokens: tmpl,
+        template_tokens: tok_list,
         is_hygienic: true
     };
 }
@@ -82,7 +82,9 @@ pub fn macro_table_add(tab: &mut MacroTable, mdef: MacroDef) -> Bool {
     let mut i: Int = 0;
     while i < n {
         let d: MacroDef = list_get(defs, i);
-        if d.name == mdef.name {
+        let dn: String = d.name;
+        let mn: String = mdef.name;
+        if dn == mn {
             return false;
         }
         i = i + 1;

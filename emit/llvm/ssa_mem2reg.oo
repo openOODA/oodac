@@ -137,7 +137,7 @@ pub fn ssa_mem2reg_promote(fn_data: SsaFunction) -> SsaFunction {
                 } else if op == ssa_op_store() || op == ssa_op_store_lit() {
                     let slot: Int = imm;
                     let val: Int = lh;
-                    let mapped_val: Int = (0 + ssa_m2r_resolve_map(load_map_from, load_map_to, val);
+                    let mapped_val: Int = (0 + ssa_m2r_resolve_map(load_map_from, load_map_to, val));
                     reaching = ssa_m2r_set(reaching, slot, mapped_val);
                 } else if op == ssa_op_load() {
                     let slot: Int = imm;
@@ -145,10 +145,10 @@ pub fn ssa_mem2reg_promote(fn_data: SsaFunction) -> SsaFunction {
                     load_map_from = list_push(load_map_from, res);
                     load_map_to = list_push(load_map_to, cur_def);
                 } else {
-                    let new_lh: Int = (0 + ssa_m2r_resolve_map(load_map_from, load_map_to, lh);
+                    let new_lh: Int = (0 + ssa_m2r_resolve_map(load_map_from, load_map_to, lh));
                     let mut new_imm: Int = imm;
                     if op != ssa_op_br() && op != ssa_op_cond_br() && op != ssa_op_const() && op != ssa_op_const_forced() {
-                        new_imm = (0 + ssa_m2r_resolve_map(load_map_from, load_map_to, imm);
+                        new_imm = (0 + ssa_m2r_resolve_map(load_map_from, load_map_to, imm));
                     }
                     out_ops = list_push(out_ops, op);
                     out_res = list_push(out_res, res);
@@ -162,16 +162,27 @@ pub fn ssa_mem2reg_promote(fn_data: SsaFunction) -> SsaFunction {
         b = b + 1;
     }
 
+    return ssa_m2r_build_fn(fn_data, out_ops, out_res, out_imms, out_lhss, out_bids);
+}
+
+fn ssa_m2r_build_fn(
+    fn_data: SsaFunction,
+    ops: List[Int],
+    res: List[Int],
+    imms: List[Int],
+    lhss: List[Int],
+    bids: List[Int]
+) -> SsaFunction {
     return SsaFunction {
         name: fn_data.name,
         return_type: fn_data.return_type,
         block_count: fn_data.block_count,
         block_names: fn_data.block_names,
-        inst_opcodes: out_ops,
-        inst_results: out_res,
-        inst_imm_vals: out_imms,
-        inst_lhs_vals: out_lhss,
-        inst_block_ids: out_bids
+        inst_opcodes: ops,
+        inst_results: res,
+        inst_imm_vals: imms,
+        inst_lhs_vals: lhss,
+        inst_block_ids: bids
     };
 }
 

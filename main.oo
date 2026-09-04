@@ -44,8 +44,6 @@ pub fn main(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, args: List[St
     if list_len(a) > 14 { sanitizers = list_get(a, 14);
     }
 
-    if !json_errors { let _clr: Result[String, String] = sys_exec(sys, "sh", "-c", "rm -f .ooda-cache/ooda-tmp/json_errors.arm");
-    }
     if cmd == "build" {
         run_build_san(fs_r, fs_w, sys, path, out_arg, backend, opt_level, lto, release, is_dbg, false, target_triple, pgo_gen, pgo_use, sanitizers);
         if runtime_cap_required {

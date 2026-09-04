@@ -24,7 +24,7 @@ fn ssa_cse_update_list_local(xs: List[Int], idx: Int, val: Int) -> List[Int] {
 }
 
 pub fn ssa_opt_cse(fn_data: SsaFunction) -> SsaFunction {
-    let n: Int = (0 + ssa_fn_inst_count(fn_data);
+    let n: Int = (0 + ssa_fn_inst_count(fn_data));
     if n == 0 { return fn_data; }
 
     // Compute use_count the same way dce does: every positive imm counts as a

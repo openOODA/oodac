@@ -33,6 +33,15 @@ if c == "'" { out = out + "'\\''";
     return out + "'";
 }
 
+fn sys_env_var(sys: &ProcessCap, key: String) -> String {
+    let r: Result[String, String] = sys_exec(sys, "sh", "-c", "printf %s \"$" + key + "\"");
+    if r.is_ok() {
+        let v: String = match r { Ok(s) => s, Err(e) => "" };
+        return v;
+    }
+    return "";
+}
+
 pub fn gcc_repro_flags() -> String {
     return "-frandom-seed=0 -Wl,--build-id=none";
 }
@@ -86,7 +95,10 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, path
     i = i + 1;
     }
 
-    let host: String = "./bin/oodac";
+    let mut host: String = sys_env_var(sys, "OODAC_BIN");
+    if host == "" {
+        host = "./bin/oodac";
+    }
     let stamp: String = oo_file_stamp(host);
     let stamp_s: String = build_sanitize_stamp(stamp);
     let repro: String = gcc_repro_flags();

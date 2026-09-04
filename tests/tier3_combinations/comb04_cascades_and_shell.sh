@@ -37,5 +37,10 @@ assert_exit_code 0 $RC_C4_1 \
 
 # Test C4.2: Side-channel directory not created by direct execution wrapper
 SIDE_CHANNEL_DIR="$REPO_ROOT/.ooda-cache/ooda-tmp/x86_elf_pure"
-assert_eq 1 1 \
+assert_file_not_exists "$SIDE_CHANNEL_DIR" \
   "C4.2 Direct argument vectors operate in-memory without side-channel flags"
+
+# Test C4.2b: JSON diagnostics operate without persistent disk flag files
+"$OODA_BIN" check --json-errors "$TESTS_DIR/fixtures/valid_minimal.oo" >/dev/null 2>&1
+assert_file_not_exists "$REPO_ROOT/.ooda-cache/ooda-tmp/json_errors.arm" \
+  "C4.2b JSON diagnostics operate without persistent disk flag files"

@@ -11,7 +11,6 @@
 //   4. Manage SSA symbol table bindings and lookups.
 
 import "ssa_ir.oo";
-import "ast/ANCHOR.oo";
 
 type SsaLowerContext = struct {
     fn_data: SsaFunction,
@@ -24,9 +23,7 @@ type SsaLowerContext = struct {
 };
 
 pub fn ssa_ctx_new(name: String, ret_type: Int) -> SsaLowerContext {
-    let empty_s: List[String] = list_new();
-    let empty_i: List[Int] = list_new();
-    return SsaLowerContext { fn_data: ssa_fn_new(name, ret_type), cur_block: 0, next_reg: 1, last_val: 0, var_names: empty_s, var_slots: empty_i, var_count: 0 };
+    return SsaLowerContext { fn_data: ssa_fn_new(name, ret_type), cur_block: 0, next_reg: 1, last_val: 0, var_names: list_new(), var_slots: list_new(), var_count: 0 };
 }
 
 pub fn ssa_ctx_add_block(ctx: SsaLowerContext, name: String) -> SsaLowerContext {
@@ -60,10 +57,7 @@ pub fn ssa_sym_lookup(ctx: SsaLowerContext, name: String) -> Int {
 }
 
 pub fn ssa_sym_bind(ctx: SsaLowerContext, name: String, slot: Int) -> SsaLowerContext {
-    let mut vnames: List[String] = ctx.var_names;
-    let names: List[String] = list_push(vnames, name);
-    let slots: List[Int] = list_push(ctx.var_slots, slot);
-    return SsaLowerContext { fn_data: ctx.fn_data, cur_block: ctx.cur_block, next_reg: ctx.next_reg, last_val: ctx.last_val, var_names: names, var_slots: slots, var_count: ctx.var_count + 1 };
+    return SsaLowerContext { fn_data: ctx.fn_data, cur_block: ctx.cur_block, next_reg: ctx.next_reg, last_val: ctx.last_val, var_names: list_push(ctx.var_names, name), var_slots: list_push(ctx.var_slots, slot), var_count: ctx.var_count + 1 };
 }
 
 pub fn ssa_lower_args_of(node: String) -> String {

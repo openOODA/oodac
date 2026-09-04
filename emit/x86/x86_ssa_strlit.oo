@@ -66,11 +66,11 @@ pub fn x86_rewire_println_str(fn_data: SsaFunction, strs: List[String]) -> SsaFu
     while si < ns { pool = x86_str_intern(pool, list_get(strs, si));
     si = si + 1;
     }
-    let mut ops: List[Int] = list_new();
-    let mut res: List[Int] = list_new();
-    let mut imms: List[Int] = list_new();
-    let mut lhss: List[Int] = list_new();
-    let mut bids: List[Int] = list_new();
+    let mut out_ops: List[Int] = list_new();
+    let mut out_res: List[Int] = list_new();
+    let mut out_imms: List[Int] = list_new();
+    let mut out_lhss: List[Int] = list_new();
+    let mut out_bids: List[Int] = list_new();
     i = 0;
     let mut site: Int = 0;
     while i < n { let op: Int = list_get(fn_data.inst_opcodes, i);
@@ -80,15 +80,14 @@ pub fn x86_rewire_println_str(fn_data: SsaFunction, strs: List[String]) -> SsaFu
     nimm = x86_str_id(pool, list_get(strs, site));
     site = site + 1;
     }
-        ops = list_push(ops, nop);
-        res = list_push(res, list_get(fn_data.inst_results, i));
-        imms = list_push(imms, nimm);
-        lhss = list_push(lhss, list_get(fn_data.inst_lhs_vals, i));
-        bids = list_push(bids, list_get(fn_data.inst_block_ids, i));
+        out_ops = list_push(out_ops, nop);
+        out_res = list_push(out_res, list_get(fn_data.inst_results, i));
+        out_imms = list_push(out_imms, nimm);
+        out_lhss = list_push(out_lhss, list_get(fn_data.inst_lhs_vals, i));
+        out_bids = list_push(out_bids, list_get(fn_data.inst_block_ids, i));
         i = i + 1;
     }
-    let res: SsaFunction = SsaFunction { name: fn_data.name, return_type: fn_data.return_type, block_count: fn_data.block_count, block_names: fn_data.block_names, inst_opcodes: ops, inst_results: res, inst_imm_vals: imms, inst_lhs_vals: lhss, inst_block_ids: bids };
-    return res;
+    return SsaFunction { name: fn_data.name, return_type: fn_data.return_type, block_count: fn_data.block_count, block_names: fn_data.block_names, inst_opcodes: out_ops, inst_results: out_res, inst_imm_vals: out_imms, inst_lhs_vals: out_lhss, inst_block_ids: out_bids };
 }
 
 pub fn x86_src_leftover_unhandled(src: String) -> Bool {

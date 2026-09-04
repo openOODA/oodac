@@ -53,35 +53,20 @@ pub fn int_to_kind(k: Int) -> String {
 
 pub fn typed_k(toks: List[TypedToken], i: Int) -> String {
     let t: TypedToken = list_get(toks, i);
-return int_to_kind(t.kind);
+    return int_to_kind(t.kind);
 }
 
 pub fn typed_t(toks: List[TypedToken], i: Int) -> String {
     let t: TypedToken = list_get(toks, i);
-return t.text;
+    return t.text;
 }
 
 pub fn typed_line(toks: List[TypedToken], i: Int) -> Int {
     let t: TypedToken = list_get(toks, i);
-return t.line;
+    return t.line;
 }
 
 pub fn typed_col(toks: List[TypedToken], i: Int) -> Int {
     let t: TypedToken = list_get(toks, i);
-return t.col;
-}
-
-pub fn token_from_tsv(
-  kind: Int,
-  line: Int,
-  col: Int,
-  text: String
-) -> TypedToken { let res: TypedToken = TypedToken { kind: kind, line: line, col: col, text: text };
-  return res;
-}
-
-pub fn tokens_typed(src: String) -> List[TypedToken] {
-  // direct typed path — no TSV
-  let mut out: List[TypedToken] = list_new();
-  return out;
+    return t.col;
 }

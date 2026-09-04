@@ -79,7 +79,7 @@ pub fn run_build_llvm(sys: &ProcessCap, path: String, out: String, is_bc: Bool, 
     if str_index_of(san_str, "fuzzer") >= 0 { san_flags = san_flags + " -fsanitize=fuzzer";
     clang_san = clang_san + "-fsanitize=fuzzer ";
     }
-    let r_emit: Result[String, String] = sys_exec(sys, "sh", "-c", "OODAC_BIN=\"${OODAC_BIN:-./bin/oodac}\" && $OODAC_BIN emit-llvm" + dbg_flag + tr_flag + san_flags + " " + shell_sq(path) + " > " + shell_sq(tmp_ll));
+    let r_emit: Result[String, String] = sys_exec(sys, "sh", "-c", "OODAC_BIN=\"${OODAC_BIN:-${OODA_COMPILER:-./bin/oodac}}\" && $OODAC_BIN emit-llvm" + dbg_flag + tr_flag + san_flags + " " + shell_sq(path) + " > " + shell_sq(tmp_ll));
     if !r_emit.is_ok() { println("ERR\tbuild\temit-llvm failed");
     process_exit(1);
     }

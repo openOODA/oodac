@@ -59,7 +59,7 @@ pub fn c_mono_total_weight(types: List[String]) -> Int {
 
 pub fn c_mono_partition_chunks(types: List[String], num_chunks: Int) -> List[String] {
     let mut bins: List[String] = list_new();
-    let mut weights: List[Int] = list_new();
+    let mut weights: List[Int] = bytes_new();
     let mut k: Int = 0;
     let eff_chunks: Int = if num_chunks < 1 { 1 } else { num_chunks };
     while k < eff_chunks { bins = list_push(bins, "");
@@ -84,7 +84,7 @@ pub fn c_mono_partition_chunks(types: List[String], num_chunks: Int) -> List[Str
         let cur_types: String = list_get(bins, min_idx);
         let updated: String = if chars_len(cur_types) == 0 { ty } else { cur_types + "\t" + ty };
         let mut new_bins: List[String] = list_new();
-        let mut new_weights: List[Int] = list_new();
+        let mut new_weights: List[Int] = bytes_new();
         let mut b_i: Int = 0;
         while b_i < eff_chunks { if b_i == min_idx { new_bins = list_push(new_bins, updated);
         new_weights = list_push(new_weights, min_w + w);

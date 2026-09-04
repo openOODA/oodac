@@ -219,9 +219,9 @@ pub fn ssa_opt_run_loop_unroll(func: SsaFunction, max_unroll: Int) -> SsaFunctio
     let loop0: SsaLoopInfo = ssa_opt_find_first_loop(func);
     if loop0.header_bb < 0 || max_unroll <= 1 || max_unroll > 4 { return func; }
     let n: Int = 0 + ssa_fn_inst_count(func);
-    let mut new_ops: List[Int] = list_new(); let mut new_res: List[Int] = list_new();
-    let mut new_imms: List[Int] = list_new(); let mut new_bids: List[Int] = list_new();
-    let mut new_lhss: List[Int] = list_new();
+    let mut unroll_ops: List[Int] = list_new(); let mut unroll_res: List[Int] = list_new();
+    let mut unroll_imms: List[Int] = list_new(); let mut unroll_bids: List[Int] = list_new();
+    let mut unroll_lhss: List[Int] = list_new();
     let mut i: Int = 0;
     while i < n {
         let op: Int = list_get(func.inst_opcodes, i);
@@ -229,22 +229,22 @@ pub fn ssa_opt_run_loop_unroll(func: SsaFunction, max_unroll: Int) -> SsaFunctio
         let imm: Int = list_get(func.inst_imm_vals, i);
         let lhs: Int = list_get(func.inst_lhs_vals, i);
         let bid: Int = list_get(func.inst_block_ids, i);
-        new_ops = list_push(new_ops, op); new_res = list_push(new_res, res);
-        new_lhss = list_push(new_lhss, lhs);
-        new_imms = list_push(new_imms, imm); new_bids = list_push(new_bids, bid);
+        unroll_ops = list_push(unroll_ops, op); unroll_res = list_push(unroll_res, res);
+        unroll_lhss = list_push(unroll_lhss, lhs);
+        unroll_imms = list_push(unroll_imms, imm); unroll_bids = list_push(unroll_bids, bid);
         if bid == loop0.backedge_bb && op != ssa_op_br() && op != ssa_op_cond_br() && max_unroll >= 2 {
             let mut step: Int = 1;
             while step < max_unroll && step < 4 {
-                new_ops = list_push(new_ops, op);
-                new_res = list_push(new_res, res + (step * 10));
-                new_imms = list_push(new_imms, imm);
-                new_lhss = list_push(new_lhss, lhs);
-                new_bids = list_push(new_bids, bid);
+                unroll_ops = list_push(unroll_ops, op);
+                unroll_res = list_push(unroll_res, res + (step * 10));
+                unroll_imms = list_push(unroll_imms, imm);
+                unroll_lhss = list_push(unroll_lhss, lhs);
+                unroll_bids = list_push(unroll_bids, bid);
                 step = step + 1;
             }
         }
         i = i + 1;
     }
-    return SsaFunction { name: func.name, return_type: func.return_type, block_count: func.block_count, block_names: func.block_names, inst_opcodes: new_ops, inst_results: new_res, inst_imm_vals: new_imms, inst_lhs_vals: new_lhss, inst_block_ids: new_bids };
+    return SsaFunction { name: func.name, return_type: func.return_type, block_count: func.block_count, block_names: func.block_names, inst_opcodes: unroll_ops, inst_results: unroll_res, inst_imm_vals: unroll_imms, inst_lhs_vals: unroll_lhss, inst_block_ids: unroll_bids };
 }
 

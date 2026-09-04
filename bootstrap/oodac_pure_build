@@ -143,9 +143,9 @@ collect() {
       if [[ -f "$imp" ]]; then collect "$imp"
       elif [[ -f "$imp/ANCHOR.oo" ]]; then collect "$imp/ANCHOR.oo"
       else echo "ERR_MISSING $imp" >&2; exit 1; fi
-    elif [[ -f "$dir/$imp" ]]; then
+    elif [[ "$imp" != std/* && "$imp" != oodac/* && -f "$dir/$imp" ]]; then
       collect "$dir/$imp"
-    elif [[ -f "$dir/$imp/ANCHOR.oo" ]]; then
+    elif [[ "$imp" != std/* && "$imp" != oodac/* && -f "$dir/$imp/ANCHOR.oo" ]]; then
       collect "$dir/$imp/ANCHOR.oo"
     elif [[ -f "$ROOT/$imp" ]]; then
       collect "$ROOT/$imp"
@@ -155,14 +155,26 @@ collect() {
       collect "$ROOT/$imp"
     elif [[ "$imp" == std/* && -f "$ROOT/$imp/ANCHOR.oo" ]]; then
       collect "$ROOT/$imp/ANCHOR.oo"
+    elif [[ "$imp" == std/* && -f "$WS_ROOT/$imp" ]]; then
+      collect "$WS_ROOT/$imp"
+    elif [[ "$imp" == std/* && -f "$WS_ROOT/$imp/ANCHOR.oo" ]]; then
+      collect "$WS_ROOT/$imp/ANCHOR.oo"
     elif [[ -f "$ROOT/std/$imp" ]]; then
       collect "$ROOT/std/$imp"
     elif [[ -f "$ROOT/std/$imp/ANCHOR.oo" ]]; then
       collect "$ROOT/std/$imp/ANCHOR.oo"
+    elif [[ "$imp" == oodac/* && -f "$WS_ROOT/$imp" ]]; then
+      collect "$WS_ROOT/$imp"
+    elif [[ "$imp" == oodac/* && -f "$WS_ROOT/$imp/ANCHOR.oo" ]]; then
+      collect "$WS_ROOT/$imp/ANCHOR.oo"
     elif [[ -f "$ROOT/oodac/$imp" ]]; then
       collect "$ROOT/oodac/$imp"
     elif [[ -f "$ROOT/oodac/$imp/ANCHOR.oo" ]]; then
       collect "$ROOT/oodac/$imp/ANCHOR.oo"
+    elif [[ -f "$WS_ROOT/$imp" ]]; then
+      collect "$WS_ROOT/$imp"
+    elif [[ -f "$WS_ROOT/$imp/ANCHOR.oo" ]]; then
+      collect "$WS_ROOT/$imp/ANCHOR.oo"
     else
       echo "ERR_MISSING $dir/$imp" >&2
       exit 1

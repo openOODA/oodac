@@ -93,9 +93,16 @@ pub fn c_simd_create_loop_nest(
     outer_bound: String,
     inner_bound: String,
     elem_ty: String
-) -> SimdLoopNest { let is_vec: Bool = c_simd_is_vectorizable_kind(elem_ty);
-let res: SimdLoopNest = SimdLoopNest { outer_var: outer_var, inner_var: inner_var, outer_bound: outer_bound, inner_bound: inner_bound, elem_ty: elem_ty, is_tiled: true, is_vectorizable: is_vec };
-    return res;
+) -> SimdLoopNest {
+    return SimdLoopNest {
+        outer_var: outer_var,
+        inner_var: inner_var,
+        outer_bound: outer_bound,
+        inner_bound: inner_bound,
+        elem_ty: elem_ty,
+        is_tiled: true,
+        is_vectorizable: c_simd_is_vectorizable_kind(elem_ty)
+    };
 }
 
 pub fn c_simd_emit_tiled_2d_loops(nest: SimdLoopNest, cfg: SimdTileConfig) {

@@ -11,22 +11,59 @@ static char oo_je_path[512];
 
 static int oo_je_armed(void) {
   if (!oo_je_checked) {
-    FILE *f;
-    size_t nrd;
+    const char *je;
     oo_je_checked = 1;
     oo_je_path[0] = 0;
-    f = fopen(".ooda-cache/ooda-tmp/json_errors.arm", "rb");
-    if (!f) {
-      oo_je_on = 0;
-      return 0;
+
+    /* 1. Check environment variable OODA_JSON_ERRORS */
+    je = oo_process_policy_getenv("OODA_JSON_ERRORS");
+    if (!je) je = getenv("OODA_JSON_ERRORS");
+    if (je && je[0] && strcmp(je, "0") != 0) {
+      oo_je_on = 1;
+      if (strcmp(je, "1") != 0 && strcmp(je, "true") != 0) {
+        strncpy(oo_je_path, je, sizeof(oo_je_path) - 1);
+        oo_je_path[sizeof(oo_je_path) - 1] = 0;
+      } else {
+        const char *jp = oo_process_policy_getenv("OODA_JSON_PATH");
+        if (!jp) jp = getenv("OODA_JSON_PATH");
+        if (jp && jp[0]) {
+          strncpy(oo_je_path, jp, sizeof(oo_je_path) - 1);
+          oo_je_path[sizeof(oo_je_path) - 1] = 0;
+        }
+      }
     }
-    oo_je_on = 1;
-    nrd = fread(oo_je_path, 1, sizeof(oo_je_path) - 1, f);
-    fclose(f);
-    while (nrd > 0 && (oo_je_path[nrd - 1] == '\n' || oo_je_path[nrd - 1] == '\0')) {
-      nrd--;
+
+    /* 2. Direct binary invocation fallback: inspect /proc/self/cmdline */
+    if (!oo_je_on) {
+      FILE *fcmd = fopen("/proc/self/cmdline", "rb");
+      if (fcmd) {
+        char buf[2048];
+        size_t n = fread(buf, 1, sizeof(buf) - 1, fcmd);
+        fclose(fcmd);
+        if (n > 0) {
+          size_t idx = 0;
+          int found_je = 0;
+          char last_path[512] = {0};
+          while (idx < n) {
+            const char *arg = buf + idx;
+            size_t alen = strlen(arg);
+            if (strcmp(arg, "--json-errors") == 0 || strcmp(arg, "-json") == 0) {
+              found_je = 1;
+            } else if (alen > 3 && strcmp(arg + alen - 3, ".oo") == 0) {
+              strncpy(last_path, arg, sizeof(last_path) - 1);
+            }
+            idx += alen + 1;
+          }
+          if (found_je) {
+            oo_je_on = 1;
+            if (last_path[0]) {
+              strncpy(oo_je_path, last_path, sizeof(oo_je_path) - 1);
+              oo_je_path[sizeof(oo_je_path) - 1] = 0;
+            }
+          }
+        }
+      }
     }
-    oo_je_path[nrd] = 0;
   }
   return oo_je_on;
 }

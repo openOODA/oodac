@@ -8,11 +8,11 @@
 #include <string.h>
 #include <limits.h>
 
-/* ZT path A: process-policy getenv — fail-closed for non OODA_/OO_ keys.
+/* ZT path A: process-policy getenv — fail-closed for non OODA_/OODAC_/OO_ keys.
  * Product env_get still requires EnvCap via oo_env_get. */
 const char *oo_process_policy_getenv(const char *key) {
   if (!key || !key[0]) return NULL;
-  if (strncmp(key, "OODA_", 5) != 0 && strncmp(key, "OO_", 3) != 0) {
+  if (strncmp(key, "OODA_", 5) != 0 && strncmp(key, "OODAC_", 6) != 0 && strncmp(key, "OO_", 3) != 0) {
     return NULL;
   }
   return getenv(key);

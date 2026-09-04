@@ -51,6 +51,9 @@ fn check_modules(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, paths: L
             process_exit(1);
             }
             names = names + scan_fn_names(raw);
+        } else {
+            println("ERR\timport\tmissing " + pth);
+            process_exit(1);
         }
         raws = list_push(raws, raw);
         i = i + 1;

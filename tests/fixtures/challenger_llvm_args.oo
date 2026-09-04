@@ -1,0 +1,8 @@
+// # Challenger LLVM Main Args Sample
+// Logline: Test llvm_emit_main_args lowering.
+// Setup: None.
+// Beats: 1. Main with args.
+pub fn main(args: List[String]) {
+    let n: Int = list_len(args);
+    println(n);
+}

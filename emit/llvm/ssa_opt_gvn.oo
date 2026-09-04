@@ -43,7 +43,7 @@ fn ssa_gvn_canonical_key(op: Int, imm: Int, lhs: Int) -> Int {
 }
 
 pub fn ssa_opt_gvn(fn_data: SsaFunction) -> SsaFunction {
-    let n: Int = (0 + ssa_fn_inst_count(fn_data);
+    let n: Int = (0 + ssa_fn_inst_count(fn_data));
     if n == 0 { return fn_data; }
 
     // Compute use_count the same way dce/cse do. Scan inst_results for the
@@ -105,7 +105,7 @@ pub fn ssa_opt_gvn(fn_data: SsaFunction) -> SsaFunction {
 
         let is_pure: Bool = (op != op_alloca) && (op != op_store) && (op != op_br) && (op != op_cond_br) && (op != op_ret) && (op != op_store_lit) && (op != op_println_int) && (op != op_println_str) && (op != op_switch) && (op != op_unreachable) && (op != op_landingpad);
 
-        let key: Int = (0 + ssa_gvn_canonical_key(op, imm, lhs);
+        let key: Int = (0 + ssa_gvn_canonical_key(op, imm, lhs));
 
         // Linear scan seen list for matching (key, op, bid).
         let mut found_idx: Int = 0 - 1;
