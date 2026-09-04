@@ -86,7 +86,7 @@ pub fn public_entry(v: Int) -> Int {
 }
 EOF
 
-OUT_10_5=$("$REPO_ROOT/../ooda/bin/ooda" check "$TMP_ENCAP" 2>&1)
+OUT_10_5=$("$REPO_ROOT/bin/oodac" check "$TMP_ENCAP" 2>&1)
 RC_10_5=$?
 rm -f "$TMP_ENCAP"
 assert_exit_code 0 $RC_10_5 \

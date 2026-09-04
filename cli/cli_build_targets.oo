@@ -222,8 +222,8 @@ pub fn run_build_pgo(sys: &ProcessCap, path: String, out: String, sanitizers: St
     process_exit(1);
     }
     // Use OODAC_BIN's parent directory as the project root. The oodac wrapper
-    // is invoked from the project root, and runtime/chs_rt.c lives there.
-    let oodac_path: String = "/home/jeryd/Projects/openOODA/ooda";
+    let pwd_res = sys_exec(sys, "sh", "-c", "pwd");
+    let oodac_path: String = match pwd_res { Ok(s) => str_trim(s), Err(e) => "." };
     let rt_path: String = oodac_path + "/runtime/chs_rt.c";
     let src_path: String = oodac_path + "/" + tmp_c;
     let r_emit: Result[String, String] = sys_exec(sys, "sh", "-c", "OODAC_BIN=\"${OODAC_BIN:-${OODA_COMPILER:-$(readlink -f /proc/$PPID/exe)}}\" && $OODAC_BIN emit-c " + shell_sq(path) + " > " + shell_sq(tmp_c));

@@ -27,7 +27,7 @@ if c == "'" { out = out + "'\\''";
 fn probe_src_root() -> String {
     let mut s: String = "OODA_SRC_ROOT=\"${OODA_SRC_ROOT:-.}\"; ";
     s = s + "if [ -f \"$OODA_SRC_ROOT/runtime/chs_rt.c\" ]; then true; ";
-    s = s + "elif [ -f \"$OODA_SRC_ROOT/ooda/runtime/chs_rt.c\" ]; then OODA_SRC_ROOT=\"$OODA_SRC_ROOT/ooda\"; fi; export OODA_SRC_ROOT; ";
+    s = s + "elif [ -f \"./runtime/chs_rt.c\" ]; then OODA_SRC_ROOT=\".\"; fi; export OODA_SRC_ROOT; ";
     return s;
 }
 

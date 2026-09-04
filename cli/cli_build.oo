@@ -113,12 +113,9 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, path
     i = i + 1;
     }
 
-    let mut host: String = "./oodac_bin";
-    if !path_exists(fs_r, host) { host = "./ooda/oodac_bin"; }
-    if !path_exists(fs_r, host) { host = "./bin/oodac"; }
+    let mut host: String = "./bin/oodac";
     if !path_exists(fs_r, host) { host = "./bin/oodac_bin.core"; }
-    if !path_exists(fs_r, host) { host = "./ooda/bin/oodac_bin.core"; }
-    if !path_exists(fs_r, host) { host = "./ooda/bin/ooda"; }
+    if !path_exists(fs_r, host) { host = "./oodac_bin"; }
     let stamp: String = oo_file_stamp(host);
     let stamp_s: String = build_sanitize_stamp(stamp);
     let repro: String = gcc_repro_flags();

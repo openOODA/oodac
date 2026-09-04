@@ -70,7 +70,7 @@ pub fn canonical_utility_op(x: Int) -> Int {
 }
 EOF
 
-OUT_7_5=$("$REPO_ROOT/../ooda/bin/ooda" check "$TMP_CANON" 2>&1)
+OUT_7_5=$("$REPO_ROOT/bin/oodac" check "$TMP_CANON" 2>&1)
 RC_7_5=$?
 rm -f "$TMP_CANON"
 assert_exit_code 0 $RC_7_5 \

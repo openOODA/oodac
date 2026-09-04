@@ -71,7 +71,7 @@ pub fn pure_calc() -> Int {
 }
 EOF
 
-OUT_9_4=$("$REPO_ROOT/../ooda/bin/ooda" check "$TMP_UNUSED_IMP" 2>&1)
+OUT_9_4=$("$REPO_ROOT/bin/oodac" check "$TMP_UNUSED_IMP" 2>&1)
 RC_9_4=$?
 rm -f "$TMP_UNUSED_IMP"
 # A strict compiler detects unused import and returns non-zero (or reports warning)
@@ -82,7 +82,7 @@ else
 fi
 
 # Test 9.5: Clean module without unused imports or lets compiles cleanly
-OUT_9_5=$("$REPO_ROOT/../ooda/bin/ooda" check "$TESTS_DIR/fixtures/valid_minimal.oo" 2>&1)
+OUT_9_5=$("$REPO_ROOT/bin/oodac" check "$TESTS_DIR/fixtures/valid_minimal.oo" 2>&1)
 RC_9_5=$?
 assert_exit_code 0 $RC_9_5 \
   "9.5 Clean module with 0 unused imports/lets compiles cleanly"

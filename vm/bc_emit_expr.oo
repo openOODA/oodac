@@ -8,6 +8,7 @@
 //   1. Unified cohesive implementation.
 
 
+import "ast/ANCHOR.oo";
 import "bc_emit_env.oo";
 
 import "bc_emit_surface.oo";

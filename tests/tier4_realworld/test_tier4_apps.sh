@@ -13,7 +13,8 @@
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 TESTS_DIR=$(cd "$SCRIPT_DIR/.." && pwd)
-OODA_BIN="${OODA_BIN:-/home/jeryd/Projects/openOODA/ooda/bin/ooda}"
+REPO_ROOT=$(cd "$TESTS_DIR/.." && pwd)
+OODA_BIN="${OODA_BIN:-$REPO_ROOT/bin/oodac}"
 
 source "$TESTS_DIR/test_runner_core.sh"
 set_feature "Tier 4 - Real-World Applications"

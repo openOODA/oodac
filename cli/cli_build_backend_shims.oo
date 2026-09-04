@@ -42,7 +42,7 @@ pub fn run_llc_link(sys: &ProcessCap, in_ll: String, out: String) -> Bool {
 // Aggressive-LTO build entry: opt + llc + clang-flto link.
 pub fn run_build_aggrlto(sys: &ProcessCap, path: String, out: String, target_triple: String) -> Bool {
     let tmp_ll: String = out + ".tmp.ll";
-    let emit_cmd: String = "OODAC_BIN=\"${OODAC_BIN:-./ooda/oodac_bin}\" && $OODAC_BIN emit-llvm " + path + " > " + tmp_ll;
+    let emit_cmd: String = "OODAC_BIN=\"${OODAC_BIN:-./bin/oodac}\" && $OODAC_BIN emit-llvm " + path + " > " + tmp_ll;
     let r_emit: Result[String, String] = sys_exec(sys, "sh", "-c", emit_cmd);
     if !r_emit.is_ok() {
         return false;
@@ -57,7 +57,7 @@ pub fn run_build_aggrlto(sys: &ProcessCap, path: String, out: String, target_tri
 pub fn run_build_x86(sys: &ProcessCap, path: String, out: String) {
     let tmp_s = out + ".tmp.s";
     let tmp_o = out + ".tmp.o";
-    let r_emit: Result[String, String] = sys_exec(sys, "sh", "-c", "OODAC_BIN=\"${OODAC_BIN:-./ooda/oodac_bin}\" && $OODAC_BIN emit-x86 " + shell_sq(path) + " > " + shell_sq(tmp_s));
+    let r_emit: Result[String, String] = sys_exec(sys, "sh", "-c", "OODAC_BIN=\"${OODAC_BIN:-./bin/oodac}\" && $OODAC_BIN emit-x86 " + shell_sq(path) + " > " + shell_sq(tmp_s));
     if !r_emit.is_ok() {
         println("ERR\tbuild\temit-x86 failed");
         process_exit(1);
@@ -82,7 +82,7 @@ pub fn run_build_x86_ssa(sys: &ProcessCap, path: String, out: String) {
     let tmp_o = out + ".tmp.o";
     let tmp_full = out + ".tmp.full.s";
     let entry_stub = "    .text\n    .globl _start\n    .p2align 4\n_start:\n    push %rbp\n    mov %rsp, %rbp\n    call main\n    mov %rax, %rdi\n    mov $60, %rax\n    syscall\n";
-    let r_emit: Result[String, String] = sys_exec(sys, "sh", "-c", "OODAC_BIN=\"${OODAC_BIN:-./ooda/oodac_bin}\" && $OODAC_BIN emit-x86-ssa " + shell_sq(path) + " > " + shell_sq(tmp_s) + " 2>" + shell_sq(tmp_s + ".err"));
+    let r_emit: Result[String, String] = sys_exec(sys, "sh", "-c", "OODAC_BIN=\"${OODAC_BIN:-./bin/oodac}\" && $OODAC_BIN emit-x86-ssa " + shell_sq(path) + " > " + shell_sq(tmp_s) + " 2>" + shell_sq(tmp_s + ".err"));
     if !r_emit.is_ok() {
         println("ERR\tbuild\temit-x86-ssa failed");
         process_exit(1);
@@ -119,7 +119,7 @@ pub fn run_build_pgo(sys: &ProcessCap, path: String, out: String, sanitizers: St
     let proj_root: String = match pwd_res { Ok(s) => str_trim(s), Err(e) => "" };
     let rt_path: String = proj_root + "/runtime/chs_rt.c";
     let src_path: String = proj_root + "/" + tmp_c;
-    let r_emit: Result[String, String] = sys_exec(sys, "sh", "-c", "OODAC_BIN=\"${OODAC_BIN:-./ooda/oodac_bin}\" && $OODAC_BIN emit-c " + shell_sq(path) + " > " + shell_sq(tmp_c));
+    let r_emit: Result[String, String] = sys_exec(sys, "sh", "-c", "OODAC_BIN=\"${OODAC_BIN:-./bin/oodac}\" && $OODAC_BIN emit-c " + shell_sq(path) + " > " + shell_sq(tmp_c));
     if !r_emit.is_ok() {
         println("ERR\tbuild\tpgo emit-c failed");
         process_exit(1);
@@ -153,7 +153,7 @@ pub fn run_build_jit(fs: &FsReadCap, sys: &ProcessCap, path: String, out: String
     let tmp_st: String = out + ".tmp.jit.st";
     let _mk: Result[String, String] = sys_exec(sys, "sh", "-c", "mkdir -p .ooda-cache/ooda-tmp");
     let r: Result[String, String] = sys_exec(sys, "sh", "-c",
-        "OODAC_BIN=\"${OODAC_BIN:-./ooda/oodac_bin}\" && $OODAC_BIN emit-llvm "
+        "OODAC_BIN=\"${OODAC_BIN:-./bin/oodac}\" && $OODAC_BIN emit-llvm "
         + shell_sq(path) + " > " + shell_sq(tmp_ll) + " 2> " + shell_sq(tmp_err));
     if !r.is_ok() {
         println("ERR\tjit\temit-llvm failed");

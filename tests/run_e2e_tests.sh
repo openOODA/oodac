@@ -17,7 +17,14 @@ set -o pipefail
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 TESTS_DIR="$SCRIPT_DIR"
 REPO_ROOT=$(cd "$TESTS_DIR/.." && pwd)
-OODA_BIN="${OODA_BIN:-/home/jeryd/Projects/openOODA/ooda/bin/ooda}"
+OODA_BIN="${OODA_BIN:-$REPO_ROOT/bin/oodac}"
+if [[ ! -x "$OODA_BIN" && -x "$REPO_ROOT/bin/ooda" ]]; then
+  OODA_BIN="$REPO_ROOT/bin/ooda"
+elif [[ ! -x "$OODA_BIN" && -x "$REPO_ROOT/bin/oodac" ]]; then
+  OODA_BIN="$REPO_ROOT/bin/oodac"
+fi
+export OODA_BIN
+export REPO_ROOT
 
 # Check prerequisites
 if [[ ! -x "$OODA_BIN" ]]; then

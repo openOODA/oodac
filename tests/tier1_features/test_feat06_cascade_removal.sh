@@ -82,7 +82,7 @@ pub fn init_config(pure: Bool) -> BuildConfig {
 }
 EOF
 
-OUT_6_5=$("$REPO_ROOT/../ooda/bin/ooda" check "$TMP_MEM_CHECK" 2>&1)
+OUT_6_5=$("$REPO_ROOT/bin/oodac" check "$TMP_MEM_CHECK" 2>&1)
 RC_6_5=$?
 rm -f "$TMP_MEM_CHECK"
 assert_exit_code 0 $RC_6_5 \

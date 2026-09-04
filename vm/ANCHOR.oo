@@ -9,9 +9,6 @@
 //   2. Re-export public bytecode emission and execution APIs.
 //   3. Maintain <= 256 lines limit.
 
-import "lex/ANCHOR.oo";
-import "types/ANCHOR.oo";
-import "ast/ANCHOR.oo";
 import "bc_emit.oo";
 import "bc_emit_env.oo";
 import "bc_emit_expr.oo";

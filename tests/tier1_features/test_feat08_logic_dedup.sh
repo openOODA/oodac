@@ -93,7 +93,7 @@ pub fn canonical_parse_int(s: String) -> Int {
 }
 EOF
 
-OUT_8_5=$("$REPO_ROOT/../ooda/bin/ooda" check "$TMP_SHARED" 2>&1)
+OUT_8_5=$("$REPO_ROOT/bin/oodac" check "$TMP_SHARED" 2>&1)
 RC_8_5=$?
 rm -f "$TMP_SHARED"
 assert_exit_code 0 $RC_8_5 \

@@ -11,6 +11,7 @@
 //   4. Boundary: internal refactor of any individual emitter stays local; toolchain imports this single file.
 
 
+import "lex/ANCHOR.oo";
 import "ast/ANCHOR.oo";
 import "check/ANCHOR.oo";
 import "emit/c/ANCHOR.oo";
