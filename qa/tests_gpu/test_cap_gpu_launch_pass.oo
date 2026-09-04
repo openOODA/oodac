@@ -1,0 +1,21 @@
+// # Test GPU Launch Authorized Pass
+//
+// Logline: Asserts successful static compilation when gpu_launch is provided with valid &GpuCap token.
+//
+// Setup: Sealed GPU builtin gpu_launch passes typecheck when &GpuCap token is passed.
+//
+// Beats:
+//   1. Declare function taking gpu: &GpuCap.
+//   2. Invoke gpu_launch passing gpu token.
+//   3. Assert successful typecheck.
+
+pub fn run_gpu_kernel(gpu: &GpuCap) {
+    let res = gpu_launch(gpu, "k_vec_add", 1, 64);
+    match res {
+        Ok(v) => {},
+        Err(e) => {}
+    }
+}
+
+pub fn main() {
+}

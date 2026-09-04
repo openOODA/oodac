@@ -1,0 +1,10 @@
+// # emit-x86 struct field init and read
+type Point = struct {
+    x: Int,
+    y: Int
+};
+pub fn main() {
+    let mut p = Point { x: 0, y: 4 };
+    p.x = 3;
+    println(p.x);
+}

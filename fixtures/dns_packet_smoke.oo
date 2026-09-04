@@ -1,0 +1,88 @@
+// # DNS packet round-trip smoke
+//
+// Logline: Asserts std/net/dns_packet builders and formatters for DnsHeader, DnsQuestion, and DnsRecord with IANA DNS type codes and the example.com test vector.
+//
+// Setup: Imports std/net/dns_packet.oo. Pure.
+//
+// Beats:
+//   1. IANA DNS type codes A=1, AAAA=28, MX=15.
+//   2. dns_type_name maps codes to "A", "AAAA", ..., "MX", "UNKNOWN" for 99.
+//   3. DnsHeader sets id, rd, and qd_count.
+//   4. DnsQuestion round-trips name, qtype, qclass.
+//   5. DnsRecord round-trips name, rtype, ttl, rdata; dns_record_format prints the example.com line.
+
+import "std/net/dns_packet.oo";
+
+pub fn main() {
+    let dns_packet_dummy: Int = 0;
+
+    // Beat 1: IANA codes.
+    let a: Int = dns_type_a();
+    let aaaa: Int = dns_type_aaaa();
+    let mx: Int = dns_type_mx();
+    if a != 1 || aaaa != 28 || mx != 15 {
+        println("FAIL type codes a=" + a.to_string() + " aaaa=" + aaaa.to_string() + " mx=" + mx.to_string());
+        return;
+    }
+    println("OK type codes");
+
+    // Beat 2: type names.
+    if dns_type_name(1) != "A" {
+        println("FAIL type name A");
+        return;
+    }
+    if dns_type_name(28) != "AAAA" {
+        println("FAIL type name AAAA");
+        return;
+    }
+    if dns_type_name(99) != "UNKNOWN" {
+        println("FAIL type name UNKNOWN");
+        return;
+    }
+    println("OK type names");
+
+    // Beat 3: header.
+    let h: DnsHeader = dns_header_new(4660, true);
+    if h.id != 4660 {
+        println("FAIL header id got " + h.id.to_string());
+        return;
+    }
+    if !h.rd {
+        println("FAIL header rd");
+        return;
+    }
+    if h.qd_count != 1 {
+        println("FAIL header qd_count got " + h.qd_count.to_string());
+        return;
+    }
+    println("OK header");
+
+    // Beat 4: question.
+    let q: DnsQuestion = dns_question_new("example.com", a);
+    if q.name != "example.com" {
+        println("FAIL question name got " + q.name);
+        return;
+    }
+    if q.qtype != 1 || q.qclass != 1 {
+        println("FAIL question type/class");
+        return;
+    }
+    println("OK question");
+
+    // Beat 5: record and format.
+    let r: DnsRecord = dns_record_new("example.com", a, 300, "1.2.3.4");
+    if r.name != "example.com" || r.rtype != 1 || r.ttl != 300 || r.rdata != "1.2.3.4" {
+        println("FAIL record fields");
+        return;
+    }
+    let fmt: String = dns_record_format(r);
+    if fmt != "example.com 300 IN A 1.2.3.4" {
+        println("FAIL record format got " + fmt);
+        return;
+    }
+    println("OK record format");
+
+    let total: Int = dns_packet_dummy + 1;
+    println("DNS_PACKET_RT_OK");
+    println("total=" + total.to_string());
+}

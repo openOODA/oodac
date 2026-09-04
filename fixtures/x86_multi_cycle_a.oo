@@ -1,0 +1,4 @@
+import "x86_multi_cycle_b.oo";
+pub fn fa() -> Int {
+    return 1;
+}

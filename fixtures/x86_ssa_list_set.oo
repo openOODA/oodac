@@ -1,0 +1,7 @@
+// # emit-x86 list_set then list_get of the written Int
+pub fn main() {
+    let mut xs: List[Int] = list_new();
+    xs = list_push(xs, 0);
+    xs = list_set(xs, 0, 7);
+    println(list_get(xs, 0));
+}

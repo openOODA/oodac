@@ -1,0 +1,99 @@
+// # Math Adversarial Smoke Test
+//
+// Logline: Verifies IEEE-754 math functions (sin, cos, ln, exp, sqrt, pow) with adversarial inputs.
+//
+// Setup: Pure float operations. No FS or net dependencies.
+//
+// Beats:
+//   1. VALID: Normal math operations.
+//   2. NEGATIVE TRUST: Test with zero and identity values.
+//   3. ADVERSARIAL: Test with extreme values and special cases.
+//   4. DOUBLE-RUN: Verify all operations are deterministic.
+
+import "std/core/math/trig.oo";
+
+pub fn expect_true(label: String, cond: Bool) -> Bool {
+    if cond { println("OK " + label); return true; }
+    println("FAIL " + label);
+    return false;
+}
+
+pub fn expect_false(label: String, cond: Bool) -> Bool {
+    if !cond { println("OK " + label); return true; }
+    println("FAIL " + label);
+    return false;
+}
+
+pub fn main() {
+    // VALID: math_sin - sin(0) = 0, sin(PI/2) ≈ 1
+    let sin_zero: Float = math_sin(0.0);
+    if !expect_true("sin 0 == 0", sin_zero == 0.0) { return; }
+
+    // VALID: math_cos - cos(0) = 1, cos(PI) ≈ -1
+    let cos_zero: Float = math_cos(0.0);
+    if !expect_true("cos 0 == 1", cos_zero == 1.0) { return; }
+
+    // VALID: math_ln - ln(1) = 0, ln(e) ≈ 1
+    let ln_one: Float = math_ln(1.0);
+    if !expect_true("ln 1 == 0", ln_one == 0.0) { return; }
+
+    // VALID: math_exp - exp(0) = 1, exp(1) ≈ e
+    let exp_zero: Float = math_exp(0.0);
+    if !expect_true("exp 0 == 1", exp_zero == 1.0) { return; }
+
+    // VALID: math_sqrt - sqrt(0) = 0, sqrt(4) = 2
+    let sqrt_zero: Float = math_sqrt(0.0);
+    if !expect_true("sqrt 0 == 0", sqrt_zero == 0.0) { return; }
+    let sqrt_four: Float = math_sqrt(4.0);
+    if !expect_true("sqrt 4 == 2", sqrt_four == 2.0) { return; }
+
+    // VALID: math_pow - pow(2,3) = 8, pow(x,0) = 1
+    let pow_2_3: Float = math_pow(2.0, 3.0);
+    if !expect_true("pow 2^3 == 8", pow_2_3 == 8.0) { return; }
+    let pow_x_0: Float = math_pow(5.0, 0.0);
+    if !expect_true("pow 5^0 == 1", pow_x_0 == 1.0) { return; }
+
+    // VALID: Sin/Cos identity: sin^2 + cos^2 = 1
+    let angle: Float = 0.5;
+    let s: Float = math_sin(angle);
+    let c: Float = math_cos(angle);
+    let identity: Float = s * s + c * c;
+    if !expect_true("sin^2 + cos^2 ≈ 1", identity > 0.9999 && identity < 1.0001) { return; }
+
+    // VALID: Exp/Log identity: exp(ln(x)) ≈ x
+    let x: Float = 2.5;
+    let exp_ln_x: Float = math_exp(math_ln(x));
+    if !expect_true("exp(ln(x)) ≈ x", exp_ln_x > 2.4999 && exp_ln_x < 2.5001) { return; }
+
+    // NEGATIVE TRUST: Zero values
+    let sqrt_neg: Float = math_sqrt(-1.0);
+    // Should be NaN, check if it's not a normal number
+    if !expect_false("sqrt(-1) is valid", sqrt_neg == sqrt_neg && sqrt_neg != 0.0) { return; }
+
+    // NEGATIVE TRUST: ln(0) should be -inf or NaN
+    let ln_zero: Float = math_ln(0.0);
+    if !expect_false("ln(0) is valid", ln_zero == ln_zero && ln_zero > -1000000.0) { return; }
+
+    // ADVERSARIAL: Large values
+    let exp_large: Float = math_exp(100.0);
+    if !expect_true("exp(100) is large", exp_large > 1000000000000.0) { return; }
+
+    let large_val: Float = math_exp(230.0);
+    let ln_large: Float = math_ln(large_val);
+    if !expect_true("ln(exp(230)) ≈ 230", ln_large > 229.0 && ln_large < 231.0) { return; }
+
+    // ADVERSARIAL: Negative values
+    let sin_neg: Float = math_sin(-1.0);
+    if !expect_true("sin(-1) ≈ -0.8415", sin_neg > -0.85 && sin_neg < -0.84) { return; }
+
+    // DOUBLE-RUN: Determinism check
+    let sin_dr1: Float = math_sin(0.5);
+    let sin_dr2: Float = math_sin(0.5);
+    if !expect_true("dr sin", sin_dr1 == sin_dr2) { return; }
+
+    let exp_dr1: Float = math_exp(1.5);
+    let exp_dr2: Float = math_exp(1.5);
+    if !expect_true("dr exp", exp_dr1 == exp_dr2) { return; }
+
+    println("OK: math_smoke passed");
+}

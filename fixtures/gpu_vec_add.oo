@@ -1,0 +1,19 @@
+// # GPU vector add kernel fixture
+//
+// Logline: Declares an @gpu k_add kernel that writes elementwise plus into c.
+//
+// Setup: FloatPtr buffers and Int length. No host string keywords.
+//
+// Beats:
+//   1. Annotate k_add as an @gpu device function.
+//   2. Walk i from 0 to n and assign c[i] from a[i] plus b[i].
+//   3. Provide an empty host main.
+
+@gpu pub fn k_add(a: FloatPtr, b: FloatPtr, c: FloatPtr, n: Int) {
+    let mut i: Int = 0;
+    while i < n {
+        c[i] = a[i] + b[i];
+        i = i + 1;
+    }
+}
+pub fn main() {}

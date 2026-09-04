@@ -1,0 +1,24 @@
+// # Negative Test: Unsatisfiable Multivariate Polynomial
+//
+// Logline: Fails closed when multivariate polynomial lower bound violates contract.
+//
+// Setup: Pure .oo test for fail-closed SMT refusal on multivariate inequality.
+//
+// Beats:
+//   1. Function invalid requires a >= 2, b >= 3, c >= 4, d >= 5.
+//   2. Function invalid requires a * b + c * d < 26.
+//   3. Compiler refuses with ERR smt unsat requires at 17:5.
+
+pub fn invalid(a: Int, b: Int, c: Int, d: Int) -> Int
+    requires a >= 2
+    requires b >= 3
+    requires c >= 4
+    requires d >= 5
+    requires a * b + c * d < 26
+{
+    return a * b + c * d;
+}
+
+pub fn main() {
+    println(invalid(2, 3, 4, 5));
+}

@@ -1,0 +1,18 @@
+// # String-domain fuzz fail
+//
+// Logline: Return empty while ensuring result == x so the string rail fails.
+//
+// Beats:
+//   1. Keep FUZZ_DOMAIN string and target always_bad 1 6.
+//   2. Ensure result == x.
+//   3. Return "" so the rail fails.
+
+// Pure String-domain fail rail: ensures result == x but returns empty.
+// FUZZ_DOMAIN: string
+// FUZZ_TARGET: always_bad 1 6
+// FUZZ_ENSURES: always_bad result == x
+fn always_bad(x: String) -> String {
+    return "";
+}
+pub fn main() {
+}

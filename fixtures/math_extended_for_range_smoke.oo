@@ -1,0 +1,71 @@
+// # For-range iteration smoke
+//
+// Logline: Asserts std/math/extended/for_range.verify_for_range exercises an empty range, a single-element range, and a 100-element range via the for-in desugaring path.
+//
+// Setup: Imports std/math/extended/for_range.oo. The module provides only the verify_for_range probe, which sums i in 0..5. We extend the test with our own edge-case loops in this fixture to exercise the same for-in desugaring path the probe uses.
+//
+// Beats:
+//   1. Probe: verify_for_range() returns true (sums 0+1+2+3+4=10 internally).
+//   2. Empty range 5..5: loop body never executes, sum stays 0.
+//   3. Single range 0..1: loop body executes once with i=0, sum = 0.
+//   4. Large range 0..100: sum of 0..99 = 99*100/2 = 4950.
+//   5. Down-counting style 10..0 is not supported in for-in; covered by sum identity 0..N for N=10 giving 45.
+
+import "std/core/math/extended/for_range.oo";
+
+pub fn main() {
+    // Beat 1: probe.
+    let probe_ok: Bool = verify_for_range();
+    if probe_ok == false {
+        println("FAIL verify_for_range returned false");
+        return;
+    }
+    println("OK for_range probe");
+
+    // Beat 2: empty range 5..5 -> sum stays 0.
+    let mut s_empty: Int = 0;
+    for i in 5..5 {
+        s_empty = s_empty + i;
+    }
+    if s_empty != 0 {
+        println("FAIL empty range sum expected 0, got " + s_empty.to_string());
+        return;
+    }
+    println("OK for_range empty");
+
+    // Beat 3: single range 0..1 -> sum = 0.
+    let mut s_single: Int = 0;
+    for i in 0..1 {
+        s_single = s_single + i;
+    }
+    if s_single != 0 {
+        println("FAIL single range sum expected 0, got " + s_single.to_string());
+        return;
+    }
+    println("OK for_range single");
+
+    // Beat 4: large range 0..100 -> sum = 0+1+...+99 = 4950.
+    let mut s_big: Int = 0;
+    for i in 0..100 {
+        s_big = s_big + i;
+    }
+    if s_big != 4950 {
+        println("FAIL large range sum expected 4950, got " + s_big.to_string());
+        return;
+    }
+    println("OK for_range 0..100 = 4950");
+
+    // Beat 5: 0..10 -> sum = 0+1+...+9 = 45.
+    let mut s10: Int = 0;
+    for i in 0..10 {
+        s10 = s10 + i;
+    }
+    if s10 != 45 {
+        println("FAIL 0..10 sum expected 45, got " + s10.to_string());
+        return;
+    }
+    println("OK for_range 0..10 = 45");
+
+    println("FOR_RANGE_KAT_OK");
+    println("OK");
+}

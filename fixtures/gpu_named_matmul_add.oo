@@ -1,0 +1,22 @@
+// # Named matmul kernel with add body
+//
+// Logline: Kernel name containing matmul must not select tiled GEMM when the body is add.
+//
+// Setup: @gpu fn k_matmul stores a[i] + b[i].
+//
+// Beats:
+//   1. Name the kernel k_matmul.
+//   2. Body is elementwise add.
+//   3. emit-hip must emit + not a tiled GEMM template.
+
+@gpu
+pub fn k_matmul(a: FloatPtr, b: FloatPtr, c: FloatPtr, n: Int) {
+    let mut i: Int = 0;
+    while i < n {
+        c[i] = a[i] + b[i];
+        i = i + 1;
+    }
+}
+
+pub fn main() {
+}

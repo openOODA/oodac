@@ -1,0 +1,56 @@
+// # ProcessCap facade smoke (CAP residual + real exec)
+//
+// Logline: Asserts std/os/process.process_spawn returns Ok with a positive pid and process_exec blocks on a real `true`/`false` shell invocation.
+//
+// Setup: Imports std/os/process.oo. Uses &ProcessCap. Per RULES.oot 1.4, we only exercise the public facade and never invoke process_kill/process_wait on a real pid beyond a single round-trip.
+//
+// Beats:
+//   1. process_args returns a list (length is non-negative under `ooda run`).
+//   2. process_spawn("true") returns Ok and a non-empty pid.
+//   3. process_exec("true") returns Ok (blocking real exec).
+//   4. process_exec("false") returns Err (exit non-zero).
+//   5. Print OS_PROCESS_OK on success.
+
+import "std/fs/process/process.oo";
+
+pub fn main(p: &ProcessCap) {
+    // Beat 1: process_args is a list.
+    let args: List[String] = process_args(p);
+    if list_len(args) < 0 {
+        println("FAIL process_args: negative len");
+        return;
+    }
+    println("OK process_args");
+
+    // Beat 2: process_spawn returns Ok (real fork+exec) with a non-empty pid.
+    let s: Result[String, String] = process_spawn(p, "true");
+    if s.is_err() {
+        println("FAIL process_spawn: err branch hit");
+        return;
+    }
+    let pid_s: String = s.val;
+    if pid_s == "" {
+        println("FAIL process_spawn: empty pid");
+        return;
+    }
+    println("OK process_spawn_real_fork pid=" + pid_s);
+
+    // Beat 3: real blocking exec of "true" returns Ok.
+    let e: Result[String, String] = process_exec(p, "true");
+    if e.is_err() {
+        println("FAIL process_exec: err branch hit");
+        return;
+    }
+    println("OK process_exec_true");
+
+    // Beat 4: process_exec of a failing command returns Err.
+    let ef: Result[String, String] = process_exec(p, "false");
+    if ef.is_ok() {
+        println("FAIL process_exec_false: expected Err");
+        return;
+    }
+    println("OK process_exec_false_err");
+
+    println("OS_PROCESS_OK");
+    println("OK");
+}

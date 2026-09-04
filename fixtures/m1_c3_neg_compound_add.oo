@@ -1,0 +1,22 @@
+// # Negative: Compound Add Contradiction
+//
+// Logline: Proves that impossible compound addition precondition triggers compile-time unsat refusal.
+//
+// Setup: Pure .oo fixture for negative contract testing.
+//
+// Beats:
+//   1. Function requires a in [1, 3], b in [1, 3].
+//   2. Precondition a + b >= 10 is provably unsat (max is 6).
+//   3. Refuses at compile time with ERR smt unsat requires.
+
+pub fn bad_compound_add(a: Int, b: Int) -> Int
+    requires a >= 1 && a <= 3
+    requires b >= 1 && b <= 3
+    requires a + b >= 10
+{
+    return a + b;
+}
+
+pub fn main() {
+    println(bad_compound_add(2, 2));
+}

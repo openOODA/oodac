@@ -1,0 +1,77 @@
+// # 3D Lights Types Adversarial Smoke Test
+//
+// Logline: Verifies LightColor creation and RGBA operations with adversarial inputs.
+//
+// Setup: Pure struct operations. No FS or net dependencies.
+//
+// Beats:
+//   1. VALID: Normal LightColor creation and preset colors.
+//   2. NEGATIVE TRUST: Test with zero and black colors.
+//   3. ADVERSARIAL: Test with extreme RGB values.
+//   4. DOUBLE-RUN: Verify all operations are deterministic.
+
+import "std/app/ui/3d/lights_types.oo";
+
+pub fn expect_eq_int(label: String, got: Int, want: Int) -> Bool {
+    if got == want { println("OK " + label); return true; }
+    println("FAIL " + label + " got=" + got.to_string() + " want=" + want.to_string());
+    return false;
+}
+
+pub fn expect_eq_color(label: String, got: LightColor, want: LightColor) -> Bool {
+    let cond: Bool = got.r == want.r && got.g == want.g && got.b == want.b && got.a == want.a;
+    if cond { println("OK " + label); return true; }
+    println("FAIL " + label);
+    return false;
+}
+
+pub fn main() {
+    // VALID: LightColor creation
+    let c1: LightColor = light_color_new(100, 150, 200, 255);
+    if !expect_eq_int("c1 r", c1.r, 100) { return; }
+    if !expect_eq_int("c1 g", c1.g, 150) { return; }
+    if !expect_eq_int("c1 b", c1.b, 200) { return; }
+    if !expect_eq_int("c1 a", c1.a, 255) { return; }
+
+    // VALID: White color
+    let white: LightColor = light_color_white();
+    let expected_white: LightColor = light_color_new(255, 255, 255, 255);
+    if !expect_eq_color("white", white, expected_white) { return; }
+
+    // VALID: Black color
+    let black: LightColor = light_color_black();
+    let expected_black: LightColor = light_color_new(0, 0, 0, 255);
+    if !expect_eq_color("black", black, expected_black) { return; }
+
+    // NEGATIVE TRUST: Zero RGBA
+    let c_zero: LightColor = light_color_new(0, 0, 0, 0);
+    if !expect_eq_int("zero r", c_zero.r, 0) { return; }
+    if !expect_eq_int("zero a", c_zero.a, 0) { return; }
+
+    // NEGATIVE TRUST: Partial transparency
+    let c_alpha: LightColor = light_color_new(100, 100, 100, 128);
+    if !expect_eq_int("alpha 128", c_alpha.a, 128) { return; }
+
+    // ADVERSARIAL: Maximum values
+    let c_max: LightColor = light_color_new(255, 255, 255, 255);
+    if !expect_eq_int("max r", c_max.r, 255) { return; }
+
+    // ADVERSARIAL: Large values (will be clamped or wrapped)
+    let c_large: LightColor = light_color_new(1000, 2000, 3000, 4000);
+    if !expect_eq_int("large r", c_large.r, 1000) { return; }
+
+    // ADVERSARIAL: Negative values
+    let c_neg: LightColor = light_color_new(-100, -50, -200, -10);
+    if !expect_eq_int("neg r", c_neg.r, -100) { return; }
+
+    // DOUBLE-RUN: Determinism check
+    let c_dr1: LightColor = light_color_new(42, 84, 126, 200);
+    let c_dr2: LightColor = light_color_new(42, 84, 126, 200);
+    if !expect_eq_color("dr creation", c_dr1, c_dr2) { return; }
+
+    let white_dr1: LightColor = light_color_white();
+    let white_dr2: LightColor = light_color_white();
+    if !expect_eq_color("dr white", white_dr1, white_dr2) { return; }
+
+    println("OK: 3d_lights_types_smoke passed");
+}

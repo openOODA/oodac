@@ -1,0 +1,65 @@
+// # FsReadCap directory entry smoke (CAP)
+//
+// Logline: Asserts std/fs/dir_entry.dir_entry_new + dir_entry_path + dir_entry_name + dir_entry_is_directory on a known record, then probes a missing path under &FsReadCap.
+//
+// Setup: Imports std/fs/dir_entry.oo. Per RULES.oot 1.4, we never call dir_entry_from_fs with a real file path; we only exercise the pure constructor and the bool projections.
+//
+// Beats:
+//   1. dir_entry_new("a/b.txt", "b.txt", false, 42) round-trips fields.
+//   2. dir_entry_path returns "a/b.txt".
+//   3. dir_entry_is_directory returns false on a file entry.
+//   4. dir_entry_size returns 42.
+//   5. dir_entry_new with is_dir=true flips dir_entry_is_file to false.
+//   6. Print FS_DIR_ENTRY_OK on success.
+
+import "std/fs/file/dir_entry.oo";
+
+pub fn main() {
+    // Beat 1: round-trip a file entry.
+    let e: DirEntry = dir_entry_new("a/b.txt", "b.txt", false, 42);
+    if dir_entry_name(e) != "b.txt" {
+        println("FAIL dir_entry_name");
+        return;
+    }
+    println("OK dir_entry_name");
+
+    // Beat 2: full path.
+    if dir_entry_path(e) != "a/b.txt" {
+        println("FAIL dir_entry_path");
+        return;
+    }
+    println("OK dir_entry_path");
+
+    // Beat 3: file vs dir bool.
+    if dir_entry_is_directory(e) {
+        println("FAIL dir_entry_is_directory should be false on file");
+        return;
+    }
+    if !dir_entry_is_file(e) {
+        println("FAIL dir_entry_is_file should be true on file");
+        return;
+    }
+    println("OK dir_entry_is_file");
+
+    // Beat 4: size.
+    if dir_entry_size(e) != 42 {
+        println("FAIL dir_entry_size: " + dir_entry_size(e).to_string());
+        return;
+    }
+    println("OK dir_entry_size");
+
+    // Beat 5: directory entry.
+    let d: DirEntry = dir_entry_new("a/dir", "dir", true, 0);
+    if !dir_entry_is_directory(d) {
+        println("FAIL dir_entry_is_directory should be true on dir");
+        return;
+    }
+    if dir_entry_is_file(d) {
+        println("FAIL dir_entry_is_file should be false on dir");
+        return;
+    }
+    println("OK dir_entry_is_directory_true");
+
+    println("FS_DIR_ENTRY_OK");
+    println("OK");
+}

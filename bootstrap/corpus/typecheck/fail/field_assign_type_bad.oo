@@ -1,0 +1,20 @@
+// # Assign a string to a point field
+//
+// Logline: Writes "hi" into Point.x which is Int.
+//
+// Setup: oodac typecheck must reject this program.
+//
+// Beats:
+//   1. Define Point with Int fields.
+//   2. Bind a mutable Point.
+//   3. Assign p.x = "hi".
+
+type Point = struct {
+    x: Int,
+    y: Int,
+};
+fn main() -> Int {
+    let mut p = Point { x: 1, y: 2 };
+    p.x = "hi";
+    return 0;
+}

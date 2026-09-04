@@ -1,0 +1,123 @@
+// # Ring Buffer Smoke Test
+//
+// Logline: Verifies the upgraded fixed-capacity circular ring buffer push with overwrite on overflow, pop, peek, get, and head/tail wrap-around.
+//
+// Setup: Imports std/collections/ring_buffer.oo. Pure, no FS or net.
+//
+// Beats:
+//   1. Build a capacity-4 ring and assert initial state.
+//   2. Push 6 items past capacity and assert size stays at capacity.
+//   3. Confirm the oldest items were overwritten and the buffer reflects FIFO order.
+//   4. Pop the oldest items and assert head/tail advance.
+//   5. Index access at logical offsets from oldest to newest.
+
+import "std/core/collection/ring_buffer.oo";
+import "std/hw/runtime/rt_str_format.oo";
+
+pub fn expect_eq_int(label: String, got: Int, want: Int) -> Bool {
+    if got == want { println("OK " + label); return true; }
+    println("FAIL " + label + " got=" + int_to_str(got) + " want=" + int_to_str(want));
+    return false;
+}
+
+pub fn expect_true(label: String, cond: Bool) -> Bool {
+    if cond { println("OK " + label); return true; }
+    println("FAIL " + label);
+    return false;
+}
+
+pub fn expect_false(label: String, cond: Bool) -> Bool {
+    if cond { println("FAIL " + label); return false; }
+    println("OK " + label);
+    return true;
+}
+
+// Unwrap a Result[Int, String] or return the given default. Only safe to call
+// when the caller has already proven the result is Ok.
+pub fn res_int_or(r: Result[Int, String], d: Int) -> Int {
+    if r.is_err() { return d; }
+    return r.unwrap();
+}
+
+pub fn main() {
+    let mut rb: RingBuffer = ring_buffer_new(4);
+    if !expect_eq_int("capacity", ring_buffer_capacity(rb), 4) { return; }
+    if !expect_eq_int("initial size", ring_buffer_len(rb), 0) { return; }
+    if !expect_true("initial empty", ring_buffer_is_empty(rb)) { return; }
+    if !expect_false("initial not full", ring_buffer_is_full(rb)) { return; }
+
+    // Push 6 items past capacity. The first two should be overwritten.
+    rb = ring_buffer_push(rb, 10);
+    rb = ring_buffer_push(rb, 20);
+    rb = ring_buffer_push(rb, 30);
+    rb = ring_buffer_push(rb, 40);
+    if !expect_true("full at 4", ring_buffer_is_full(rb)) { return; }
+    if !expect_eq_int("size at full", ring_buffer_len(rb), 4) { return; }
+
+    rb = ring_buffer_push(rb, 50);
+    if !expect_eq_int("size after overflow push", ring_buffer_len(rb), 4) { return; }
+    rb = ring_buffer_push(rb, 60);
+    if !expect_eq_int("size after second overflow", ring_buffer_len(rb), 4) { return; }
+
+    // After overwriting 10 and 20, the logical buffer should be [30, 40, 50, 60]
+    let g0: Result[Int, String] = ring_buffer_get(rb, 0);
+    if !expect_eq_int("get index 0 (oldest)", res_int_or(g0, 0 - 1), 30) { return; }
+    let g1: Result[Int, String] = ring_buffer_get(rb, 1);
+    if !expect_eq_int("get index 1", res_int_or(g1, 0 - 1), 40) { return; }
+    let g2: Result[Int, String] = ring_buffer_get(rb, 2);
+    if !expect_eq_int("get index 2", res_int_or(g2, 0 - 1), 50) { return; }
+    let g3: Result[Int, String] = ring_buffer_get(rb, 3);
+    if !expect_eq_int("get index 3 (newest)", res_int_or(g3, 0 - 1), 60) { return; }
+
+    let pk: Result[Int, String] = ring_buffer_peek(rb);
+    if !expect_eq_int("peek oldest", res_int_or(pk, 0 - 1), 30) { return; }
+
+    // Pop two oldest (30, 40) and push two more (70, 80).
+    rb = ring_buffer_pop(rb);
+    rb = ring_buffer_pop(rb);
+    if !expect_eq_int("size after 2 pops", ring_buffer_len(rb), 2) { return; }
+
+    rb = ring_buffer_push(rb, 70);
+    rb = ring_buffer_push(rb, 80);
+    if !expect_eq_int("size after 2 more pushes", ring_buffer_len(rb), 4) { return; }
+
+    // Now the logical buffer should be [50, 60, 70, 80]
+    let h0: Result[Int, String] = ring_buffer_get(rb, 0);
+    if !expect_eq_int("get 0 after wrap", res_int_or(h0, 0 - 1), 50) { return; }
+    let h1: Result[Int, String] = ring_buffer_get(rb, 1);
+    if !expect_eq_int("get 1 after wrap", res_int_or(h1, 0 - 1), 60) { return; }
+    let h2: Result[Int, String] = ring_buffer_get(rb, 2);
+    if !expect_eq_int("get 2 after wrap", res_int_or(h2, 0 - 1), 70) { return; }
+    let h3: Result[Int, String] = ring_buffer_get(rb, 3);
+    if !expect_eq_int("get 3 after wrap", res_int_or(h3, 0 - 1), 80) { return; }
+
+    // Out-of-bounds get returns Err.
+    let ob: Result[Int, String] = ring_buffer_get(rb, 4);
+    if !expect_false("get out of bounds is_err", ob.is_ok()) { return; }
+    let obn: Result[Int, String] = ring_buffer_get(rb, 0 - 1);
+    if !expect_false("get negative is_err", obn.is_ok()) { return; }
+
+    // Pop all and verify empty.
+    rb = ring_buffer_pop(rb);
+    rb = ring_buffer_pop(rb);
+    rb = ring_buffer_pop(rb);
+    rb = ring_buffer_pop(rb);
+    if !expect_eq_int("size after popping all", ring_buffer_len(rb), 0) { return; }
+    if !expect_true("empty after pop all", ring_buffer_is_empty(rb)) { return; }
+
+    // Pop on empty leaves size at 0.
+    rb = ring_buffer_pop(rb);
+    if !expect_eq_int("size after pop on empty", ring_buffer_len(rb), 0) { return; }
+    let pempty: Result[Int, String] = ring_buffer_peek(rb);
+    if !expect_false("peek empty is_err", pempty.is_ok()) { return; }
+
+    // Clear returns the buffer to empty while keeping capacity.
+    let mut rb2: RingBuffer = ring_buffer_new(4);
+    rb2 = ring_buffer_push(rb2, 1);
+    rb2 = ring_buffer_push(rb2, 2);
+    rb2 = ring_buffer_clear(rb2);
+    if !expect_eq_int("size after clear", ring_buffer_len(rb2), 0) { return; }
+    if !expect_eq_int("capacity after clear", ring_buffer_capacity(rb2), 4) { return; }
+
+    println("RING_BUFFER_OK");
+}

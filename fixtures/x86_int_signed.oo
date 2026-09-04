@@ -1,0 +1,4 @@
+// # emit-x86 signed int println
+pub fn main() {
+    println(0 - 7);
+}

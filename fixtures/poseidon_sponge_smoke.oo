@@ -1,0 +1,45 @@
+// # Poseidon Sponge Hash Determinism Smoke
+//
+// Logline: Verifies std/crypto/zk/poseidon_sponge.poseidon_sponge_hash is deterministic and returns a non-zero Int for non-empty input.
+//
+// Setup: Imports std/crypto/zk/poseidon_sponge.oo. Pure, no FS or net. Property test (PROP).
+//
+// Beats:
+//   1. Hash an empty input list with t=3 params.
+//   2. Hash a 4-element list [1, 2, 3, 4] with t=3 params.
+//   3. Both calls deterministic (same input → same output).
+//   4. Non-empty hash is non-zero.
+//   5. Print POSEIDON_SPONGE_PROP_OK on success.
+
+import "std/sec/zk/poseidon_sponge_algebraic.oo";
+
+pub fn main() {
+    let p: PoseidonParams = poseidon_params_t3();
+    let mut empty: List[Int] = list_new();
+    let h_empty1: Int = poseidon_sponge_hash(&p, empty);
+    let h_empty2: Int = poseidon_sponge_hash(&p, empty);
+    if h_empty1 != h_empty2 {
+        println("FAIL empty non-deterministic");
+        return;
+    }
+    let mut data: List[Int] = list_new();
+    data = list_push(data, 1);
+    data = list_push(data, 2);
+    data = list_push(data, 3);
+    data = list_push(data, 4);
+    let h_data1: Int = poseidon_sponge_hash(&p, data);
+    let h_data2: Int = poseidon_sponge_hash(&p, data);
+    if h_data1 != h_data2 {
+        println("FAIL data non-deterministic");
+        return;
+    }
+    if h_data1 == 0 {
+        println("FAIL data hash is zero");
+        return;
+    }
+    if h_data1 == h_empty1 {
+        println("FAIL hash collision empty/data");
+        return;
+    }
+    println("POSEIDON_SPONGE_PROP_OK");
+}

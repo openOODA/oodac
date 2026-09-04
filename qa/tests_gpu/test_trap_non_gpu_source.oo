@@ -1,0 +1,18 @@
+// # Test Non-GPU Source Rejection Trap
+//
+// Logline: Asserts fail-closed compile-time rejection when emit-hip is run on non-GPU source.
+//
+// Setup: Source file contains standard sovereign code without @gpu kernel annotations.
+//
+// Beats:
+//   1. Declare standard sovereign CPU function.
+//   2. Run emit-hip compiler pipeline.
+//   3. Assert fail-closed rejection with ERR gpu_emit no @gpu kernel definitions found.
+
+pub fn cpu_greeting() {
+    println("hello openOODA sovereign world");
+}
+
+pub fn main() {
+    cpu_greeting();
+}

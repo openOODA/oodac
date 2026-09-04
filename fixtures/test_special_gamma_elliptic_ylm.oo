@@ -1,0 +1,70 @@
+// # Incomplete Gamma Elliptic Spherical Fixture
+//
+// Logline: Checks P(s, x), complete elliptic K(k), and Y_l^m against tabulated values.
+//
+// Setup: Isolated emit-c. Run from ooda/.
+//
+// Beats:
+//   1. P(1, 1) = 1 - 1/e and P(2, 1) = 1 - 2/e.
+//   2. K(0) = pi/2 and K(1/2) matches the AGM table value.
+//   3. Y_0^0 = 1/sqrt(4 pi) and Y_1^0(0) = sqrt(3/4 pi).
+//   4. Fail closed on s < 1, |k| >= 1, and |m| > l.
+
+import "std/core/math/special/incomplete_gamma.oo";
+import "std/core/math/special/elliptic_k.oo";
+import "std/core/math/special/spherical_harmonic.oo";
+
+fn fail(msg: String) {
+    println("FAIL " + msg);
+    process_exit(1);
+}
+
+fn unwrap_f(r: Result[Float, String], msg: String) -> Float {
+    match r {
+        Ok(v) => { return v; },
+        Err(e) => { fail(msg + ": " + e); return 0.0; }
+    }
+}
+
+fn unwrap_fv(r: Result[List[Float], String], msg: String) -> List[Float] {
+    match r {
+        Ok(v) => { return v; },
+        Err(e) => { fail(msg + ": " + e); return list_new(); }
+    }
+}
+
+fn near(a: Float, b: Float, eps: Float) -> Bool {
+    let mut d: Float = a - b;
+    if d < 0.0 { d = 0.0 - d; }
+    return d <= eps;
+}
+
+pub fn main() {
+    let e1: Float = exp(0.0 - 1.0);
+    let p11: Float = unwrap_f(gamma_p(1, 1.0), "P11");
+    if near(p11, 1.0 - e1, 0.0000001) == false { fail("P(1,1)"); }
+    let p21: Float = unwrap_f(gamma_p(2, 1.0), "P21");
+    if near(p21, 1.0 - 2.0 * e1, 0.0000001) == false { fail("P(2,1)"); }
+    let gs: Result[Float, String] = gamma_p(0, 1.0);
+    if gs.is_ok() { fail("P s=0"); }
+    let gx: Result[Float, String] = gamma_p(1, 0.0 - 1.0);
+    if gx.is_ok() { fail("P x<0"); }
+
+    let k0: Float = unwrap_f(elliptic_k(0.0), "K0");
+    if near(k0, 1.5707963267948966, 0.000001) == false { fail("K(0)"); }
+    let k5: Float = unwrap_f(elliptic_k(0.5), "K5");
+    if near(k5, 1.6857503548125963, 0.000001) == false { fail("K(0.5)"); }
+    let kb: Result[Float, String] = elliptic_k(1.0);
+    if kb.is_ok() { fail("K(1)"); }
+
+    let y00: List[Float] = unwrap_fv(ylm(0, 0, 0.0, 0.0), "Y00");
+    if near(list_get(y00, 0), 0.28209479177387814, 0.000001) == false { fail("Y00 re"); }
+    if near(list_get(y00, 1), 0.0, 0.000001) == false { fail("Y00 im"); }
+    let y10: List[Float] = unwrap_fv(ylm(1, 0, 0.0, 0.0), "Y10");
+    if near(list_get(y10, 0), 0.4886025119029199, 0.000001) == false { fail("Y10"); }
+    let ym: List[Float] = unwrap_fv(ylm(1, 0 - 1, 1.5707963267948966, 0.0), "Y1m1");
+    if near(list_get(ym, 0), 0.3454941494713355, 0.00001) == false { fail("Y1-1"); }
+    let yb: Result[List[Float], String] = ylm(1, 2, 0.0, 0.0);
+    if yb.is_ok() { fail("Y m>l"); }
+    println("SPECIAL_GAMMA_ELLIPTIC_YLM_ALL_PASSED");
+}

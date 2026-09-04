@@ -1,0 +1,66 @@
+// # 3D Camera Adversarial Smoke Test
+//
+// Logline: Verifies camera initialization, movement, and position queries with adversarial inputs.
+//
+// Setup: Pure integer camera structs. No FS or net dependencies.
+//
+// Beats:
+//   1. Initialize camera config and camera from config.
+//   2. Move camera and verify position updates.
+//   3. NEGATIVE TRUST: Test with 0 FOV and 0 aspect ratio.
+//   4. ADVERSARIAL: Test with negative movement values and large coordinates.
+//   5. DOUBLE-RUN: Verify all operations are deterministic.
+
+import "std/app/ui/3d/camera.oo";
+
+pub fn expect_eq_int(label: String, got: Int, want: Int) -> Bool {
+    if got == want { println("OK " + label); return true; }
+    println("FAIL " + label + " got=" + got.to_string() + " want=" + want.to_string());
+    return false;
+}
+
+pub fn expect_eq_camera(label: String, got: Camera, want: Camera) -> Bool {
+    let cond: Bool = got.fov == want.fov && got.near_plane == want.near_plane && 
+                     got.far_plane == want.far_plane && got.aspect_ratio == want.aspect_ratio &&
+                     got.x == want.x && got.y == want.y && got.z == want.z &&
+                     got.pitch == want.pitch && got.yaw == want.yaw && got.roll == want.roll;
+    if cond { println("OK " + label); return true; }
+    println("FAIL " + label);
+    return false;
+}
+
+pub fn main() {
+    // VALID: Normal camera initialization and movement
+    let config1: CameraConfig = init_camera_config(60, 16);
+    let cam1: Camera = create_camera(config1);
+    
+    if !expect_eq_int("config fov", config1.fov, 60) { return; }
+    if !expect_eq_int("config aspect", config1.aspect_ratio, 16) { return; }
+    if !expect_eq_int("camera fov", cam1.fov, 60) { return; }
+    if !expect_eq_int("camera position z", camera_get_position_z(cam1), 0) { return; }
+
+    let cam2: Camera = camera_move(cam1, 10, 20, 30);
+    if !expect_eq_int("camera position z after move", camera_get_position_z(cam2), 30) { return; }
+
+    // NEGATIVE TRUST: Edge case inputs (0 values)
+    let config_zero: CameraConfig = init_camera_config(0, 0);
+    let cam_zero: Camera = create_camera(config_zero);
+    if !expect_eq_int("zero config fov", config_zero.fov, 0) { return; }
+    if !expect_eq_int("zero camera fov", cam_zero.fov, 0) { return; }
+
+    // ADVERSARIAL: Extreme values
+    let config_large: CameraConfig = init_camera_config(180, 10000);
+    let cam_large: Camera = create_camera(config_large);
+    if !expect_eq_int("large config fov", config_large.fov, 180) { return; }
+    
+    let cam_neg: Camera = camera_move(cam_large, -100, -200, -300);
+    if !expect_eq_int("neg move position z", camera_get_position_z(cam_neg), -300) { return; }
+
+    // DOUBLE-RUN: Determinism check
+    let config_dr: CameraConfig = init_camera_config(60, 16);
+    let cam_dr: Camera = create_camera(config_dr);
+    let cam_dr_moved: Camera = camera_move(cam_dr, 10, 20, 30);
+    if !expect_eq_int("dr position z", camera_get_position_z(cam_dr_moved), 30) { return; }
+
+    println("OK: 3d_camera_smoke passed");
+}

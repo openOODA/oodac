@@ -1,0 +1,7 @@
+// # emit-x86 6-arg const call
+pub fn f(a: Int, b: Int, c: Int, d: Int, e: Int, g: Int) -> Int {
+    return a + b + c + d + e + g;
+}
+pub fn main() {
+    println(f(1, 2, 3, 4, 5, 27));
+}

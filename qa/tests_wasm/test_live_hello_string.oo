@@ -1,0 +1,18 @@
+// # WebAssembly Live Dynamic String Concatenation Test
+//
+// Logline: Validates dynamic string concatenation (+), heap allocation, and WASI stdout emission.
+//
+// Setup: Sovereign WASM execution under wasmtime and Node.js.
+//
+// Beats:
+//   1. Build dynamic greeting strings.
+//   2. Concatenate string literals with dynamic expressions.
+//   3. Print output via WASI fd_write.
+//   4. Assert pass.
+
+pub fn main() {
+    let name: String = "World";
+    let greeting: String = ("Hello, " + name) + "!";
+    println(greeting);
+    println("WebAssembly Dynamic Strings OK");
+}

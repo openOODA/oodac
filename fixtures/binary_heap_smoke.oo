@@ -1,0 +1,93 @@
+// # BinaryHeap property smoke
+//
+// Logline: Asserts std/collections/binary_heap.oo max-heap order invariant via push/pop/peek.
+//
+// Setup: Imports std/collections/binary_heap.oo. Pure.
+//
+// Beats:
+//   1. Build an empty BinaryHeap; len = 0, peek is_err.
+//   2. Push 10 values; peek returns the maximum.
+//   3. Pop; peek returns the next-largest remaining value.
+//   4. BINARY_HEAP_OK on success.
+
+import "std/core/collection/binary_heap.oo";
+
+pub fn expect_eq_int(label: String, got: Int, want: Int) -> Bool {
+    if got == want { println("OK " + label); return true; }
+    println("FAIL " + label + " got=" + got.to_string() + " want=" + want.to_string());
+    return false;
+}
+
+pub fn expect_true(label: String, cond: Bool) -> Bool {
+    if cond { println("OK " + label); return true; }
+    println("FAIL " + label);
+    return false;
+}
+
+pub fn expect_false(label: String, cond: Bool) -> Bool {
+    if cond { println("FAIL " + label); return false; }
+    println("OK " + label);
+    return true;
+}
+
+pub fn unwrap_int(r: Result[Int, String]) -> Int {
+    if r.is_err() { return 0 - 1; }
+    return r.unwrap();
+}
+
+pub fn main() {
+    let h0: BinaryHeap = heap_new();
+    if !expect_eq_int("initial len", heap_len(h0), 0) { return; }
+    if !expect_true("initial is_empty", heap_is_empty(h0)) { return; }
+    let pe: Result[Int, String] = heap_peek(h0);
+    if !expect_false("peek empty is_err", pe.is_ok()) { return; }
+
+    let mut h: BinaryHeap = h0;
+    h = heap_push(h, 5);
+    h = heap_push(h, 12);
+    h = heap_push(h, 3);
+    h = heap_push(h, 27);
+    h = heap_push(h, 8);
+    h = heap_push(h, 19);
+    h = heap_push(h, 1);
+    h = heap_push(h, 14);
+    h = heap_push(h, 6);
+    h = heap_push(h, 22);
+    if !expect_eq_int("len after 10 pushes", heap_len(h), 10) { return; }
+    if !expect_eq_int("peek max", unwrap_int(heap_peek(h)), 27) { return; }
+    if !expect_true("contains 19", heap_contains(h, 19)) { return; }
+
+    let h2: BinaryHeap = heap_pop(h);
+    if !expect_eq_int("len after 1 pop", heap_len(h2), 9) { return; }
+    if !expect_eq_int("peek after pop", unwrap_int(heap_peek(h2)), 22) { return; }
+
+    let h3: BinaryHeap = heap_pop(h2);
+    if !expect_eq_int("peek after 2nd pop", unwrap_int(heap_peek(h3)), 19) { return; }
+
+    let h4: BinaryHeap = heap_pop(h3);
+    if !expect_eq_int("peek after 3rd pop", unwrap_int(heap_peek(h4)), 14) { return; }
+
+    let h5: BinaryHeap = heap_pop(h4);
+    if !expect_eq_int("peek after 4th pop", unwrap_int(heap_peek(h5)), 12) { return; }
+
+    let h6: BinaryHeap = heap_pop(h5);
+    if !expect_eq_int("peek after 5th pop", unwrap_int(heap_peek(h6)), 8) { return; }
+
+    let h7: BinaryHeap = heap_pop(h6);
+    if !expect_eq_int("peek after 6th pop", unwrap_int(heap_peek(h7)), 6) { return; }
+
+    let h8: BinaryHeap = heap_pop(h7);
+    if !expect_eq_int("peek after 7th pop", unwrap_int(heap_peek(h8)), 5) { return; }
+
+    let h9: BinaryHeap = heap_pop(h8);
+    if !expect_eq_int("peek after 8th pop", unwrap_int(heap_peek(h9)), 3) { return; }
+
+    let h10: BinaryHeap = heap_pop(h9);
+    if !expect_eq_int("peek after 9th pop", unwrap_int(heap_peek(h10)), 1) { return; }
+
+    let h11: BinaryHeap = heap_pop(h10);
+    if !expect_eq_int("len after drain", heap_len(h11), 0) { return; }
+    if !expect_true("drained is_empty", heap_is_empty(h11)) { return; }
+
+    println("BINARY_HEAP_OK");
+}

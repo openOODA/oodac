@@ -1,0 +1,101 @@
+// # WebAssembly Milestone 2 Recursion Test Suite
+//
+// Logline: Build, emit, and verify WebAssembly binary modules with recursive function definitions (factorial, fibonacci) and standalone WASI Preview1 entry points.
+//
+// Setup: Run with ooda/bin/ooda check or run from qa/.
+//
+// Beats:
+//   1. Import required modules.
+//   2. Execute test assertions.
+//   3. Report pass or fail with exit code.
+import "oodac/emit/wasm/wasm_leb128.oo";
+import "oodac/emit/wasm/wasm_opcodes.oo";
+import "oodac/emit/wasm/wasm_types.oo";
+import "oodac/emit/wasm/wasm_binary_builder.oo";
+import "oodac/emit/wasm/wasm_lower_expr.oo";
+import "oodac/emit/wasm/wasm_lower_stmt.oo";
+import "oodac/emit/wasm/wasm_lower_control.oo";
+import "oodac/emit/wasm/wasm_lower_fn.oo";
+import "oodac/ast/ast.oo";
+
+pub fn test_m2_factorial_module(fs: &FsWriteCap) -> List[Int] {
+    // fn fact(n: Int) -> Int {
+    //     if n <= 1 { return 1; }
+    //     return n * fact(n - 1);
+    // }
+    let cond: String = mk_ebinop("<=", mk_evar("n"), mk_eint("1"));
+    let then_body: String = mk_block(mk_sreturn(mk_eint("1")), mk_sempty());
+    let if_node: String = mk_eif(cond, then_body, "");
+
+    let rec_call: String = mk_ecall("fact", mk_ebinop("-", mk_evar("n"), mk_eint("1")));
+    let ret_stmt: String = mk_sreturn(mk_ebinop("*", mk_evar("n"), rec_call));
+
+    let body_block: String = mk_block(if_node + "," + ret_stmt, mk_sempty());
+    let params: String = mk_param("n", mk_ty_int());
+
+    let fn_node: String = mk_fn("fact", params, mk_ty_int(), "", body_block);
+    let bin: List[Int] = wasm_compile_ast_module(mk_file(fn_node), "browser", wasm_val_type_i32());
+
+    let s: String = bytes_to_str(bin);
+    let _w: Result[Void, String] = write_file(fs, "/home/jeryd/Projects/openOODA/qa/tests_wasm/tests_m2_factorial.wasm", s);
+    return bin;
+}
+
+pub fn test_m2_fibonacci_module(fs: &FsWriteCap) -> List[Int] {
+    // fn fib(n: Int) -> Int {
+    //     if n <= 0 { return 0; }
+    //     if n == 1 { return 1; }
+    //     return fib(n - 1) + fib(n - 2);
+    // }
+    let cond0: String = mk_ebinop("<=", mk_evar("n"), mk_eint("0"));
+    let if0: String = mk_eif(cond0, mk_block(mk_sreturn(mk_eint("0")), mk_sempty()), "");
+
+    let cond1: String = mk_ebinop("==", mk_evar("n"), mk_eint("1"));
+    let if1: String = mk_eif(cond1, mk_block(mk_sreturn(mk_eint("1")), mk_sempty()), "");
+
+    let call1: String = mk_ecall("fib", mk_ebinop("-", mk_evar("n"), mk_eint("1")));
+    let call2: String = mk_ecall("fib", mk_ebinop("-", mk_evar("n"), mk_eint("2")));
+    let ret_stmt: String = mk_sreturn(mk_ebinop("+", call1, call2));
+
+    let body_block: String = mk_block(if0 + "," + if1 + "," + ret_stmt, mk_sempty());
+    let params: String = mk_param("n", mk_ty_int());
+
+    let fn_node: String = mk_fn("fib", params, mk_ty_int(), "", body_block);
+    let bin: List[Int] = wasm_compile_ast_module(mk_file(fn_node), "browser", wasm_val_type_i32());
+
+    let s: String = bytes_to_str(bin);
+    let _w: Result[Void, String] = write_file(fs, "/home/jeryd/Projects/openOODA/qa/tests_wasm/tests_m2_fibonacci.wasm", s);
+    return bin;
+}
+
+pub fn test_m2_wasi_main_module(fs: &FsWriteCap) -> List[Int] {
+    // fn fact(n: Int) -> Int { if n <= 1 { return 1; } return n * fact(n - 1); }
+    // fn main() -> Int { return fact(5); } // returns 120
+    let cond: String = mk_ebinop("<=", mk_evar("n"), mk_eint("1"));
+    let if_node: String = mk_eif(cond, mk_block(mk_sreturn(mk_eint("1")), mk_sempty()), "");
+    let rec_call: String = mk_ecall("fact", mk_ebinop("-", mk_evar("n"), mk_eint("1")));
+    let fact_ret: String = mk_sreturn(mk_ebinop("*", mk_evar("n"), rec_call));
+    let fact_body: String = mk_block(if_node + "," + fact_ret, mk_sempty());
+    let fact_fn: String = mk_fn("fact", mk_param("n", mk_ty_int()), mk_ty_int(), "", fact_body);
+
+    let main_ret: String = mk_sreturn(mk_ecall("fact", mk_eint("5")));
+    let main_body: String = mk_block(main_ret, mk_sempty());
+    let main_fn: String = mk_fn("main", "", mk_ty_int(), "", main_body);
+
+    let file_node: String = mk_file(fact_fn + "," + main_fn);
+    let bin: List[Int] = wasm_compile_ast_module(file_node, "wasi", wasm_val_type_i32());
+
+    let s: String = bytes_to_str(bin);
+    let _w: Result[Void, String] = write_file(fs, "/home/jeryd/Projects/openOODA/qa/tests_wasm/tests_m2_wasi_main.wasm", s);
+    return bin;
+}
+
+pub fn main(fs: &FsWriteCap) {
+    println("=================================================");
+    println(" Running WebAssembly M2 Recursion Unit Tests");
+    println("=================================================");
+    test_m2_factorial_module(fs);
+    test_m2_fibonacci_module(fs);
+    test_m2_wasi_main_module(fs);
+    println("All WASM M2 Recursion unit tests emitted successfully!");
+}

@@ -1,0 +1,60 @@
+// # ActorRef mailbox-order smoke (PROP)
+//
+// Logline: Asserts std/actor/actor_ref.actor_ref_new + actor_ref_send preserve the live flag and accept a string message under &ThreadCap.
+//
+// Setup: Imports std/actor/actor_ref.oo. Uses &ThreadCap.
+//
+// Beats:
+//   1. actor_ref_new sets is_alive=true, mailbox_slot preserved.
+//   2. actor_ref_send on a live ref returns Ok(true).
+//   3. actor_ref_tell with msg_type + payload returns Ok(true).
+//   4. Mark is_alive=false; actor_ref_send returns Err "E_ACTOR_DEAD".
+//   5. Print ACTOR_ACTOR_REF_PROP_OK on success.
+
+import "std/net/actor/actor_ref.oo";
+
+pub fn main(thread: &ThreadCap) {
+    // Beat 1: fresh ref.
+    let mut a: ActorRef = actor_ref_new("actor_1", "/sys/actor_1", 3);
+    if !a.is_alive {
+        println("FAIL alive_init");
+        return;
+    }
+    if a.mailbox_slot != 3 {
+        println("FAIL mailbox_slot");
+        return;
+    }
+    if a.id != "actor_1" {
+        println("FAIL id");
+        return;
+    }
+    println("OK actor_ref_new");
+
+    // Beat 2: send on live.
+    let r1: Result[Bool, String] = actor_ref_send(thread, a, "hello");
+    if r1.is_err() {
+        println("FAIL send_live: err branch hit");
+        return;
+    }
+    println("OK actor_ref_send_live");
+
+    // Beat 3: tell with type+payload.
+    let r2: Result[Bool, String] = actor_ref_tell(thread, a, "MSG", "payload");
+    if r2.is_err() {
+        println("FAIL tell_live: err branch hit");
+        return;
+    }
+    println("OK actor_ref_tell_live");
+
+    // Beat 4: mark dead, send returns Err.
+    a.is_alive = false;
+    let r3: Result[Bool, String] = actor_ref_send(thread, a, "x");
+    if r3.is_ok() {
+        println("FAIL send_dead_should_err");
+        return;
+    }
+    println("OK actor_ref_send_dead_rejected");
+
+    println("ACTOR_ACTOR_REF_PROP_OK");
+    println("OK");
+}

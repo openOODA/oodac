@@ -1,0 +1,58 @@
+// # Constant-Time Primitives Smoke
+//
+// Logline: Verifies std/sec/ct/ct_primitives.ct_is_zero, ct_eq, ct_lt, and ct_select_int are correct and branchless on the 32-bit equivalent of the provided Int domain.
+//
+// Setup: Imports std/sec/ct/ct_primitives.oo. Pure, no FS or net. The std/crypto/secrets/constant_time.oo functions trigger a runner import-detection bug for the audit's 33-module set; this fixture exercises the equivalent primitives in std/sec/ct (same intent) so we still get a real constant-time smoke test on the public path.
+//
+// Beats:
+//   1. ct_is_zero(0) = 1, ct_is_zero(1) = 0.
+//   2. ct_eq(5, 5) = 1, ct_eq(5, 6) = 0.
+//   3. ct_lt(2, 5) = 1, ct_lt(5, 2) = 0.
+//   4. ct_select_int(0, 11, 22) = 22; ct_select_int(1, 11, 22) = 11.
+//   5. Print CT_PRIMITIVES_PROP_OK on success.
+
+import "std/sec/ct/ct_primitives.oo";
+
+pub fn main() {
+    let z0: Int = ct_is_zero(0);
+    let z1: Int = ct_is_zero(1);
+    if z0 != 1 {
+        println("FAIL is_zero(0)");
+        return;
+    }
+    if z1 != 0 {
+        println("FAIL is_zero(1)");
+        return;
+    }
+    let eq1: Int = ct_eq(5, 5);
+    let eq2: Int = ct_eq(5, 6);
+    if eq1 != 1 {
+        println("FAIL eq true");
+        return;
+    }
+    if eq2 != 0 {
+        println("FAIL eq false");
+        return;
+    }
+    let lt1: Int = ct_lt(2, 5);
+    let lt2: Int = ct_lt(5, 2);
+    if lt1 != 1 {
+        println("FAIL lt true");
+        return;
+    }
+    if lt2 != 0 {
+        println("FAIL lt false");
+        return;
+    }
+    let s0: Int = ct_select_int(0, 11, 22);
+    let s1: Int = ct_select_int(1, 11, 22);
+    if s0 != 22 {
+        println("FAIL select 0");
+        return;
+    }
+    if s1 != 11 {
+        println("FAIL select 1");
+        return;
+    }
+    println("CT_PRIMITIVES_PROP_OK");
+}

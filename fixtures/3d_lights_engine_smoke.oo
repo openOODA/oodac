@@ -1,0 +1,81 @@
+// # 3D Lights Engine Adversarial Smoke Test
+//
+// Logline: Verifies light creation, setters, and getters with adversarial inputs.
+//
+// Setup: Pure struct operations. No FS or net dependencies.
+//
+// Beats:
+//   1. VALID: Normal light creation and field access.
+//   2. NEGATIVE TRUST: Test with default and zero values.
+//   3. ADVERSARIAL: Test with extreme intensity and position values.
+//   4. DOUBLE-RUN: Verify all operations are deterministic.
+
+import "std/app/ui/3d/lights_engine.oo";
+
+pub fn expect_eq_int(label: String, got: Int, want: Int) -> Bool {
+    if got == want { println("OK " + label); return true; }
+    println("FAIL " + label + " got=" + got.to_string() + " want=" + want.to_string());
+    return false;
+}
+
+pub fn expect_eq_ambient(label: String, got: AmbientLight, want: AmbientLight) -> Bool {
+    let cond: Bool = got.r == want.r && got.g == want.g && got.b == want.b && 
+                     got.a == want.a && got.intensity == want.intensity && got.enabled == want.enabled;
+    if cond { println("OK " + label); return true; }
+    println("FAIL " + label);
+    return false;
+}
+
+pub fn main() {
+    // VALID: AmbientLight default
+    let ambient_def: AmbientLight = ambient_light_default();
+    if !expect_eq_int("ambient r", ambient_def.r, 30) { return; }
+    if !expect_eq_int("ambient enabled", ambient_def.enabled, 1) { return; }
+
+    // VALID: DirectionalLight default
+    let dir_def: DirectionalLight = directional_light_default();
+    if !expect_eq_int("dir r", dir_def.r, 255) { return; }
+    if !expect_eq_int("dir intensity", dir_def.intensity, 200) { return; }
+
+    // VALID: PointLight default
+    let point_def: PointLight = point_light_default();
+    if !expect_eq_int("point r", point_def.r, 255) { return; }
+    if !expect_eq_int("point x", point_def.x, 0) { return; }
+    if !expect_eq_int("point radius", point_def.radius, 100) { return; }
+
+    // VALID: SpotLight default
+    let spot_def: SpotLight = spot_light_default();
+    if !expect_eq_int("spot r", spot_def.r, 255) { return; }
+    if !expect_eq_int("spot intensity", spot_def.intensity, 220) { return; }
+
+    // VALID: Ambient setter/getter
+    let ambient_custom: AmbientLight = ambient_light_set_enabled(ambient_def, 0);
+    if !expect_eq_int("ambient set enabled", ambient_custom.enabled, 0) { return; }
+    
+    let ambient_intense: AmbientLight = ambient_light_set_intensity(ambient_def, 100);
+    if !expect_eq_int("ambient set intensity", ambient_light_get_intensity(ambient_intense), 100) { return; }
+    if !expect_eq_int("ambient get enabled", ambient_light_get_enabled(ambient_intense), 1) { return; }
+
+    // NEGATIVE TRUST: Zero intensity
+    let ambient_zero: AmbientLight = ambient_light_set_intensity(ambient_def, 0);
+    if !expect_eq_int("ambient zero intensity", ambient_light_get_intensity(ambient_zero), 0) { return; }
+
+    // ADVERSARIAL: Large intensity
+    let ambient_large: AmbientLight = ambient_light_set_intensity(ambient_def, 1000000);
+    if !expect_eq_int("ambient large intensity", ambient_light_get_intensity(ambient_large), 1000000) { return; }
+
+    // ADVERSARIAL: Negative intensity
+    let ambient_neg: AmbientLight = ambient_light_set_intensity(ambient_def, -100);
+    if !expect_eq_int("ambient neg intensity", ambient_light_get_intensity(ambient_neg), -100) { return; }
+
+    // DOUBLE-RUN: Determinism check
+    let ambient_dr1: AmbientLight = ambient_light_default();
+    let ambient_dr2: AmbientLight = ambient_light_default();
+    if !expect_eq_ambient("dr ambient", ambient_dr1, ambient_dr2) { return; }
+
+    let dir_dr1: DirectionalLight = directional_light_default();
+    let dir_dr2: DirectionalLight = directional_light_default();
+    if !expect_eq_int("dr dir r", dir_dr1.r, dir_dr2.r) { return; }
+
+    println("OK: 3d_lights_engine_smoke passed");
+}

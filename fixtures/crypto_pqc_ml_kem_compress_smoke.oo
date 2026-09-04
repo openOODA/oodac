@@ -1,0 +1,24 @@
+// # ML-KEM Compress Round-Trip Smoke
+//
+// Logline: Verifies std/crypto/pqc/ml_kem_compress.ml_kem_compress_int and ml_kem_decompress_int are mutual inverses for d=12 over x=100.
+//
+// Setup: Imports std/crypto/pqc/ml_kem_compress.oo. Pure, no FS or net. Round-trip property (PROP) test.
+//
+// Beats:
+//   1. Compress x=100 with d=12.
+//   2. Decompress and assert equality.
+//   3. Print ML_KEM_COMPRESS_PQC_PROP_OK on success.
+
+import "std/sec/asymmetric/ml_kem_compress.oo";
+
+pub fn main() {
+    let x: Int = 100;
+    let d: Int = 12;
+    let y: Int = ml_kem_compress_int(x, d);
+    let x_back: Int = ml_kem_decompress_int(y, d);
+    if x != x_back {
+        println("FAIL roundtrip");
+        return;
+    }
+    println("ML_KEM_COMPRESS_PQC_PROP_OK");
+}

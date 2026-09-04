@@ -1,0 +1,51 @@
+#!/usr/bin/env python3
+# Why not .oo: host qemu matrix for 53 AArch64 fixtures (RULES 1.13).
+import os, subprocess, sys, struct
+os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+env = os.environ.copy()
+env["OODA_FS_WRITEDIR"] = os.getcwd()
+fail = 0
+tmpdir = ".ooda-cache/ooda-tmp/a64_matrix"
+os.makedirs(tmpdir, exist_ok=True)
+lst = sys.argv[1] if len(sys.argv) > 1 else "scripts/aarch64_fixture_matrix.list"
+for line in open(lst):
+    line = line.rstrip("\n")
+    if not line or line.startswith("#"):
+        continue
+    path, want = line.split("\t", 1)
+    r = subprocess.run(["./oodac_bin", "emit-aarch64", path], capture_output=True, text=True, timeout=30)
+    text = (r.stdout or "") + (r.stderr or "")
+    if want in ("ERR", "NOMAIN"):
+        if r.returncode == 0 and not text.lstrip().startswith("ERR"):
+            print("FAIL expected ERR", path, text[:60])
+            fail = 1
+        continue
+    if r.returncode != 0 or text.lstrip().startswith("ERR"):
+        print("FAIL emit", path, text[:80])
+        fail = 1
+        continue
+    elf = os.path.join(os.getcwd(), tmpdir, os.path.basename(path) + ".elf")
+    b = subprocess.run(["./oodac_bin", "--backend", "aarch64", "build", "-o", elf, path], capture_output=True, text=True, timeout=30, env=env)
+    if b.returncode != 0 or not os.path.isfile(elf) or os.path.getsize(elf) == 0:
+        print("FAIL build", path, (b.stdout + b.stderr)[:80])
+        fail = 1
+        continue
+    data = open(elf, "rb").read(20)
+    em = struct.unpack_from("<H", data, 18)[0] if len(data) >= 20 else 0
+    if em != 183:
+        print("FAIL e_machine", path, hex(em))
+        fail = 1
+        continue
+    os.chmod(elf, 0o755)
+    try:
+        q = subprocess.run(["qemu-aarch64", elf], capture_output=True, timeout=3)
+    except subprocess.TimeoutExpired:
+        print("FAIL qemu timeout", path)
+        fail = 1
+        continue
+    got = q.stdout.decode("utf-8", "replace")
+    exp = want.replace("\\n", "\n")
+    if got != exp:
+        print("FAIL stdout", path, "got", repr(got), "want", repr(exp))
+        fail = 1
+sys.exit(fail)

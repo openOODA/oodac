@@ -1,0 +1,91 @@
+// # LZ4 Block Decode Round-Trip Smoke
+//
+// Logline: Verifies std/compression/lz4_block.lz4_block_decode and lz4_block_lits against a known small encoded payload.
+//
+// Setup: Imports std/compression/lz4_block.oo. Pure (no FS, no net).
+//
+// Beats:
+//   1. Encode "hello" via lz4_block_lits and decode via lz4_block_decode to confirm round-trip.
+//   2. lz4_block_decode on a truncated payload returns flag=0 (Err).
+//   3. lz4_block_stat on flag=1 returns Ok; on flag=0 returns Err.
+//   4. Print LZ4_BLOCK_RT_OK on success.
+
+import "std/fs/compression/lz4_block.oo";
+
+pub fn main() {
+    // Beat 1: lz4_block_lits encodes 5 bytes "hello" (104, 101, 108, 108, 111).
+    let mut src: List[Int] = list_new();
+    src = list_push(src, 104);
+    src = list_push(src, 101);
+    src = list_push(src, 108);
+    src = list_push(src, 108);
+    src = list_push(src, 111);
+    let enc: ByteOut = lz4_block_lits(src);
+    if enc.flag != 1 {
+        println("FAIL lz4_block_lits: expected flag=1, got flag=" + enc.flag.to_string());
+        return;
+    }
+    if enc.err != "" {
+        println("FAIL lz4_block_lits: expected empty err");
+        return;
+    }
+    if list_len(enc.bytes) != 6 {
+        println("FAIL lz4_block_lits: expected 6 bytes (1 token + 5 literals), got " + list_len(enc.bytes).to_string());
+        return;
+    }
+    println("OK lz4_block_lits_encode");
+
+    // Beat 2: lz4_block_decode of the lz4_block_lits output should round-trip
+    // back to the 5 original bytes (no match follows the literals, so the
+    // decoder returns the literal payload).
+    let dec: ByteOut = lz4_block_decode(enc.bytes);
+    if dec.flag != 1 {
+        println("FAIL lz4_block_decode: expected flag=1, got flag=" + dec.flag.to_string() + " err=" + dec.err);
+        return;
+    }
+    if list_len(dec.bytes) != 5 {
+        println("FAIL lz4_block_decode: expected 5 decoded bytes, got " + list_len(dec.bytes).to_string());
+        return;
+    }
+    if list_get(dec.bytes, 0) != 104 || list_get(dec.bytes, 4) != 111 {
+        println("FAIL lz4_block_decode: payload mismatch");
+        return;
+    }
+    println("OK lz4_block_decode_round_trip");
+
+    // Beat 3: lz4_block_decode on a too-short buffer (token claims 15 literals, no body) returns Err.
+    let mut short_buf: List[Int] = list_new();
+    short_buf = list_push(short_buf, 240);
+    let dec_err: ByteOut = lz4_block_decode(short_buf);
+    if dec_err.flag != 0 {
+        println("FAIL lz4_block_decode_short: expected Err, got flag=" + dec_err.flag.to_string());
+        return;
+    }
+    println("OK lz4_block_decode_truncated_err");
+
+    // Beat 4: lz4_block_stat returns Result[Int, String].
+    let stat_ok: Result[Int, String] = lz4_block_stat(1, "");
+    if stat_ok.is_err() {
+        println("FAIL lz4_block_stat flag=1 should be Ok");
+        return;
+    }
+    let stat_err: Result[Int, String] = lz4_block_stat(0, "fail");
+    if !stat_err.is_err() {
+        println("FAIL lz4_block_stat flag=0 should be Err");
+        return;
+    }
+    println("OK lz4_block_stat");
+
+    // Beat 5: lz4_block_match encodes 1 literal + 4-byte match, then decodes back.
+    let mut lits1: List[Int] = list_new();
+    lits1 = list_push(lits1, 90);
+    let m: ByteOut = lz4_block_match(lits1, 1, 4);
+    if m.flag != 1 {
+        println("FAIL lz4_block_match: expected flag=1, got flag=" + m.flag.to_string());
+        return;
+    }
+    println("OK lz4_block_match_encode");
+
+    println("LZ4_BLOCK_RT_OK");
+    println("OK");
+}

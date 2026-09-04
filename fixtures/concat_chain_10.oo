@@ -1,0 +1,25 @@
+// # 10-chain string concat
+//
+// Logline: Concatenate ten single-char bindings via chained plus and print abcdefghij.
+//
+// Setup: Test fixture. Keep all code exact. Exercises oo_str_concat_multi single allocation.
+//
+// Beats:
+//   1. Bind a through j to single-char strings.
+//   2. Concat the ten vars with chained + into s.
+//   3. Print s expecting abcdefghij.
+
+pub fn main() {
+    let a = "a";
+    let b = "b";
+    let c = "c";
+    let d = "d";
+    let e = "e";
+    let f = "f";
+    let g = "g";
+    let h = "h";
+    let i = "i";
+    let j = "j";
+    let s = a + b + c + d + e + f + g + h + i + j;
+    println(s);
+}

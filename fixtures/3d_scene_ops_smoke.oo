@@ -1,0 +1,54 @@
+// # 3D Scene Ops Adversarial Smoke Test
+//
+// Logline: Verifies SceneOp creation and field access with adversarial inputs.
+//
+// Setup: Pure struct operations. No FS or net dependencies.
+//
+// Beats:
+//   1. VALID: Normal SceneOp creation and field access.
+//   2. NEGATIVE TRUST: Test with zero IDs.
+//   3. ADVERSARIAL: Test with extreme IDs.
+//   4. DOUBLE-RUN: Verify all operations are deterministic.
+
+import "std/app/ui/3d/scene_ops.oo";
+
+pub fn expect_eq_int(label: String, got: Int, want: Int) -> Bool {
+    if got == want { println("OK " + label); return true; }
+    println("FAIL " + label + " got=" + got.to_string() + " want=" + want.to_string());
+    return false;
+}
+
+pub fn main() {
+    // VALID: SceneOp creation
+    let op1: SceneOp = scene_op_new(1, 0);
+    if !expect_eq_int("op1 node_id", scene_op_node_id(op1), 1) { return; }
+    if !expect_eq_int("op1 parent_id", op1.parent_id, 0) { return; }
+
+    // VALID: SceneOp with different IDs
+    let op2: SceneOp = scene_op_new(5, 3);
+    if !expect_eq_int("op2 node_id", scene_op_node_id(op2), 5) { return; }
+    if !expect_eq_int("op2 parent_id", op2.parent_id, 3) { return; }
+
+    // NEGATIVE TRUST: Zero IDs
+    let op_zero: SceneOp = scene_op_new(0, 0);
+    if !expect_eq_int("op_zero node_id", scene_op_node_id(op_zero), 0) { return; }
+    if !expect_eq_int("op_zero parent_id", op_zero.parent_id, 0) { return; }
+
+    // ADVERSARIAL: Large IDs
+    let op_large: SceneOp = scene_op_new(1000000, 999999);
+    if !expect_eq_int("op_large node_id", scene_op_node_id(op_large), 1000000) { return; }
+    if !expect_eq_int("op_large parent_id", op_large.parent_id, 999999) { return; }
+
+    // ADVERSARIAL: Negative IDs
+    let op_neg: SceneOp = scene_op_new(-1, -2);
+    if !expect_eq_int("op_neg node_id", scene_op_node_id(op_neg), -1) { return; }
+    if !expect_eq_int("op_neg parent_id", op_neg.parent_id, -2) { return; }
+
+    // DOUBLE-RUN: Determinism check
+    let op_dr1: SceneOp = scene_op_new(42, 84);
+    let op_dr2: SceneOp = scene_op_new(42, 84);
+    if !expect_eq_int("dr node_id", scene_op_node_id(op_dr1), scene_op_node_id(op_dr2)) { return; }
+    if !expect_eq_int("dr parent_id", op_dr1.parent_id, op_dr2.parent_id) { return; }
+
+    println("OK: 3d_scene_ops_smoke passed");
+}

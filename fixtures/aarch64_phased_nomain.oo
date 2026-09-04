@@ -1,0 +1,4 @@
+// # Phase D leftover: library unit with no fn main
+fn helper() -> Int {
+    return 1;
+}

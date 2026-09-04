@@ -1,0 +1,36 @@
+// # OPEN-85 soa_layout sums field sizes
+//
+// Logline: Parse name:bytes fields. A constant 1 for any name is a stub.
+//
+// Setup: oo_soa_layout / oo_dod_layout in runtime/chs_rt_arena.c.
+//
+// Beats:
+//   1. x:8 is 8. x:8,y:8 is 16.
+//   2. dod_layout(3) is 24.
+//   3. Print open85: PASSED.
+
+pub fn main() {
+    let a = soa_layout("x:8");
+    let b = soa_layout("x:8,y:8");
+    let d = dod_layout(3);
+    if a == 1 {
+        println("FAIL constant");
+        process_exit(1);
+    }
+    if a != 8 {
+        println("FAIL a");
+        process_exit(1);
+    }
+    if b != 16 {
+        println("FAIL b");
+        process_exit(1);
+    }
+    if d != 24 {
+        println("FAIL dod");
+        process_exit(1);
+    }
+    println(a);
+    println(b);
+    println(d);
+    println("open85: PASSED");
+}

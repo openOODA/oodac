@@ -1,0 +1,12 @@
+// # verify_human stub
+//
+// Logline: HITL is not a product feature; this file does not call verify_human.
+//
+// Beats:
+//   1. Do not import std/hitl.oo.
+//   2. Leave main a println(0).
+//   3. Human loop is ooda fix.
+
+pub fn main() {
+    println(0);
+}

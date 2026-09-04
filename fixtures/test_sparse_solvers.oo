@@ -1,0 +1,113 @@
+// # Sparse Linear Solver Fixture
+//
+// Logline: Checks CSR SpMV, transpose, density, PCG, and BiCGSTAB against known systems.
+//
+// Setup: Isolated emit-c. Run from ooda/.
+//
+// Beats:
+//   1. SpMV of a 3 by 3 SPD CSR matrix matches the dense product.
+//   2. Transpose equals the symmetric dense matrix and density is 5/9.
+//   3. PCG recovers a known SPD solution.
+//   4. BiCGSTAB recovers a known non-symmetric solution.
+
+import "std/core/math/sparse/csr_matrix.oo";
+import "std/core/math/sparse/conjugate_gradient.oo";
+import "std/core/math/sparse/bicgstab.oo";
+
+fn fail(msg: String) {
+    println("FAIL " + msg);
+    process_exit(1);
+}
+
+fn unwrap_fv(r: Result[List[Float], String], msg: String) -> List[Float] {
+    match r {
+        Ok(v) => { return v; },
+        Err(e) => { fail(msg + ": " + e); return list_new(); }
+    }
+}
+
+fn near(a: Float, b: Float, eps: Float) -> Bool {
+    let mut d: Float = a - b;
+    if d < 0.0 { d = 0.0 - d; }
+    return d <= eps;
+}
+
+fn fpush(xs: List[Float], a: Float, b: Float, c: Float) -> List[Float] {
+    let mut o: List[Float] = xs;
+    o = list_push(o, a);
+    o = list_push(o, b);
+    o = list_push(o, c);
+    return o;
+}
+
+pub fn main() {
+    let mut rp: List[Int] = list_new();
+    rp = list_push(rp, 0);
+    rp = list_push(rp, 2);
+    rp = list_push(rp, 4);
+    rp = list_push(rp, 5);
+    let mut ci: List[Int] = list_new();
+    ci = list_push(ci, 0);
+    ci = list_push(ci, 1);
+    ci = list_push(ci, 0);
+    ci = list_push(ci, 1);
+    ci = list_push(ci, 2);
+    let mut vs: List[Float] = list_new();
+    vs = list_push(vs, 4.0);
+    vs = list_push(vs, 1.0);
+    vs = list_push(vs, 1.0);
+    vs = list_push(vs, 3.0);
+    vs = list_push(vs, 2.0);
+    let mut x: List[Float] = list_new();
+    x = fpush(x, 1.0, 1.0, 1.0);
+    let y: List[Float] = unwrap_fv(csr_spmv(rp, ci, vs, 3, x), "spmv");
+    if near(list_get(y, 0), 5.0, 0.0000001) == false { fail("spmv0"); }
+    if near(list_get(y, 1), 4.0, 0.0000001) == false { fail("spmv1"); }
+    if near(list_get(y, 2), 2.0, 0.0000001) == false { fail("spmv2"); }
+    if csr_nnz(vs) != 5 { fail("nnz"); }
+    let dens: Result[Float, String] = csr_density(5, 3, 3);
+    match dens {
+        Ok(dv) => { if near(dv, 5.0 / 9.0, 0.0000001) == false { fail("density"); } },
+        Err(e) => { fail("density: " + e); }
+    }
+    let at: List[Float] = unwrap_fv(csr_transpose_dense(rp, ci, vs, 3, 3), "trans");
+    if near(list_get(at, 0), 4.0, 0.0000001) == false { fail("at00"); }
+    if near(list_get(at, 1), 1.0, 0.0000001) == false { fail("at01"); }
+    if near(list_get(at, 4), 3.0, 0.0000001) == false { fail("at11"); }
+    if near(list_get(at, 8), 2.0, 0.0000001) == false { fail("at22"); }
+    let mut b: List[Float] = list_new();
+    b = fpush(b, 6.0, 7.0, 6.0);
+    let xs: List[Float] = unwrap_fv(cg_solve(rp, ci, vs, 3, b, 50, 0.000000001), "cg");
+    if near(list_get(xs, 0), 1.0, 0.000001) == false { fail("cg0"); }
+    if near(list_get(xs, 1), 2.0, 0.000001) == false { fail("cg1"); }
+    if near(list_get(xs, 2), 3.0, 0.000001) == false { fail("cg2"); }
+
+    let mut rp2: List[Int] = list_new();
+    rp2 = list_push(rp2, 0);
+    rp2 = list_push(rp2, 2);
+    rp2 = list_push(rp2, 5);
+    rp2 = list_push(rp2, 7);
+    let mut ci2: List[Int] = list_new();
+    ci2 = list_push(ci2, 0);
+    ci2 = list_push(ci2, 1);
+    ci2 = list_push(ci2, 0);
+    ci2 = list_push(ci2, 1);
+    ci2 = list_push(ci2, 2);
+    ci2 = list_push(ci2, 1);
+    ci2 = list_push(ci2, 2);
+    let mut vs2: List[Float] = list_new();
+    vs2 = list_push(vs2, 3.0);
+    vs2 = list_push(vs2, 1.0);
+    vs2 = list_push(vs2, 1.0);
+    vs2 = list_push(vs2, 4.0);
+    vs2 = list_push(vs2, 1.0);
+    vs2 = list_push(vs2, 2.0);
+    vs2 = list_push(vs2, 3.0);
+    let mut b2: List[Float] = list_new();
+    b2 = fpush(b2, 5.0, 12.0, 13.0);
+    let xb: List[Float] = unwrap_fv(bicgstab_solve(rp2, ci2, vs2, 3, b2, 80, 0.000000001), "bicgstab");
+    if near(list_get(xb, 0), 1.0, 0.000001) == false { fail("bi0"); }
+    if near(list_get(xb, 1), 2.0, 0.000001) == false { fail("bi1"); }
+    if near(list_get(xb, 2), 3.0, 0.000001) == false { fail("bi2"); }
+    println("SPARSE_SOLVERS_ALL_PASSED");
+}

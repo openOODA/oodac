@@ -1,0 +1,22 @@
+// # Sovereign ELF64 loop smoke
+//
+// Logline: Sum one to ten while skipping five, using a while loop and an if.
+//
+// Setup: No imports. Used by --x86-elf-pure.
+//
+// Beats:
+//   1. Walk i with while.
+//   2. Skip five with if.
+//   3. Print the sum.
+
+pub fn main() {
+    let mut s: Int = 0;
+    let mut i: Int = 1;
+    while i <= 10 {
+        if i != 5 {
+            s = s + i;
+        }
+        i = i + 1;
+    }
+    println(s);
+}

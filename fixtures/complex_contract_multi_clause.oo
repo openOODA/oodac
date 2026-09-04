@@ -1,0 +1,23 @@
+// # Complex contract multi-clause
+//
+// Logline: Multiple requires and ensures clauses all hold for valid inputs.
+//
+// Setup: Compiled and run by scripts/test_contracts_and.oo.
+//
+// Beats:
+//   1. Two separate requires clauses.
+//   2. Two separate ensures clauses.
+//   3. main passes 5 and 3, expecting 8.
+
+pub fn multi_clause(x: Int, y: Int) -> Int
+    requires x > 0
+    requires y > 0
+    ensures result > 0
+    ensures result == x + y
+{
+    return x + y;
+}
+
+pub fn main() {
+    println(multi_clause(5, 3));
+}

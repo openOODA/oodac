@@ -1,0 +1,221 @@
+// # WebAssembly LEB128 Adversarial Stress Test
+//
+// Logline: Empirically stress-test LEB128 u32/i32/u64/i64 encoders and decoders on extreme boundary values and chained streams.
+//
+// Setup: Run with ooda/bin/ooda check or run from qa/.
+//
+// Beats:
+//   1. Import required modules.
+//   2. Execute test assertions.
+//   3. Report pass or fail with exit code.
+import "oodac/emit/wasm/wasm_leb128.oo";
+
+fn assert_true(cond: Bool, msg: String) {
+    if !cond {
+        println("LEB128 STRESS ASSERTION FAILED: " + msg);
+    }
+}
+
+fn assert_eq_int(actual: Int, expected: Int, msg: String) {
+    if actual != expected {
+        println("LEB128 STRESS ASSERTION FAILED: " + msg + " (expected " + expected.to_string() + ", got " + actual.to_string() + ")");
+    }
+}
+
+fn check_u32_roundtrip(val: Int) -> Bool {
+    let enc: List[Int] = encode_u32_leb128(val);
+    let dec: LebDecodeResult = decode_u32_leb128(enc, 0);
+    return dec.value == val && dec.next_offset == list_len(enc);
+}
+
+fn check_i32_roundtrip(val: Int) -> Bool {
+    let enc: List[Int] = encode_i32_leb128(val);
+    let dec: LebDecodeResult = decode_i32_leb128(enc, 0);
+    return dec.value == val && dec.next_offset == list_len(enc);
+}
+
+fn check_u64_roundtrip(val: Int) -> Bool {
+    let enc: List[Int] = encode_u64_leb128(val);
+    let dec: LebDecodeResult = decode_u64_leb128(enc, 0);
+    return dec.value == val && dec.next_offset == list_len(enc);
+}
+
+fn check_i64_roundtrip(val: Int) -> Bool {
+    let enc: List[Int] = encode_i64_leb128(val);
+    let dec: LebDecodeResult = decode_i64_leb128(enc, 0);
+    return dec.value == val && dec.next_offset == list_len(enc);
+}
+
+fn check_bytes(actual: List[Int], expected: List[Int], name: String) {
+    let na: Int = list_len(actual);
+    let ne: Int = list_len(expected);
+    if na != ne {
+        println("BYTE LEN MISMATCH in " + name + ": expected " + ne.to_string() + ", got " + na.to_string());
+        return;
+    }
+    let mut i: Int = 0;
+    while i < na {
+        let ba: Int = list_get(actual, i);
+        let be: Int = list_get(expected, i);
+        if ba != be {
+            println("BYTE MISMATCH in " + name + " at idx " + i.to_string() + ": expected " + be.to_string() + ", got " + ba.to_string());
+        }
+        i = i + 1;
+    }
+}
+
+fn list_of_1(b0: Int) -> List[Int] {
+    let mut l: List[Int] = list_new();
+    return list_push(l, b0);
+}
+
+fn list_of_2(b0: Int, b1: Int) -> List[Int] {
+    let mut l: List[Int] = list_new();
+    l = list_push(l, b0);
+    return list_push(l, b1);
+}
+
+fn list_of_3(b0: Int, b1: Int, b2: Int) -> List[Int] {
+    let mut l: List[Int] = list_new();
+    l = list_push(l, b0); l = list_push(l, b1);
+    return list_push(l, b2);
+}
+
+fn list_of_5(b0: Int, b1: Int, b2: Int, b3: Int, b4: Int) -> List[Int] {
+    let mut l: List[Int] = list_new();
+    l = list_push(l, b0); l = list_push(l, b1); l = list_push(l, b2); l = list_push(l, b3);
+    return list_push(l, b4);
+}
+
+pub fn test_spec_vectors() {
+    // Exact byte-level spec tests
+    check_bytes(encode_u32_leb128(0), list_of_1(0), "u32(0)");
+    check_bytes(encode_u32_leb128(1), list_of_1(1), "u32(1)");
+    check_bytes(encode_u32_leb128(127), list_of_1(127), "u32(127)");
+    check_bytes(encode_u32_leb128(128), list_of_2(128, 1), "u32(128)");
+    check_bytes(encode_u32_leb128(624485), list_of_3(229, 142, 38), "u32(624485)");
+    check_bytes(encode_u32_leb128(4294967295), list_of_5(255, 255, 255, 255, 15), "u32(0xFFFFFFFF)");
+
+    check_bytes(encode_i32_leb128(0), list_of_1(0), "i32(0)");
+    check_bytes(encode_i32_leb128(1), list_of_1(1), "i32(1)");
+    check_bytes(encode_i32_leb128(-1), list_of_1(127), "i32(-1)");
+    check_bytes(encode_i32_leb128(63), list_of_1(63), "i32(63)");
+    check_bytes(encode_i32_leb128(64), list_of_2(192, 0), "i32(64)");
+    check_bytes(encode_i32_leb128(-64), list_of_1(64), "i32(-64)");
+    check_bytes(encode_i32_leb128(-65), list_of_2(191, 127), "i32(-65)");
+    check_bytes(encode_i32_leb128(127), list_of_2(255, 0), "i32(127)");
+    check_bytes(encode_i32_leb128(-128), list_of_2(128, 127), "i32(-128)");
+    check_bytes(encode_i32_leb128(2147483647), list_of_5(255, 255, 255, 255, 7), "i32(INT32_MAX)");
+    check_bytes(encode_i32_leb128(-2147483648), list_of_5(128, 128, 128, 128, 120), "i32(INT32_MIN)");
+}
+
+pub fn test_u32_boundaries() {
+    let vals: List[Int] = list_new();
+    let mut v: List[Int] = vals;
+    v = list_push(v, 0); v = list_push(v, 1); v = list_push(v, 2);
+    v = list_push(v, 63); v = list_push(v, 64);
+    v = list_push(v, 127); v = list_push(v, 128); v = list_push(v, 129);
+    v = list_push(v, 255); v = list_push(v, 256);
+    v = list_push(v, 16383); v = list_push(v, 16384); v = list_push(v, 16385);
+    v = list_push(v, 2097151); v = list_push(v, 2097152);
+    v = list_push(v, 268435455); v = list_push(v, 268435456);
+    v = list_push(v, 2147483647); v = list_push(v, 4294967295);
+
+    let n: Int = list_len(v);
+    let mut i: Int = 0;
+    while i < n {
+        let val: Int = list_get(v, i);
+        assert_true(check_u32_roundtrip(val), "u32 boundary " + val.to_string());
+        i = i + 1;
+    }
+}
+
+pub fn test_i32_boundaries() {
+    let vals: List[Int] = list_new();
+    let mut v: List[Int] = vals;
+    v = list_push(v, 0); v = list_push(v, 1); v = list_push(v, -1);
+    v = list_push(v, 63); v = list_push(v, 64); v = list_push(v, -64); v = list_push(v, -65);
+    v = list_push(v, 127); v = list_push(v, 128); v = list_push(v, -128); v = list_push(v, -129);
+    v = list_push(v, 8191); v = list_push(v, 8192); v = list_push(v, -8192); v = list_push(v, -8193);
+    v = list_push(v, 16383); v = list_push(v, 16384); v = list_push(v, -16384); v = list_push(v, -16385);
+    v = list_push(v, 1048575); v = list_push(v, 1048576); v = list_push(v, -1048576); v = list_push(v, -1048577);
+    v = list_push(v, 134217727); v = list_push(v, 134217728); v = list_push(v, -134217728); v = list_push(v, -134217729);
+    v = list_push(v, 2147483647); v = list_push(v, -2147483648);
+
+    let n: Int = list_len(v);
+    let mut i: Int = 0;
+    while i < n {
+        let val: Int = list_get(v, i);
+        assert_true(check_i32_roundtrip(val), "i32 boundary " + val.to_string());
+        i = i + 1;
+    }
+}
+
+pub fn test_64bit_boundaries() {
+    assert_true(check_u64_roundtrip(0), "u64 0");
+    assert_true(check_u64_roundtrip(1), "u64 1");
+    assert_true(check_u64_roundtrip(4294967295), "u64 0xFFFFFFFF");
+    assert_true(check_u64_roundtrip(4294967296), "u64 2^32");
+    assert_true(check_u64_roundtrip(1099511627775), "u64 0xFFFFFFFFFF");
+    assert_true(check_u64_roundtrip(9223372036854775807), "u64 INT64_MAX");
+
+    assert_true(check_i64_roundtrip(0), "i64 0");
+    assert_true(check_i64_roundtrip(1), "i64 1");
+    assert_true(check_i64_roundtrip(-1), "i64 -1");
+    assert_true(check_i64_roundtrip(2147483647), "i64 INT32_MAX");
+    assert_true(check_i64_roundtrip(-2147483648), "i64 INT32_MIN");
+    assert_true(check_i64_roundtrip(4294967296), "i64 2^32");
+    assert_true(check_i64_roundtrip(-4294967296), "i64 -2^32");
+    assert_true(check_i64_roundtrip(9223372036854775807), "i64 INT64_MAX");
+    let int64_min: Int = -9223372036854775807 - 1;
+    assert_true(check_i64_roundtrip(int64_min), "i64 INT64_MIN");
+}
+
+pub fn test_chained_stream() {
+    // Encode sequence of mixed u32/i32 and decode sequentially
+    let mut stream: List[Int] = list_new();
+    let mut e1: List[Int] = encode_u32_leb128(624485);
+    let mut e2: List[Int] = encode_i32_leb128(-2147483648);
+    let mut e3: List[Int] = encode_u32_leb128(0);
+    let mut e4: List[Int] = encode_i32_leb128(2147483647);
+    let mut e5: List[Int] = encode_i32_leb128(-1);
+
+    let mut i: Int = 0;
+    while i < list_len(e1) { stream = list_push(stream, list_get(e1, i)); i = i + 1; }
+    i = 0;
+    while i < list_len(e2) { stream = list_push(stream, list_get(e2, i)); i = i + 1; }
+    i = 0;
+    while i < list_len(e3) { stream = list_push(stream, list_get(e3, i)); i = i + 1; }
+    i = 0;
+    while i < list_len(e4) { stream = list_push(stream, list_get(e4, i)); i = i + 1; }
+    i = 0;
+    while i < list_len(e5) { stream = list_push(stream, list_get(e5, i)); i = i + 1; }
+
+    let d1: LebDecodeResult = decode_u32_leb128(stream, 0);
+    assert_eq_int(d1.value, 624485, "stream d1");
+
+    let d2: LebDecodeResult = decode_i32_leb128(stream, d1.next_offset);
+    assert_eq_int(d2.value, -2147483648, "stream d2");
+
+    let d3: LebDecodeResult = decode_u32_leb128(stream, d2.next_offset);
+    assert_eq_int(d3.value, 0, "stream d3");
+
+    let d4: LebDecodeResult = decode_i32_leb128(stream, d3.next_offset);
+    assert_eq_int(d4.value, 2147483647, "stream d4");
+
+    let d5: LebDecodeResult = decode_i32_leb128(stream, d4.next_offset);
+    assert_eq_int(d5.value, -1, "stream d5");
+    assert_eq_int(d5.next_offset, list_len(stream), "stream end offset");
+}
+
+pub fn main() {
+    println("=================================================");
+    println(" Running Adversarial LEB128 Stress Tests");
+    println("=================================================");
+    test_spec_vectors();
+    test_u32_boundaries();
+    test_i32_boundaries();
+    test_64bit_boundaries();
+    test_chained_stream();
+    println("All Adversarial LEB128 stress tests PASSED!");
+}

@@ -1,0 +1,24 @@
+// # Test Valid Attention Head Dimension Pass
+//
+// Logline: Asserts successful compilation when attention head dimension is within bounds.
+//
+// Setup: Fused FlashAttention kernel parameter declares head_dim less than or equal to 256.
+//
+// Beats:
+//   1. Declare attention kernel with valid head_dim equal to 128.
+//   2. Pass static capability and typecheck validation.
+//   3. Assert successful compilation and emission.
+
+pub fn k_attention_valid_bounds(
+    gpu: &GpuCap,
+    seq_len: Int,
+    head_dim: Int
+) -> Int {
+    if head_dim <= 256 {
+        return seq_len * head_dim;
+    }
+    return 0;
+}
+
+pub fn main() {
+}

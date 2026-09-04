@@ -1,0 +1,24 @@
+// # Test GPU Copy D2H Authorized Pass
+//
+// Logline: Asserts valid compilation when gpu_copy_d2h receives valid &GpuCap token.
+//
+// Setup: Sealed GPU builtin gpu_copy_d2h should pass typecheck when authorized with &GpuCap.
+//
+// Beats:
+//   1. Declare function taking gpu: &GpuCap.
+//   2. Invoke gpu_copy_d2h with gpu token.
+//   3. Assert static typecheck succeeds.
+
+pub fn run_gpu_copy_d2h(gpu: &GpuCap) {
+    let dev_ptr = 0;
+    let host_ptr = 0;
+    let size = 1024;
+    let res = gpu_copy_d2h(gpu, host_ptr, dev_ptr, size);
+    match res {
+        Ok(v) => {},
+        Err(e) => {}
+    }
+}
+
+pub fn main() {
+}

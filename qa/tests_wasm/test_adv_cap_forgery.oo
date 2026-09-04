@@ -1,0 +1,142 @@
+// # WebAssembly Adversarial Capability & Token Forgery Test Suite
+//
+// Logline: Stress-tests capability token security against integer, string, and type forgery attacks, hierarchy bypasses, and ABI erasure.
+//
+// Setup: Run with ooda/bin/ooda run qa/tests_wasm/test_adv_cap_forgery.oo.
+//
+// Beats:
+//   1. Test primitive and literal token forgery rejections.
+//   2. Test custom and spoofed capability type rejections.
+//   3. Test subsumption hierarchy and privilege escalation attacks.
+//   4. Test zero-cost parameter erasure and multi-param type preservation.
+import "oodac/emit/wasm/wasm_cap_lowering.oo";
+
+fn assert_true(cond: Bool, msg: String) {
+    if !cond { println("FAIL: " + msg); process_exit(1); }
+}
+
+fn assert_false(cond: Bool, msg: String) {
+    if cond { println("FAIL: " + msg); process_exit(1); }
+}
+
+fn assert_eq_str(actual: String, expected: String, msg: String) {
+    if actual != expected {
+        println("FAIL: " + msg + " (exp '" + expected + "', got '" + actual + "')");
+        process_exit(1);
+    }
+}
+
+pub fn test_literal_token_forgery() {
+    assert_false(is_capability_type_str("0"), "int 0 not cap");
+    assert_false(is_capability_type_str("1"), "int 1 not cap");
+    assert_false(is_capability_type_str("42"), "int 42 not cap");
+    assert_false(is_capability_type_str("-1"), "int -1 not cap");
+    assert_false(is_capability_type_str("0xDEADBEEF"), "hex not cap");
+    assert_false(is_capability_type_str("3.14159"), "float lit not cap");
+    assert_false(is_capability_type_str("true"), "bool true not cap");
+    assert_false(is_capability_type_str("false"), "bool false not cap");
+    assert_false(is_capability_type_str("\"FsReadCap\""), "quoted string not cap");
+    assert_false(is_capability_type_str("\"root\""), "quoted root not cap");
+    assert_false(is_capability_type_str(""), "empty string not cap");
+    assert_false(is_capability_type_str("   "), "whitespace not cap");
+    assert_false(is_capability_type_str("null"), "null literal not cap");
+}
+
+pub fn test_spoofed_cap_names() {
+    assert_false(is_capability_type_str("FakeFsCap"), "FakeFsCap rejected");
+    assert_false(is_capability_type_str("FsCapFake"), "FsCapFake rejected");
+    assert_false(is_capability_type_str("FsCap_Forged"), "FsCap_Forged rejected");
+    assert_false(is_capability_type_str("AdminCap"), "AdminCap rejected");
+    assert_false(is_capability_type_str("RootCap"), "RootCap rejected");
+    assert_false(is_capability_type_str("SuperUserCap"), "SuperUserCap rejected");
+    assert_false(is_capability_type_str("FsReadCap2"), "FsReadCap2 rejected");
+    assert_false(is_capability_type_str("MyFsReadCap"), "MyFsReadCap rejected");
+    assert_false(is_capability_type_str("TyCap(FakeCap)"), "TyCap(FakeCap) rejected");
+    assert_false(is_capability_type_str("TyRef(TyCap(Bogus))"), "TyRef(Bogus) rejected");
+    assert_false(is_capability_type_str("&FakeNetCap"), "&FakeNetCap rejected");
+    assert_false(is_capability_type_str("&mut MaliciousCap"), "&mut Malicious rejected");
+}
+
+pub fn test_privilege_escalation_attacks() {
+    // 1. Read cap cannot write
+    assert_false(wasm_cap_subsumes("FsReadCap", "FsWriteCap"), "read cannot write");
+    assert_false(wasm_cap_subsumes("FsReadCap", "FsCap"), "read cannot escalate to parent");
+    // 2. Write cap cannot read
+    assert_false(wasm_cap_subsumes("FsWriteCap", "FsReadCap"), "write cannot read");
+    assert_false(wasm_cap_subsumes("FsWriteCap", "FsCap"), "write cannot escalate to parent");
+    // 3. Process cap cannot claim parent SysCap
+    assert_false(wasm_cap_subsumes("ProcessCap", "SysCap"), "process cannot claim SysCap");
+    // 4. Sub-network caps cannot claim parent NetCap or cross-bind
+    assert_false(wasm_cap_subsumes("HttpCap", "NetCap"), "HttpCap cannot claim NetCap");
+    assert_false(wasm_cap_subsumes("HttpCap", "TcpCap"), "HttpCap cannot claim TcpCap");
+    assert_false(wasm_cap_subsumes("HttpCap", "BindCap"), "HttpCap cannot claim BindCap");
+    assert_false(wasm_cap_subsumes("TcpCap", "UdpCap"), "TcpCap cannot claim UdpCap");
+    // 5. ArenaCap cannot claim AllocCap
+    assert_false(wasm_cap_subsumes("ArenaCap", "AllocCap"), "ArenaCap cannot claim AllocCap");
+    // 6. TimeCap cannot claim RandCap or ProcessCap
+    assert_false(wasm_cap_subsumes("TimeCap", "RandCap"), "TimeCap cannot claim RandCap");
+    assert_false(wasm_cap_subsumes("TimeCap", "ProcessCap"), "TimeCap cannot claim ProcessCap");
+    // 7. FfiCap cannot claim UnsafeFFICap
+    assert_false(wasm_cap_subsumes("FfiCap", "UnsafeFFICap"), "FfiCap cannot claim UnsafeFFICap");
+}
+
+pub fn test_all_syscall_sandboxing() {
+    let mut empty_caps: List[String] = list_new();
+    // Every sealed syscall must fail with empty capability list
+    assert_false(wasm_assert_syscall_granted("read_file", empty_caps).is_ok(), "deny read_file");
+    assert_false(wasm_assert_syscall_granted("write_file", empty_caps).is_ok(), "deny write_file");
+    assert_false(wasm_assert_syscall_granted("sys_spawn", empty_caps).is_ok(), "deny sys_spawn");
+    assert_false(wasm_assert_syscall_granted("process_exec", empty_caps).is_ok(), "deny proc_exec");
+    assert_false(wasm_assert_syscall_granted("now_ms", empty_caps).is_ok(), "deny now_ms");
+    assert_false(wasm_assert_syscall_granted("random_int", empty_caps).is_ok(), "deny random_int");
+    assert_false(wasm_assert_syscall_granted("fetch", empty_caps).is_ok(), "deny fetch");
+    assert_false(wasm_assert_syscall_granted("tcp_connect", empty_caps).is_ok(), "deny tcp_connect");
+    assert_false(wasm_assert_syscall_granted("tcp_bind", empty_caps).is_ok(), "deny tcp_bind");
+    assert_false(wasm_assert_syscall_granted("bind_udp", empty_caps).is_ok(), "deny bind_udp");
+    assert_false(wasm_assert_syscall_granted("sock_raw", empty_caps).is_ok(), "deny sock_raw");
+    assert_false(wasm_assert_syscall_granted("python_embed", empty_caps).is_ok(), "deny python_embed");
+    assert_false(wasm_assert_syscall_granted("alloc_bytes", empty_caps).is_ok(), "deny alloc_bytes");
+    assert_false(wasm_assert_syscall_granted("arena_create", empty_caps).is_ok(), "deny arena_create");
+    assert_false(wasm_assert_syscall_granted("dlopen", empty_caps).is_ok(), "deny dlopen");
+    assert_false(wasm_assert_syscall_granted("thread_spawn", empty_caps).is_ok(), "deny thread_spawn");
+    assert_false(wasm_assert_syscall_granted("gpu_launch", empty_caps).is_ok(), "deny gpu_launch");
+    assert_false(wasm_assert_syscall_granted("env_get", empty_caps).is_ok(), "deny env_get");
+}
+
+pub fn test_advanced_abi_erasure() {
+    let mut names: List[String] = list_new();
+    names = list_push(names, "c1");
+    names = list_push(names, "x");
+    names = list_push(names, "c2");
+    names = list_push(names, "y");
+    names = list_push(names, "c3");
+    names = list_push(names, "z");
+    names = list_push(names, "c4");
+
+    let mut types: List[String] = list_new();
+    types = list_push(types, "&FsReadCap");
+    types = list_push(types, "Int");
+    types = list_push(types, "&mut FsWriteCap");
+    types = list_push(types, "Float");
+    types = list_push(types, "TyCap(TimeCap)");
+    types = list_push(types, "String");
+    types = list_push(types, "TyRef(TyCap(NetCap))");
+
+    let filtered: List[String] = wasm_filter_capability_params(names, types);
+    if list_len(filtered) != 3 { println("FAIL: filtered count != 3"); process_exit(1); }
+    assert_eq_str(list_get(filtered, 0), "x", "param 0 is x");
+    assert_eq_str(list_get(filtered, 1), "y", "param 1 is y");
+    assert_eq_str(list_get(filtered, 2), "z", "param 2 is z");
+}
+
+pub fn main() {
+    println("=========================================================");
+    println(" Running Adversarial Capability & Token Forgery Tests");
+    println("=========================================================");
+    test_literal_token_forgery();
+    test_spoofed_cap_names();
+    test_privilege_escalation_attacks();
+    test_all_syscall_sandboxing();
+    test_advanced_abi_erasure();
+    println("All Adversarial Capability & Token Forgery tests PASSED!");
+}

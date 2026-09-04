@@ -1,0 +1,50 @@
+// # Minimal Continue In If Reproduction Test
+//
+// Logline: Empirically verify WASM control flow lowering for continue inside if condition.
+//
+// Setup: Run with ooda/bin/ooda check or run from qa/.
+//
+// Beats:
+//   1. Import required modules.
+//   2. Execute test assertions.
+//   3. Report pass or fail with exit code.
+import "oodac/emit/wasm/wasm_leb128.oo";
+import "oodac/emit/wasm/wasm_opcodes.oo";
+import "oodac/emit/wasm/wasm_types.oo";
+import "oodac/emit/wasm/wasm_binary_builder.oo";
+import "oodac/emit/wasm/wasm_lower_expr.oo";
+import "oodac/emit/wasm/wasm_lower_stmt.oo";
+import "oodac/emit/wasm/wasm_lower_control.oo";
+import "oodac/emit/wasm/wasm_lower_fn.oo";
+import "oodac/ast/ast.oo";
+
+pub fn main(fs: &FsWriteCap) {
+    // fn test_loop_continue() -> Int:
+    // let mut sum = 0;
+    // let mut x = 0;
+    // while x < 10 {
+    //     x = x + 1;
+    //     if x == 5 {
+    //         continue;
+    //     }
+    //     sum = sum + 1;
+    // }
+    // return sum; // Expected 9
+    let s_sum: String = mk_slet_mut("sum", mk_ty_int(), mk_eint("0"));
+    let s_x: String = mk_slet_mut("x", mk_ty_int(), mk_eint("0"));
+    let inc_x: String = mk_sassign("x", mk_ebinop("+", mk_evar("x"), mk_eint("1")));
+    let if_cont: String = mk_eif(mk_ebinop("==", mk_evar("x"), mk_eint("5")), mk_block(mk_scontinue(), mk_sempty()), "");
+    let inc_sum: String = mk_sassign("sum", mk_ebinop("+", mk_evar("sum"), mk_eint("1")));
+    let w_body: String = mk_block(inc_x + "," + if_cont + "," + inc_sum, mk_sempty());
+    let w_loop: String = mk_swhile(mk_ebinop("<", mk_evar("x"), mk_eint("10")), w_body);
+    let ret_stmt: String = mk_sreturn(mk_evar("sum"));
+
+    let fn_body: String = mk_block(s_sum + "," + s_x + "," + w_loop + "," + ret_stmt, mk_sempty());
+    let fn_node: String = mk_fn("test_loop_continue", "", mk_ty_int(), "", fn_body);
+    let file_node: String = mk_file(fn_node);
+
+    let bin: List[Int] = wasm_compile_ast_module(file_node, "browser", wasm_val_type_i32());
+    let s: String = bytes_to_str(bin);
+    let _w: Result[Void, String] = write_file(fs, "/home/jeryd/Projects/openOODA/qa/tests_wasm/test_continue_in_if.wasm", s);
+    println("Emitted test_continue_in_if.wasm");
+}

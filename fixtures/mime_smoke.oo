@@ -1,0 +1,107 @@
+// # MIME RFC 2045 lookup smoke
+//
+// Logline: Asserts std/net/mime mime_from_extension, mime_from_path, mime_with_charset, mime_extract_base, mime_is_text, mime_is_binary, and mime_is_json against the IANA registry and the application/vnd.api+json convention.
+//
+// Setup: Imports std/net/mime.oo. Pure.
+//
+// Beats:
+//   1. mime_from_extension("html") -> "text/html", "json" -> "application/json", "png" -> "image/png", "pdf" -> "application/pdf", "wasm" -> "application/wasm".
+//   2. Unknown extension -> "application/octet-stream".
+//   3. mime_from_path keeps only the trailing extension.
+//   4. mime_with_charset appends "; charset=utf-8".
+//   5. mime_extract_base strips a charset parameter.
+//   6. mime_is_text and mime_is_binary are mutually consistent for the IANA text/* and image/* examples.
+//   7. mime_is_json accepts "application/json" and "application/vnd.api+json" per RFC 6839.
+
+import "std/net/mime.oo";
+
+pub fn main() {
+    let mime_dummy: Int = 0;
+
+    // Beat 1: well-known extensions.
+    if mime_from_extension("html") != "text/html" {
+        println("FAIL ext html");
+        return;
+    }
+    if mime_from_extension("json") != "application/json" {
+        println("FAIL ext json");
+        return;
+    }
+    if mime_from_extension("png") != "image/png" {
+        println("FAIL ext png");
+        return;
+    }
+    if mime_from_extension("pdf") != "application/pdf" {
+        println("FAIL ext pdf");
+        return;
+    }
+    if mime_from_extension("wasm") != "application/wasm" {
+        println("FAIL ext wasm");
+        return;
+    }
+    println("OK ext map");
+
+    // Beat 2: unknown.
+    if mime_from_extension("unknownext") != "application/octet-stream" {
+        println("FAIL ext unknown");
+        return;
+    }
+    println("OK ext default octet-stream");
+
+    // Beat 3: path.
+    if mime_from_path("/a/b/c/test.html") != "text/html" {
+        println("FAIL from path");
+        return;
+    }
+    println("OK from path");
+
+    // Beat 4: charset.
+    let c1: String = mime_with_charset("text/html", "utf-8");
+    if c1 != "text/html; charset=utf-8" {
+        println("FAIL charset got " + c1);
+        return;
+    }
+    println("OK charset");
+
+    // Beat 5: extract base.
+    let b1: String = mime_extract_base("text/html; charset=utf-8");
+    if b1 != "text/html" {
+        println("FAIL extract base got " + b1);
+        return;
+    }
+    println("OK extract base");
+
+    // Beat 6: text vs binary.
+    if !mime_is_text("text/html") {
+        println("FAIL is_text html");
+        return;
+    }
+    if !mime_is_text("application/json") {
+        println("FAIL is_text json");
+        return;
+    }
+    if mime_is_text("image/png") {
+        println("FAIL is_text png");
+        return;
+    }
+    if !mime_is_binary("image/png") {
+        println("FAIL is_binary png");
+        return;
+    }
+    println("OK text vs binary");
+
+    // Beat 7: json suffix.
+    if !mime_is_json("application/json") {
+        println("FAIL is_json");
+        return;
+    }
+    if !mime_is_json("application/vnd.api+json") {
+        println("FAIL is_json vnd.api+json");
+        return;
+    }
+    println("OK is_json");
+
+    let total: Int = mime_dummy + 1;
+    println("MIME_RT_OK");
+    println("total=" + total.to_string());
+}

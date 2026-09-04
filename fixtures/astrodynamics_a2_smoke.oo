@@ -1,0 +1,149 @@
+// # Astrodynamics A2 Adversarial Smoke Proof
+//
+// Logline: Adversarial proof for Hohmann, bi-elliptic transfers and J2 perturbation rates.
+//
+// Setup: Pure orbital mechanics validation. No capability tokens. Validates fail-closed results and round-trips.
+//
+// Beats:
+//   1. Validate Hohmann transfer delta-v and transfer time.
+//   2. Validate bi-elliptic transfer burn magnitudes and error paths.
+//   3. Validate J2 nodal/apsidal precession and Sun-synchronous round-trip.
+//   4. Validate fail-closed error returns for invalid domains.
+
+import "std/core/math/constants.oo";
+import "std/science/phys/relativistic/hohmann_transfer.oo";
+import "std/science/phys/relativistic/bi_elliptic_transfer.oo";
+import "std/science/phys/relativistic/gravitational_j2_perturbation.oo";
+
+fn approx_eq(a: Float, b: Float, tol: Float) -> Bool {
+    let mut d: Float = a - b;
+    if d < 0.0 { d = 0.0 - d; }
+    return d <= tol;
+}
+
+fn test_abs(x: Float) -> Float {
+    if x < 0.0 { return 0.0 - x; }
+    return x;
+}
+
+fn ok_float(res: Result[Float, String]) -> Float {
+    if res.is_err() { process_exit(1); }
+    return match res {
+        Ok(v) => v,
+        Err(_) => 0.0
+    };
+}
+
+fn ok_tdv(res: Result[TransferDeltaV, String]) -> TransferDeltaV {
+    if res.is_err() { process_exit(1); }
+    return match res {
+        Ok(v) => v,
+        Err(_) => TransferDeltaV { delta_v1_kms: 0.0, delta_v2_kms: 0.0, total_delta_v_kms: 0.0, transfer_time_s: 0.0 }
+    };
+}
+
+fn ok_betp(res: Result[BiEllipticTransferPlan, String]) -> BiEllipticTransferPlan {
+    if res.is_err() { process_exit(1); }
+    return match res {
+        Ok(v) => v,
+        Err(_) => BiEllipticTransferPlan { delta_v1_kms: 0.0, delta_v2_kms: 0.0, delta_v3_kms: 0.0, total_delta_v_kms: 0.0, transfer_time_s: 0.0 }
+    };
+}
+
+fn ok_j2(res: Result[J2DriftRate, String]) -> J2DriftRate {
+    if res.is_err() { process_exit(1); }
+    return match res {
+        Ok(v) => v,
+        Err(_) => J2DriftRate { raan_drift_rad_s: 0.0, arg_periapsis_drift_rad_s: 0.0 }
+    };
+}
+
+fn err_float(res: Result[Float, String]) -> Int {
+    if res.is_err() { return 0; }
+    return 1;
+}
+
+fn err_tdv(res: Result[TransferDeltaV, String]) -> Int {
+    if res.is_err() { return 0; }
+    return 1;
+}
+
+fn err_betp(res: Result[BiEllipticTransferPlan, String]) -> Int {
+    if res.is_err() { return 0; }
+    return 1;
+}
+
+fn err_j2(res: Result[J2DriftRate, String]) -> Int {
+    if res.is_err() { return 0; }
+    return 1;
+}
+
+fn test_hohmann() -> Int {
+    let mu: Float = 398600.0;
+    let r1: Float = 6678.0;
+    let r2: Float = 42164.0;
+    let tol_v: Float = 0.001;
+    let tol_t: Float = 1.0;
+    let plan: TransferDeltaV = ok_tdv(hohmann_calculate_burns(r1, r2, mu));
+    let a: Float = 0.5 * (r1 + r2);
+    let v1: Float = sqrt(mu / r1);
+    let v2: Float = sqrt(mu / r2);
+    let vt1: Float = sqrt(mu * ((2.0 / r1) - (1.0 / a)));
+    let vt2: Float = sqrt(mu * ((2.0 / r2) - (1.0 / a)));
+    let dv1: Float = test_abs(vt1 - v1);
+    let dv2: Float = test_abs(v2 - vt2);
+    let pack: CircleConstants = circle_constants();
+    let t: Float = pack.pi * sqrt((a * a * a) / mu);
+    if !approx_eq(plan.delta_v1_kms, dv1, tol_v) { return 1; }
+    if !approx_eq(plan.delta_v2_kms, dv2, tol_v) { return 1; }
+    if !approx_eq(plan.total_delta_v_kms, dv1 + dv2, tol_v) { return 1; }
+    if !approx_eq(plan.transfer_time_s, t, tol_t) { return 1; }
+    if err_tdv(hohmann_calculate_burns(0.0, r2, mu)) != 0 { return 1; }
+    if err_tdv(hohmann_calculate_burns(r1, -r2, mu)) != 0 { return 1; }
+    if err_tdv(hohmann_calculate_burns(r1, r2, -mu)) != 0 { return 1; }
+    return 0;
+}
+
+fn test_bi_elliptic() -> Int {
+    let mu: Float = 398600.0;
+    let r1: Float = 7000.0;
+    let r2: Float = 105000.0;
+    let rb: Float = 200000.0;
+    let plan: BiEllipticTransferPlan = ok_betp(bi_elliptic_calculate_burns(r1, r2, rb, mu));
+    if plan.total_delta_v_kms <= 0.0 { return 1; }
+    if plan.transfer_time_s <= 0.0 { return 1; }
+    if plan.delta_v1_kms <= 0.0 { return 1; }
+    if plan.delta_v2_kms <= 0.0 { return 1; }
+    if plan.delta_v3_kms <= 0.0 { return 1; }
+    if err_betp(bi_elliptic_calculate_burns(0.0, r2, rb, mu)) != 0 { return 1; }
+    if err_betp(bi_elliptic_calculate_burns(r1, r2, 100.0, mu)) != 0 { return 1; }
+    if err_betp(bi_elliptic_calculate_burns(r1, r2, rb, -mu)) != 0 { return 1; }
+    return 0;
+}
+
+fn test_j2() -> Int {
+    let mu: Float = 398600.0;
+    let re: Float = 6378.137;
+    let j2: Float = 0.00108263;
+    let a: Float = 7000.0;
+    let inc: Float = ok_float(sun_synchronous_inclination(a, mu, re, j2));
+    if inc <= 0.0 || inc > 3.2 { return 1; }
+    let rate: J2DriftRate = ok_j2(j2_perturbation_rates(a, 0.0, inc, mu, re, j2));
+    if !approx_eq(rate.raan_drift_rad_s, 0.000000199106, 0.000000001) { return 1; }
+    if err_j2(j2_perturbation_rates(0.0, 0.0, inc, mu, re, j2)) != 0 { return 1; }
+    if err_j2(j2_perturbation_rates(a, 1.5, inc, mu, re, j2)) != 0 { return 1; }
+    if err_j2(j2_perturbation_rates(a, 0.0, inc, -mu, re, j2)) != 0 { return 1; }
+    if err_float(sun_synchronous_inclination(0.0, mu, re, j2)) != 0 { return 1; }
+    if err_float(sun_synchronous_inclination(10000000.0, mu, re, j2)) != 0 { return 1; }
+    return 0;
+}
+
+pub fn main() -> Int {
+    let mut code: Int = test_hohmann();
+    if code != 0 { return code; }
+    code = test_bi_elliptic();
+    if code != 0 { return code; }
+    code = test_j2();
+    if code != 0 { return code; }
+    return 0;
+}

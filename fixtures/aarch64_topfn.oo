@@ -1,0 +1,18 @@
+// # AArch64 top-level fn call
+//
+// Logline: Two top-level functions, one calls the other. Tests that the AST path handles cross-function calls when both are top-level.
+//
+// Setup: add(x) is top-level. main calls add(5) and prints 6.
+//
+// Beats:
+//   1. Define add(x) at top level.
+//   2. main calls add(5) and prints.
+
+fn add(x: Int) -> Int {
+    return x + 1;
+}
+
+pub fn main() {
+    let r: Int = add(5);
+    println(r);
+}

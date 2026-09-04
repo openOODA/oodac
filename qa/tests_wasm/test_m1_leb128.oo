@@ -1,0 +1,114 @@
+// # WebAssembly LEB128 Test Suite
+//
+// Logline: Verify unsigned and signed LEB128 integer codecs across boundary conditions and round-trip conversions.
+//
+// Setup: Run with ooda/bin/ooda check or run from qa/.
+//
+// Beats:
+//   1. Import required modules.
+//   2. Execute test assertions.
+//   3. Report pass or fail with exit code.
+import "oodac/emit/wasm/wasm_leb128.oo";
+
+fn assert_true(cond: Bool, msg: String) {
+    if !cond {
+        println("ASSERTION FAILED: " + msg);
+    }
+}
+
+fn assert_eq_int(actual: Int, expected: Int, msg: String) {
+    if actual != expected {
+        println("ASSERTION FAILED: " + msg + " (expected " + expected.to_string() + ", got " + actual.to_string() + ")");
+    }
+}
+
+fn check_u32(val: Int) -> Bool {
+    let enc: List[Int] = encode_u32_leb128(val);
+    let dec: LebDecodeResult = decode_u32_leb128(enc, 0);
+    return (dec).value == val && (dec).next_offset == list_len(enc);
+}
+
+fn check_i32(val: Int) -> Bool {
+    let enc: List[Int] = encode_i32_leb128(val);
+    let dec: LebDecodeResult = decode_i32_leb128(enc, 0);
+    return (dec).value == val && (dec).next_offset == list_len(enc);
+}
+
+fn check_u64(val: Int) -> Bool {
+    let enc: List[Int] = encode_u64_leb128(val);
+    let dec: LebDecodeResult = decode_u64_leb128(enc, 0);
+    return (dec).value == val && (dec).next_offset == list_len(enc);
+}
+
+fn check_i64(val: Int) -> Bool {
+    let enc: List[Int] = encode_i64_leb128(val);
+    let dec: LebDecodeResult = decode_i64_leb128(enc, 0);
+    return (dec).value == val && (dec).next_offset == list_len(enc);
+}
+
+pub fn main() {
+    println("=================================================");
+    println(" Running LEB128 Unit Tests & Property Assertions");
+    println("=================================================");
+
+    // Test specific known vectors
+    let v_624485: List[Int] = encode_u32_leb128(624485);
+    assert_eq_int(list_len(v_624485), 3, "624485 length");
+    assert_eq_int(list_get(v_624485, 0), 229, "624485 byte 0 (0xE5)");
+    assert_eq_int(list_get(v_624485, 1), 142, "624485 byte 1 (0x8E)");
+    assert_eq_int(list_get(v_624485, 2), 38, "624485 byte 2 (0x26)");
+
+    let v_neg1: List[Int] = encode_i32_leb128(-1);
+    assert_eq_int(list_len(v_neg1), 1, "-1 length");
+    assert_eq_int(list_get(v_neg1, 0), 127, "-1 byte 0 (0x7F)");
+
+    let v_neg128: List[Int] = encode_i32_leb128(-128);
+    assert_eq_int(list_len(v_neg128), 2, "-128 length");
+    assert_eq_int(list_get(v_neg128, 0), 128, "-128 byte 0 (0x80)");
+    assert_eq_int(list_get(v_neg128, 1), 127, "-128 byte 1 (0x7F)");
+
+    let v_pos127: List[Int] = encode_i32_leb128(127);
+    assert_eq_int(list_len(v_pos127), 2, "+127 length");
+    assert_eq_int(list_get(v_pos127, 0), 255, "+127 byte 0 (0xFF)");
+    assert_eq_int(list_get(v_pos127, 1), 0, "+127 byte 1 (0x00)");
+
+    // Round-trip tests for u32
+    assert_true(check_u32(0), "u32 roundtrip 0");
+    assert_true(check_u32(1), "u32 roundtrip 1");
+    assert_true(check_u32(63), "u32 roundtrip 63");
+    assert_true(check_u32(64), "u32 roundtrip 64");
+    assert_true(check_u32(127), "u32 roundtrip 127");
+    assert_true(check_u32(128), "u32 roundtrip 128");
+    assert_true(check_u32(255), "u32 roundtrip 255");
+    assert_true(check_u32(256), "u32 roundtrip 256");
+    assert_true(check_u32(16383), "u32 roundtrip 16383");
+    assert_true(check_u32(16384), "u32 roundtrip 16384");
+    assert_true(check_u32(624485), "u32 roundtrip 624485");
+    assert_true(check_u32(2147483647), "u32 roundtrip 2147483647");
+
+    // Round-trip tests for i32
+    assert_true(check_i32(0), "i32 roundtrip 0");
+    assert_true(check_i32(1), "i32 roundtrip 1");
+    assert_true(check_i32(-1), "i32 roundtrip -1");
+    assert_true(check_i32(-2), "i32 roundtrip -2");
+    assert_true(check_i32(63), "i32 roundtrip 63");
+    assert_true(check_i32(64), "i32 roundtrip 64");
+    assert_true(check_i32(-64), "i32 roundtrip -64");
+    assert_true(check_i32(-65), "i32 roundtrip -65");
+    assert_true(check_i32(127), "i32 roundtrip 127");
+    assert_true(check_i32(128), "i32 roundtrip 128");
+    assert_true(check_i32(-128), "i32 roundtrip -128");
+    assert_true(check_i32(-129), "i32 roundtrip -129");
+    assert_true(check_i32(624485), "i32 roundtrip 624485");
+    assert_true(check_i32(-624485), "i32 roundtrip -624485");
+    assert_true(check_i32(2147483647), "i32 roundtrip 2147483647");
+    assert_true(check_i32(-2147483648), "i32 roundtrip -2147483648");
+
+    // Round-trip tests for u64 and i64
+    assert_true(check_u64(0), "u64 roundtrip 0");
+    assert_true(check_u64(1000000000), "u64 roundtrip 1000000000");
+    assert_true(check_i64(0), "i64 roundtrip 0");
+    assert_true(check_i64(-1000000000), "i64 roundtrip -1000000000");
+
+    println("All LEB128 unit tests passed successfully!");
+}

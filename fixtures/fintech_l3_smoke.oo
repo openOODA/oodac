@@ -1,0 +1,126 @@
+// # Fintech F1 L3 Order Book Smoke Proof
+//
+// Logline: Adversarial proof for L3 limit order book insertion, matching, cancellation, and best bid/ask.
+//
+// Setup: Requires &AllocCap. Exercises price-time priority and partial fills.
+//
+// Beats:
+//   1. Insert a sell maker, then a crossing buy taker, and verify full fill.
+//   2. Insert a buy maker and a partial-crossing sell taker, and verify resting residual.
+//   3. Cancel an order and verify reduced volume and best bid/ask.
+//   4. Validate fail-closed inputs (zero/negative qty and price).
+
+import "std/science/econ/l3_book/l3_order_book_core.oo";
+import "std/science/econ/l3_book/l3_order_matching.oo";
+
+fn ok_events(res: Result[List[L3MatchEvent], String]) -> List[L3MatchEvent] {
+    if res.is_err() { process_exit(1); }
+    return match res {
+        Ok(v) => v,
+        Err(_) => list_new()
+    };
+}
+
+fn ok_ints(res: Result[List[Int], String]) -> List[Int] {
+    if res.is_err() { process_exit(1); }
+    return match res {
+        Ok(v) => v,
+        Err(_) => list_new()
+    };
+}
+
+fn ok_bool(res: Result[Bool, String]) -> Bool {
+    if res.is_err() { process_exit(1); }
+    return match res {
+        Ok(v) => v,
+        Err(_) => false
+    };
+}
+
+fn err_events(res: Result[List[L3MatchEvent], String]) -> Int {
+    if res.is_err() { return 0; }
+    return 1;
+}
+
+fn test_full_fill(alloc: &AllocCap) -> Int {
+    let mut book: L3OrderBook = l3_order_book_new(alloc);
+    let ask1: L3Order = l3_order_new(1, 100, 10, false, 1000);
+    let e1: List[L3MatchEvent] = ok_events(l3_insert_order(alloc, &mut book, &ask1));
+    if list_len(e1) != 0 { return 1; }
+    if book.ask_levels != 1 { return 1; }
+    if book.total_volume != 0 { return 1; }
+    let bid1: L3Order = l3_order_new(2, 100, 10, true, 1001);
+    let e2: List[L3MatchEvent] = ok_events(l3_insert_order(alloc, &mut book, &bid1));
+    if list_len(e2) != 1 { return 1; }
+    let ev: L3MatchEvent = list_get(e2, 0);
+    if ev.maker_id != 1 { return 1; }
+    if ev.taker_id != 2 { return 1; }
+    if ev.exec_price != 100 { return 1; }
+    if ev.exec_qty != 10 { return 1; }
+    if !ev.is_full_fill { return 1; }
+    if book.bid_levels != 0 { return 1; }
+    if book.ask_levels != 0 { return 1; }
+    if book.total_volume != 10 { return 1; }
+    let bba: List[Int] = ok_ints(l3_best_bid_ask(alloc, &book));
+    if list_len(bba) != 2 { return 1; }
+    if list_get(bba, 0) != 0 { return 1; }
+    if list_get(bba, 1) != 0 { return 1; }
+    return 0;
+}
+
+fn test_partial_fill_and_rest(alloc: &AllocCap) -> Int {
+    let mut book: L3OrderBook = l3_order_book_new(alloc);
+    let bid1: L3Order = l3_order_new(10, 200, 15, true, 1);
+    let _e: List[L3MatchEvent] = ok_events(l3_insert_order(alloc, &mut book, &bid1));
+    if book.bid_levels != 1 { return 1; }
+    let ask1: L3Order = l3_order_new(11, 190, 20, false, 2);
+    let e: List[L3MatchEvent] = ok_events(l3_insert_order(alloc, &mut book, &ask1));
+    if list_len(e) != 1 { return 1; }
+    let ev: L3MatchEvent = list_get(e, 0);
+    if ev.exec_qty != 15 { return 1; }
+    if ev.is_full_fill { return 1; }
+    if book.bid_levels != 0 { return 1; }
+    if book.ask_levels != 1 { return 1; }
+    if book.total_volume != 15 { return 1; }
+    let bba: List[Int] = ok_ints(l3_best_bid_ask(alloc, &book));
+    if list_get(bba, 1) != 190 { return 1; }
+    return 0;
+}
+
+fn test_cancel(alloc: &AllocCap) -> Int {
+    let mut book: L3OrderBook = l3_order_book_new(alloc);
+    let bid1: L3Order = l3_order_new(20, 150, 5, true, 10);
+    let _e: List[L3MatchEvent] = ok_events(l3_insert_order(alloc, &mut book, &bid1));
+    let bid2: L3Order = l3_order_new(21, 140, 3, true, 11);
+    let _e2: List[L3MatchEvent] = ok_events(l3_insert_order(alloc, &mut book, &bid2));
+    if book.bid_levels != 2 { return 1; }
+    if !ok_bool(l3_cancel_order(alloc, &mut book, 20)) { return 1; }
+    if book.bid_levels != 1 { return 1; }
+    if book.total_volume != 3 { return 1; }
+    let bba: List[Int] = ok_ints(l3_best_bid_ask(alloc, &book));
+    if list_get(bba, 0) != 140 { return 1; }
+    return 0;
+}
+
+fn test_invalid(alloc: &AllocCap) -> Int {
+    let mut book: L3OrderBook = l3_order_book_new(alloc);
+    let o1: L3Order = l3_order_new(1, 0, 10, true, 1);
+    let o2: L3Order = l3_order_new(1, 10, 0, true, 1);
+    let o3: L3Order = l3_order_new(0, 10, 10, true, 1);
+    if err_events(l3_insert_order(alloc, &mut book, &o1)) != 0 { return 1; }
+    if err_events(l3_insert_order(alloc, &mut book, &o2)) != 0 { return 1; }
+    if err_events(l3_insert_order(alloc, &mut book, &o3)) != 0 { return 1; }
+    return 0;
+}
+
+pub fn main(alloc: &AllocCap) -> Int {
+    let mut code: Int = test_full_fill(alloc);
+    if code != 0 { return code; }
+    code = test_partial_fill_and_rest(alloc);
+    if code != 0 { return code; }
+    code = test_cancel(alloc);
+    if code != 0 { return code; }
+    code = test_invalid(alloc);
+    if code != 0 { return code; }
+    return 0;
+}

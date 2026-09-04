@@ -1,0 +1,18 @@
+// # MD5 and SHA1 vectors
+//
+// Logline: Print path-A free-name MD5, SHA1, and residual AES stubs.
+//
+// Beats:
+//   1. Print MD5 of "" and "hello".
+//   2. Print SHA1 of "".
+//   3. Print residual AES encrypt.
+
+// Known: MD5("") MD5("hello") SHA1("") AES → STUB_FAIL_CLOSED
+// Free names only — avoid multi-import flakiness for std wrappers.
+
+pub fn main() {
+    println(crypto_md5_internal(""));
+    println(crypto_md5_internal("hello"));
+    println(crypto_sha1_internal(""));
+    println(crypto_aes_encrypt_internal("k", "p"));
+}

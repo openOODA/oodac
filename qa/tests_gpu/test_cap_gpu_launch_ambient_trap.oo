@@ -1,0 +1,22 @@
+// # Test GPU Launch Ambient Trap
+//
+// Logline: Asserts fail-closed static rejection when gpu_launch is called without &GpuCap token.
+//
+// Setup: Sealed GPU builtin gpu_launch requires explicit &GpuCap token.
+//
+// Beats:
+//   1. Declare unprivileged function without capability parameter.
+//   2. Attempt ambient invocation of gpu_launch.
+//   3. Assert static capability violation error.
+
+pub fn run_ambient_launch() {
+    let res = gpu_launch("k_vec_add", 1, 64);
+    match res {
+        Ok(v) => {},
+        Err(e) => {}
+    }
+}
+
+pub fn main() {
+    run_ambient_launch();
+}

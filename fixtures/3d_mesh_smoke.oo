@@ -1,0 +1,53 @@
+// # 3D Mesh Adversarial Smoke Test
+//
+// Logline: Verifies MeshStat creation and field access with adversarial inputs.
+//
+// Setup: Pure struct operations. No FS or net dependencies.
+//
+// Beats:
+//   1. VALID: Normal MeshStat creation and field access.
+//   2. NEGATIVE TRUST: Test with zero values.
+//   3. ADVERSARIAL: Test with extreme values.
+//   4. DOUBLE-RUN: Verify all operations are deterministic.
+
+import "std/app/ui/3d/mesh.oo";
+
+pub fn expect_eq_int(label: String, got: Int, want: Int) -> Bool {
+    if got == want { println("OK " + label); return true; }
+    println("FAIL " + label + " got=" + got.to_string() + " want=" + want.to_string());
+    return false;
+}
+
+pub fn main() {
+    // VALID: MeshStat creation
+    let stat1: MeshStat = mesh_stat_new(100, 200);
+    if !expect_eq_int("stat verts", mesh_stat_verts(stat1), 100) { return; }
+    if !expect_eq_int("stat faces", stat1.faces, 200) { return; }
+
+    // VALID: Different values
+    let stat2: MeshStat = mesh_stat_new(1000, 500);
+    if !expect_eq_int("stat2 verts", mesh_stat_verts(stat2), 1000) { return; }
+    if !expect_eq_int("stat2 faces", stat2.faces, 500) { return; }
+
+    // NEGATIVE TRUST: Zero values
+    let stat_zero: MeshStat = mesh_stat_new(0, 0);
+    if !expect_eq_int("stat zero verts", mesh_stat_verts(stat_zero), 0) { return; }
+    if !expect_eq_int("stat zero faces", stat_zero.faces, 0) { return; }
+
+    // ADVERSARIAL: Large values
+    let stat_large: MeshStat = mesh_stat_new(1000000, 2000000);
+    if !expect_eq_int("stat large verts", mesh_stat_verts(stat_large), 1000000) { return; }
+    if !expect_eq_int("stat large faces", stat_large.faces, 2000000) { return; }
+
+    // ADVERSARIAL: Negative values
+    let stat_neg: MeshStat = mesh_stat_new(-100, -200);
+    if !expect_eq_int("stat neg verts", mesh_stat_verts(stat_neg), -100) { return; }
+
+    // DOUBLE-RUN: Determinism check
+    let stat_dr1: MeshStat = mesh_stat_new(42, 84);
+    let stat_dr2: MeshStat = mesh_stat_new(42, 84);
+    if !expect_eq_int("dr verts", mesh_stat_verts(stat_dr1), mesh_stat_verts(stat_dr2)) { return; }
+    if !expect_eq_int("dr faces", stat_dr1.faces, stat_dr2.faces) { return; }
+
+    println("OK: 3d_mesh_smoke passed");
+}

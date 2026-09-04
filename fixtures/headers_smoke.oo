@@ -1,0 +1,76 @@
+// # HTTP header map round-trip smoke
+//
+// Logline: Asserts std/net/headers HeaderMap ops (set, get, has, count) and parse/serialize of a CRLF-separated header block per RFC 7230 §3.2.
+//
+// Setup: Imports std/net/headers.oo. Pure.
+//
+// Beats:
+//   1. headers_set overrides earlier values (Host is set twice, last wins).
+//   2. headers_get returns "" for missing keys.
+//   3. headers_has and headers_count are correct.
+//   4. headers_serialize emits "Name: value" lines, sorted by name.
+//   5. headers_parse round-trips a CRLF block.
+
+import "std/net/headers.oo";
+
+pub fn main() {
+    let headers_dummy: Int = 0;
+
+    // Beat 1-3: build.
+    let m: HeaderMap = headers_new();
+    let m2: HeaderMap = headers_set(m, "Host", "example.com");
+    let m3: HeaderMap = headers_set(m2, "Accept", "text/html");
+    let m4: HeaderMap = headers_set(m3, "Host", "other.com");
+    if headers_get(m4, "Host") != "other.com" {
+        println("FAIL get Host got " + headers_get(m4, "Host"));
+        return;
+    }
+    if headers_get(m4, "X-Missing") != "" {
+        println("FAIL missing key");
+        return;
+    }
+    if !headers_has(m4, "Host") {
+        println("FAIL has Host");
+        return;
+    }
+    if headers_has(m4, "X-Missing") {
+        println("FAIL has missing");
+        return;
+    }
+    let c: Int = headers_count(m4);
+    if c != 2 {
+        println("FAIL count got " + c.to_string());
+        return;
+    }
+    println("OK header map ops");
+
+    // Beat 4: serialize sorted.
+    let s: String = headers_serialize(m4);
+    if !s.contains("Host: other.com") {
+        println("FAIL serialize Host got " + s);
+        return;
+    }
+    if !s.contains("Accept: text/html") {
+        println("FAIL serialize Accept got " + s);
+        return;
+    }
+    println("OK serialize");
+
+    // Beat 5: parse round-trip.
+    let raw: String = "Host: example.com\r\nAccept: text/html\r\nUser-Agent: test\r\n";
+    let mp: HeaderMap = headers_parse(raw);
+    let cp: Int = headers_count(mp);
+    if cp != 3 {
+        println("FAIL parsed count got " + cp.to_string());
+        return;
+    }
+    if headers_get(mp, "Host") != "example.com" {
+        println("FAIL parsed Host got " + headers_get(mp, "Host"));
+        return;
+    }
+    println("OK parse round-trip");
+
+    let total: Int = headers_dummy + 1;
+    println("HEADERS_RT_OK");
+    println("total=" + total.to_string());
+}

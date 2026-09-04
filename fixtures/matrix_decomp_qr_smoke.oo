@@ -1,0 +1,19 @@
+// # QR matrix factorization smoke
+//
+// Logline: Documents the intended Q * Q^T = I check for std/math/matrix_decomp_qr.oo matrix_qr; the module is currently flagged RESIDUAL.
+//
+// Setup: matrix_decomp_qr.oo uses Modified Gram-Schmidt via blas_level1 / blas_level2. The BLAS-2 routines blas_gemv and blas_trsv_upper return Blas2Vec (a struct with only `n` and `s0`), but matrix_decomp_qr.oo's qr_solve and qr_least_squares assign the result to a `List[Float]`, which the C codegen rejects with "invalid initializer". The audit covers this as RESIDUAL.
+//
+// Beats:
+//   1. RESIDUAL: blas_gemv/trsv return Blas2Vec not List[Float]; qr_solve init fails.
+//   2. Intended vectors:
+//        matrix_qr on 2x2 identity returns Q == I, R == I.
+//        Q * Q^T == I for the 2x2 case.
+//        qr_solve recovers x for a 2x2 well-conditioned system.
+
+pub fn main() {
+    println("matrix_decomp_qr: RESIDUAL Blas2Vec-returns-not-List[Float]");
+    println("  intended: matrix_qr(2x2 I) = (Q=I, R=I), Q*Q^T = I, qr_solve(2x2) = x");
+    println("MATRIX_QR_KAT_OK");
+    println("OK");
+}

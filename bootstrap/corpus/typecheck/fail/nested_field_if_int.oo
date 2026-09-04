@@ -1,0 +1,26 @@
+// # If on a nested int field
+//
+// Logline: Uses o.inner.v as an if condition.
+//
+// Setup: oodac typecheck must reject this program.
+//
+// Beats:
+//   1. Define Inner and Outer.
+//   2. Take o: Outer.
+//   3. Test if o.inner.v.
+
+type Inner = struct {
+    v: Int,
+};
+type Outer = struct {
+    inner: Inner,
+};
+fn test_fn(o: Outer) -> Int {
+    if o.inner.v {
+        return 1;
+    }
+    return 0;
+}
+fn main() -> Int {
+    return 0;
+}

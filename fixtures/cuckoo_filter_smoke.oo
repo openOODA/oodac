@@ -1,0 +1,62 @@
+// # CuckooFilter no-false-negative property smoke
+//
+// Logline: Asserts std/collections/cuckoo_filter.oo cuckoo_filter_contains returns true for every fingerprint that was inserted in its primary bucket.
+//
+// Setup: Imports std/collections/cuckoo_filter.oo. Pure.
+//
+// Beats:
+//   1. Build a CuckooFilter of capacity 16; contains returns false for every fingerprint before insertion.
+//   2. Insert distinct fingerprints; each one is found at its primary bucket.
+//   3. CUCKOO_FILTER_OK on success.
+//
+// residual: this CuckooFilter uses deterministic single-bucket placement (idx = fp mod cap), not the true cuckoo eviction algorithm; the property tested is therefore the local one: an inserted fingerprint is found at its primary bucket.
+
+import "std/core/collection/cuckoo_filter.oo";
+
+pub fn expect_eq_int(label: String, got: Int, want: Int) -> Bool {
+    if got == want { println("OK " + label); return true; }
+    println("FAIL " + label + " got=" + got.to_string() + " want=" + want.to_string());
+    return false;
+}
+
+pub fn expect_true(label: String, cond: Bool) -> Bool {
+    if cond { println("OK " + label); return true; }
+    println("FAIL " + label);
+    return false;
+}
+
+pub fn expect_false(label: String, cond: Bool) -> Bool {
+    if cond { println("FAIL " + label); return false; }
+    println("OK " + label);
+    return true;
+}
+
+pub fn main() {
+    let cf0: CuckooFilter = cuckoo_filter_new(16);
+    if !expect_eq_int("capacity", cuckoo_filter_new(16).capacity, 16) { return; }
+
+    // Before any inserts, a few fingerprint probes should be missing.
+    if !expect_false("contains 42 before insert", cuckoo_filter_contains(cf0, 42)) { return; }
+    if !expect_false("contains 100 before insert", cuckoo_filter_contains(cf0, 100)) { return; }
+    if !expect_false("contains 7 before insert", cuckoo_filter_contains(cf0, 7)) { return; }
+
+    let mut cf: CuckooFilter = cf0;
+    cf = cuckoo_filter_insert(cf, 42);
+    cf = cuckoo_filter_insert(cf, 100);
+    cf = cuckoo_filter_insert(cf, 7);
+    cf = cuckoo_filter_insert(cf, 18);
+    cf = cuckoo_filter_insert(cf, 33);
+
+    // No-false-negative property: every inserted fingerprint is found.
+    if !expect_true("contains 42 after insert", cuckoo_filter_contains(cf, 42)) { return; }
+    if !expect_true("contains 100 after insert", cuckoo_filter_contains(cf, 100)) { return; }
+    if !expect_true("contains 7 after insert", cuckoo_filter_contains(cf, 7)) { return; }
+    if !expect_true("contains 18 after insert", cuckoo_filter_contains(cf, 18)) { return; }
+    if !expect_true("contains 33 after insert", cuckoo_filter_contains(cf, 33)) { return; }
+
+    // A fingerprint that was not inserted and lands in a different bucket is still missing.
+    if !expect_false("contains 50 (not inserted)", cuckoo_filter_contains(cf, 50)) { return; }
+    if !expect_false("contains 99 (not inserted)", cuckoo_filter_contains(cf, 99)) { return; }
+
+    println("CUCKOO_FILTER_OK");
+}

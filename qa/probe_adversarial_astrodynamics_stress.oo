@@ -1,0 +1,232 @@
+// # Adversarial Astrodynamics Stress & Boundary Verification
+//
+// Logline: Stress-tests astrodynamics modules against extreme eccentricities, polar/retrograde inclinations, near-zero masses, and degenerate vectors.
+//
+// Setup: Pure numerical verification suite importing unified and advanced astrodynamics facades.
+//
+// Beats:
+//   1. Stress-test Kepler equation solvers with boundary eccentricities (e=0.0, e=0.999, e=0.9999).
+//   2. Stress-test orbital mechanics and vis-viva under near-zero gravitational parameters and extreme orbits.
+//   3. Stress-test J2 oblateness rates across equatorial, polar, retrograde, and critical inclinations.
+//   4. Stress-test attitude quaternion kinematics, zero-norm axes, and degenerate coordinate frames.
+//   5. Assert all calculations complete without NaN, Inf, arithmetic exceptions, or crashes.
+
+import "std/science/phys/relativistic/astrodynamics.oo";
+import "std/science/phys/relativistic/astro_advanced.oo";
+
+fn assert_finite_positive(val: Float, tag: String) {
+    if val <= 0.0 {
+        println("FAIL non-positive: " + tag);
+        process_exit(1);
+    }
+}
+
+fn assert_near(val: Float, expected: Float, tol: Float, tag: String) {
+    let diff: Float = if val > expected { val - expected } else { expected - val };
+    if diff > tol {
+        println("FAIL assert_near: " + tag);
+        process_exit(1);
+    }
+}
+
+pub fn main() {
+    let pi: Float = 3.141592653589793;
+    let mu_earth: Float = 398600441800000.0;
+
+    // -------------------------------------------------------------
+    // Beat 1: Kepler Equation Solver Boundary Eccentricities
+    // -------------------------------------------------------------
+    // Circular orbit (e = 0.0)
+    let sol_circ: AnomalySolution = mean_to_eccentric_anomaly(0.0, 0.0, 0.000001, 50);
+    if !(sol_circ).converged || (sol_circ).eccentric_anomaly_rad != 0.0 {
+        println("FAIL kepler circular e=0");
+        process_exit(1);
+    }
+    let nu_circ: Float = eccentric_to_true_anomaly(0.0, 0.0);
+    assert_near(nu_circ, 0.0, 0.00001, "nu_circ");
+
+    let sol_circ_half: AnomalySolution = mean_to_eccentric_anomaly(1.5707963, 0.0, 0.000001, 50);
+    assert_near((sol_circ_half).eccentric_anomaly_rad, 1.5707963, 0.00001, "sol_circ_half");
+
+    // Extreme high eccentricity (e = 0.999)
+    let sol_ecc_0: AnomalySolution = mean_to_eccentric_anomaly(0.0, 0.999, 0.000001, 50);
+    if !(sol_ecc_0).converged {
+        println("FAIL kepler ecc e=0.999 m=0");
+        process_exit(1);
+    }
+    let sol_ecc_pi: AnomalySolution = mean_to_eccentric_anomaly(pi, 0.999, 0.000001, 50);
+    if !(sol_ecc_pi).converged {
+        println("FAIL kepler ecc e=0.999 m=pi");
+        process_exit(1);
+    }
+    assert_near((sol_ecc_pi).eccentric_anomaly_rad, pi, 0.0001, "sol_ecc_pi");
+
+    let nu_ecc_pi: Float = eccentric_to_true_anomaly(pi, 0.999);
+    assert_finite_positive(nu_ecc_pi, "nu_ecc_pi");
+
+    // Ultra-extreme eccentricity boundary (e = 0.9999)
+    let sol_ultra: AnomalySolution = mean_to_eccentric_anomaly(0.5, 0.9999, 0.000001, 100);
+    assert_finite_positive((sol_ultra).eccentric_anomaly_rad, "sol_ultra");
+
+    // -------------------------------------------------------------
+    // Beat 2: Two-Body Dynamics & Near-Zero Central Masses
+    // -------------------------------------------------------------
+    let orb_circ: KeplerOrbit = kepler_orbit_new(7000000.0, 0.0, mu_earth);
+    assert_finite_positive((orb_circ).period_s, "orb_circ.period");
+
+    let orb_ecc: KeplerOrbit = kepler_orbit_new(7000000.0, 0.999, mu_earth);
+    assert_finite_positive((orb_ecc).period_s, "orb_ecc.period");
+
+    // Near-zero mass (mu = 0.00001)
+    let orb_tiny_mu: KeplerOrbit = kepler_orbit_new(1000.0, 0.5, 0.00001);
+    assert_finite_positive((orb_tiny_mu).period_s, "orb_tiny_mu.period");
+
+    // Vis-viva speed under extreme parameters
+    let v_circ: Float = kepler_vis_viva(7000000.0, 7000000.0, mu_earth);
+    assert_near(v_circ, 7546.05, 1.0, "v_circ");
+
+    let v_near_zero: Float = kepler_vis_viva(10.0, 100.0, 0.00001);
+    assert_finite_positive(v_near_zero, "v_near_zero");
+
+    let v_esc_earth: Float = kepler_escape_velocity(7000000.0, mu_earth);
+    assert_near(v_esc_earth, 10671.72, 1.0, "v_esc_earth");
+
+    let v_esc_tiny: Float = kepler_escape_velocity(100.0, 0.00001);
+    assert_finite_positive(v_esc_tiny, "v_esc_tiny");
+
+    // -------------------------------------------------------------
+    // Beat 3: J2 Perturbation Rates & Extreme Inclinations
+    // -------------------------------------------------------------
+    // Equatorial (inc = 0 deg)
+    let elem_eq: OrbitalElements = OrbitalElements {
+        a_m: 7000000.0,
+        e: 0.001,
+        inc_rad: 0.0,
+        raan_rad: 0.0,
+        argp_rad: 0.0,
+        nu_rad: 0.0
+    };
+    let rates_eq: J2PerturbationRates = j2_perturbation_rates_compute(elem_eq, mu_earth);
+    if (rates_eq).d_raan_dt_rad_s >= 0.0 {
+        println("FAIL rates_eq d_raan should be negative");
+        process_exit(1);
+    }
+    assert_finite_positive((rates_eq).d_argp_dt_rad_s, "rates_eq.d_argp");
+
+    // Polar orbit (inc = 90 deg -> cos(inc) = 0 -> d_raan = 0)
+    let elem_pol: OrbitalElements = OrbitalElements {
+        a_m: 7000000.0,
+        e: 0.001,
+        inc_rad: 1.5707963267948966,
+        raan_rad: 0.0,
+        argp_rad: 0.0,
+        nu_rad: 0.0
+    };
+    let rates_pol: J2PerturbationRates = j2_perturbation_rates_compute(elem_pol, mu_earth);
+    assert_near((rates_pol).d_raan_dt_rad_s, 0.0, 0.0000001, "rates_pol.d_raan");
+
+    // Retrograde orbit (inc = 180 deg -> cos(inc) = -1 -> d_raan > 0)
+    let elem_ret: OrbitalElements = OrbitalElements {
+        a_m: 7000000.0,
+        e: 0.001,
+        inc_rad: pi,
+        raan_rad: 0.0,
+        argp_rad: 0.0,
+        nu_rad: 0.0
+    };
+    let rates_ret: J2PerturbationRates = j2_perturbation_rates_compute(elem_ret, mu_earth);
+    assert_finite_positive((rates_ret).d_raan_dt_rad_s, "rates_ret.d_raan");
+
+    // High eccentricity orbit (e = 0.999) under J2
+    let elem_high_e: OrbitalElements = OrbitalElements {
+        a_m: 70000000.0,
+        e: 0.999,
+        inc_rad: 0.5,
+        raan_rad: 0.0,
+        argp_rad: 0.0,
+        nu_rad: 0.0
+    };
+    let rates_high_e: J2PerturbationRates = j2_perturbation_rates_compute(elem_high_e, mu_earth);
+    let d_raan_high: Float = (rates_high_e).d_raan_dt_rad_s;
+    if d_raan_high == 0.0 {
+        println("FAIL rates_high_e");
+        process_exit(1);
+    }
+
+    // -------------------------------------------------------------
+    // Beat 4: Attitude Kinematics, Singularities & Coordinate Frames
+    // -------------------------------------------------------------
+    // Degenerate zero-axis quaternion constructor (must not NaN/crash)
+    let zero_axis: Vector3 = vec3_new(0.0, 0.0, 0.0);
+    let q_zero_axis: Quaternion = quat_from_axis_angle(zero_axis, 1.57);
+    if (q_zero_axis).x != 0.0 || (q_zero_axis).y != 0.0 || (q_zero_axis).z != 0.0 {
+        println("FAIL q_zero_axis");
+        process_exit(1);
+    }
+
+    // Degenerate zero-norm quaternion normalization
+    let q_all_zero: Quaternion = quat_new(0.0, 0.0, 0.0, 0.0);
+    let q_norm_zero: Quaternion = quat_normalize(q_all_zero);
+    if (q_norm_zero).w != 1.0 || (q_norm_zero).x != 0.0 {
+        println("FAIL q_norm_zero");
+        process_exit(1);
+    }
+
+    // Quaternion rotation with identity
+    let v_test: Vector3 = vec3_new(10.0, -20.0, 30.0);
+    let v_rot_id: Vector3 = quat_rotate_vector(quat_identity(), v_test);
+    assert_near((v_rot_id).x, 10.0, 0.0001, "v_rot_id.x");
+    assert_near((v_rot_id).y, -20.0, 0.0001, "v_rot_id.y");
+    assert_near((v_rot_id).z, 30.0, 0.0001, "v_rot_id.z");
+
+    // Collinear RSW frame generation (degenerate pos & vel)
+    let pos_zero: Vector3 = vec3_new(0.0, 0.0, 0.0);
+    let vel_zero: Vector3 = vec3_new(0.0, 0.0, 0.0);
+    let rsw_deg: RswFrame = compute_rsw_frame(pos_zero, vel_zero);
+    if (rsw_deg).r.x != 1.0 || (rsw_deg).w.z != 1.0 {
+        println("FAIL rsw_deg");
+        process_exit(1);
+    }
+
+    // -------------------------------------------------------------
+    // Beat 5: Transfers, Propulsion & Relativistic Precessions
+    // -------------------------------------------------------------
+    // Equal radii Hohmann transfer (delta_v == 0)
+    let hoh_zero: HohmannTransfer = hohmann_transfer_compute(7000000.0, 7000000.0, mu_earth);
+    assert_near((hoh_zero).total_delta_v, 0.0, 0.00001, "hoh_zero.total_delta_v");
+
+    // Descending Hohmann transfer (r1 > r2)
+    let hoh_desc: HohmannTransfer = hohmann_transfer_compute(42000000.0, 7000000.0, mu_earth);
+    assert_finite_positive((hoh_desc).total_delta_v, "hoh_desc.total_delta_v");
+
+    // Zero-propellant Tsiolkovsky delta-v (m0 == mf)
+    let stg_zero_fuel: RocketStage = rocket_stage_new(1, 5000.0, 0.0, 350.0);
+    let dv_zero_fuel: Float = tsiolkovsky_stage_dv(stg_zero_fuel);
+    assert_near(dv_zero_fuel, 0.0, 0.00001, "dv_zero_fuel");
+
+    // Negative calendar epoch Julian Date conversion
+    let dt_bce: DateTimeUtc = DateTimeUtc {
+        year: -500.0,
+        month: 6.0,
+        day: 15.0,
+        hour: 12.0,
+        minute: 0.0,
+        second: 0.0
+    };
+    let epoch_bce: JulianEpoch = julian_epoch_from_date(dt_bce);
+    if (epoch_bce).jd <= 0.0 {
+        println("FAIL epoch_bce.jd");
+        process_exit(1);
+    }
+
+    // Relativistic perihelion advance on extreme eccentric orbit (e = 0.999)
+    let rel_prec: Float = relativistic_perihelion_advance_rad(70000000.0, 0.999, mu_earth);
+    assert_finite_positive(rel_prec, "rel_prec");
+
+    // CR3BP pseudopotential on near-zero secondary mass (mu = 0.00001)
+    let cr3bp_u: Float = cr3bp_pseudopotential(0.5, 0.5, 0.0, 0.00001);
+    assert_finite_positive(cr3bp_u, "cr3bp_u");
+
+    println("probe_adversarial_astrodynamics_stress: PASSED");
+    process_exit(0);
+}

@@ -1,0 +1,13 @@
+// # ok fsread cap read
+//
+// Logline: Check-pass fixture that grants read_file on a named path through FsReadCap.
+//
+// Beats:
+//   1. ok takes fs: &FsReadCap.
+//   2. read_file is called on /tmp/cap_g2_x.
+//   3. Check must accept the granular grant.
+
+pub fn ok(fs: &FsReadCap) {
+    let r = read_file(fs, "/tmp/cap_g2_x");
+}
+pub fn main() {}

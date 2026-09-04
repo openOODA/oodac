@@ -1,0 +1,25 @@
+// # Pass a verify assert
+//
+// Logline: Assert two mul products and print mul(2, 5) from main.
+//
+// Setup: Test fixture. Keep all code exact.
+//
+// Beats:
+//   1. Return a * b from mul.
+//   2. Assert mul(3, 4) and mul(0, 9).
+//   3. Print mul(2, 5).
+//
+// Pass fixture: verify + assert_eq on pure path (no contracts).
+pub fn mul(a: Int, b: Int) -> Int {
+    return a * b;
+}
+
+verify mul {
+    assert_eq!(mul(3, 4), 12);
+    assert_eq!(mul(0, 9), 0);
+}
+
+pub fn main() {
+    let x = mul(2, 5);
+    println(x);
+}

@@ -1,0 +1,4 @@
+pub fn main() {
+    let x: Int = "hi";
+    println(x);
+}

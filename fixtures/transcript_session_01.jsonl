@@ -1,0 +1,10 @@
+{"step":0,"type":"USER_INPUT","prompt":"open the dashboard","completion":"","tool_payload":""}
+{"step":1,"type":"PLANNER_RESPONSE","prompt":"ctx","completion":"open the dashboard panel","tool_payload":""}
+{"step":2,"type":"TOOL_CALL","prompt":"ctx","completion":"opened","tool_payload":"{\"panel\":\"dashboard\"}"}
+{"step":3,"type":"PLANNER_RESPONSE","prompt":"ctx","completion":"render the efficiency chart","tool_payload":""}
+{"step":4,"type":"TOOL_CALL","prompt":"ctx","completion":"rendered","tool_payload":"{\"chart\":\"efficiency\",\"value\":18.5}"}
+{"step":5,"type":"REVIEWER_RESPONSE","prompt":"ctx","completion":"looks good","tool_payload":""}
+{"step":6,"type":"USER_INPUT","prompt":"also show tokens saved","completion":"","tool_payload":""}
+{"step":7,"type":"PLANNER_RESPONSE","prompt":"ctx","completion":"add tokens saved to the chart","tool_payload":""}
+{"step":8,"type":"TOOL_CALL","prompt":"ctx","completion":"added","tool_payload":"{\"metric\":\"tokens_saved\",\"value\":1804372}"}
+{"step":9,"type":"REVIEWER_RESPONSE","prompt":"ctx","completion":"ship it","tool_payload":""}

@@ -1,0 +1,8 @@
+// # Unmatched tag fail-closed assertion fixture
+pub fn main() {
+    let x = V9(42);
+    match x {
+        None => { println(0); },
+        Some(v) => { println(v); }
+    }
+}

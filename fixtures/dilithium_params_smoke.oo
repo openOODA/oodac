@@ -1,0 +1,53 @@
+// # Dilithium Parameter Set Distinction Smoke
+//
+// Logline: Verifies std/crypto/advanced/dilithium_params.dilithium_params_2, _3, _5 return distinct parameter records (different k, l) for the three security levels.
+//
+// Setup: Imports std/crypto/advanced/dilithium_params.oo. Pure, no FS or net. Property test (PROP).
+//
+// Beats:
+//   1. Build dilithium_params_2, _3, _5.
+//   2. Assert their k and l fields are distinct across the three sets.
+//   3. Print DILITHIUM_PARAMS_PROP_OK on success.
+
+import "std/sec/asymmetric/dilithium_params.oo";
+
+pub fn main() {
+    let p2: DilithiumParams = dilithium_params_2();
+    let p3: DilithiumParams = dilithium_params_3();
+    let p5: DilithiumParams = dilithium_params_5();
+    let k2: Int = p2.k;
+    let l2: Int = p2.l;
+    let k3: Int = p3.k;
+    let l3: Int = p3.l;
+    let k5: Int = p5.k;
+    let l5: Int = p5.l;
+    if k2 == 0 {
+        println("FAIL k2 zero");
+        return;
+    }
+    if k2 == k3 {
+        println("FAIL k2 == k3");
+        return;
+    }
+    if k3 == k5 {
+        println("FAIL k3 == k5");
+        return;
+    }
+    if k2 == k5 {
+        println("FAIL k2 == k5");
+        return;
+    }
+    if l2 == l3 {
+        println("FAIL l2 == l3");
+        return;
+    }
+    if l3 == l5 {
+        println("FAIL l3 == l5");
+        return;
+    }
+    if l2 == l5 {
+        println("FAIL l2 == l5");
+        return;
+    }
+    println("DILITHIUM_PARAMS_PROP_OK");
+}

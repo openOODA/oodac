@@ -1,0 +1,28 @@
+// # P4.36 LTO build subject
+//
+// Logline: Small arithmetic fixture used to verify -Olto (fat LTO with -flto -O2) build path runs end-to-end.
+//
+// Beats:
+//   1. sum_to adds 1..n.
+//   2. main prints SUM and a PASS marker.
+
+fn sum_to(n: Int) -> Int {
+    let mut total: Int = 0;
+    let mut i: Int = 1;
+    while i <= n {
+        total = total + i;
+        i = i + 1;
+    }
+    return total;
+}
+
+pub fn main() {
+    let s: Int = sum_to(10);
+    println("SUM=" + s.to_string());
+    if s == 55 {
+        println("P436_LTO_OK");
+    } else {
+        println("P436_LTO_FAIL");
+        process_exit(1);
+    }
+}

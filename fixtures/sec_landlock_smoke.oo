@@ -1,0 +1,22 @@
+// # Landlock sandbox smoke (CAP negative path)
+//
+// Logline: Asserts oo_landlock_is_available is callable and returns a stable probe under &SysCap.
+//
+// Setup: Calls oo_landlock_is_available (C-backed) directly. No std/sec/landlock.oo mock.
+//
+// Beats:
+//   1. oo_landlock_is_available() returns an Int >= 0.
+//   2. Print SEC_LANDLOCK_OK on success.
+
+pub fn main(sys: &SysCap) {
+    // Beat 1: kernel feature probe.
+    let supported: Int = oo_landlock_is_available();
+    if supported < 0 {
+        println("FAIL landlock_not_supported");
+        return;
+    }
+    println("OK oo_landlock_is_available");
+
+    println("SEC_LANDLOCK_OK");
+    println("OK");
+}

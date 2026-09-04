@@ -1,0 +1,16 @@
+// # Drive Result helpers
+//
+// Logline: Call std/result helpers and print result payload.
+//
+// Setup: Test fixture. Imports std/result.oo.
+//
+// Beats:
+//   1. Construct Ok("hi") and unwrap to print.
+
+import "std/core/primitives/result.oo";
+
+pub fn main() {
+    let r: Result[String, String] = res_ok("hi");
+    let s: String = res_unwrap_or(r, "default");
+    println(s);
+}

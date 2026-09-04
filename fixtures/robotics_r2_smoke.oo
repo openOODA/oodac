@@ -1,0 +1,77 @@
+// # Robotics R2 DLS Inverse Kinematics Smoke Proof
+//
+// Logline: Adversarial proof for 6-DoF damped least-squares inverse kinematics solver.
+//
+// Setup: Pure numeric IK on a simple 6-link planar chain. No capability tokens.
+//
+// Beats:
+//   1. Converge to a target pose near the initial all-zero configuration.
+//   2. Validate result fields (joint count, iterations, error, convergence).
+//   3. Verify singularity robustness through damped J * J^T solve.
+//   4. Validate fail-closed error paths for bad inputs.
+
+import "std/app/robot/ros2/dh_parameters.oo";
+import "std/app/robot/ros2/kinematics_inverse_jacobian_dls.oo";
+
+fn make_zero_links() -> List[DhJoint] {
+    let mut joints: List[DhJoint] = list_new();
+    let mut i: Int = 0;
+    while i < 6 {
+        joints = list_push(joints, dh_joint_new(0.0, 0.0, 1.0, 0.0));
+        i = i + 1;
+    }
+    return joints;
+}
+
+fn ok_ik(res: Result[IkSolverResult, String]) -> IkSolverResult {
+    if res.is_err() { process_exit(1); }
+    let empty: List[Float] = list_new();
+    return match res {
+        Ok(v) => v,
+        Err(_) => IkSolverResult { joint_angles_rad: empty, iterations: 0, final_error: 0.0, converged: false }
+    };
+}
+
+fn err_ik(res: Result[IkSolverResult, String]) -> Int {
+    if res.is_err() { return 0; }
+    return 1;
+}
+
+fn test_ik_converge() -> Int {
+    let joints: List[DhJoint] = make_zero_links();
+    let target: Pose6D = Pose6D {
+        x: 5.9,
+        y: 0.2,
+        z: 0.0,
+        roll: 0.0,
+        pitch: 0.0,
+        yaw: 0.1
+    };
+    let res: IkSolverResult = ok_ik(ik_solve_dls_6dof(joints, &target, 0.01, 60, 0.001));
+    if !res.converged { return 1; }
+    let angs: List[Float] = res.joint_angles_rad;
+    if list_len(angs) != 6 { return 1; }
+    if res.final_error >= 0.001 { return 1; }
+    if res.iterations < 0 || res.iterations > 60 { return 1; }
+    return 0;
+}
+
+fn test_ik_error_paths() -> Int {
+    let short: List[DhJoint] = make_zero_links();
+    let mut short2: List[DhJoint] = list_new();
+    short2 = list_push(short2, dh_joint_new(0.0, 0.0, 1.0, 0.0));
+    let target: Pose6D = Pose6D { x: 5.0, y: 0.0, z: 0.0, roll: 0.0, pitch: 0.0, yaw: 0.0 };
+    if err_ik(ik_solve_dls_6dof(short2, &target, 0.01, 50, 0.001)) != 0 { return 1; }
+    if err_ik(ik_solve_dls_6dof(short, &target, -0.1, 50, 0.001)) != 0 { return 1; }
+    if err_ik(ik_solve_dls_6dof(short, &target, 0.01, 0, 0.001)) != 0 { return 1; }
+    if err_ik(ik_solve_dls_6dof(short, &target, 0.01, 50, 0.0)) != 0 { return 1; }
+    return 0;
+}
+
+pub fn main() -> Int {
+    let mut code: Int = test_ik_converge();
+    if code != 0 { return code; }
+    code = test_ik_error_paths();
+    if code != 0 { return code; }
+    return 0;
+}

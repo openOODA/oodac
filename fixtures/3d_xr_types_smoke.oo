@@ -1,0 +1,104 @@
+// # 3D XR Types Adversarial Smoke Test
+//
+// Logline: Verifies XR type structs creation and field access with adversarial inputs.
+//
+// Setup: Pure integer XR structs. No FS or net dependencies.
+//
+// Beats:
+//   1. VALID: Test XrPose creation and field access.
+//   2. VALID: Test XrSession creation and field access.
+//   3. VALID: Test XrView creation and field access.
+//   4. VALID: Test XrFrame creation and field access.
+//   5. NEGATIVE TRUST: Test with zero values for all fields.
+//   6. ADVERSARIAL: Test with extreme negative/positive values.
+//   7. DOUBLE-RUN: Verify all operations are deterministic.
+
+import "std/app/ui/3d/xr_types.oo";
+
+pub fn expect_eq_int(label: String, got: Int, want: Int) -> Bool {
+    if got == want { println("OK " + label); return true; }
+    println("FAIL " + label + " got=" + got.to_string() + " want=" + want.to_string());
+    return false;
+}
+
+pub fn main() {
+    // VALID: XrPose creation and field access
+    let pose1: XrPose = xr_pose_new(100, 200, 300);
+    if !expect_eq_int("pose x", xr_pose_x(pose1), 100) { return; }
+    if !expect_eq_int("pose y", pose1.y, 200) { return; }
+    if !expect_eq_int("pose z", pose1.z, 300) { return; }
+    
+    // VALID: XrSession creation and field access
+    let session1: XrSession = xr_session_new(42);
+    if !expect_eq_int("session id", session1.id, 42) { return; }
+    if !expect_eq_int("session active", session1.active, 1) { return; }
+    if !expect_eq_int("session fov", session1.fov, 90000) { return; }
+    if !expect_eq_int("session ipd_mm", session1.ipd_mm, 64) { return; }
+    
+    // VALID: XrView creation and field access
+    let view1: XrView = xr_view_new(pose1, 90000);
+    if !expect_eq_int("view pose x", view1.pose.x, 100) { return; }
+    if !expect_eq_int("view pose y", view1.pose.y, 200) { return; }
+    if !expect_eq_int("view pose z", view1.pose.z, 300) { return; }
+    if !expect_eq_int("view fov", view1.fov, 90000) { return; }
+    if !expect_eq_int("view eye_index", view1.eye_index, 0) { return; }
+    
+    // VALID: XrFrame creation and field access
+    let frame1: XrFrame = xr_frame_new(session1, pose1, 2);
+    if !expect_eq_int("frame head_pose x", frame1.head_pose.x, 100) { return; }
+    if !expect_eq_int("frame head_pose y", frame1.head_pose.y, 200) { return; }
+    if !expect_eq_int("frame head_pose z", frame1.head_pose.z, 300) { return; }
+    if !expect_eq_int("frame session_id", frame1.session_id, 42) { return; }
+    if !expect_eq_int("frame view_count", frame1.view_count, 2) { return; }
+    
+    // NEGATIVE TRUST: Zero values
+    let pose_zero: XrPose = xr_pose_new(0, 0, 0);
+    if !expect_eq_int("pose zero x", pose_zero.x, 0) { return; }
+    if !expect_eq_int("pose zero y", pose_zero.y, 0) { return; }
+    if !expect_eq_int("pose zero z", pose_zero.z, 0) { return; }
+    
+    let session_zero: XrSession = xr_session_new(0);
+    if !expect_eq_int("session zero id", session_zero.id, 0) { return; }
+    if !expect_eq_int("session zero active", session_zero.active, 1) { return; }
+    
+    let view_zero: XrView = xr_view_new(pose_zero, 0);
+    if !expect_eq_int("view zero fov", view_zero.fov, 0) { return; }
+    if !expect_eq_int("view zero eye_index", view_zero.eye_index, 0) { return; }
+    
+    let frame_zero: XrFrame = xr_frame_new(session_zero, pose_zero, 0);
+    if !expect_eq_int("frame zero session_id", frame_zero.session_id, 0) { return; }
+    if !expect_eq_int("frame zero view_count", frame_zero.view_count, 0) { return; }
+    
+    // ADVERSARIAL: Extreme values
+    let pose_extreme: XrPose = xr_pose_new(999999, -999999, 999999);
+    if !expect_eq_int("pose extreme x", pose_extreme.x, 999999) { return; }
+    if !expect_eq_int("pose extreme y", pose_extreme.y, -999999) { return; }
+    if !expect_eq_int("pose extreme z", pose_extreme.z, 999999) { return; }
+    
+    let session_extreme: XrSession = xr_session_new(999999);
+    if !expect_eq_int("session extreme id", session_extreme.id, 999999) { return; }
+    
+    let view_extreme: XrView = xr_view_new(pose_extreme, 360000);
+    if !expect_eq_int("view extreme fov", view_extreme.fov, 360000) { return; }
+    
+    let frame_extreme: XrFrame = xr_frame_new(session_extreme, pose_extreme, 999);
+    if !expect_eq_int("frame extreme session_id", frame_extreme.session_id, 999999) { return; }
+    if !expect_eq_int("frame extreme view_count", frame_extreme.view_count, 999) { return; }
+    
+    // DOUBLE-RUN: Determinism
+    let pose_dr: XrPose = xr_pose_new(100, 200, 300);
+    let pose_dr2: XrPose = xr_pose_new(100, 200, 300);
+    if !expect_eq_int("dr pose x", pose_dr.x, pose_dr2.x) { return; }
+    if !expect_eq_int("dr pose y", pose_dr.y, pose_dr2.y) { return; }
+    if !expect_eq_int("dr pose z", pose_dr.z, pose_dr2.z) { return; }
+    
+    let session_dr: XrSession = xr_session_new(42);
+    let session_dr2: XrSession = xr_session_new(42);
+    if !expect_eq_int("dr session id", session_dr.id, session_dr2.id) { return; }
+    if !expect_eq_int("dr session active", session_dr.active, session_dr2.active) { return; }
+    
+    // Verify marker function
+    if !expect_eq_int("xr_types_marker", xr_types_marker(), 1) { return; }
+    
+    println("OK: 3d_xr_types_smoke passed");
+}

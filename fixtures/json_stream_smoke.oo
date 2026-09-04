@@ -1,0 +1,54 @@
+// # JSON stream tokenizer smoke test
+//
+// Logline: Verifies the streaming JSON tokenizer plus the json_parse status projection and json_parse_at direct struct return.
+//
+// Setup: Imports std/encoding/json_stream.oo. No other imports required.
+//
+// Beats:
+//   1. json_parse returns Ok(1) for valid JSON and Err for malformed input.
+//   2. json_parse_at on a JSON object returns a JsonValue with kind "object" and count > 0.
+//   3. json_parse_at on a JSON array returns a JsonValue with kind "array".
+//   4. Tokenizer json_stream_next drives events through the parser.
+//   5. Print JSON_STREAM_OK on success.
+
+import "std/core/encoding/json_stream.oo";
+
+fn jssm_assert(label: String, ok: Bool) {
+    if !ok {
+        println("FAIL " + label);
+        process_exit(1);
+    }
+    println("OK " + label);
+}
+
+pub fn main() {
+    // Beat 1: json_parse status.
+    let valid: String = "{\"a\":1,\"b\":[true,null,\"s\"]}";
+    let st_ok: Result[Int, String] = json_parse(valid);
+    jssm_assert("json_parse valid", st_ok.is_ok());
+
+    let broken: String = "{\"a\":1,}";
+    let st_err: Result[Int, String] = json_parse(broken);
+    jssm_assert("json_parse trailing-comma err", st_err.is_err());
+
+    // Beat 2: json_parse_at returns a JsonValue directly.
+    let v_obj: JsonValue = json_parse_at(valid, 0);
+    jssm_assert("parse_at kind object", json_kind(v_obj) == "object");
+    jssm_assert("parse_at count > 0", json_num(v_obj) > 0);
+
+    // Beat 3: parse_at on an array.
+    let arr: String = "[1,2,3]";
+    let v_arr: JsonValue = json_parse_at(arr, 0);
+    jssm_assert("parse_at kind array", json_kind(v_arr) == "array");
+    jssm_assert("parse_at count 3", json_num(v_arr) == 3);
+
+    // Beat 4: streaming tokenizer.
+    let mut s: JsonStream = json_stream_new();
+    s = json_stream_push(s, "{\"x\":1}");
+    s = json_stream_next(s);
+    let eof_after_first: Bool = json_stream_eof(s);
+    jssm_assert("stream not done after first event", !eof_after_first);
+
+    // Beat 5: Print OK.
+    println("JSON_STREAM_OK");
+}

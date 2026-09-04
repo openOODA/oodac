@@ -1,0 +1,21 @@
+// # Int arity-4 add smoke
+//
+// Logline: Add four Ints with a non-negative x so the arity>=4 path A smoke can pass.
+//
+// Beats:
+//   1. Keep FUZZ_DOMAIN int and target quad_add 0 10.
+//   2. Require x >= 0 and ensure result >= 0.
+//   3. Return x + y + z + w.
+
+// Pure Int arity≥4 path A multi (smoke expects pass) fixture (M49).
+// FUZZ_DOMAIN: int
+// FUZZ_TARGET: quad_add 0 10
+// FUZZ_REQUIRES: quad_add x >= 0
+// FUZZ_ENSURES: quad_add result >= 0
+fn quad_add(x: Int, y: Int, z: Int, w: Int) -> Int {
+    requires x >= 0;
+    return x + y + z + w;
+}
+
+pub fn main() {
+}

@@ -1,0 +1,52 @@
+// # AES-128 Encrypt KAT Smoke
+//
+// Logline: Asserts std/crypto/aes.aes_encrypt against the FIPS 197 §A.1 published AES-128 ECB KAT (key=0x00..0x0f, plaintext=0x00112233..ddeeff) producing ciphertext 0x69c4e0d8..b4c55a.
+//
+// Setup: Imports std/crypto/aes.oo. Pure, no FS or net. Uses bytes_to_str to build 16-byte key/plaintext from hex nibbles.
+//
+// Beats:
+//   1. Build 16-byte key 0x000102030405060708090a0b0c0d0e0f.
+//   2. Build 16-byte plaintext 0x00112233445566778899aabbccddeeff.
+//   3. Assert aes_encrypt returns 69c4e0d86a7b0430d8cdb78070b4c55a.
+//   4. Print AES_KAT_OK on success.
+
+import "std/sec/symmetric/aes.oo";
+
+pub fn main() {
+    let mut kb: List[Int] = list_new();
+    let mut i: Int = 0;
+    while i < 16 {
+        kb = list_push(kb, i);
+        i = i + 1;
+    }
+    let key: String = bytes_to_str(kb);
+    let hx: String = "00112233445566778899aabbccddeeff";
+    let mut pb: List[Int] = list_new();
+    let mut j: Int = 0;
+    while j < 16 {
+        let mut hi: Int = 0;
+        while hi < 16 {
+            if byte_at(hx, j * 2) == byte_at("0123456789abcdef", hi) {
+                break;
+            }
+            hi = hi + 1;
+        }
+        let mut lo: Int = 0;
+        while lo < 16 {
+            if byte_at(hx, j * 2 + 1) == byte_at("0123456789abcdef", lo) {
+                break;
+            }
+            lo = lo + 1;
+        }
+        pb = list_push(pb, hi * 16 + lo);
+        j = j + 1;
+    }
+    let plain: String = bytes_to_str(pb);
+    let ct: String = aes_encrypt(key, plain);
+    let exp: String = "69c4e0d86a7b0430d8cdb78070b4c55a";
+    if ct != exp {
+        println("FAIL aes KAT got " + ct);
+        return;
+    }
+    println("AES_KAT_OK");
+}

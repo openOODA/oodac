@@ -1,0 +1,115 @@
+// # 3D XR Ops Adversarial Smoke Test
+//
+// Logline: Verifies XR pose operations, stereoscopic view transforms, and session management with adversarial inputs.
+//
+// Setup: Pure integer XR structs. No FS or net dependencies.
+//
+// Beats:
+//   1. VALID: Test pose translation, combination, and equality.
+//   2. VALID: Test stereoscopic eye view generation and frustum calculations.
+//   3. VALID: Test session lifecycle and view extraction.
+//   4. NEGATIVE TRUST: Test with zero IPD, zero FOV, and boundary values.
+//   5. ADVERSARIAL: Test with extreme negative/positive coordinates and large values.
+//   6. DOUBLE-RUN: Verify all operations are deterministic.
+
+import "std/app/ui/3d/xr_ops.oo";
+
+pub fn expect_eq_int(label: String, got: Int, want: Int) -> Bool {
+    if got == want { println("OK " + label); return true; }
+    println("FAIL " + label + " got=" + got.to_string() + " want=" + want.to_string());
+    return false;
+}
+
+pub fn main() {
+    // VALID: Normal pose operations
+    let pose1: XrPose = xr_pose_new(100, 200, 300);
+    let pose2: XrPose = xr_pose_new(10, 20, 30);
+    
+    let translated: XrPose = xr_pose_translate(pose1, 50, 60, 70);
+    if !expect_eq_int("pose translate x", translated.x, 150) { return; }
+    if !expect_eq_int("pose translate y", translated.y, 260) { return; }
+    if !expect_eq_int("pose translate z", translated.z, 370) { return; }
+    
+    let combined: XrPose = xr_pose_combine(pose1, pose2);
+    if !expect_eq_int("pose combine x", combined.x, 110) { return; }
+    if !expect_eq_int("pose combine y", combined.y, 220) { return; }
+    if !expect_eq_int("pose combine z", combined.z, 330) { return; }
+    
+    if !expect_eq_int("pose equal same", xr_pose_equal(pose1, pose1), 1) { return; }
+    if !expect_eq_int("pose equal diff", xr_pose_equal(pose1, pose2), 0) { return; }
+    
+    // VALID: Stereoscopic views
+    let head: XrPose = xr_pose_new(0, 0, 0);
+    let left_view: XrView = xr_view_left(head, 90000, 64);
+    if !expect_eq_int("left view x", left_view.pose.x, -32) { return; }
+    if !expect_eq_int("left view eye_index", left_view.eye_index, 0) { return; }
+    
+    let right_view: XrView = xr_view_right(head, 90000, 64);
+    if !expect_eq_int("right view x", right_view.pose.x, 32) { return; }
+    if !expect_eq_int("right view eye_index", right_view.eye_index, 1) { return; }
+    
+    if !expect_eq_int("view is left eye", xr_view_is_left_eye(left_view), 1) { return; }
+    
+    let width: Int = xr_view_frustum_half_width(left_view, 1000);
+    let width_check: Int = if width > 0 { 1 } else { 0 };
+    if !expect_eq_int("frustum half width > 0", width_check, 1) { return; }
+    
+    // VALID: Session management
+    let session: XrSession = xr_session_new(1);
+    if !expect_eq_int("session active", session.active, 1) { return; }
+    if !expect_eq_int("session fov", session.fov, 90000) { return; }
+    if !expect_eq_int("session ipd", session.ipd_mm, 64) { return; }
+    
+    let session_stopped: XrSession = xr_session_stop(session);
+    if !expect_eq_int("session stopped", session_stopped.active, 0) { return; }
+    if !expect_eq_int("session is active", xr_session_is_active(session), 1) { return; }
+    if !expect_eq_int("session not active", xr_session_is_active(session_stopped), 0) { return; }
+    
+    let session_fov: XrSession = xr_session_set_fov(session, 120000);
+    if !expect_eq_int("session fov updated", session_fov.fov, 120000) { return; }
+    
+    let session_ipd: XrSession = xr_session_set_ipd(session, 70);
+    if !expect_eq_int("session ipd updated", session_ipd.ipd_mm, 70) { return; }
+    
+    if !expect_eq_int("get views active", xr_get_views(session), 2) { return; }
+    if !expect_eq_int("get views inactive", xr_get_views(session_stopped), 0) { return; }
+    
+    // NEGATIVE TRUST: Zero and boundary values
+    let pose_zero: XrPose = xr_pose_new(0, 0, 0);
+    let translated_zero: XrPose = xr_pose_translate(pose_zero, 0, 0, 0);
+    if !expect_eq_int("zero translate x", translated_zero.x, 0) { return; }
+    
+    let left_zero: XrView = xr_view_left(pose_zero, 0, 0);
+    if !expect_eq_int("zero fov view x", left_zero.pose.x, 0) { return; }
+    if !expect_eq_int("zero fov", left_zero.fov, 0) { return; }
+    
+    let session_zero: XrSession = xr_session_new(0);
+    if !expect_eq_int("zero session id", session_zero.id, 0) { return; }
+    
+    // ADVERSARIAL: Extreme values
+    let pose_extreme: XrPose = xr_pose_new(999999, -999999, 999999);
+    let translated_extreme: XrPose = xr_pose_translate(pose_extreme, -1000000, 1000000, -1000000);
+    if !expect_eq_int("extreme translate x", translated_extreme.x, -1) { return; }
+    if !expect_eq_int("extreme translate y", translated_extreme.y, 1) { return; }
+    if !expect_eq_int("extreme translate z", translated_extreme.z, -1) { return; }
+    
+    let combined_extreme: XrPose = xr_pose_combine(pose_extreme, pose_extreme);
+    if !expect_eq_int("extreme combine x", combined_extreme.x, 1999998) { return; }
+    
+    let left_extreme: XrView = xr_view_left(pose_extreme, 180000, 1000);
+    if !expect_eq_int("extreme left view x", left_extreme.pose.x, 999499) { return; }
+    
+    let session_extreme: XrSession = xr_session_new(999999);
+    let session_extreme_fov: XrSession = xr_session_set_fov(session_extreme, 360000);
+    if !expect_eq_int("extreme fov", session_extreme_fov.fov, 360000) { return; }
+    
+    // DOUBLE-RUN: Determinism
+    let pose_dr: XrPose = xr_pose_new(100, 200, 300);
+    let dr1: XrPose = xr_pose_translate(pose_dr, 50, 60, 70);
+    let dr2: XrPose = xr_pose_translate(pose_dr, 50, 60, 70);
+    if !expect_eq_int("dr translate x", dr1.x, dr2.x) { return; }
+    if !expect_eq_int("dr translate y", dr1.y, dr2.y) { return; }
+    if !expect_eq_int("dr translate z", dr1.z, dr2.z) { return; }
+    
+    println("OK: 3d_xr_ops_smoke passed");
+}

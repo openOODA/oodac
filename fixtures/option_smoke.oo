@@ -1,0 +1,92 @@
+// # Option Adversarial Smoke Test
+//
+// Logline: Verifies Option Some/None variants, is_some/is_none checks, and unwrap with default using Result[String, String].
+//
+// Setup: Pure operations using Result as Option. No FS or net dependencies.
+//
+// Beats:
+//   1. VALID: Normal Some and None creation and checking.
+//   2. NEGATIVE TRUST: Test with empty strings and edge cases.
+//   3. ADVERSARIAL: Test with special string values.
+//   4. DOUBLE-RUN: Verify all operations are deterministic.
+
+import "std/core/primitives/option.oo";
+
+pub fn expect_eq_str(label: String, got: String, want: String) -> Bool {
+    if got == want { println("OK " + label); return true; }
+    println("FAIL " + label + " got=" + got + " want=" + want);
+    return false;
+}
+
+pub fn expect_true(label: String, cond: Bool) -> Bool {
+    if cond { println("OK " + label); return true; }
+    println("FAIL " + label);
+    return false;
+}
+
+pub fn expect_false(label: String, cond: Bool) -> Bool {
+    if !cond { println("OK " + label); return true; }
+    println("FAIL " + label);
+    return false;
+}
+
+pub fn main() {
+    // VALID: Some creation
+    let some_val: Result[String, String] = opt_some("hello");
+    if !expect_true("some is_some", opt_is_some(some_val)) { return; }
+    if !expect_false("some is_none", opt_is_none(some_val)) { return; }
+    if !expect_eq_str("some unwrap_or", opt_unwrap_or(some_val, "default"), "hello") { return; }
+
+    // VALID: None creation
+    let none_val: Result[String, String] = opt_none();
+    if !expect_false("none is_some", opt_is_some(none_val)) { return; }
+    if !expect_true("none is_none", opt_is_none(none_val)) { return; }
+    if !expect_eq_str("none unwrap_or", opt_unwrap_or(none_val, "default"), "default") { return; }
+
+    // VALID: Some with different values
+    let some_num: Result[String, String] = opt_some("42");
+    if !expect_eq_str("some num unwrap", opt_unwrap_or(some_num, "0"), "42") { return; }
+
+    // VALID: opt_map
+    let some_mapped: Result[String, String] = opt_map(some_val, "_suffix");
+    if !expect_true("some mapped is_some", opt_is_some(some_mapped)) { return; }
+    
+    let none_mapped: Result[String, String] = opt_map(none_val, "_suffix");
+    if !expect_true("none mapped is_none", opt_is_none(none_mapped)) { return; }
+
+    // NEGATIVE TRUST: Empty string as Some
+    let some_empty: Result[String, String] = opt_some("");
+    if !expect_true("some empty is_some", opt_is_some(some_empty)) { return; }
+    if !expect_eq_str("some empty unwrap", opt_unwrap_or(some_empty, "default"), "") { return; }
+
+    // NEGATIVE TRUST: Unwrap with empty default
+    if !expect_eq_str("none unwrap empty", opt_unwrap_or(none_val, ""), "") { return; }
+
+    // ADVERSARIAL: Long string
+    let mut long_str: String = "a";
+    let mut i: Int = 0;
+    while i < 50 {
+        long_str = long_str + "a";
+        i = i + 1;
+    }
+    let some_long: Result[String, String] = opt_some(long_str);
+    if !expect_true("some long is_some", opt_is_some(some_long)) { return; }
+    if !expect_eq_str("some long unwrap", opt_unwrap_or(some_long, "short"), long_str) { return; }
+
+    // ADVERSARIAL: Special characters
+    let some_special: Result[String, String] = opt_some("hello\nworld\t!");
+    if !expect_true("some special is_some", opt_is_some(some_special)) { return; }
+
+    // DOUBLE-RUN: Determinism check
+    let some_dr1: Result[String, String] = opt_some("test");
+    let some_dr2: Result[String, String] = opt_some("test");
+    if !expect_true("dr some is_some", opt_is_some(some_dr1) && opt_is_some(some_dr2)) { return; }
+    if !expect_eq_str("dr some unwrap", opt_unwrap_or(some_dr1, "x"), opt_unwrap_or(some_dr2, "x")) { return; }
+
+    let none_dr1: Result[String, String] = opt_none();
+    let none_dr2: Result[String, String] = opt_none();
+    if !expect_true("dr none is_none", opt_is_none(none_dr1) && opt_is_none(none_dr2)) { return; }
+    if !expect_eq_str("dr none unwrap", opt_unwrap_or(none_dr1, "default"), opt_unwrap_or(none_dr2, "default")) { return; }
+
+    println("OK: option_smoke passed");
+}

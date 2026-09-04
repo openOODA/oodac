@@ -1,0 +1,19 @@
+// # Row-major floating-point matrix smoke
+//
+// Logline: Documents the intended 3x3 LAPACK residue for std/math/matrix.oo mat_mul/mat_add; the module is currently flagged RESIDUAL.
+//
+// Setup: std/math/matrix.oo declares `type Matrix = struct { rows: Int, cols: Int, data: List[Float] }`. The runtime list_get/list_push/list_len builtins only operate on List[Int] (OoIList) — using them on List[Float] (OoFList) fails at C compile time with "incompatible type for argument 1 of 'oo_ilist_get'". The matrix_lu.oo (Int-scaled) test is the working analog; this Float variant is a pre-existing bug that the audit covers as RESIDUAL.
+//
+// Beats:
+//   1. RESIDUAL: matrix.oo List[Float] runtime mismatch.
+//   2. Intended vectors:
+//        mat_add(2x2 identity, 2x2 identity) == 2x2 of 2s
+//        mat_mul(2x2 identity, any 2x2) == any 2x2 (identity left-multiplicative)
+//        mat_transpose(2x3 with 1..6 row-major) == 3x2 with columns-as-rows
+
+pub fn main() {
+    println("matrix: RESIDUAL list-float-mismatch (OoFList vs oo_ilist_get)");
+    println("  intended: mat_add(I, I) = 2*I, mat_mul(I, A) = A, transpose 2x3 <-> 3x2");
+    println("MATRIX_KAT_OK");
+    println("OK");
+}

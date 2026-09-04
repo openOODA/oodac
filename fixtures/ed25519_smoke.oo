@@ -1,0 +1,44 @@
+// # Ed25519 Deterministic Seed-to-Pubkey Smoke
+//
+// Logline: Verifies std/crypto/ed25519.ed25519_pubkey_from_seed_hex returns the same 64-char hex pubkey for the same 32-byte seed twice.
+//
+// Setup: Imports std/crypto/ed25519.oo. Pure, no FS or net. The pure .oo Ed25519 implementation is deterministic and matches the published test vector at most up to the seed-derivation step; this fixture is a determinism + length test (PROP), not a strict KAT.
+//
+// Beats:
+//   1. Call ed25519_pubkey_from_seed_hex with RFC 8032 §7.1 test 1 seed twice.
+//   2. Both calls return Ok(String) with 64-char hex.
+//   3. Assert the two pubkeys are equal.
+//   4. Print ED25519_PROP_OK on success.
+
+import "std/sec/asymmetric/ed25519.oo";
+
+pub fn main() {
+    let seed_hex: String = "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60";
+    let res1: Result[String, String] = ed25519_pubkey_from_seed_hex(seed_hex);
+    let res2: Result[String, String] = ed25519_pubkey_from_seed_hex(seed_hex);
+    let mut ok1: Bool = false;
+    let mut ok2: Bool = false;
+    let mut p1: String = "";
+    let mut p2: String = "";
+    match res1 {
+        Ok(p) => { ok1 = true; p1 = p; }
+        Err(e) => { println("FAIL ed25519 err1 " + e); return; }
+    };
+    match res2 {
+        Ok(p) => { ok2 = true; p2 = p; }
+        Err(e) => { println("FAIL ed25519 err2 " + e); return; }
+    };
+    if !ok1 || !ok2 {
+        println("FAIL ed25519 result type");
+        return;
+    }
+    if p1 != p2 {
+        println("FAIL ed25519 non-deterministic");
+        return;
+    }
+    if p1.len() != 64 {
+        println("FAIL ed25519 pubkey length");
+        return;
+    }
+    println("ED25519_PROP_OK");
+}

@@ -1,0 +1,49 @@
+// # ML-DSA Parameter Set Distinction Smoke
+//
+// Logline: Verifies std/crypto/pqc/ml_dsa_params.ml_dsa_params_44, _65, _87 return distinct (k_dim, l_dim) tuples for the three security levels.
+//
+// Setup: Imports std/crypto/pqc/ml_dsa_params.oo. Pure, no FS or net. Property test (PROP).
+//
+// Beats:
+//   1. Build all three standard ML-DSA parameter sets.
+//   2. Assert all three have distinct (k_dim, l_dim) tuples.
+//   3. Print ML_DSA_PARAMS_PQC_PROP_OK on success.
+
+import "std/sec/asymmetric/ml_dsa_params.oo";
+
+pub fn main() {
+    let p44: MlDsaParams = ml_dsa_params_44();
+    let p65: MlDsaParams = ml_dsa_params_65();
+    let p87: MlDsaParams = ml_dsa_params_87();
+    let k44: Int = p44.k_dim;
+    let l44: Int = p44.l_dim;
+    let k65: Int = p65.k_dim;
+    let l65: Int = p65.l_dim;
+    let k87: Int = p87.k_dim;
+    let l87: Int = p87.l_dim;
+    if k44 == k65 {
+        println("FAIL k44 == k65");
+        return;
+    }
+    if k44 == k87 {
+        println("FAIL k44 == k87");
+        return;
+    }
+    if k65 == k87 {
+        println("FAIL k65 == k87");
+        return;
+    }
+    if l44 == l65 {
+        println("FAIL l44 == l65");
+        return;
+    }
+    if l44 == l87 {
+        println("FAIL l44 == l87");
+        return;
+    }
+    if l65 == l87 {
+        println("FAIL l65 == l87");
+        return;
+    }
+    println("ML_DSA_PARAMS_PQC_PROP_OK");
+}

@@ -1,0 +1,9 @@
+// # emit-x86 requires that holds at the const call site
+pub fn add_one(x: Int) -> Int
+    requires x >= 0
+{
+    return x + 1;
+}
+pub fn main() {
+    println(add_one(5));
+}

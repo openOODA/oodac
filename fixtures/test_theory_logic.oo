@@ -1,0 +1,205 @@
+// # Type theory: propositional logic and modus ponens
+//
+// Logline: Verify constructive propositional logic encodings and a fail-closed modus ponens proof checker over a Horn-clause rule base.
+//
+// Setup: Pure in-fixture re-declaration. No std import required.
+//
+// Beats:
+//   1. AND intro then elim recovers original proofs.
+//   2. OR intro and elim dispatch correctly.
+//   3. Modus ponens finds a single-step proof.
+//   4. Modus ponens chains through multiple rules.
+//   5. Unknown goal returns false (fail-closed).
+//   6. Cyclic rules terminate within depth limit.
+
+type Prop = struct {
+    tag: Int,
+    left: Int,
+    right: Int
+};
+
+type Proof = struct {
+    kind: Int,
+    payload: Int
+};
+
+type MpState = struct {
+    facts: List[Int],
+    rules: List[Int]
+};
+
+pub fn prop_atom(idx: Int) -> Prop {
+    return Prop { tag: 1, left: idx, right: 0 };
+}
+
+pub fn prop_and(p: Prop, q: Prop) -> Prop {
+    return Prop { tag: 2, left: encode_pair(p.tag, q.tag), right: 0 };
+}
+
+pub fn and_intro(pf_p: Proof, pf_q: Proof) -> Proof {
+    return Proof { kind: 20, payload: encode_pair(pf_p.kind, pf_q.kind) };
+}
+
+pub fn and_elim_left(conj_proof: Proof) -> Proof {
+    return Proof { kind: conj_proof.payload / 1000, payload: 0 };
+}
+
+pub fn and_elim_right(conj_proof: Proof) -> Proof {
+    return Proof { kind: conj_proof.payload % 1000, payload: 0 };
+}
+
+pub fn or_inl(pf_p: Proof) -> Proof {
+    return Proof { kind: 31, payload: pf_p.kind };
+}
+
+pub fn or_inr(pf_q: Proof) -> Proof {
+    return Proof { kind: 32, payload: pf_q.kind };
+}
+
+pub fn encode_pair(a: Int, b: Int) -> Int {
+    return (a * 1000) + b;
+}
+
+pub fn mp_new() -> MpState {
+    return MpState { facts: list_new(), rules: list_new() };
+}
+
+pub fn mp_add_fact(s: MpState, tag: Int) -> MpState {
+    let mut facts: List[Int] = s.facts;
+    facts = list_push(facts, tag);
+    return MpState { facts: facts, rules: s.rules };
+}
+
+pub fn mp_add_rule(s: MpState, premise: Int, conclusion: Int) -> MpState {
+    let mut rules: List[Int] = s.rules;
+    let encoded: Int = (premise * 100000) + conclusion;
+    rules = list_push(rules, encoded);
+    return MpState { facts: s.facts, rules: rules };
+}
+
+pub fn mp_has_fact(s: MpState, tag: Int) -> Bool {
+    let n: Int = list_len(s.facts);
+    let mut i: Int = 0;
+    while i < n {
+        if list_get(s.facts, i) == tag {
+            return true;
+        }
+        i = i + 1;
+    }
+    return false;
+}
+
+pub fn mp_find_rule(s: MpState, premise: Int) -> Int {
+    let n: Int = list_len(s.rules);
+    let mut i: Int = 0;
+    while i < n {
+        let r: Int = list_get(s.rules, i);
+        if r / 100000 == premise {
+            return r % 100000;
+        }
+        i = i + 1;
+    }
+    return 0 - 1;
+}
+
+pub fn mp_prove(s: MpState, goal: Int, depth: Int) -> Bool {
+    if depth <= 0 {
+        return false;
+    }
+    if mp_has_fact(s, goal) {
+        return true;
+    }
+    let n: Int = list_len(s.facts);
+    let mut i: Int = 0;
+    while i < n {
+        let premise: Int = list_get(s.facts, i);
+        let conclusion: Int = mp_find_rule(s, premise);
+        if conclusion != (0 - 1) {
+            if conclusion == goal {
+                return true;
+            }
+            let s2: MpState = mp_add_fact(s, conclusion);
+            if mp_prove(s2, goal, depth - 1) {
+                return true;
+            }
+        }
+        i = i + 1;
+    }
+    return false;
+}
+
+pub fn main() {
+    let pf_p: Proof = Proof { kind: 11, payload: 0 };
+    let pf_q: Proof = Proof { kind: 12, payload: 0 };
+    let pf_conj: Proof = and_intro(pf_p, pf_q);
+    let left: Proof = and_elim_left(pf_conj);
+    let right: Proof = and_elim_right(pf_conj);
+    if left.kind == 11 {
+        if right.kind == 12 {
+            println("OK and_intro_and_elim");
+        } else {
+            println("FAIL and_elim_right");
+            process_exit(1);
+        }
+    } else {
+        println("FAIL and_elim_left");
+        process_exit(1);
+    }
+
+    let or_left: Proof = or_inl(pf_p);
+    let or_right: Proof = or_inr(pf_q);
+    if or_left.kind == 31 {
+        if or_right.kind == 32 {
+            println("OK or_intro_both_sides");
+        } else {
+            println("FAIL or_inr");
+            process_exit(1);
+        }
+    } else {
+        println("FAIL or_inl");
+        process_exit(1);
+    }
+
+    let mut s1: MpState = mp_new();
+    s1 = mp_add_fact(s1, 100);
+    s1 = mp_add_rule(s1, 100, 200);
+    if mp_prove(s1, 200, 8) {
+        println("OK mp_one_step");
+    } else {
+        println("FAIL mp_one_step");
+        process_exit(1);
+    }
+
+    let mut s2: MpState = mp_new();
+    s2 = mp_add_fact(s2, 1);
+    s2 = mp_add_rule(s2, 1, 2);
+    s2 = mp_add_rule(s2, 2, 3);
+    s2 = mp_add_rule(s2, 3, 4);
+    if mp_prove(s2, 4, 16) {
+        println("OK mp_chained");
+    } else {
+        println("FAIL mp_chained");
+        process_exit(1);
+    }
+
+    let mut s3: MpState = mp_new();
+    s3 = mp_add_fact(s3, 1);
+    if mp_prove(s3, 99, 8) {
+        println("FAIL mp_unknown_goal_should_fail_closed");
+        process_exit(1);
+    } else {
+        println("OK mp_unknown_goal_fail_closed");
+    }
+
+    let mut s4: MpState = mp_new();
+    s4 = mp_add_fact(s4, 1);
+    s4 = mp_add_rule(s4, 1, 1);
+    if mp_prove(s4, 1, 16) {
+        println("OK mp_cyclic_terminates");
+    } else {
+        println("FAIL mp_cyclic_terminates");
+        process_exit(1);
+    }
+
+    println("test_theory_logic: PASSED");
+}

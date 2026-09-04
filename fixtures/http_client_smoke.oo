@@ -1,0 +1,96 @@
+// # HTTP client (CAP) capability-aware smoke
+//
+// Logline: Asserts std/net/http_client builder helpers produce correct HTTP/1.1 request lines, Host, User-Agent, and Content-Length. CAP-gated http_client_fetch is logged RESIDUAL: the build is hermetic and the runtime cannot fabricate a &HttpCap.
+//
+// Setup: Imports std/net/http_client.oo. The CAP-gated fetch path is acknowledged in the log and excluded from the assertions.
+//
+// Beats:
+//   1. http_client_new() defaults: User-Agent="openOODA-Net/1.0", timeout_ms=10000, follow_redirects=true.
+//   2. http_client_with_user_agent overrides the User-Agent.
+//   3. http_client_with_timeout overrides the timeout in ms.
+//   4. http_client_build_header for GET produces "GET /path HTTP/1.1" + Host + UA + Connection: close.
+//   5. http_client_build_header for POST adds Content-Type.
+//   6. http_client_build_post sets Content-Length to the body byte count.
+
+import "std/net/http_client.oo";
+
+pub fn main() {
+    let http_client_dummy: Int = 0;
+
+    // Beat 1: defaults.
+    let c1: HttpClient = http_client_new();
+    if c1.user_agent != "openOODA-Net/1.0" {
+        println("FAIL default user-agent got " + c1.user_agent);
+        return;
+    }
+    if c1.timeout_ms != 10000 {
+        println("FAIL default timeout got " + c1.timeout_ms.to_string());
+        return;
+    }
+    if !c1.follow_redirects {
+        println("FAIL default follow_redirects");
+        return;
+    }
+    println("OK client defaults");
+
+    // Beat 2: user-agent override.
+    let c2: HttpClient = http_client_with_user_agent(c1, "my-agent/2.0");
+    if c2.user_agent != "my-agent/2.0" {
+        println("FAIL user-agent override got " + c2.user_agent);
+        return;
+    }
+    println("OK user-agent override");
+
+    // Beat 3: timeout override.
+    let c3: HttpClient = http_client_with_timeout(c2, 5000);
+    if c3.timeout_ms != 5000 {
+        println("FAIL timeout override got " + c3.timeout_ms.to_string());
+        return;
+    }
+    println("OK timeout override");
+
+    // Beat 4: GET build.
+    let h1: String = http_client_build_header("GET", "example.com", "/api", "", "ua/1");
+    if !h1.contains("GET /api HTTP/1.1") {
+        println("FAIL GET request line got " + h1);
+        return;
+    }
+    if !h1.contains("Host: example.com") {
+        println("FAIL GET Host header got " + h1);
+        return;
+    }
+    if !h1.contains("User-Agent: ua/1") {
+        println("FAIL GET UA header got " + h1);
+        return;
+    }
+    if !h1.contains("Connection: close") {
+        println("FAIL GET Connection header got " + h1);
+        return;
+    }
+    println("OK GET build");
+
+    // Beat 5: POST build with Content-Type.
+    let h2: String = http_client_build_header("POST", "example.com", "/api", "application/json", "ua/1");
+    if !h2.contains("POST /api HTTP/1.1") {
+        println("FAIL POST request line got " + h2);
+        return;
+    }
+    if !h2.contains("Content-Type: application/json") {
+        println("FAIL POST Content-Type got " + h2);
+        return;
+    }
+    println("OK POST build");
+
+    // Beat 6: POST body builder sets Content-Length.
+    let h3: String = http_client_build_post("example.com", "/api", "application/json", "{\"a\":1}", "ua/1");
+    if !h3.contains("Content-Length: 7") {
+        println("FAIL POST Content-Length got " + h3);
+        return;
+    }
+    println("OK POST body length");
+
+    println("RESIDUAL http_client_fetch requires &HttpCap: not exercised in pure build");
+    let total: Int = http_client_dummy + 1;
+    println("HTTP_CLIENT_OK");
+    println("total=" + total.to_string());
+}

@@ -1,0 +1,107 @@
+// # Flat Hash Map Smoke Test
+//
+// Logline: Verifies Robin Hood flat hash map insert, update, lookup of present and missing keys, and backward-shift deletion across a cluster.
+//
+// Setup: Imports std/collections/flat_hash_map.oo. Pure, no FS or net.
+//
+// Beats:
+//   1. Build a map of capacity 16 and insert five distinct keys.
+//   2. Update an existing key in place; length stays constant.
+//   3. Retrieve present and missing keys; missing returns None.
+//   4. Verify a tightly clustered triplet survives a middle-key removal.
+//   5. Confirm surviving keys still work after the cluster collapses.
+
+import "std/core/collection/flat_hash_map.oo";
+import "std/core/primitives/option.oo";
+
+pub fn expect_eq_str(label: String, got: String, want: String) -> Bool {
+    if got == want { println("OK " + label); return true; }
+    println("FAIL " + label + " got=" + got + " want=" + want);
+    return false;
+}
+
+pub fn expect_eq_int(label: String, got: Int, want: Int) -> Bool {
+    if got == want { println("OK " + label); return true; }
+    println("FAIL " + label);
+    return false;
+}
+
+pub fn expect_true(label: String, cond: Bool) -> Bool {
+    if cond { println("OK " + label); return true; }
+    println("FAIL " + label);
+    return false;
+}
+
+pub fn expect_false(label: String, cond: Bool) -> Bool {
+    if cond { println("FAIL " + label); return false; }
+    println("OK " + label);
+    return true;
+}
+
+pub fn main() {
+    let mut m: FlatHashMap = fhm_new(16);
+
+    m = fhm_insert(m, "alpha", "1");
+    m = fhm_insert(m, "beta", "2");
+    m = fhm_insert(m, "gamma", "3");
+    m = fhm_insert(m, "delta", "4");
+    m = fhm_insert(m, "epsilon", "5");
+
+    if !expect_eq_int("len after 5 inserts", fhm_len(m), 5) { return; }
+
+    let r1: Result[String, String] = fhm_get(m, "alpha");
+    if !expect_eq_str("get alpha", opt_unwrap_or(r1, "MISS"), "1") { return; }
+    let r2: Result[String, String] = fhm_get(m, "gamma");
+    if !expect_eq_str("get gamma", opt_unwrap_or(r2, "MISS"), "3") { return; }
+    let r3: Result[String, String] = fhm_get(m, "epsilon");
+    if !expect_eq_str("get epsilon", opt_unwrap_or(r3, "MISS"), "5") { return; }
+
+    if !expect_true("contains beta", fhm_contains(m, "beta")) { return; }
+    if !expect_false("contains missing", fhm_contains(m, "omega")) { return; }
+
+    let rmiss: Result[String, String] = fhm_get(m, "omega");
+    if !expect_false("get missing is_none", opt_is_some(rmiss)) { return; }
+
+    m = fhm_insert(m, "beta", "TWO");
+    if !expect_eq_int("len unchanged after update", fhm_len(m), 5) { return; }
+    let r4: Result[String, String] = fhm_get(m, "beta");
+    if !expect_eq_str("get beta updated", opt_unwrap_or(r4, "MISS"), "TWO") { return; }
+
+    // Beat 4: cluster backward shift with three keys that all hash to bucket 5
+    // of an 8-slot map. We then remove the middle one and verify the others
+    // remain reachable, confirming the cluster collapsed correctly.
+    let mut small: FlatHashMap = fhm_new(8);
+    small = fhm_insert(small, "alpha", "A");
+    small = fhm_insert(small, "epsilon", "E");
+    small = fhm_insert(small, "theta", "T");
+    if !expect_eq_int("cluster len", fhm_len(small), 3) { return; }
+
+    let sa: Result[String, String] = fhm_get(small, "alpha");
+    let se: Result[String, String] = fhm_get(small, "epsilon");
+    let st: Result[String, String] = fhm_get(small, "theta");
+    if !expect_eq_str("cluster alpha", opt_unwrap_or(sa, "MISS"), "A") { return; }
+    if !expect_eq_str("cluster epsilon", opt_unwrap_or(se, "MISS"), "E") { return; }
+    if !expect_eq_str("cluster theta", opt_unwrap_or(st, "MISS"), "T") { return; }
+
+    small = fhm_remove(small, "epsilon");
+    if !expect_eq_int("len after remove", fhm_len(small), 2) { return; }
+    if !expect_false("removed epsilon", fhm_contains(small, "epsilon")) { return; }
+    if !expect_true("alpha survives remove", fhm_contains(small, "alpha")) { return; }
+    if !expect_true("theta survives remove", fhm_contains(small, "theta")) { return; }
+
+    let sa2: Result[String, String] = fhm_get(small, "alpha");
+    let st2: Result[String, String] = fhm_get(small, "theta");
+    if !expect_eq_str("alpha value intact", opt_unwrap_or(sa2, "MISS"), "A") { return; }
+    if !expect_eq_str("theta value intact", opt_unwrap_or(st2, "MISS"), "T") { return; }
+
+    let srem: Result[String, String] = fhm_get(small, "epsilon");
+    if !expect_false("get removed is_none", opt_is_some(srem)) { return; }
+
+    // Surviving keys from the original map must still be reachable.
+    let r5: Result[String, String] = fhm_get(m, "alpha");
+    if !expect_eq_str("original alpha after all ops", opt_unwrap_or(r5, "MISS"), "1") { return; }
+    let r6: Result[String, String] = fhm_get(m, "delta");
+    if !expect_eq_str("original delta after all ops", opt_unwrap_or(r6, "MISS"), "4") { return; }
+
+    println("FLAT_HASH_MAP_OK");
+}

@@ -1,0 +1,18 @@
+// # SSA path stub smoke
+//
+// Logline: -Ossa dispatches to run_build_llvm_ssa (the P2.22 stub), which
+// prints the "# SSA path" marker and falls through to the direct-opcode
+// run_build_llvm emit path. The resulting binary should print
+// "ssa_path_stub: PASSED" so we can confirm the wiring end-to-end.
+//
+// Setup: Build with -Ossa (or any opt level — the c backend ignores it).
+// Pass criteria: stdout is exactly "ssa_path_stub: PASSED".
+//
+// Beats:
+//   1. Enter main.
+//   2. Print the marker.
+//   3. Exit 0.
+
+pub fn main() {
+    println("ssa_path_stub: PASSED");
+}

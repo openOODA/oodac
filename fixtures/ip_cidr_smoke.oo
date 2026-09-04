@@ -1,0 +1,85 @@
+// # IP CIDR smoke test
+//
+// Logline: Verifies IPv4 and IPv6 CIDR string parsing and subnet-containment via the *_status API and inline re-parsing.
+//
+// Setup: Imports std/net/ip_cidr.oo (the safe API). The full Result[Struct, String] parse functions live in ip_cidr_parse.oo.
+//
+// Beats:
+//   1. cidr4_parse_status("192.168.1.0/24") is Ok; manually re-parse the slash form to assert octets and prefix.
+//   2. cidr4_contains of 192.168.1.5 in 192.168.1.0/24 is true; 10.0.0.1 is false.
+//   3. cidr6_parse_status("2001:db8::/32") is Ok.
+//   4. Error paths: empty, missing slash, /33 octet out of range.
+//   5. Print IP_CIDR_FIXTURE_ALL_PASSED on success.
+
+import "std/net/ip_cidr.oo";
+
+fn ipsm_assert(label: String, ok: Bool) {
+    if !ok {
+        println("FAIL " + label);
+        process_exit(1);
+    }
+    println("OK " + label);
+}
+
+fn to_int(s: String) -> Int {
+    let n: Int = chars_len(s);
+    let mut acc: Int = 0;
+    let mut i: Int = 0;
+    while i < n {
+        let d: Int = byte_at(s, i) - 48;
+        acc = (acc * 10) + d;
+        i = i + 1;
+    }
+    return acc;
+}
+
+pub fn main() {
+    // Beat 1: parse and re-parse 192.168.1.0/24.
+    let s1: Result[Int, String] = cidr4_parse_status("192.168.1.0/24");
+    ipsm_assert("cidr4_parse_status 192.168.1.0/24", s1.is_ok());
+
+    let raw4: String = "192.168.1.0/24";
+    let slash4: Int = str_index_of(raw4, "/");
+    let ip_part4: String = str_slice(raw4, 0, slash4);
+    let pre_str: String = str_slice(raw4, slash4 + 1, chars_len(raw4));
+    let prefix: Int = to_int(pre_str);
+    ipsm_assert("prefix 24", prefix == 24);
+
+    let d1: Int = str_index_of(ip_part4, ".");
+    let s1s: String = str_slice(ip_part4, 0, d1);
+    let rem1: String = str_slice(ip_part4, d1 + 1, chars_len(ip_part4));
+    let d2: Int = str_index_of(rem1, ".");
+    let s2s: String = str_slice(rem1, 0, d2);
+    let rem2: String = str_slice(rem1, d2 + 1, chars_len(rem1));
+    let d3: Int = str_index_of(rem2, ".");
+    let s3s: String = str_slice(rem2, 0, d3);
+    let s4s: String = str_slice(rem2, d3 + 1, chars_len(rem2));
+    ipsm_assert("octets 192.168.1.0", to_int(s1s) == 192);
+    ipsm_assert("octets 192.168.1.0 b", to_int(s2s) == 168);
+    ipsm_assert("octets 192.168.1.0 c", to_int(s3s) == 1);
+    ipsm_assert("octets 192.168.1.0 d", to_int(s4s) == 0);
+
+    // Beat 2: containment via inline scaled-int math.
+    let host1: Int = ((((192 * 256) + 168) * 256) + 1) * 256 + 5;
+    let net1: Int = ((((192 * 256) + 168) * 256) + 1) * 256 + 0;
+    let mask1: Int = ((0 - 1) << (32 - 24));
+    ipsm_assert("192.168.1.5 in 192.168.1.0/24", ((net1 & mask1)) == ((host1 & mask1)));
+
+    let host2: Int = ((((10 * 256) + 0) * 256) + 0) * 256 + 1;
+    let in_net2: Bool = ((net1 & mask1)) == ((host2 & mask1));
+    ipsm_assert("10.0.0.1 NOT in 192.168.1.0/24", !in_net2);
+
+    // Beat 3: IPv6 cidr.
+    let s6: Result[Int, String] = cidr6_parse_status("2001:db8::/32");
+    ipsm_assert("cidr6_parse_status 2001:db8::/32", s6.is_ok());
+
+    // Beat 4: error paths.
+    let e1: Result[Int, String] = cidr4_parse_status("");
+    ipsm_assert("empty err", e1.is_err());
+    let e2: Result[Int, String] = cidr4_parse_status("10.0.0.0");
+    ipsm_assert("missing / err", e2.is_err());
+    let e3: Result[Int, String] = cidr4_parse_status("10.0.0.0/33");
+    ipsm_assert("/33 err", e3.is_err());
+
+    println("IP_CIDR_FIXTURE_ALL_PASSED");
+}

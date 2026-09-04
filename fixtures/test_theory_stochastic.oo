@@ -1,0 +1,235 @@
+// # Stochastic processes: Markov chains
+//
+// Logline: Verify transition matrix manipulation, stochasticity, power-iteration stationary distribution, irreducibility via BFS, and row normalization on finite-state chains.
+//
+// Setup: Pure in-fixture re-declaration. No std import required.
+//
+// Beats:
+//   1. 2-state chain P = [[0.7, 0.3], [0.4, 0.6]] is row-stochastic.
+//   2. Power-iteration stationary distribution satisfies pi * P = pi.
+//   3. Power iteration converges within 100 iterations at tol = 0.0001.
+//   4. 3-cycle (1->2->3->1) is irreducible.
+//   5. Disconnected 3-state chain is not irreducible.
+//   6. Row normalization of an un-normalized row produces a stochastic chain.
+type MarkovChain = struct {
+    n_states: Int,
+    P: List[Float]
+};
+pub fn mc_new(n: Int) -> MarkovChain {
+    if n <= 0 { return MarkovChain { n_states: 0 - 1, P: list_new() }; }
+    let total = n * n;
+    let mut data: List[Float] = list_new();
+    let mut i: Int = 0;
+    while i < total { data = list_push(data, 0.0); i = i + 1; }
+    return MarkovChain { n_states: n, P: data };
+}
+pub fn mc_set_transition(mut mc: MarkovChain, from: Int, to: Int, p: Float) -> MarkovChain {
+    let n: Int = mc.n_states;
+    if n <= 0 || from < 0 || from >= n || to < 0 || to >= n { return mc; }
+    let target = from * n + to;
+    let mut out: List[Float] = list_new();
+    let total = list_len(mc.P);
+    let mut k: Int = 0;
+    while k < total { if k == target { out = list_push(out, p); } else { out = list_push(out, list_get(mc.P, k)); } k = k + 1; }
+    let mut local: MarkovChain = mc;
+    local.P = out;
+    return local;
+}
+pub fn mc_get_transition(mc: MarkovChain, from: Int, to: Int) -> Float {
+    let n: Int = mc.n_states;
+    if n <= 0 || from < 0 || from >= n || to < 0 || to >= n { return 0.0; }
+    return list_get(mc.P, from * n + to);
+}
+pub fn mc_normalize_row(mut mc: MarkovChain, from: Int) -> MarkovChain {
+    let n: Int = mc.n_states;
+    if n <= 0 || from < 0 || from >= n { return mc; }
+    let mut sum: Float = 0.0;
+    let mut j: Int = 0;
+    while j < n { sum = sum + list_get(mc.P, from * n + j); j = j + 1; }
+    if sum <= 0.0 { return mc; }
+    let mut local: MarkovChain = mc;
+    let mut j2: Int = 0;
+    while j2 < n {
+        let idx = from * n + j2;
+        let v = list_get(local.P, idx);
+        let mut np: List[Float] = list_new();
+        let total = list_len(local.P);
+        let mut k: Int = 0;
+        while k < total { if k == idx { np = list_push(np, v / sum); } else { np = list_push(np, list_get(local.P, k)); } k = k + 1; }
+        local.P = np;
+        j2 = j2 + 1;
+    }
+    return local;
+}
+pub fn mc_is_stochastic(mc: MarkovChain) -> Bool {
+    let n: Int = mc.n_states;
+    if n <= 0 { return false; }
+    let tol: Float = 0.0001;
+    let mut i: Int = 0;
+    while i < n {
+        let mut sum: Float = 0.0;
+        let mut j: Int = 0;
+        while j < n { sum = sum + list_get(mc.P, i * n + j); j = j + 1; }
+        let diff: Float = sum - 1.0;
+        if diff < 0.0 { if (0.0 - diff) > tol { return false; } } else { if diff > tol { return false; } }
+        i = i + 1;
+    }
+    return true;
+}
+pub fn mc_step(mc: MarkovChain, state: Int, n_steps: Int) -> Int {
+    let n: Int = mc.n_states;
+    if n <= 0 || state < 0 || state >= n || n_steps < 0 { return 0 - 1; }
+    let mut current: Int = state;
+    let mut step: Int = 0;
+    while step < n_steps {
+        let seed: Int = current * 1103515245 + 12345 + step * 7;
+        let mod_val: Int = seed % 2147483647;
+        let mut s: Int = mod_val;
+        if s < 0 { s = 0 - s; }
+        if s == 0 { s = 1; }
+        let u: Float = (1.0 * (s)) / 2147483647.0;
+        let mut cum: Float = 0.0;
+        let mut next: Int = 0;
+        let mut found: Int = 0;
+        let mut j: Int = 0;
+        while j < n {
+            cum = cum + list_get(mc.P, current * n + j);
+            if found == 0 { if u < cum { next = j; found = 1; } }
+            j = j + 1;
+        }
+        if found == 0 { next = current; }
+        current = next;
+        step = step + 1;
+    }
+    return current;
+}
+pub fn mc_stationary_power(mc: MarkovChain, n_iters: Int) -> List[Float] {
+    let n: Int = mc.n_states;
+    if n <= 0 || n_iters <= 0 { return list_new(); }
+    let n_f: Float = 1.0 * (n);
+    let init: Float = 1.0 / n_f;
+    let mut pi: List[Float] = list_new();
+    let mut k: Int = 0;
+    while k < n { pi = list_push(pi, init); k = k + 1; }
+    let mut it: Int = 0;
+    while it < n_iters {
+        let mut nxt: List[Float] = list_new();
+        let mut j: Int = 0;
+        while j < n {
+            let mut acc: Float = 0.0;
+            let mut i: Int = 0;
+            while i < n { let pij: Float = list_get(mc.P, i * n + j); let pi_i: Float = list_get(pi, i); acc = acc + pi_i * pij; i = i + 1; }
+            nxt = list_push(nxt, acc);
+            j = j + 1;
+        }
+        pi = nxt;
+        it = it + 1;
+    }
+    return pi;
+}
+pub fn mc_stationary_diff(prev: List[Float], curr: List[Float]) -> Float {
+    let n1: Int = list_len(prev);
+    let n2: Int = list_len(curr);
+    if n1 != n2 || n1 == 0 { return 0.0; }
+    let mut acc: Float = 0.0;
+    let mut i: Int = 0;
+    while i < n1 { let d: Float = list_get(prev, i) - list_get(curr, i); if d < 0.0 { acc = acc + (0.0 - d); } else { acc = acc + d; } i = i + 1; }
+    return acc;
+}
+pub fn mc_converged(prev: List[Float], curr: List[Float], tol: Float) -> Bool {
+    if tol < 0.0 { return false; }
+    let d: Float = mc_stationary_diff(prev, curr);
+    return d < tol;
+}
+pub fn mc_is_irreducible(mc: MarkovChain) -> Bool {
+    let n: Int = mc.n_states;
+    if n <= 1 { return false; }
+    let mut src: Int = 0;
+    while src < n {
+        let mut visited: List[Int] = list_new();
+        let mut k: Int = 0;
+        while k < n { if k == src { visited = list_push(visited, 1); } else { visited = list_push(visited, 0); } k = k + 1; }
+        let mut queue: List[Int] = list_new();
+        queue = list_push(queue, src);
+        let mut head: Int = 0;
+        while head < list_len(queue) {
+            let u: Int = list_get(queue, head);
+            let mut v: Int = 0;
+            while v < n {
+                if list_get(visited, v) == 0 {
+                    let p_uv: Float = list_get(mc.P, u * n + v);
+                    if p_uv > 0.0 {
+                        let mut nv: List[Int] = list_new();
+                        let mut kk: Int = 0;
+                        while kk < n { if kk == v { nv = list_push(nv, 1); } else { nv = list_push(nv, list_get(visited, kk)); } kk = kk + 1; }
+                        visited = nv;
+                        queue = list_push(queue, v);
+                    }
+                }
+                v = v + 1;
+            }
+            head = head + 1;
+        }
+        let mut count: Int = 0;
+        let mut jj: Int = 0;
+        while jj < n { if list_get(visited, jj) == 1 { count = count + 1; } jj = jj + 1; }
+        if count != n { return false; }
+        src = src + 1;
+    }
+    return true;
+}
+pub fn main() {
+    // Test 1: 2-state chain is stochastic
+    let mut mc: MarkovChain = mc_new(2);
+    mc = mc_set_transition(mc, 0, 0, 0.7);
+    mc = mc_set_transition(mc, 0, 1, 0.3);
+    mc = mc_set_transition(mc, 1, 0, 0.4);
+    mc = mc_set_transition(mc, 1, 1, 0.6);
+    if mc_is_stochastic(mc) { println("OK test1_2state_stochastic"); } else { println("FAIL test1"); process_exit(1); }
+
+    // Test 2: stationary distribution exists and pi * P = pi
+    let pi = mc_stationary_power(mc, 500);
+    let n2: Int = mc.n_states;
+    let mut pip: List[Float] = list_new();
+    let mut j: Int = 0;
+    while j < n2 {
+        let mut acc: Float = 0.0;
+        let mut i: Int = 0;
+        while i < n2 { let pij: Float = list_get(mc.P, i * n2 + j); let pi_i: Float = list_get(pi, i); acc = acc + pi_i * pij; i = i + 1; }
+        pip = list_push(pip, acc);
+        j = j + 1;
+    }
+    if mc_converged(pi, pip, 0.001) { println("OK test2_stationary_self_consistent"); } else { println("FAIL test2"); process_exit(1); }
+
+    // Test 3: power iteration converges within 100 iters at tol=0.0001
+    let pi_100 = mc_stationary_power(mc, 100);
+    let pi_200 = mc_stationary_power(mc, 200);
+    if mc_converged(pi_100, pi_200, 0.0001) { println("OK test3_power_converges_within_100"); } else { println("FAIL test3"); process_exit(1); }
+
+    // Test 4: 3-cycle 1->2->3->1 is irreducible
+    let mut mc4: MarkovChain = mc_new(3);
+    mc4 = mc_set_transition(mc4, 0, 1, 1.0);
+    mc4 = mc_set_transition(mc4, 1, 2, 1.0);
+    mc4 = mc_set_transition(mc4, 2, 0, 1.0);
+    if mc_is_irreducible(mc4) { println("OK test4_3cycle_irreducible"); } else { println("FAIL test4"); process_exit(1); }
+
+    // Test 5: disconnected 3-state chain is NOT irreducible
+    let mut mc5: MarkovChain = mc_new(3);
+    mc5 = mc_set_transition(mc5, 0, 0, 0.5);
+    mc5 = mc_set_transition(mc5, 0, 1, 0.5);
+    mc5 = mc_set_transition(mc5, 1, 0, 0.5);
+    mc5 = mc_set_transition(mc5, 1, 1, 0.5);
+    mc5 = mc_set_transition(mc5, 2, 2, 1.0);
+    if mc_is_irreducible(mc5) { println("FAIL test5_should_not_be_irreducible"); process_exit(1); } else { println("OK test5_disconnected_not_irreducible"); }
+
+    // Test 6: row normalization of un-normalized row gives stochastic chain
+    let mut mc6: MarkovChain = mc_new(2);
+    mc6 = mc_set_transition(mc6, 0, 0, 2.0);
+    mc6 = mc_set_transition(mc6, 0, 1, 2.0);
+    mc6 = mc_set_transition(mc6, 1, 0, 0.5);
+    mc6 = mc_set_transition(mc6, 1, 1, 0.5);
+    mc6 = mc_normalize_row(mc6, 0);
+    if mc_is_stochastic(mc6) { println("OK test6_normalize_yields_stochastic"); } else { println("FAIL test6"); process_exit(1); }
+
+    println("test_theory_stochastic: PASSED");
+}

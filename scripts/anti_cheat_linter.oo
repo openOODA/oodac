@@ -1,0 +1,34 @@
+// # Anti-Cheat Honesty Linter — Sovereign Integrity Gate
+//
+// Logline: Scans codebase for fraudulent pass-throughs, hardcoded bypass sentinels, and mock facades.
+//
+// Setup: ProcessCap required to execute repository integrity audit across test and compiler trees.
+//
+// Beats:
+//   1. Resolve repository root environment.
+//   2. Scan tests and compiler for prohibited shortcut sentinels.
+//   3. Assert zero fraudulent mock bypasses.
+//   4. Report passing verification and exit 0.
+
+pub fn main(p: &ProcessCap) {
+    println("=== Anti-Cheat Honesty Linter ===");
+    let cmd: String = "src_root=\"${OODA_REPO_ROOT:-$(pwd -P)}\"; "
+        + "cd \"$src_root\" 2>/dev/null || exit 1; "
+        + "bad=$(find . -name '.agents' -prune -o -name 'anti_cheat_linter.oo' -prune -o -type f -name '*.oo' -print 2>/dev/null | xargs grep -nE 'CH[E]AT_BYPASS|MOCK_PASS_ALL|FAKE_SUCCESS' || true); "
+        + "if [ -n \"$bad\" ]; then echo '[CHEAT FAIL] Found prohibited mock bypasses:'; echo \"$bad\"; exit 1; fi; "
+        + "echo 'Anti-Cheat Audit: 0 cheat bypasses found. Integrity verified.'; "
+        + "exit 0;";
+
+    let res = process_exec(p, cmd);
+    match res {
+        Ok(out) => {
+            println(out);
+            println("anti_cheat_linter: PASS");
+            process_exit(0);
+        },
+        Err(e) => {
+            println("anti_cheat_linter: FAIL - " + e);
+            process_exit(1);
+        }
+    }
+}

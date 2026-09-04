@@ -1,0 +1,14 @@
+// # Reproducible constant fixture
+//
+// Logline: Print a fixed line so hermetic dual-run builds can compare .bin digests.
+//
+// Setup: No caps. No imports. Used by std_qa_reproducible_build and ooda build --hermetic.
+//
+// Beats:
+//   1. main prints the token repro-ok.
+//   2. The program has no time, env, or path reads.
+//   3. Dual-run gcc of emit-c output must match byte-for-byte.
+
+pub fn main() {
+    println("repro-ok");
+}

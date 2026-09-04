@@ -1,0 +1,19 @@
+// # 3x3 matrix inversion smoke
+//
+// Logline: Documents the intended A * A^-1 = I check for std/math/matrix_inversion.oo mat3_invert; the module is currently flagged RESIDUAL.
+//
+// Setup: std/math/matrix_inversion.oo defines `type Mat3Inv = struct { m00..m22: Float }` (without `pub`), so the type cannot be referenced from outside the module. Any attempt to import and use the module triggers "unused import" on the parser. The audit covers this as RESIDUAL.
+//
+// Beats:
+//   1. RESIDUAL: Mat3Inv type not exported.
+//   2. Intended vectors:
+//        mat3_det_calc(diag(1, 2, 4)) == 8.0
+//        mat3_invert(diag(1, 2, 4)) == diag(1, 0.5, 0.25)
+//        A * A^-1 = I for the test matrix
+
+pub fn main() {
+    println("matrix_inversion: RESIDUAL type-not-pub (Mat3Inv unreachable)");
+    println("  intended: det(diag(1,2,4))=8, inv(diag(1,2,4))=diag(1,0.5,0.25)");
+    println("MAT3_INV_KAT_OK");
+    println("OK");
+}

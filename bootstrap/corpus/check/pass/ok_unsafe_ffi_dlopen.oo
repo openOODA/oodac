@@ -1,0 +1,13 @@
+// # ok unsafe ffi dlopen
+//
+// Logline: Check-pass fixture that grants dlopen through an UnsafeFFICap first argument.
+//
+// Beats:
+//   1. ok takes ffi: &UnsafeFFICap.
+//   2. dlopen is called with that token.
+//   3. Check must accept the FFI grant.
+
+pub fn ok(ffi: &UnsafeFFICap) {
+    let r = dlopen(ffi, "libx.so");
+}
+pub fn main() {}

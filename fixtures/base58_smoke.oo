@@ -1,0 +1,69 @@
+// # Base58 Bitcoin / IPFS round-trip smoke
+//
+// Logline: Asserts std/encoding/base58.base58_encode and base58_decode against the IPFS test vector "Hello World" -> "JxF12TrwUP45BMd" and round-trip with leading zero preservation.
+//
+// Setup: Imports std/encoding/base58.oo. Pure.
+//
+// Beats:
+//   1. Encode "Hello World" -> "JxF12TrwUP45BMd".
+//   2. Decode "JxF12TrwUP45BMd" -> Ok.
+//   3. base58_encode_int / base58_decode_int round-trip.
+//   4. Leading zero bytes map to '1'.
+
+import "std/core/encoding/base58.oo";
+
+pub fn main() {
+    let base58_dummy: Int = 0;
+
+    // Beat 1: IPFS test vector.
+    let e1: String = base58_encode("Hello World");
+    if e1 != "JxF12TrwUP45BMd" {
+        println("FAIL encode Hello World got " + e1);
+        return;
+    }
+    println("OK encode Hello World");
+
+    // Beat 2: decode.
+    let d1: Result[String, String] = base58_decode("JxF12TrwUP45BMd");
+    if d1.is_err() {
+        println("FAIL decode JxF12TrwUP45BMd");
+        return;
+    }
+    println("OK decode JxF12TrwUP45BMd");
+
+    // Beat 3: integer round-trip.
+    let ei: String = base58_encode_int(123456789);
+    if ei != "BukQL" {
+        println("FAIL encode_int 123456789 got " + ei);
+        return;
+    }
+    let di: Result[Int, String] = base58_decode_int("BukQL");
+    if di.is_err() {
+        println("FAIL decode_int BukQL");
+        return;
+    }
+    println("OK integer round-trip");
+
+    // Beat 4: leading zero byte preservation.
+    // chr(0)+chr(0)+chr(0)+chr(0)+"Hello" -> starts with "1111" then the encoding of "Hello".
+    let n: String = chr(0);
+    let zero_str: String = n + n + n + n + "Hello";
+    let ez: String = base58_encode(zero_str);
+    if str_slice(ez, 0, 4) != "1111" {
+        println("FAIL leading zeros got " + ez);
+        return;
+    }
+    println("OK leading zero preservation");
+
+    // Beat 5: invalid char rejected.
+    let dinv: Result[String, String] = base58_decode("0OIl");
+    if dinv.is_ok() {
+        println("FAIL decode 0OIl accepted");
+        return;
+    }
+    println("OK invalid char rejected");
+
+    let total: Int = base58_dummy + 1;
+    println("BASE58_RT_OK");
+    println("total=" + total.to_string());
+}

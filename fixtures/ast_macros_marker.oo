@@ -1,0 +1,15 @@
+// # Mark AST macros residual
+//
+// Logline: This fixture only names the AST-macros residual surface.
+//
+// Setup: See bootstrap/AST_MACROS.oot. Named only, not enforced.
+//
+// Beats:
+//   1. Keep a named residual surface.
+//   2. Print 0 from main.
+//   3. Do not enforce macros here.
+
+// AST_MACROS: residual
+pub fn main() {
+    println(0);
+}

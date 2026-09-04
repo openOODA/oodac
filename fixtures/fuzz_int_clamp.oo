@@ -1,0 +1,25 @@
+// # Int clamp10 fuzz
+//
+// Logline: Clamp a non-negative Int into 0..10 for the int fuzz rail.
+//
+// Beats:
+//   1. Keep FUZZ_DOMAIN int and target clamp10 0 30.
+//   2. Require x >= 0 and ensure 0 <= result <= 10.
+//   3. Return 10 when x > 10, else x.
+
+// FUZZ_DOMAIN: int
+// FUZZ_TARGET: clamp10 0 30
+// FUZZ_REQUIRES: clamp10 x >= 0
+// FUZZ_ENSURES: clamp10 result >= 0
+// FUZZ_ENSURES: clamp10 result <= 10
+fn clamp10(x: Int) -> Int {
+    requires x >= 0;
+    ensures result >= 0;
+    ensures result <= 10;
+    if x > 10 {
+        return 10;
+    }
+    return x;
+}
+pub fn main(sys: &SysCap) {
+}

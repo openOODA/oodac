@@ -1,0 +1,27 @@
+// # Count in a while
+//
+// Logline: Increment i in a while, then pick y with else-if and unary not.
+//
+// Setup: Test fixture. Keep all code exact.
+//
+// Beats:
+//   1. Increment i while it is under 3.
+//   2. Bind flag from !(i == 0).
+//   3. Print the else-if result.
+//
+// while loops + else-if + unary ! (interpreter + LLVM/WAT subset)
+pub fn main() {
+    let mut i = 0;
+    while i < 3 {
+        i = i + 1;
+    }
+    let flag = !(i == 0);
+    let y = if i > 5 {
+        9
+    } else if i > 2 {
+        i
+    } else {
+        0
+    };
+    println(y);
+}

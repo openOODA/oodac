@@ -1,0 +1,23 @@
+// # Negative: Multi-Term Multiplication Contradiction
+//
+// Logline: Proves that impossible multi-term multiplication precondition triggers compile-time unsat refusal.
+//
+// Setup: Pure .oo fixture for negative contract testing.
+//
+// Beats:
+//   1. Function requires x in [2, 3], y in [2, 3], z in [2, 3].
+//   2. Precondition x * y * z >= 100 is provably unsat (max is 27).
+//   3. Refuses at compile time with ERR smt unsat requires.
+
+pub fn bad_multiterm(x: Int, y: Int, z: Int) -> Int
+    requires x >= 2 && x <= 3
+    requires y >= 2 && y <= 3
+    requires z >= 2 && z <= 3
+    requires x * y * z >= 100
+{
+    return x * y * z;
+}
+
+pub fn main() {
+    println(bad_multiterm(2, 2, 2));
+}

@@ -1,0 +1,98 @@
+// # Result Adversarial Smoke Test
+//
+// Logline: Verifies Result Ok/Err variants, is_ok/is_err checks, unwrap, map_err, and map_ok with adversarial inputs.
+//
+// Setup: Pure operations. No FS or net dependencies.
+//
+// Beats:
+//   1. VALID: Normal Ok and Err creation and checking.
+//   2. NEGATIVE TRUST: Test with empty strings and edge cases.
+//   3. ADVERSARIAL: Test with special string values.
+//   4. DOUBLE-RUN: Verify all operations are deterministic.
+
+import "std/core/primitives/result.oo";
+
+pub fn expect_eq_str(label: String, got: String, want: String) -> Bool {
+    if got == want { println("OK " + label); return true; }
+    println("FAIL " + label + " got=" + got + " want=" + want);
+    return false;
+}
+
+pub fn expect_true(label: String, cond: Bool) -> Bool {
+    if cond { println("OK " + label); return true; }
+    println("FAIL " + label);
+    return false;
+}
+
+pub fn expect_false(label: String, cond: Bool) -> Bool {
+    if !cond { println("OK " + label); return true; }
+    println("FAIL " + label);
+    return false;
+}
+
+pub fn main() {
+    // VALID: Ok creation
+    let ok_val: Result[String, String] = res_ok("success");
+    if !expect_true("ok is_ok", res_is_ok(ok_val)) { return; }
+    if !expect_false("ok is_err", res_is_err(ok_val)) { return; }
+    if !expect_eq_str("ok unwrap_or", res_unwrap_or(ok_val, "default"), "success") { return; }
+
+    // VALID: Err creation
+    let err_val: Result[String, String] = res_err("error");
+    if !expect_false("err is_ok", res_is_ok(err_val)) { return; }
+    if !expect_true("err is_err", res_is_err(err_val)) { return; }
+    if !expect_eq_str("err unwrap_or", res_unwrap_or(err_val, "default"), "default") { return; }
+
+    // VALID: res_map_err
+    let err_mapped: Result[String, String] = res_map_err(err_val, "new error");
+    if !expect_eq_str("err map_err unwrap", res_unwrap_or(err_mapped, "default"), "default") { return; }
+    
+    let ok_mapped: Result[String, String] = res_map_err(ok_val, "new error");
+    if !expect_eq_str("ok map_err unwrap", res_unwrap_or(ok_mapped, "default"), "success") { return; }
+
+    // VALID: res_map_ok_prefix
+    let ok_prefixed: Result[String, String] = res_map_ok_prefix(ok_val, "prefix_");
+    if !expect_eq_str("ok map_ok unwrap", res_unwrap_or(ok_prefixed, "default"), "prefix_success") { return; }
+    
+    let err_prefixed: Result[String, String] = res_map_ok_prefix(err_val, "prefix_");
+    if !expect_eq_str("err map_ok unwrap", res_unwrap_or(err_prefixed, "default"), "default") { return; }
+
+    // NEGATIVE TRUST: Empty strings
+    let ok_empty: Result[String, String] = res_ok("");
+    if !expect_true("ok empty is_ok", res_is_ok(ok_empty)) { return; }
+    if !expect_eq_str("ok empty unwrap", res_unwrap_or(ok_empty, "default"), "") { return; }
+
+    let err_empty: Result[String, String] = res_err("");
+    if !expect_true("err empty is_err", res_is_err(err_empty)) { return; }
+    if !expect_eq_str("err empty unwrap", res_unwrap_or(err_empty, "default"), "default") { return; }
+
+    // ADVERSARIAL: Long strings
+    let mut long_str: String = "a";
+    let mut i: Int = 0;
+    while i < 50 {
+        long_str = long_str + "a";
+        i = i + 1;
+    }
+    let ok_long: Result[String, String] = res_ok(long_str);
+    if !expect_eq_str("ok long unwrap", res_unwrap_or(ok_long, "short"), long_str) { return; }
+
+    let err_long: Result[String, String] = res_err(long_str);
+    if !expect_eq_str("err long unwrap", res_unwrap_or(err_long, "short"), "short") { return; }
+
+    // ADVERSARIAL: Special characters
+    let ok_special: Result[String, String] = res_ok("hello\nworld\t!");
+    if !expect_eq_str("ok special unwrap", res_unwrap_or(ok_special, "x"), "hello\nworld\t!") { return; }
+
+    // DOUBLE-RUN: Determinism check
+    let ok_dr1: Result[String, String] = res_ok("test");
+    let ok_dr2: Result[String, String] = res_ok("test");
+    if !expect_true("dr ok is_ok", res_is_ok(ok_dr1) && res_is_ok(ok_dr2)) { return; }
+    if !expect_eq_str("dr ok unwrap", res_unwrap_or(ok_dr1, "x"), res_unwrap_or(ok_dr2, "x")) { return; }
+
+    let err_dr1: Result[String, String] = res_err("error");
+    let err_dr2: Result[String, String] = res_err("error");
+    if !expect_true("dr err is_err", res_is_err(err_dr1) && res_is_err(err_dr2)) { return; }
+    if !expect_eq_str("dr err unwrap", res_unwrap_or(err_dr1, "default"), res_unwrap_or(err_dr2, "default")) { return; }
+
+    println("OK: result_smoke passed");
+}

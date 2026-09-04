@@ -1,0 +1,42 @@
+// # FHE BGV Evaluator Config Determinism Smoke
+//
+// Logline: Verifies std/crypto/fhe_lattices/fhe_bgv_evaluator.bgv_evaluator_config_new is deterministic and bgv_eval_is_level_valid accepts non-negative levels.
+//
+// Setup: Imports std/crypto/fhe_lattices/fhe_bgv_evaluator.oo. Pure, no FS or net. Property test (PROP).
+//
+// Beats:
+//   1. bgv_evaluator_config_new(max_depth=3, t=2, chain=[1000,2000,4000]).
+//   2. bgv_eval_is_level_valid(0) = true, bgv_eval_is_level_valid(-1) = false.
+//   3. bgv_eval_depth_consumed(init=5, cur=2) = 3.
+//   4. Print BGV_EVAL_PROP_OK on success.
+
+import "std/sec/asymmetric/fhe_bgv_evaluator.oo";
+
+pub fn main() {
+    let mut chain: List[Int] = list_new();
+    chain = list_push(chain, 1000);
+    chain = list_push(chain, 2000);
+    chain = list_push(chain, 4000);
+    let cfg: BgvEvaluatorConfig = bgv_evaluator_config_new(3, 2, chain);
+    let ok0: Bool = bgv_eval_is_level_valid(0);
+    let okn1: Bool = bgv_eval_is_level_valid(-1);
+    if !ok0 {
+        println("FAIL level 0 invalid");
+        return;
+    }
+    if okn1 {
+        println("FAIL level -1 valid");
+        return;
+    }
+    let depth: Int = bgv_eval_depth_consumed(5, 2);
+    if depth != 3 {
+        println("FAIL depth");
+        return;
+    }
+    let max_depth: Int = cfg.max_depth;
+    if max_depth != 3 {
+        println("FAIL max_depth");
+        return;
+    }
+    println("BGV_EVAL_PROP_OK");
+}

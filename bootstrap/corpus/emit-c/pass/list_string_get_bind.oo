@@ -1,0 +1,15 @@
+// # list string get bind
+//
+// Logline: Emit-c pass fixture that binds list_get of a List[String] and prints the String.
+//
+// Beats:
+//   1. main builds a one-item string list.
+//   2. s is bound from list_get at 0.
+//   3. println prints s.
+
+pub fn main() {
+    let mut xs: List[String] = list_new();
+    xs = list_push(xs, "hi");
+    let s = list_get(xs, 0);
+    println(s);
+}

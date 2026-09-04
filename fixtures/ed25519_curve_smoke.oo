@@ -1,0 +1,47 @@
+// # Ed25519 Twisted Edwards Identity Smoke
+//
+// Logline: Verifies std/crypto/advanced/ed25519_curve.ed25519_curve_identity and ed25519_curve_double both return 64-field curve points and are deterministic across two calls.
+//
+// Setup: Imports std/crypto/advanced/ed25519_curve.oo. Pure, no FS or net. Property test (PROP).
+//
+// Beats:
+//   1. ed25519_curve_identity returns a 64-Int list.
+//   2. ed25519_curve_double returns a 64-Int list on the identity input.
+//   3. Both calls are deterministic (id == id2, dbl == dbl2).
+//   4. Print ED25519_CURVE_PROP_OK on success.
+
+import "std/sec/asymmetric/ed25519_curve.oo";
+
+pub fn main() {
+    let id: List[Int] = ed25519_curve_identity();
+    let ln: Int = id.len();
+    if ln != 64 {
+        println("FAIL identity len");
+        return;
+    }
+    let id2: List[Int] = ed25519_curve_identity();
+    let mut i: Int = 0;
+    while i < 64 {
+        if list_get(id, i) != list_get(id2, i) {
+            println("FAIL identity non-deterministic");
+            return;
+        }
+        i = i + 1;
+    }
+    let dbl: List[Int] = ed25519_curve_double(id);
+    let dn: Int = dbl.len();
+    if dn != 64 {
+        println("FAIL double len");
+        return;
+    }
+    let dbl2: List[Int] = ed25519_curve_double(id);
+    let mut j: Int = 0;
+    while j < 64 {
+        if list_get(dbl, j) != list_get(dbl2, j) {
+            println("FAIL double non-deterministic");
+            return;
+        }
+        j = j + 1;
+    }
+    println("ED25519_CURVE_PROP_OK");
+}

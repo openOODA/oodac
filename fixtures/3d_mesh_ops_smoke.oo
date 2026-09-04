@@ -1,0 +1,119 @@
+// # 3D Mesh Ops Adversarial Smoke Test
+//
+// Logline: Verifies Vector3 operations, triangle translation, normal, and centroid with adversarial inputs.
+//
+// Setup: Pure geometric operations. No FS or net dependencies.
+//
+// Beats:
+//   1. VALID: Normal Vector3 arithmetic and triangle operations.
+//   2. NEGATIVE TRUST: Test with zero vectors and identity.
+//   3. ADVERSARIAL: Test with extreme values and overflow.
+//   4. DOUBLE-RUN: Verify all operations are deterministic.
+
+import "std/app/ui/3d/mesh_ops.oo";
+
+pub fn expect_eq_int(label: String, got: Int, want: Int) -> Bool {
+    if got == want { println("OK " + label); return true; }
+    println("FAIL " + label + " got=" + got.to_string() + " want=" + want.to_string());
+    return false;
+}
+
+pub fn expect_eq_vec3(label: String, got: Vector3, want: Vector3) -> Bool {
+    let cond: Bool = got.x == want.x && got.y == want.y && got.z == want.z;
+    if cond { println("OK " + label); return true; }
+    println("FAIL " + label);
+    return false;
+}
+
+pub fn expect_eq_triangle(label: String, got: Triangle, want: Triangle) -> Bool {
+    let cond: Bool = got.x1 == want.x1 && got.y1 == want.y1 && got.z1 == want.z1 &&
+                     got.x2 == want.x2 && got.y2 == want.y2 && got.z2 == want.z2 &&
+                     got.x3 == want.x3 && got.y3 == want.y3 && got.z3 == want.z3;
+    if cond { println("OK " + label); return true; }
+    println("FAIL " + label);
+    return false;
+}
+
+pub fn main() {
+    // VALID: Vector3 operations
+    let v1: Vector3 = vector3_new(1, 2, 3);
+    let v2: Vector3 = vector3_new(4, 5, 6);
+    
+    let v_add: Vector3 = vector3_add(v1, v2);
+    if !expect_eq_vec3("vec3_add", v_add, vector3_new(5, 7, 9)) { return; }
+
+    let v_sub: Vector3 = vector3_sub(v2, v1);
+    if !expect_eq_vec3("vec3_sub", v_sub, vector3_new(3, 3, 3)) { return; }
+
+    let v_dot: Int = vector3_dot(v1, v2);
+    if !expect_eq_int("vec3_dot", v_dot, 32) { return; }
+
+    let v_cross: Vector3 = vector3_cross(v1, v2);
+    if !expect_eq_vec3("vec3_cross", v_cross, vector3_new(-3, 6, -3)) { return; }
+
+    let v_scale: Vector3 = vector3_scale(v1, 2);
+    if !expect_eq_vec3("vec3_scale", v_scale, vector3_new(2, 4, 6)) { return; }
+
+    let v_len: Int = vector3_length_squared(v1);
+    if !expect_eq_int("vec3_length_squared", v_len, 14) { return; }
+
+    let v_neg: Vector3 = vector3_neg(v1);
+    if !expect_eq_vec3("vec3_neg", v_neg, vector3_new(-1, -2, -3)) { return; }
+
+    // VALID: Vector3 equality
+    let v_eq_same: Int = vector3_eq(v1, v1);
+    if !expect_eq_int("vec3_eq same", v_eq_same, 1) { return; }
+    let v_eq_diff: Int = vector3_eq(v1, v2);
+    if !expect_eq_int("vec3_eq diff", v_eq_diff, 0) { return; }
+
+    // VALID: Triangle operations
+    let tri1: Triangle = triangle_new(v1, v2, vector3_new(7, 8, 9));
+    let tri_trans: Triangle = triangle_translate(tri1, 10, 20, 30);
+    if !expect_eq_int("tri_trans x1", tri_trans.x1, 11) { return; }
+    if !expect_eq_int("tri_trans x2", tri_trans.x2, 14) { return; }
+    if !expect_eq_int("tri_trans x3", tri_trans.x3, 17) { return; }
+
+    // VALID: Triangle normal
+    let tri_normal: Vector3 = triangle_normal(tri1);
+    if !expect_eq_int("tri_normal x", tri_normal.x, -3) { return; }
+
+    // VALID: Triangle centroid
+    let tri_centroid: Vector3 = triangle_centroid(tri1);
+    if !expect_eq_int("tri_centroid x", tri_centroid.x, 4) { return; }
+
+    // NEGATIVE TRUST: Zero vector
+    let v_zero: Vector3 = vector3_new(0, 0, 0);
+    let v_zero_len: Int = vector3_length_squared(v_zero);
+    if !expect_eq_int("zero len", v_zero_len, 0) { return; }
+
+    let v_zero_dot: Int = vector3_dot(v_zero, v1);
+    if !expect_eq_int("zero dot", v_zero_dot, 0) { return; }
+
+    // ADVERSARIAL: Large values
+    let v_large: Vector3 = vector3_new(1000000, 2000000, 3000000);
+    let v_large_scale: Vector3 = vector3_scale(v_large, 2);
+    if !expect_eq_int("large scale x", v_large_scale.x, 2000000) { return; }
+
+    // ADVERSARIAL: Negative values
+    let v_neg1: Vector3 = vector3_new(-10, -20, -30);
+    let v_neg2: Vector3 = vector3_new(5, 10, 15);
+    let v_neg_add: Vector3 = vector3_add(v_neg1, v_neg2);
+    if !expect_eq_vec3("neg add", v_neg_add, vector3_new(-5, -10, -15)) { return; }
+
+    // ADVERSARIAL: Cross product edge cases
+    let v_x: Vector3 = vector3_new(1, 0, 0);
+    let v_y: Vector3 = vector3_new(0, 1, 0);
+    let v_cross_xy: Vector3 = vector3_cross(v_x, v_y);
+    if !expect_eq_vec3("cross x y", v_cross_xy, vector3_new(0, 0, 1)) { return; }
+
+    // DOUBLE-RUN: Determinism check
+    let v_dr1: Vector3 = vector3_new(10, 20, 30);
+    let v_dr2: Vector3 = vector3_new(10, 20, 30);
+    if !expect_eq_vec3("dr vec3", v_dr1, v_dr2) { return; }
+
+    let v_add_dr1: Vector3 = vector3_add(v_dr1, vector3_new(5, 10, 15));
+    let v_add_dr2: Vector3 = vector3_add(v_dr2, vector3_new(5, 10, 15));
+    if !expect_eq_vec3("dr add", v_add_dr1, v_add_dr2) { return; }
+
+    println("OK: 3d_mesh_ops_smoke passed");
+}

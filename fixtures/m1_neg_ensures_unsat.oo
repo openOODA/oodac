@@ -1,0 +1,20 @@
+// # Negative Test: Unsatisfiable Postcondition
+//
+// Logline: Fails closed when postcondition specifies impossible negative square.
+//
+// Setup: Pure .oo test for fail-closed SMT refusal.
+//
+// Beats:
+//   1. Function invalid ensures result * result < 0.
+//   2. Compiler refuses with ERR smt unsat ensures.
+//   3. Process exits with code 1.
+
+pub fn invalid(x: Int) -> Int
+    ensures result * result < 0
+{
+    return x;
+}
+
+pub fn main() {
+    println(invalid(5));
+}

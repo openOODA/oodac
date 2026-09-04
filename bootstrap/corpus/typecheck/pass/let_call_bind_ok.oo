@@ -1,0 +1,19 @@
+// # Accept inferred then annotated
+//
+// Logline: Rebinding an inferred Int call result to let y: Int must typecheck.
+//
+// Setup: g returns Int; x is inferred Int.
+//
+// Beats:
+//   1. Bind x = g().
+//   2. Write let y: Int = x.
+//   3. Typecheck must accept both binds.
+
+pub fn g() -> Int {
+    return 1;
+}
+pub fn main() {
+    let x = g();
+    let y: Int = x;
+    println(y);
+}

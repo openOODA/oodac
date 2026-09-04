@@ -1,0 +1,52 @@
+// # Special Function Fixture
+//
+// Logline: Checks Euler's identity, Bessel J0/J1, and Legendre Pn against tabulated values.
+//
+// Setup: Isolated emit-c. Run from ooda/.
+//
+// Beats:
+//   1. e^{i pi} = -1 and axis evaluations of Euler's formula.
+//   2. Bessel J0(0), J0(1), J1(1), and J0(2) match tables.
+//   3. Legendre P0..P3 at x=0.5 and associated P_1^1(0.5) match tables.
+
+import "std/core/math/special/complex_field.oo";
+import "std/core/math/special/bessel_functions.oo";
+import "std/core/math/special/legendre_polynomials.oo";
+
+fn fail(msg: String) {
+    println("FAIL " + msg);
+    process_exit(1);
+}
+
+fn near(a: Float, b: Float, eps: Float) -> Bool {
+    let mut d: Float = a - b;
+    if d < 0.0 { d = 0.0 - d; }
+    return d <= eps;
+}
+
+pub fn main() {
+    let pi: Float = 3.141592653589793;
+    let e0: Complex = complex_euler(0.0);
+    if near(complex_re(e0), 1.0, 0.00001) == false { fail("euler0 re"); }
+    if near(complex_im(e0), 0.0, 0.00001) == false { fail("euler0 im"); }
+    let eh: Complex = complex_euler(0.5 * pi);
+    if near(complex_re(eh), 0.0, 0.00001) == false { fail("euler pi/2 re"); }
+    if near(complex_im(eh), 1.0, 0.00001) == false { fail("euler pi/2 im"); }
+    let ep: Complex = complex_euler(pi);
+    if near(complex_re(ep), 0.0 - 1.0, 0.00001) == false { fail("euler pi re"); }
+    if near(complex_im(ep), 0.0, 0.00001) == false { fail("euler pi im"); }
+
+    if near(bessel_j0(0.0), 1.0, 0.00001) == false { fail("j0(0)"); }
+    if near(bessel_j0(1.0), 0.7651976865579666, 0.00001) == false { fail("j0(1)"); }
+    if near(bessel_j1(1.0), 0.4400505857449335, 0.00001) == false { fail("j1(1)"); }
+    if near(bessel_j0(2.0), 0.2238907791412356, 0.00001) == false { fail("j0(2)"); }
+    if near(bessel_j0(5.0), 0.0 - 0.1775967713143383, 0.02) == false { fail("j0(5)"); }
+
+    if near(legendre_p(0, 0.5), 1.0, 0.0000001) == false { fail("P0"); }
+    if near(legendre_p(1, 0.5), 0.5, 0.0000001) == false { fail("P1"); }
+    if near(legendre_p(2, 0.5), 0.0 - 0.125, 0.0000001) == false { fail("P2"); }
+    if near(legendre_p(3, 0.5), 0.0 - 0.4375, 0.0000001) == false { fail("P3"); }
+    if near(legendre_associated(1, 1, 0.5), 0.0 - 0.8660254037844386, 0.00001) == false { fail("P11"); }
+
+    println("SPECIAL_FUNCTIONS_ALL_PASSED");
+}

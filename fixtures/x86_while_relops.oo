@@ -1,0 +1,15 @@
+// # emit-x86 while under six relational operators
+pub fn main() {
+    let mut a: Int = 0;
+    while a < 1 { println(1); a = a + 1; }
+    let mut b: Int = 2;
+    while b > 1 { println(2); b = b - 1; }
+    let mut c: Int = 1;
+    while c <= 1 { println(3); c = c + 1; }
+    let mut d: Int = 1;
+    while d >= 1 { println(4); d = d - 1; }
+    let mut e: Int = 0;
+    while e == 0 { println(5); e = e + 1; }
+    let mut f: Int = 0;
+    while f != 1 { println(6); f = f + 1; }
+}

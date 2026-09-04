@@ -1,0 +1,75 @@
+// # BTreeSet property smoke
+//
+// Logline: Asserts std/collections/btree_set.oo uniqueness invariant over Int elements.
+//
+// Setup: Imports std/collections/btree_set.oo. Pure.
+//
+// Beats:
+//   1. Build an empty BTreeSet and verify len = 0.
+//   2. Insert 25 distinct elements; contains returns true for each.
+//   3. Insert a duplicate; len unchanged.
+//   4. min and max are the first and last in sorted order.
+//   5. BTREE_SET_OK on success.
+
+import "std/core/collection/btree_set.oo";
+
+pub fn expect_eq_int(label: String, got: Int, want: Int) -> Bool {
+    if got == want { println("OK " + label); return true; }
+    println("FAIL " + label + " got=" + got.to_string() + " want=" + want.to_string());
+    return false;
+}
+
+pub fn expect_true(label: String, cond: Bool) -> Bool {
+    if cond { println("OK " + label); return true; }
+    println("FAIL " + label);
+    return false;
+}
+
+pub fn expect_false(label: String, cond: Bool) -> Bool {
+    if cond { println("FAIL " + label); return false; }
+    println("OK " + label);
+    return true;
+}
+
+pub fn unwrap_int(r: Result[Int, String]) -> Int {
+    if r.is_err() { return 0 - 1; }
+    return r.unwrap();
+}
+
+pub fn main() {
+    let s0: BTreeSet = btree_set_new();
+    if !expect_eq_int("initial len", btree_set_len(s0), 0) { return; }
+    if !expect_true("initial is_empty", btree_set_is_empty(s0)) { return; }
+
+    let mut s: BTreeSet = s0;
+    let mut i: Int = 0;
+    while i < 25 {
+        s = btree_set_insert(s, i);
+        i = i + 1;
+    }
+    if !expect_eq_int("len after 25 inserts", btree_set_len(s), 25) { return; }
+    if !expect_false("not empty", btree_set_is_empty(s)) { return; }
+
+    let mut j: Int = 0;
+    while j < 25 {
+        if !expect_true("contains " + j.to_string(), btree_set_contains(s, j)) { return; }
+        j = j + 1;
+    }
+    if !expect_false("contains missing 9999", btree_set_contains(s, 9999)) { return; }
+
+    let s2: BTreeSet = btree_set_insert(s, 0);
+    if !expect_eq_int("len after dup insert", btree_set_len(s2), 25) { return; }
+    let s3: BTreeSet = btree_set_insert(s2, 12);
+    if !expect_eq_int("len after dup insert 12", btree_set_len(s3), 25) { return; }
+
+    if !expect_eq_int("min", unwrap_int(btree_set_min(s)), 0) { return; }
+    if !expect_eq_int("max", unwrap_int(btree_set_max(s)), 24) { return; }
+
+    let s4: BTreeSet = btree_set_remove(s3, 12);
+    if !expect_eq_int("len after remove", btree_set_len(s4), 24) { return; }
+    if !expect_false("removed 12", btree_set_contains(s4, 12)) { return; }
+    let s5: BTreeSet = btree_set_remove(s4, 12);
+    if !expect_eq_int("len after miss-remove", btree_set_len(s5), 24) { return; }
+
+    println("BTREE_SET_OK");
+}

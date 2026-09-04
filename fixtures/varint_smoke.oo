@@ -1,0 +1,76 @@
+// # Varint (LEB128) Protobuf round-trip smoke
+//
+// Logline: Asserts std/encoding/varint.varint_encode and varint_decode against canonical Protobuf LEB128 vectors for 1, 127, 128, 300, and 16384, plus offset-based reads.
+//
+// Setup: Imports std/encoding/varint.oo. Pure.
+//
+// Beats:
+//   1. varint_encode(1) round-trips at offset 0 in 1 byte.
+//   2. varint_encode(127) round-trips at offset 0 in 1 byte.
+//   3. varint_encode(128) round-trips at offset 0 in 2 bytes (high bit set).
+//   4. varint_encode(300) round-trips at offset 0 in 2 bytes.
+//   5. varint_encode(16384) round-trips in 3 bytes.
+//   6. varint_decode at offset 1 in a multi-byte string consumes only the suffix.
+
+import "std/core/encoding/varint.oo";
+
+pub fn main() {
+    let varint_dummy: Int = 0;
+
+    // Beat 1: 1 -> 0x01.
+    let e1: String = varint_encode(1);
+    let d1: VarintResult = varint_decode(e1, 0);
+    if d1.value != 1 || d1.bytes_consumed != 1 || !d1.succeeded {
+        println("FAIL varint 1 decode " + d1.value.to_string() + " n=" + d1.bytes_consumed.to_string() + " ok=" + d1.succeeded.to_string());
+        return;
+    }
+    println("OK varint 1");
+
+    // Beat 2: 127 (max 1-byte) -> 0x7f.
+    let e127: String = varint_encode(127);
+    let d127: VarintResult = varint_decode(e127, 0);
+    if d127.value != 127 || d127.bytes_consumed != 1 || !d127.succeeded {
+        println("FAIL varint 127");
+        return;
+    }
+    println("OK varint 127");
+
+    // Beat 3: 128 (min 2-byte) -> 0x80 0x01.
+    let e128: String = varint_encode(128);
+    let d128: VarintResult = varint_decode(e128, 0);
+    if d128.value != 128 || d128.bytes_consumed != 2 || !d128.succeeded {
+        println("FAIL varint 128 got " + d128.value.to_string() + " n=" + d128.bytes_consumed.to_string());
+        return;
+    }
+    println("OK varint 128");
+
+    // Beat 4: 300 -> 0xac 0x02.
+    let e300: String = varint_encode(300);
+    let d300: VarintResult = varint_decode(e300, 0);
+    if d300.value != 300 || d300.bytes_consumed != 2 || !d300.succeeded {
+        println("FAIL varint 300 got " + d300.value.to_string() + " n=" + d300.bytes_consumed.to_string());
+        return;
+    }
+    println("OK varint 300");
+
+    // Beat 5: 16384 -> 0x80 0x80 0x01.
+    let e16384: String = varint_encode(16384);
+    let d16384: VarintResult = varint_decode(e16384, 0);
+    if d16384.value != 16384 || d16384.bytes_consumed != 3 || !d16384.succeeded {
+        println("FAIL varint 16384 got " + d16384.value.to_string() + " n=" + d16384.bytes_consumed.to_string());
+        return;
+    }
+    println("OK varint 16384");
+
+    // Beat 6: offset-based read.
+    let d300b: VarintResult = varint_decode(e300, 1);
+    if d300b.value != 2 || d300b.bytes_consumed != 1 || !d300b.succeeded {
+        println("FAIL varint offset 1 got " + d300b.value.to_string() + " n=" + d300b.bytes_consumed.to_string());
+        return;
+    }
+    println("OK varint offset read");
+
+    let total: Int = varint_dummy + 1;
+    println("VARINT_RT_OK");
+    println("total=" + total.to_string());
+}

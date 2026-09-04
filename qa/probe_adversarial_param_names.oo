@@ -1,0 +1,102 @@
+// # Adversarial Parameter Names Probe
+//
+// Logline: Adversarially tests functions and call chains with parameter names 'name' and 'body' without type confusion.
+//
+// Setup: Requires working oodac compiler with correct parameter symbol binding.
+//
+// Beats:
+//   1. Test function accepting (name: String, body: String) returning combined formatted string.
+//   2. Test function accepting (name: Int, body: Int) performing arithmetic operations.
+//   3. Test multi-step call chain passing (name, body) through inverted argument orders.
+//   4. Test struct definitions and method calls with fields named 'name' and 'body'.
+
+type Payload = struct {
+    name: String,
+    body: String,
+    code: Int
+};
+
+pub fn format_entry(name: String, body: String) -> String {
+    let header: String = "<entry name=\"" + name + "\">";
+    let content: String = body;
+    let footer: String = "</entry>";
+    return header + content + footer;
+}
+
+pub fn compute_metric(name: Int, body: Int) -> Int {
+    let product: Int = name * body;
+    let sum: Int = name + body;
+    return product - sum;
+}
+
+pub fn chain_level_3(name: String, body: String) -> String {
+    if name == "root" {
+        return "MATCH:" + body;
+    }
+    return name + ":" + body;
+}
+
+pub fn chain_level_2(body: String, name: String) -> String {
+    // Inverted parameter names to stress-test positional binding
+    let res: String = chain_level_3(name, body);
+    return "L2(" + res + ")";
+}
+
+pub fn chain_level_1(name: String, body: String) -> String {
+    return chain_level_2(body, name);
+}
+
+pub fn process_payload(p: Payload) -> String {
+    let n: String = p.name;
+    let b: String = p.body;
+    return format_entry(n, b);
+}
+
+pub fn main() {
+    let mut num_errors: Int = 0;
+
+    // Test 1: String parameters named name and body
+    let res1: String = format_entry("alert", "cpu high");
+    if res1 == "<entry name=\"alert\">cpu high</entry>" {
+    } else {
+        println("FAIL: format_entry");
+        num_errors = num_errors + 1;
+    }
+
+    // Test 2: Int parameters named name and body
+    let res2: Int = compute_metric(10, 20);
+    // 10 * 20 - (10 + 20) = 200 - 30 = 170
+    if res2 == 170 {
+    } else {
+        println("FAIL: compute_metric");
+        num_errors = num_errors + 1;
+    }
+
+    // Test 3: Inverted call chain with name and body
+    let res3: String = chain_level_1("root", "payload_data");
+    if res3 == "L2(MATCH:payload_data)" {
+    } else {
+        println("FAIL: chain_level_1");
+        num_errors = num_errors + 1;
+    }
+
+    // Test 4: Struct with name and body fields
+    let p: Payload = Payload {
+        name: "item1",
+        body: "content1",
+        code: 42
+    };
+    let res4: String = process_payload(p);
+    if res4 == "<entry name=\"item1\">content1</entry>" {
+    } else {
+        println("FAIL: process_payload");
+        num_errors = num_errors + 1;
+    }
+
+    if num_errors == 0 {
+        println("probe_adversarial_param_names: PASSED");
+    } else {
+        println("probe_adversarial_param_names: FAILED");
+        process_exit(1);
+    }
+}

@@ -1,0 +1,99 @@
+// # 3D Gaussian Types Adversarial Smoke Test
+//
+// Logline: Verifies Gaussian3D type construction, field access, transformation, and scaling with adversarial inputs.
+//
+// Setup: Pure struct operations. No FS or net dependencies.
+//
+// Beats:
+//   1. VALID: Normal Gaussian3D creation and field access.
+//   2. NEGATIVE TRUST: Test with zero and identity values.
+//   3. ADVERSARIAL: Test with extreme values and overflow conditions.
+//   4. DOUBLE-RUN: Verify all operations are deterministic.
+
+import "std/app/ui/3d/gaussian_types.oo";
+
+pub fn expect_eq_int(label: String, got: Int, want: Int) -> Bool {
+    if got == want { println("OK " + label); return true; }
+    println("FAIL " + label + " got=" + got.to_string() + " want=" + want.to_string());
+    return false;
+}
+
+pub fn expect_eq_gaussian(label: String, got: Gaussian3D, want: Gaussian3D) -> Bool {
+    let cond: Bool = got.cx == want.cx && got.cy == want.cy && 
+                     got.cz == want.cz && got.opacity == want.opacity;
+    if cond { println("OK " + label); return true; }
+    println("FAIL " + label);
+    return false;
+}
+
+pub fn main() {
+    // VALID: Normal Gaussian3D creation and field access
+    let g1: Gaussian3D = gaussian3d_new(10, 20, 30, 255);
+    if !expect_eq_int("g1 cx", g1.cx, 10) { return; }
+    if !expect_eq_int("g1 cy", g1.cy, 20) { return; }
+    if !expect_eq_int("g1 cz", g1.cz, 30) { return; }
+    if !expect_eq_int("g1 opacity", gaussian3d_opacity(g1), 255) { return; }
+
+    // VALID: Identity Gaussian
+    let g_ident: Gaussian3D = gaussian3d_identity();
+    if !expect_eq_int("identity cx", g_ident.cx, 0) { return; }
+    if !expect_eq_int("identity opacity", g_ident.opacity, 0) { return; }
+
+    // VALID: Translation
+    let g_trans: Gaussian3D = gaussian3d_translate(g1, 5, 10, 15);
+    if !expect_eq_int("trans cx", g_trans.cx, 15) { return; }
+    if !expect_eq_int("trans cy", g_trans.cy, 30) { return; }
+    if !expect_eq_int("trans cz", g_trans.cz, 45) { return; }
+    if !expect_eq_int("trans opacity", g_trans.opacity, 255) { return; }
+
+    // VALID: Set opacity
+    let g_op: Gaussian3D = gaussian3d_set_opacity(g1, 128);
+    if !expect_eq_int("set opacity", g_op.opacity, 128) { return; }
+    if !expect_eq_int("set opacity preserves cx", g_op.cx, 10) { return; }
+
+    // VALID: Scale
+    let g_scale: Gaussian3D = gaussian3d_scale(g1, 500);
+    if !expect_eq_int("scale opacity", g_scale.opacity, 127) { return; }
+
+    // NEGATIVE TRUST: Zero values
+    let g_zero: Gaussian3D = gaussian3d_new(0, 0, 0, 0);
+    if !expect_eq_int("zero cx", g_zero.cx, 0) { return; }
+    if !expect_eq_int("zero opacity", g_zero.opacity, 0) { return; }
+
+    // NEGATIVE TRUST: Negative coordinates
+    let g_neg: Gaussian3D = gaussian3d_new(-10, -20, -30, 100);
+    if !expect_eq_int("neg cx", g_neg.cx, -10) { return; }
+    if !expect_eq_int("neg cy", g_neg.cy, -20) { return; }
+    if !expect_eq_int("neg cz", g_neg.cz, -30) { return; }
+
+    // ADVERSARIAL: Large values
+    let g_large: Gaussian3D = gaussian3d_new(1000000, 2000000, 3000000, 255);
+    if !expect_eq_int("large cx", g_large.cx, 1000000) { return; }
+
+    // ADVERSARIAL: Scale with extreme factor (2000 = 2x)
+    let g_extreme_scale: Gaussian3D = gaussian3d_scale(g1, 2000);
+    if !expect_eq_int("extreme scale opacity", g_extreme_scale.opacity, 510) { return; }
+
+    // ADVERSARIAL: Translate with large negative values
+    let g_adv_trans: Gaussian3D = gaussian3d_translate(g1, -1000000, -2000000, -3000000);
+    if !expect_eq_int("adv trans cx", g_adv_trans.cx, -999990) { return; }
+
+    // ADVERSARIAL: Zero scale factor
+    let g_zero_scale: Gaussian3D = gaussian3d_scale(g1, 0);
+    if !expect_eq_int("zero scale opacity", g_zero_scale.opacity, 0) { return; }
+
+    // DOUBLE-RUN: Determinism check
+    let g_dr1: Gaussian3D = gaussian3d_new(42, 84, 126, 200);
+    let g_dr2: Gaussian3D = gaussian3d_new(42, 84, 126, 200);
+    if !expect_eq_gaussian("dr creation", g_dr1, g_dr2) { return; }
+
+    let g_dr_trans1: Gaussian3D = gaussian3d_translate(g_dr1, 10, 20, 30);
+    let g_dr_trans2: Gaussian3D = gaussian3d_translate(g_dr2, 10, 20, 30);
+    if !expect_eq_gaussian("dr translation", g_dr_trans1, g_dr_trans2) { return; }
+
+    let g_dr_scale1: Gaussian3D = gaussian3d_scale(g_dr1, 1000);
+    let g_dr_scale2: Gaussian3D = gaussian3d_scale(g_dr2, 1000);
+    if !expect_eq_gaussian("dr scale", g_dr_scale1, g_dr_scale2) { return; }
+
+    println("OK: 3d_gaussian_types_smoke passed");
+}

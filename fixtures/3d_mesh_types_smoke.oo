@@ -1,0 +1,107 @@
+// # 3D Mesh Types Adversarial Smoke Test
+//
+// Logline: Verifies Vector3, Triangle, and Mesh creation with adversarial inputs.
+//
+// Setup: Pure struct operations. No FS or net dependencies.
+//
+// Beats:
+//   1. VALID: Normal Vector3, Triangle, and Mesh creation.
+//   2. NEGATIVE TRUST: Test with zero values.
+//   3. ADVERSARIAL: Test with extreme values.
+//   4. DOUBLE-RUN: Verify all operations are deterministic.
+
+import "std/app/ui/3d/mesh_types.oo";
+
+pub fn expect_eq_int(label: String, got: Int, want: Int) -> Bool {
+    if got == want { println("OK " + label); return true; }
+    println("FAIL " + label + " got=" + got.to_string() + " want=" + want.to_string());
+    return false;
+}
+
+pub fn expect_eq_vec3(label: String, got: Vector3, want: Vector3) -> Bool {
+    let cond: Bool = got.x == want.x && got.y == want.y && got.z == want.z;
+    if cond { println("OK " + label); return true; }
+    println("FAIL " + label);
+    return false;
+}
+
+pub fn expect_eq_triangle(label: String, got: Triangle, want: Triangle) -> Bool {
+    let cond: Bool = got.x1 == want.x1 && got.y1 == want.y1 && got.z1 == want.z1 &&
+                     got.x2 == want.x2 && got.y2 == want.y2 && got.z2 == want.z2 &&
+                     got.x3 == want.x3 && got.y3 == want.y3 && got.z3 == want.z3;
+    if cond { println("OK " + label); return true; }
+    println("FAIL " + label);
+    return false;
+}
+
+pub fn main() {
+    // VALID: Vector3 creation
+    let v1: Vector3 = vector3_new(1, 2, 3);
+    if !expect_eq_int("v1 x", v1.x, 1) { return; }
+    if !expect_eq_int("v1 y", v1.y, 2) { return; }
+    if !expect_eq_int("v1 z", v1.z, 3) { return; }
+
+    // VALID: Triangle creation
+    let v2: Vector3 = vector3_new(4, 5, 6);
+    let v3: Vector3 = vector3_new(7, 8, 9);
+    let tri1: Triangle = triangle_new(v1, v2, v3);
+    if !expect_eq_int("tri x1", tri1.x1, 1) { return; }
+    if !expect_eq_int("tri y1", tri1.y1, 2) { return; }
+    if !expect_eq_int("tri z1", tri1.z1, 3) { return; }
+    if !expect_eq_int("tri x2", tri1.x2, 4) { return; }
+    if !expect_eq_int("tri y2", tri1.y2, 5) { return; }
+    if !expect_eq_int("tri z2", tri1.z2, 6) { return; }
+    if !expect_eq_int("tri x3", tri1.x3, 7) { return; }
+    if !expect_eq_int("tri y3", tri1.y3, 8) { return; }
+    if !expect_eq_int("tri z3", tri1.z3, 9) { return; }
+
+    // VALID: Mesh creation
+    let mesh1: Mesh = mesh_new(42);
+    if !expect_eq_int("mesh id", mesh1.id, 42) { return; }
+    if !expect_eq_int("mesh n_tri", mesh1.n_tri, 0) { return; }
+    if !expect_eq_int("mesh centroid_x_sum", mesh1.centroid_x_sum, 0) { return; }
+
+    // NEGATIVE TRUST: Zero vector
+    let v_zero: Vector3 = vector3_new(0, 0, 0);
+    if !expect_eq_vec3("zero vector", v_zero, vector3_new(0, 0, 0)) { return; }
+
+    // NEGATIVE TRUST: Zero mesh
+    let mesh_zero: Mesh = mesh_new(0);
+    if !expect_eq_int("mesh zero id", mesh_zero.id, 0) { return; }
+
+    // NEGATIVE TRUST: Triangle from zero vectors
+    let tri_zero: Triangle = triangle_new(v_zero, v_zero, v_zero);
+    if !expect_eq_int("tri zero x1", tri_zero.x1, 0) { return; }
+
+    // ADVERSARIAL: Large values
+    let v_large: Vector3 = vector3_new(1000000, 2000000, 3000000);
+    if !expect_eq_int("large x", v_large.x, 1000000) { return; }
+
+    // ADVERSARIAL: Negative values
+    let v_neg: Vector3 = vector3_new(-100, -200, -300);
+    if !expect_eq_int("neg x", v_neg.x, -100) { return; }
+
+    // ADVERSARIAL: Triangle with negative coordinates
+    let tri_neg: Triangle = triangle_new(v_neg, v_zero, v_large);
+    if !expect_eq_int("tri_neg x1", tri_neg.x1, -100) { return; }
+    if !expect_eq_int("tri_neg x3", tri_neg.x3, 1000000) { return; }
+
+    // ADVERSARIAL: Large mesh ID
+    let mesh_large: Mesh = mesh_new(1000000);
+    if !expect_eq_int("mesh large id", mesh_large.id, 1000000) { return; }
+
+    // DOUBLE-RUN: Determinism check
+    let v_dr1: Vector3 = vector3_new(10, 20, 30);
+    let v_dr2: Vector3 = vector3_new(10, 20, 30);
+    if !expect_eq_vec3("dr vector", v_dr1, v_dr2) { return; }
+
+    let tri_dr1: Triangle = triangle_new(v_dr1, v_dr2, vector3_new(30, 40, 50));
+    let tri_dr2: Triangle = triangle_new(v_dr1, v_dr2, vector3_new(30, 40, 50));
+    if !expect_eq_triangle("dr triangle", tri_dr1, tri_dr2) { return; }
+
+    let mesh_dr1: Mesh = mesh_new(100);
+    let mesh_dr2: Mesh = mesh_new(100);
+    if !expect_eq_int("dr mesh id", mesh_dr1.id, mesh_dr2.id) { return; }
+
+    println("OK: 3d_mesh_types_smoke passed");
+}

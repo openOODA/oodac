@@ -1,0 +1,64 @@
+// # Sieve of Atkin prime generator smoke
+//
+// Logline: Asserts std/math/prime_sieve_atkin.atkin_sieve_generate and atkin_sieve_count against OEIS A000720 (pi(n)) for n in {10, 100, 1000}.
+//
+// Setup: Imports std/math/prime_sieve_atkin.oo. Pure, no FS or net. The implementation falls back to trial division over odd numbers >= 5, so the atkin_sieve_count result must match OEIS pi(n) for the requested range.
+//
+// Beats:
+//   1. atkin_sieve_count(generate(10)) == 4 (primes 2, 3, 5, 7).
+//   2. atkin_sieve_count(generate(100)) == 25 (primes <= 100).
+//   3. atkin_sieve_count(generate(1000)) == 168 (primes <= 1000).
+//   4. limit=1 returns 0 (no primes <= 1).
+//   5. limit=2 returns 1 (just 2).
+
+import "std/core/math/prime_sieve_atkin.oo";
+
+pub fn main() {
+    // Beat 1: 4 primes <= 10.
+    let s10: AtkinSieve = atkin_sieve_generate(10);
+    let n10: Int = atkin_sieve_count(s10);
+    if n10 != 4 {
+        println("FAIL atkin pi(10) expected 4, got " + n10.to_string());
+        return;
+    }
+    println("OK atkin pi(10) = 4");
+
+    // Beat 2: 25 primes <= 100.
+    let s100: AtkinSieve = atkin_sieve_generate(100);
+    let n100: Int = atkin_sieve_count(s100);
+    if n100 != 25 {
+        println("FAIL atkin pi(100) expected 25, got " + n100.to_string());
+        return;
+    }
+    println("OK atkin pi(100) = 25");
+
+    // Beat 3: 168 primes <= 1000.
+    let s1000: AtkinSieve = atkin_sieve_generate(1000);
+    let n1000: Int = atkin_sieve_count(s1000);
+    if n1000 != 168 {
+        println("FAIL atkin pi(1000) expected 168, got " + n1000.to_string());
+        return;
+    }
+    println("OK atkin pi(1000) = 168");
+
+    // Beat 4: limit=1 -> 0.
+    let s1: AtkinSieve = atkin_sieve_generate(1);
+    let n1: Int = atkin_sieve_count(s1);
+    if n1 != 0 {
+        println("FAIL atkin pi(1) expected 0, got " + n1.to_string());
+        return;
+    }
+    println("OK atkin pi(1) = 0");
+
+    // Beat 5: limit=2 -> 1.
+    let s2: AtkinSieve = atkin_sieve_generate(2);
+    let n2: Int = atkin_sieve_count(s2);
+    if n2 != 1 {
+        println("FAIL atkin pi(2) expected 1, got " + n2.to_string());
+        return;
+    }
+    println("OK atkin pi(2) = 1");
+
+    println("ATKIN_KAT_OK");
+    println("OK");
+}

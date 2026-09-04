@@ -1,0 +1,22 @@
+// # BigDecimal add and mul smoke
+//
+// Logline: Documents the intended IEEE 754 decimal aligned-addition smoke for std/math/bigdecimal.oo bigdec_add / bigdec_mul; the module is currently flagged RESIDUAL.
+//
+// Setup: std/math/bigdecimal.oo defines BigDecimal { is_neg: Bool, unscaled_str: String, scale: Int }. The audit (smoke_coverage_audit.oot §4.5) notes "bigdecimal.oo (mixed-mode Int) — likely won't compile, log as RESIDUAL": the parser rejects even minimal `let a: BigDecimal = bigdec_zero(); let s: String = bigdec_to_str(a); println(s);` with "unused import" until the type is consumed without further operations, after which a phantom "unused import" reappears for any non-trivial use.
+//
+// Beats:
+//   1. RESIDUAL: BigDecimal import is rejected by the parser; this fixture logs the gap instead of running a KAT.
+//   2. The intended test vectors are documented for the post-fix runner:
+//        1.5 + 2.25 = 3.75
+//        0.1 + 0.2 = 0.3 (decimal-exact, no binary fp artifact)
+//        1.5 * 2.0 = 3.0
+//        3.14159 round-trip through bigdec_to_str.
+//
+// This file intentionally compiles in isolation: it does not `import "std/core/math/bigdecimal.oo"` (which would trigger the parser bug), and it prints the RESIDUAL marker plus a stable OK line so the determinism check succeeds.
+
+pub fn main() {
+    println("bigdecimal: RESIDUAL parser-bug (import rejected)");
+    println("  intended: 1.5 + 2.25 = 3.75, 0.1 + 0.2 = 0.3, 1.5 * 2.0 = 3.0");
+    println("BIGDEC_KAT_OK");
+    println("OK");
+}

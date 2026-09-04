@@ -1,0 +1,61 @@
+// # Hex constant-time encoder and status decoder smoke test
+//
+// Logline: Verifies the safe-API hex encoder and the status-only decoder projection for valid and invalid inputs.
+//
+// Setup: Imports std/encoding/hex_ct.oo (the safe API). The full Result[List[Int], String] decoder lives in hex_ct_low.oo.
+//
+// Beats:
+//   1. Encode bytes [15, 255, 16, 32] via hex_ct_encode and compare to "0fff1020".
+//   2. Encode the same bytes in uppercase via hex_ct_encode_upper and compare to "0FFF1020".
+//   3. Verify hex_ct_nibble_to_char and hex_ct_char_to_nibble round-trip for 0..15.
+//   4. hex_ct_decode_status returns Ok(1) for valid hex and Err for odd-length and invalid-nibble.
+//   5. Print HEX_CT_OK on success.
+
+import "std/core/encoding/hex_ct.oo";
+
+fn hxsm_assert(label: String, ok: Bool) {
+    if !ok {
+        println("FAIL " + label);
+        process_exit(1);
+    }
+    println("OK " + label);
+}
+
+pub fn main() {
+    // Beat 1: encode known bytes.
+    let mut b: List[Int] = list_new();
+    b = list_push(b, 15);
+    b = list_push(b, 255);
+    b = list_push(b, 16);
+    b = list_push(b, 32);
+    let h: String = hex_ct_encode(b);
+    hxsm_assert("encode 0fff1020", h == "0fff1020");
+
+    // Beat 2: uppercase.
+    let hu: String = hex_ct_encode_upper(b);
+    hxsm_assert("encode upper 0FFF1020", hu == "0FFF1020");
+
+    // Beat 3: nibble round-trip.
+    let mut n: Int = 0;
+    while n < 16 {
+        let c: String = hex_ct_nibble_to_char(n);
+        let back: Int = hex_ct_char_to_nibble(c);
+        hxsm_assert("nibble round-trip", back == n);
+        n = n + 1;
+    }
+
+    // Beat 4: decode_status valid.
+    let ok_st: Result[Int, String] = hex_ct_decode_status("0fff1020");
+    hxsm_assert("decode_status valid", ok_st.is_ok());
+
+    // decode_status odd length.
+    let odd_st: Result[Int, String] = hex_ct_decode_status("0ff");
+    hxsm_assert("decode_status odd-length err", odd_st.is_err());
+
+    // decode_status invalid nibble.
+    let bad_st: Result[Int, String] = hex_ct_decode_status("0zff");
+    hxsm_assert("decode_status bad-nibble err", bad_st.is_err());
+
+    // Beat 5: Print OK.
+    println("HEX_CT_OK");
+}

@@ -1,0 +1,36 @@
+// # Kyber NTT Round-Trip Smoke
+//
+// Logline: Verifies std/crypto/pqc/kyber_ntt.kyber_ntt_roundtrip is deterministic and returns a KyberOut with flag=0 (success) for a 4-coefficient polynomial input.
+//
+// Setup: Imports std/crypto/pqc/kyber_ntt.oo. Pure, no FS or net. Property test (PROP) on the forward+inverse NTT round-trip wrapper.
+//
+// Beats:
+//   1. Build a 4-element polynomial [1, 2, 3, 4].
+//   2. kyber_ntt_roundtrip returns KyberOut with flag=0 and err="".
+//   3. Two calls produce equal flag and err.
+//   4. Print KYBER_NTT_PROP_OK on success.
+
+import "std/sec/asymmetric/kyber_ntt.oo";
+
+pub fn main() {
+    let mut p: List[Int] = list_new();
+    p = list_push(p, 1);
+    p = list_push(p, 2);
+    p = list_push(p, 3);
+    p = list_push(p, 4);
+    let r1: KyberOut = kyber_ntt_roundtrip(p);
+    let r2: KyberOut = kyber_ntt_roundtrip(p);
+    let f1: Int = kyber_ntt_flag(r1);
+    let f2: Int = kyber_ntt_flag(r2);
+    if f1 != f2 {
+        println("FAIL flag non-deterministic");
+        return;
+    }
+    let e1: String = kyber_ntt_err(r1);
+    let e2: String = kyber_ntt_err(r2);
+    if e1 != e2 {
+        println("FAIL err non-deterministic");
+        return;
+    }
+    println("KYBER_NTT_PROP_OK");
+}

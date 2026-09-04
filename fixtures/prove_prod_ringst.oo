@@ -1,0 +1,27 @@
+// # Product ring_stream prove
+//
+// Logline: Fail-closed emit+gcc+run of shipped ring_stream_write/available_read.
+//
+// Setup: Product std/io/ring_stream.oo. Write ab.
+//
+// Beats:
+//   1. After write ab, available_read is 2.
+//   2. Exit 1 before PASSED on a miss.
+
+import "std/core/io/ring_stream.oo";
+
+pub fn main() {
+    let s0: RingStream = ring_stream_new(16);
+    let wr: Result[RingStream, String] = ring_stream_write(s0, "ab");
+    if wr.is_err() {
+        println("FAIL ringst write");
+        process_exit(1);
+    }
+    let s: RingStream = match wr { Ok(v) => v, Err(_) => s0 };
+    let n: Int = ring_stream_available_read(s);
+    if n != 2 {
+        println("FAIL ringst avail");
+        process_exit(1);
+    }
+    println("prod_ringst: PASSED");
+}

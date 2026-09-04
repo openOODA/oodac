@@ -1,0 +1,20 @@
+// # AArch64 shape Float refuse
+//
+// Logline: Float runtime usage that the 25-arm chain cannot compile.
+//
+// Setup: Should trigger aarch64_emit_shape_refuse_test.
+//
+// Beats:
+//   1. Define a Float variable.
+//   2. Try to use it in a runtime expression (no const-fold).
+
+pub fn main() {
+    let x: Float = 1.5;
+    let y: Float = 2.5;
+    let z: Float = x * y;
+    if z > 3.0 {
+        println("big");
+    } else {
+        println("small");
+    }
+}

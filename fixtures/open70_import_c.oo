@@ -1,0 +1,34 @@
+// # OPEN-70 import_c reads a header; LTO runs gcc -flto
+//
+// Logline: Granted import_c returns stdio size; a missing or jailed path is 0; LTO is 0.
+//
+// Setup: &UnsafeFFICap and &ProcessCap on main. Include-dir jail. No ambient call.
+//
+// Beats:
+//   1. stdio.h is at least 32 bytes.
+//   2. A missing header and /etc/passwd return 0.
+//   3. lto_xlang_link compiles two units with -flto.
+
+pub fn main(ffi: &UnsafeFFICap, p: &ProcessCap) {
+    let n = import_c(ffi, "stdio.h");
+    if n < 32 {
+        println("FAIL import_c");
+        process_exit(1);
+    }
+    let miss = import_c(ffi, "ooda_no_such_header_zzz.h");
+    if miss != 0 {
+        println("FAIL missing");
+        process_exit(1);
+    }
+    let steal = import_c(ffi, "/etc/passwd");
+    if steal != 0 {
+        println("FAIL passwd");
+        process_exit(1);
+    }
+    let lk = lto_xlang_link(p, "a", "b");
+    if lk != 0 {
+        println("FAIL lto");
+        process_exit(1);
+    }
+    println("OK");
+}

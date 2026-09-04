@@ -1,0 +1,119 @@
+// # Challenger 1: Boyd's Informational E-M & 7 Deadly Sins Cost Scores
+//
+// Logline: Empirically stress-tests Boyd's specific excess power, Landauer thermodynamic dissipation, and the 7 Deadly Sins Via Negativa cost function.
+//
+// Setup: Pure numerical verification without ambient IO.
+//
+// Beats:
+//   1. Verify Boyd's informational specific excess power Ps = ((T - D) / W) * V across thrust/drag/weight regimes.
+//   2. Verify Landauer thermodynamic bound Delta_Q = k_B * T * ln(2) * Delta_Bits.
+//   3. Verify individual cost scoring for all 7 Deadly Sins (Ambient, Heap, Pointer, Inheritance, Wildcard, Cache, Blocking IO).
+//   4. Verify 7 Sins weighted total cost scoring, risk tiers (0=Pure, 1=Acceptable, 2=Degraded, 3=Fatal), and viability.
+
+import "std/compile/ooda/energy_maneuverability.oo";
+import "std/science/econ/governance/anti_patterns.oo";
+
+fn check_float_near(actual: Float, expected: Float, tolerance: Float) -> Bool {
+    let mut diff: Float = actual - expected;
+    if diff < 0.0 { diff = 0.0 - diff; }
+    return diff <= tolerance;
+}
+
+fn boyd_ld_got(r: Result[Float, String]) -> Float {
+    match r { Ok(v) => { return v; }, Err(_) => { return 0.0 - 1.0; } }
+}
+
+pub fn test_boyd_em_engine() -> Bool {
+    // Test 1: Standard positive specific excess power
+    // T = 500, D = 100, W = 2.0, V = 10.0 -> Ps = ((500 - 100) / 2.0) * 10.0 = 2000.0
+    let ps_pos: Float = energy_maneuverability_ps(500.0, 100.0, 2.0, 10.0);
+    if !check_float_near(ps_pos, 2000.0, 0.0001) { return false; }
+
+    // Test 2: Negative excess power (Drag > Thrust)
+    // T = 100, D = 300, W = 2.0, V = 10.0 -> Ps = ((100 - 300) / 2.0) * 10.0 = -1000.0
+    let ps_neg: Float = energy_maneuverability_ps(100.0, 300.0, 2.0, 10.0);
+    if !check_float_near(ps_neg, 0.0 - 1000.0, 0.0001) { return false; }
+
+    // Test 3: Weight <= 0 boundary protection (no divide by zero)
+    let ps_zero_w: Float = energy_maneuverability_ps(500.0, 100.0, 0.0, 10.0);
+    if ps_zero_w != 0.0 { return false; }
+    let ps_neg_w: Float = energy_maneuverability_ps(500.0, 100.0, 0.0 - 5.0, 10.0);
+    if ps_neg_w != 0.0 { return false; }
+
+    // Test 4: Landauer thermodynamic bound Delta_Q = k_B * T * ln(2) * erased_bits
+    // At T = 300 K, 1,000,000 bits:
+    // Delta_Q = 1.380649e-23 * 300 * 0.69314718 * 1e6 = 2.871e-15 J
+    let q_r: Result[Float, String] = calculate_landauer_dissipation(1000000.0, 300.0);
+    if q_r.is_ok() == false { return false; }
+    let q_landauer: Float = boyd_ld_got(q_r);
+    let expected_q: Float = 0.00000000000000287102;
+    if !check_float_near(q_landauer, expected_q, 0.0000000000000001) { return false; }
+
+    // Test 5: Rebuild drag tau_build = eta * tau_hit + (1 - eta) * tau_compile
+    // eta = 0.8, tau_hit = 0.01s, tau_compile = 5.0s -> 0.8*0.01 + 0.2*5.0 = 0.008 + 1.0 = 1.008s
+    let d_rebuild: Float = calculate_rebuild_drag(0.8, 0.01, 5.0);
+    if !check_float_near(d_rebuild, 1.008, 0.0001) { return false; }
+
+    return true;
+}
+
+pub fn test_7_deadly_sins_governance() -> Bool {
+    // Test 1: Zero violation score
+    let score_zero: Float = anti_pattern_score_7_sins(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+    if !check_float_near(score_zero, 0.0, 0.000001) { return false; }
+    if governance_risk_tier(score_zero) != 0 { return false; } // Tier 0 = Pure
+    if !is_architecture_viable(score_zero, 0.25) { return false; }
+
+    // Test 2: Maximum violation score (all 1.0) -> sum of default weights = 1.0
+    let score_max: Float = anti_pattern_score_7_sins(1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0);
+    if !check_float_near(score_max, 1.0, 0.000001) { return false; }
+    if governance_risk_tier(score_max) != 3 { return false; } // Tier 3 = Fatal
+    if is_architecture_viable(score_max, 0.25) { return false; } // Not viable
+
+    // Test 3: Individual Sins
+    // Sin 1: Ambient Authority (0 unauth -> 0.0 score; 5/10 -> 1.0 score clamped)
+    let s_amb_0: Float = score_ambient_authority(0, 10);
+    let s_amb_5: Float = score_ambient_authority(5, 10);
+    if s_amb_0 != 0.0 { return false; }
+    if !check_float_near(s_amb_5, 1.0, 0.0001) { return false; }
+
+    // Sin 3: Raw Pointer Dereference (0 derefs -> 0.0 score; 5 derefs * 1.0 * 0.1 -> 0.5)
+    let s_ptr_0: Float = score_raw_pointer_dereference(0, 1.0);
+    let s_ptr_5: Float = score_raw_pointer_dereference(5, 1.0);
+    if s_ptr_0 != 0.0 { return false; }
+    if !check_float_near(s_ptr_5, 0.5, 0.0001) { return false; }
+
+    // Sin 4: Deep Inheritance (depth 1 -> 0.0; depth 3 * 1.0 * 0.05 -> (3-1)^2 * 0.05 = 0.20)
+    let s_inh_1: Float = score_deep_inheritance(1, 1.0);
+    let s_inh_3: Float = score_deep_inheritance(3, 1.0);
+    if s_inh_1 != 0.0 { return false; }
+    if !check_float_near(s_inh_3, 0.20, 0.0001) { return false; }
+
+    // Sin 5: Wildcard Catching (0 swallowed -> 0.0; 1 swallowed with p=0.5 -> 0.5)
+    let s_wc_0: Float = score_wildcard_catching(0, 0.5);
+    let s_wc_1: Float = score_wildcard_catching(1, 0.5);
+    if s_wc_0 != 0.0 { return false; }
+    if !check_float_near(s_wc_1, 0.5, 0.0001) { return false; }
+
+    // Test 4: Risk Tier Boundaries
+    if governance_risk_tier(0.04) != 0 { return false; } // Pure
+    if governance_risk_tier(0.15) != 1 { return false; } // Acceptable
+    if governance_risk_tier(0.40) != 2 { return false; } // Degraded
+    if governance_risk_tier(0.80) != 3 { return false; } // Fatal
+
+    return true;
+}
+
+pub fn main() {
+    let t1: Bool = test_boyd_em_engine();
+    if !t1 {
+        println("FAIL: test_boyd_em_engine");
+        process_exit(1);
+    }
+    let t2: Bool = test_7_deadly_sins_governance();
+    if !t2 {
+        println("FAIL: test_7_deadly_sins_governance");
+        process_exit(1);
+    }
+    println("challenger_boyd_7sins_tests: PASSED");
+}

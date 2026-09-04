@@ -1,0 +1,114 @@
+// # 3D Scene Adversarial Smoke Test
+//
+// Logline: Verifies Vector3, Transform, SceneNode, and Scene graph operations with adversarial inputs.
+//
+// Setup: Pure 3D scene structs. No FS or net dependencies.
+//
+// Beats:
+//   1. VALID: Normal Vector3, Transform, SceneNode, and Scene creation.
+//   2. NEGATIVE TRUST: Test with zero and identity values.
+//   3. ADVERSARIAL: Test with extreme coordinate values.
+//   4. DOUBLE-RUN: Verify all operations are deterministic.
+
+import "std/app/ui/3d/scene.oo";
+
+pub fn expect_eq_int(label: String, got: Int, want: Int) -> Bool {
+    if got == want { println("OK " + label); return true; }
+    println("FAIL " + label + " got=" + got.to_string() + " want=" + want.to_string());
+    return false;
+}
+
+pub fn expect_eq_vec3(label: String, got: Vector3, want: Vector3) -> Bool {
+    let cond: Bool = got.x == want.x && got.y == want.y && got.z == want.z;
+    if cond { println("OK " + label); return true; }
+    println("FAIL " + label);
+    return false;
+}
+
+pub fn expect_true(label: String, cond: Bool) -> Bool {
+    if cond { println("OK " + label); return true; }
+    println("FAIL " + label);
+    return false;
+}
+
+pub fn main() {
+    // VALID: Vector3 creation
+    let v1: Vector3 = vector3_new(10, 20, 30);
+    if !expect_eq_int("v1 x", v1.x, 10) { return; }
+    if !expect_eq_int("v1 y", v1.y, 20) { return; }
+    if !expect_eq_int("v1 z", v1.z, 30) { return; }
+
+    // VALID: Zero vector
+    let v_zero: Vector3 = vector3_zero();
+    if !expect_eq_vec3("zero vector", v_zero, vector3_new(0, 0, 0)) { return; }
+
+    // VALID: Transform creation
+    let pos: Vector3 = vector3_new(1, 2, 3);
+    let rot: Vector3 = vector3_new(0, 0, 0);
+    let scl: Vector3 = vector3_new(1, 1, 1);
+    let t1: Transform = transform_new(pos, rot, scl);
+    if !expect_eq_vec3("transform position", t1.position, pos) { return; }
+    if !expect_eq_vec3("transform rotation", t1.rotation, rot) { return; }
+    if !expect_eq_vec3("transform scale", t1.scale, scl) { return; }
+
+    // VALID: Identity transform
+    let t_ident: Transform = transform_identity();
+    if !expect_eq_vec3("identity position", t_ident.position, vector3_zero()) { return; }
+    if !expect_eq_vec3("identity rotation", t_ident.rotation, vector3_zero()) { return; }
+    if !expect_eq_vec3("identity scale", t_ident.scale, vector3_new(1, 1, 1)) { return; }
+
+    // NEGATIVE TRUST: Zero position transform
+    let t_zero_pos: Transform = transform_new(vector3_zero(), vector3_zero(), vector3_new(1, 1, 1));
+    if !expect_eq_vec3("zero pos position", t_zero_pos.position, vector3_zero()) { return; }
+
+    // NEGATIVE TRUST: Zero scale (should work)
+    let t_zero_scale: Transform = transform_new(vector3_new(1, 2, 3), vector3_zero(), vector3_zero());
+    if !expect_eq_vec3("zero scale", t_zero_scale.scale, vector3_zero()) { return; }
+
+    // ADVERSARIAL: Large values
+    let v_large: Vector3 = vector3_new(1000000, 2000000, 3000000);
+    if !expect_eq_int("large x", v_large.x, 1000000) { return; }
+
+    // ADVERSARIAL: Negative values
+    let v_neg: Vector3 = vector3_new(-100, -200, -300);
+    if !expect_eq_int("neg x", v_neg.x, -100) { return; }
+
+    // ADVERSARIAL: Transform with large values
+    let t_large: Transform = transform_new(
+        vector3_new(1000000, 2000000, 3000000),
+        vector3_new(90, 45, 0),
+        vector3_new(2, 2, 2)
+    );
+    if !expect_eq_int("large transform pos x", t_large.position.x, 1000000) { return; }
+
+    // VALID: SceneNode creation
+    let node1: SceneNode = scene_node_new(1, 0, transform_identity());
+    if !expect_eq_int("node id", node1.id, 1) { return; }
+    if !expect_eq_int("node parent_id", node1.parent_id, 0) { return; }
+
+    // DOUBLE-RUN: Determinism check
+    let v_dr1: Vector3 = vector3_new(42, 84, 126);
+    let v_dr2: Vector3 = vector3_new(42, 84, 126);
+    if !expect_eq_vec3("dr vector", v_dr1, v_dr2) { return; }
+
+    let t_dr1: Transform = transform_new(
+        vector3_new(10, 20, 30),
+        vector3_new(0, 90, 0),
+        vector3_new(1, 1, 1)
+    );
+    let t_dr2: Transform = transform_new(
+        vector3_new(10, 20, 30),
+        vector3_new(0, 90, 0),
+        vector3_new(1, 1, 1)
+    );
+    if !expect_eq_vec3("dr transform pos", t_dr1.position, t_dr2.position) { return; }
+    if !expect_eq_vec3("dr transform rot", t_dr1.rotation, t_dr2.rotation) { return; }
+    if !expect_eq_vec3("dr transform scl", t_dr1.scale, t_dr2.scale) { return; }
+
+    // Test marker functions
+    if !expect_eq_int("scene marker", scene_marker(), 1) { return; }
+    if !expect_eq_int("scene_types marker", scene_types_marker(), 1) { return; }
+    if !expect_eq_int("scene_ops marker", scene_ops_marker(), 1) { return; }
+
+    println("OK: 3d_scene_smoke passed");
+}

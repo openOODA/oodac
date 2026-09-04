@@ -1,0 +1,89 @@
+// # 3D Materials Adversarial Smoke Test
+//
+// Logline: Verifies Material creation, color blending, and presets with adversarial inputs.
+//
+// Setup: Pure struct operations. No FS or net dependencies.
+//
+// Beats:
+//   1. VALID: Normal Material creation and color blending.
+//   2. NEGATIVE TRUST: Test with default and zero values.
+//   3. ADVERSARIAL: Test with extreme roughness and metallic values.
+//   4. DOUBLE-RUN: Verify all operations are deterministic.
+
+import "std/app/ui/3d/materials.oo";
+
+pub fn expect_eq_int(label: String, got: Int, want: Int) -> Bool {
+    if got == want { println("OK " + label); return true; }
+    println("FAIL " + label + " got=" + got.to_string() + " want=" + want.to_string());
+    return false;
+}
+
+pub fn expect_eq_color(label: String, got: Color, want: Color) -> Bool {
+    let cond: Bool = got.r == want.r && got.g == want.g && got.b == want.b && got.a == want.a;
+    if cond { println("OK " + label); return true; }
+    println("FAIL " + label);
+    return false;
+}
+
+pub fn main() {
+    // VALID: Color blending
+    let c1: Color = color_new(255, 0, 0, 255);
+    let c2: Color = color_new(0, 0, 255, 255);
+    let c_blend: Color = color_blend(c1, c2, 128);
+    // At t=128, blend formula: ((255*(255-128)) + (0*128))/255 = (255*127)/255 = 127
+    // For blue: ((0*127) + (255*128))/255 = (255*128)/255 = 128
+    if !expect_eq_int("blend r", c_blend.r, 127) { return; }
+    if !expect_eq_int("blend b", c_blend.b, 128) { return; }
+
+    // VALID: Material creation
+    let mat1: Material = material_new(color_white(), 128, 0);
+    if !expect_eq_int("mat1 roughness", mat1.roughness, 128) { return; }
+    if !expect_eq_int("mat1 metallic", mat1.metallic, 0) { return; }
+
+    // VALID: Material presets
+    let mat_default: Material = material_default();
+    if !expect_eq_int("default roughness", mat_default.roughness, 128) { return; }
+    if !expect_eq_int("default metallic", mat_default.metallic, 0) { return; }
+
+    let mat_mirror: Material = material_mirror();
+    if !expect_eq_int("mirror roughness", mat_mirror.roughness, 0) { return; }
+    if !expect_eq_int("mirror metallic", mat_mirror.metallic, 255) { return; }
+
+    let mat_matte: Material = material_matte_black();
+    if !expect_eq_int("matte roughness", mat_matte.roughness, 255) { return; }
+    if !expect_eq_int("matte metallic", mat_matte.metallic, 0) { return; }
+
+    // NEGATIVE TRUST: Zero roughness and metallic
+    let mat_zero: Material = material_new(color_black(), 0, 0);
+    if !expect_eq_int("zero roughness", mat_zero.roughness, 0) { return; }
+    if !expect_eq_int("zero metallic", mat_zero.metallic, 0) { return; }
+
+    // NEGATIVE TRUST: Full roughness and metallic
+    let mat_full: Material = material_new(color_white(), 255, 255);
+    if !expect_eq_int("full roughness", mat_full.roughness, 255) { return; }
+    if !expect_eq_int("full metallic", mat_full.metallic, 255) { return; }
+
+    // ADVERSARIAL: Large roughness
+    let mat_large_rough: Material = material_new(color_green(), 1000, 0);
+    if !expect_eq_int("large roughness", mat_large_rough.roughness, 1000) { return; }
+
+    // ADVERSARIAL: Blending with t=0 (100% first color)
+    let c_blend_0: Color = color_blend(c1, c2, 0);
+    if !expect_eq_color("blend t=0", c_blend_0, c1) { return; }
+
+    // ADVERSARIAL: Blending with t=255 (100% second color)
+    let c_blend_255: Color = color_blend(c1, c2, 255);
+    if !expect_eq_color("blend t=255", c_blend_255, c2) { return; }
+
+    // DOUBLE-RUN: Determinism check
+    let mat_dr1: Material = material_new(color_red(), 64, 128);
+    let mat_dr2: Material = material_new(color_red(), 64, 128);
+    if !expect_eq_int("dr roughness", mat_dr1.roughness, mat_dr2.roughness) { return; }
+    if !expect_eq_int("dr metallic", mat_dr1.metallic, mat_dr2.metallic) { return; }
+
+    let blend_dr1: Color = color_blend(c1, c2, 128);
+    let blend_dr2: Color = color_blend(c1, c2, 128);
+    if !expect_eq_color("dr blend", blend_dr1, blend_dr2) { return; }
+
+    println("OK: 3d_materials_smoke passed");
+}

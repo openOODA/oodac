@@ -1,0 +1,12 @@
+// # Test pure exit 3
+//
+// Logline: Minimal fixture returning exit code 3 via process_exit.
+//
+// Setup: Used by --x86-elf-pure CLI product tests.
+//
+// Beats:
+//   1. Call process_exit with status 3.
+
+pub fn main() {
+    process_exit(3);
+}

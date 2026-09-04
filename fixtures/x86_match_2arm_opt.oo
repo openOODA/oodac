@@ -1,0 +1,8 @@
+// # 2-arm Option match binary compare
+pub fn main() {
+    let x = Some(42);
+    match x {
+        Some(v) => { println(v); },
+        None => { println(0); }
+    }
+}

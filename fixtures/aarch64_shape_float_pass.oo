@@ -1,0 +1,14 @@
+// # AArch64 shape Float pass
+//
+// Logline: Float const-foldable chain that the chain handles.
+//
+// Setup: Should pass aarch64_emit_shape_refuse_test (real Float handler).
+//
+// Beats:
+//   1. let x: Float = FLOAT.
+//   2. println(x).
+
+pub fn main() {
+    let x: Float = 3.14;
+    println(x);
+}

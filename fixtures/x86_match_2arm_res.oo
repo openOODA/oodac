@@ -1,0 +1,8 @@
+// # 2-arm Result match binary compare
+pub fn main() {
+    let x = Ok(42);
+    match x {
+        Ok(w) => { println(w); },
+        Err(e) => { println(e); }
+    }
+}

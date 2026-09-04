@@ -1,0 +1,63 @@
+// # HKDF-SHA256 RFC 5869 KAT Smoke
+//
+// Logline: Asserts std/crypto/hkdf.hkdf_extract and hkdf_expand against the RFC 5869 test case 1 (SHA-256) published vectors.
+//
+// Setup: Imports std/crypto/hkdf.oo. Pure, no FS or net. Uses bytes_to_str to convert hex KAT input to byte strings.
+//
+// Beats:
+//   1. hkdf_extract(salt=0x00..0x0c, ikm=0x0b*22) = 077709362c2e32df0ddc3f0dc47bba6390b6c73bb50f9c3122ec844ad7c2b3e5.
+//   2. hkdf(salt, ikm, info=0xf0..0xf9, length=42) = 3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf34007208d5b887185865.
+//   3. Print HKDF_KAT_OK on success.
+
+import "std/sec/mac/hkdf.oo";
+
+pub fn hex_to_str(h: String) -> String {
+    let mut out: List[Int] = list_new();
+    let hx: String = "0123456789abcdef";
+    let mut i: Int = 0;
+    let hn: Int = h.len();
+    while i < hn {
+        let mut hi: Int = 0;
+        while hi < 16 {
+            if byte_at(h, i) == byte_at(hx, hi) {
+                break;
+            }
+            hi = hi + 1;
+        }
+        let mut lo: Int = 0;
+        while lo < 16 {
+            if byte_at(h, i + 1) == byte_at(hx, lo) {
+                break;
+            }
+            lo = lo + 1;
+        }
+        out = list_push(out, hi * 16 + lo);
+        i = i + 2;
+    }
+    return bytes_to_str(out);
+}
+
+pub fn main() {
+    let salt_str: String = hex_to_str("000102030405060708090a0b0c");
+    let mut ikm_bytes: List[Int] = list_new();
+    let mut i: Int = 0;
+    while i < 22 {
+        ikm_bytes = list_push(ikm_bytes, 11);
+        i = i + 1;
+    }
+    let ikm_str: String = bytes_to_str(ikm_bytes);
+    let prk: String = hkdf_extract(salt_str, ikm_str);
+    let exp_prk: String = "077709362c2e32df0ddc3f0dc47bba6390b6c73bb50f9c3122ec844ad7c2b3e5";
+    if prk != exp_prk {
+        println("FAIL hkdf prk got " + prk);
+        return;
+    }
+    let info_str: String = hex_to_str("f0f1f2f3f4f5f6f7f8f9");
+    let okm: String = hkdf(salt_str, ikm_str, info_str, 42);
+    let exp_okm: String = "3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf34007208d5b887185865";
+    if okm != exp_okm {
+        println("FAIL hkdf okm got " + okm);
+        return;
+    }
+    println("HKDF_KAT_OK");
+}

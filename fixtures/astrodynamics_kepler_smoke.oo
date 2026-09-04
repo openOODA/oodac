@@ -1,0 +1,149 @@
+// # Keplerian Orbital Mechanics Adversarial Smoke Proof
+//
+// Logline: Adversarial smoke proof for two-body Keplerian mechanics, anomaly solvers, and state vector transforms.
+//
+// Setup: Pure math validation. No capability tokens. Asserts fail-closed behavior and round-trip invariants.
+//
+// Beats:
+//   1. Validate orbital radii, speed, period, and escape equations.
+//   2. Validate Kepler equation solution and anomaly round-trips.
+//   3. Validate elements-to-state-vector for circular and inclined orbits.
+//   4. Validate fail-closed errors for invalid conics.
+
+import "std/core/math/constants.oo";
+import "std/science/phys/relativistic/kepler_orbit.oo";
+import "std/science/phys/relativistic/anomaly_kepler_solver.oo";
+import "std/science/phys/relativistic/orbital_state_vector.oo";
+
+fn approx_eq(a: Float, b: Float, tol: Float) -> Bool {
+    let mut d: Float = a - b;
+    if d < 0.0 { d = 0.0 - d; }
+    return d <= tol;
+}
+
+fn ok_float(res: Result[Float, String]) -> Float {
+    if res.is_err() { process_exit(1); }
+    return match res {
+        Ok(x) => x,
+        Err(_) => 0.0
+    };
+}
+
+fn err_or_bail(res: Result[Float, String]) -> Int {
+    if res.is_err() { return 0; }
+    return 1;
+}
+
+fn ok_sv(res: Result[StateVector, String]) -> StateVector {
+    if res.is_err() { process_exit(1); }
+    return match res {
+        Ok(x) => x,
+        Err(_) => StateVector { pos_x: 0.0, pos_y: 0.0, pos_z: 0.0, vel_x: 0.0, vel_y: 0.0, vel_z: 0.0 }
+    };
+}
+
+fn err_sv_or_bail(res: Result[StateVector, String]) -> Int {
+    if res.is_err() { return 0; }
+    return 1;
+}
+
+fn test_kepler_orbit() -> Int {
+    let mu: Float = kepler_mu_earth_si();
+    let a: Float = 7000000.0;
+    let tol: Float = 0.001;
+    let circ_speed: Float = sqrt(mu / a);
+    let v1: Float = ok_float(kepler_circular_speed(a, mu));
+    if !approx_eq(v1, circ_speed, tol) { return 1; }
+    let v2: Float = ok_float(kepler_vis_viva(a, a, mu));
+    if !approx_eq(v2, circ_speed, tol) { return 1; }
+    let v3: Float = ok_float(kepler_escape_speed(a, mu));
+    if !approx_eq(v3, sqrt(2.0 * mu / a), tol) { return 1; }
+    let period: Float = 2.0 * math_pi() * sqrt((a * a * a) / mu);
+    let t: Float = ok_float(kepler_orbital_period(a, mu));
+    if !approx_eq(t, period, tol) { return 1; }
+    let rp: Float = ok_float(kepler_periapsis_radius(a, 0.0));
+    if !approx_eq(rp, a, tol) { return 1; }
+    let ra: Float = ok_float(kepler_apoapsis_radius(a, 0.0));
+    if !approx_eq(ra, a, tol) { return 1; }
+    if err_or_bail(kepler_circular_speed(-a, mu)) != 0 { return 1; }
+    if err_or_bail(kepler_periapsis_radius(a, 1.5)) != 0 { return 1; }
+    return 0;
+}
+
+fn test_anomaly() -> Int {
+    let m0: Float = math_pi() / 4.0;
+    let tol: Float = 0.01;
+    let solve_tol: Float = 0.0000000001;
+    let e0: Float = ok_float(kepler_solve_eccentric_anomaly(m0, 0.0, solve_tol, 50));
+    if !approx_eq(e0, m0, 0.0000001) { return 1; }
+    let nu0: Float = ok_float(kepler_mean_to_true(m0, 0.0, solve_tol, 50));
+    if !approx_eq(nu0, m0, tol) { return 1; }
+    let e2: Float = 0.5;
+    let m2: Float = math_pi() / 3.0;
+    let e_anom: Float = ok_float(kepler_solve_eccentric_anomaly(m2, e2, solve_tol, 100));
+    let mean: Float = ok_float(kepler_eccentric_to_mean(e_anom, e2));
+    if !approx_eq(mean, m2, 0.0000001) { return 1; }
+    let nu: Float = ok_float(kepler_eccentric_to_true(e_anom, e2));
+    let e_back: Float = ok_float(kepler_true_to_eccentric(nu, e2));
+    if !approx_eq(e_back, e_anom, tol) { return 1; }
+    if err_or_bail(kepler_solve_eccentric_anomaly(m2, -0.1, 0.0001, 50)) != 0 { return 1; }
+    if err_or_bail(kepler_mean_to_true(m2, 0.9999999999, 0.0001, 1)) != 0 { return 1; }
+    return 0;
+}
+
+fn test_state_vector() -> Int {
+    let mu: Float = 398600.0;
+    let a: Float = 7000.0;
+    let v: Float = sqrt(mu / a);
+    let tol: Float = 0.0001;
+    let elem: OrbitElements = OrbitElements {
+        semi_major_axis_km: a,
+        eccentricity: 0.0,
+        inclination_rad: 0.0,
+        raan_rad: 0.0,
+        arg_periapsis_rad: 0.0,
+        true_anomaly_rad: 0.0
+    };
+    let sv: StateVector = ok_sv(elements_to_state_vector(&elem, mu));
+    if !approx_eq(sv.pos_x, a, tol) { return 1; }
+    if !approx_eq(sv.pos_y, 0.0, tol) { return 1; }
+    if !approx_eq(sv.pos_z, 0.0, tol) { return 1; }
+    if !approx_eq(sv.vel_x, 0.0, tol) { return 1; }
+    if !approx_eq(sv.vel_y, v, tol) { return 1; }
+    if !approx_eq(sv.vel_z, 0.0, tol) { return 1; }
+    let elem_i: OrbitElements = OrbitElements {
+        semi_major_axis_km: a,
+        eccentricity: 0.0,
+        inclination_rad: math_pi() / 2.0,
+        raan_rad: 0.0,
+        arg_periapsis_rad: 0.0,
+        true_anomaly_rad: 0.0
+    };
+    let sv_i: StateVector = ok_sv(elements_to_state_vector(&elem_i, mu));
+    if !approx_eq(sv_i.pos_x, a, tol) { return 1; }
+    if !approx_eq(sv_i.pos_y, 0.0, tol) { return 1; }
+    if !approx_eq(sv_i.pos_z, 0.0, tol) { return 1; }
+    if !approx_eq(sv_i.vel_x, 0.0, tol) { return 1; }
+    if !approx_eq(sv_i.vel_y, 0.0, tol) { return 1; }
+    if !approx_eq(sv_i.vel_z, v, tol) { return 1; }
+    let bad: OrbitElements = OrbitElements {
+        semi_major_axis_km: a,
+        eccentricity: 1.0,
+        inclination_rad: 0.0,
+        raan_rad: 0.0,
+        arg_periapsis_rad: 0.0,
+        true_anomaly_rad: 0.0
+    };
+    if err_sv_or_bail(elements_to_state_vector(&bad, mu)) != 0 { return 1; }
+    return 0;
+}
+
+pub fn main() -> Int {
+    let mut code: Int = test_kepler_orbit();
+    if code != 0 { return code; }
+    code = test_anomaly();
+    if code != 0 { return code; }
+    code = test_state_vector();
+    if code != 0 { return code; }
+    return 0;
+}

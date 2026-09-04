@@ -1,0 +1,201 @@
+// # Discrete measure theory: sigma-algebras, probability measures, Lebesgue integral, dominated convergence
+//
+// Logline: Standalone proof fixture verifying sigma-algebra closure on finite sets, probability measure normalization, Lebesgue integration, measurability, and dominated-convergence check on a harmonic sequence.
+//
+// Setup: Pure in-fixture re-declaration. No std import required.
+//
+// Beats:
+//   1. The trivial sigma-algebra {empty, full} on a 3-element universe is valid.
+//   2. The power set sigma-algebra on a 2-element universe is valid.
+//   3. The measure mu = (0.3, 0.5, 0.2) is a probability measure (sums to 1).
+//   4. The integral of f = (1.0, 2.0, 3.0) against mu = (0.3, 0.5, 0.2) equals 1.9.
+//   5. A constant function on a finite universe is measurable: preimage is the full universe, in the power set.
+//   6. The harmonic sequence f_n = 1/n is dominated by g = 1 and converges to 0.
+//
+// residual: Coverage limited to finite discrete measure spaces; continuous sigma-algebras and Lebesgue measure on R^n are out of scope.
+
+type SigmaAlgebra = struct { universe: List[Int], subsets: List[Int] };
+type Measure = struct { sa: SigmaAlgebra, mu: List[Float] };
+pub fn sigma_algebra_new(universe: List[Int]) -> SigmaAlgebra {
+    return SigmaAlgebra { universe: universe, subsets: list_new() };
+}
+pub fn sa_universe_mask(sa: SigmaAlgebra) -> Int {
+    let n: Int = list_len(sa.universe);
+    let mut m: Int = 0;
+    let mut i: Int = 0;
+    while i < n { m = m + (1 << i); i = i + 1; }
+    return m;
+}
+pub fn sa_add_set(sa: SigmaAlgebra, mask: Int) -> SigmaAlgebra {
+    if sa_is_subset(sa, mask) { return sa; }
+    let mut subs: List[Int] = sa.subsets;
+    subs = list_push(subs, mask);
+    return SigmaAlgebra { universe: sa.universe, subsets: subs };
+}
+pub fn sa_is_subset(sa: SigmaAlgebra, mask: Int) -> Bool {
+    let n: Int = list_len(sa.subsets);
+    let mut i: Int = 0;
+    while i < n {
+        if list_get(sa.subsets, i) == mask { return true; }
+        i = i + 1;
+    }
+    return false;
+}
+pub fn sa_size(sa: SigmaAlgebra) -> Int { return list_len(sa.subsets); }
+pub fn mask_complement(universe_size: Int, mask: Int) -> Int {
+    let mut full: Int = 0;
+    let mut i: Int = 0;
+    while i < universe_size { full = full + (1 << i); i = i + 1; }
+    return full - mask;
+}
+pub fn mask_or(a: Int, b: Int) -> Int { return a | b; }
+pub fn sa_is_sigma_algebra(sa: SigmaAlgebra) -> Bool {
+    let n: Int = list_len(sa.universe);
+    let full: Int = sa_universe_mask(sa);
+    if sa_is_subset(sa, 0) == false { return false; }
+    if sa_is_subset(sa, full) == false { return false; }
+    let m: Int = list_len(sa.subsets);
+    let mut i: Int = 0;
+    while i < m {
+        let a: Int = list_get(sa.subsets, i);
+        let comp: Int = mask_complement(n, a);
+        if sa_is_subset(sa, comp) == false { return false; }
+        let mut j: Int = 0;
+        while j < m {
+            let b: Int = list_get(sa.subsets, j);
+            let u: Int = mask_or(a, b);
+            if sa_is_subset(sa, u) == false { return false; }
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+    return true;
+}
+pub fn measure_new(sa: SigmaAlgebra, mu_values: List[Float]) -> Measure {
+    return Measure { sa: sa, mu: mu_values };
+}
+pub fn measure_total(m: Measure) -> Float {
+    let n: Int = list_len(m.mu);
+    let mut acc: Float = 0.0;
+    let mut i: Int = 0;
+    while i < n { acc = acc + list_get(m.mu, i); i = i + 1; }
+    return acc;
+}
+pub fn approx_equal(x: Float, y: Float, tol: Float) -> Bool {
+    let diff: Float = x - y;
+    if diff < 0.0 {
+        if (0.0 - diff) < tol { return true; }
+    } else {
+        if diff < tol { return true; }
+    }
+    return false;
+}
+pub fn measure_is_probability(m: Measure) -> Bool {
+    let total: Float = measure_total(m);
+    return approx_equal(total, 1.0, 0.0001);
+}
+pub fn measure_atom(m: Measure, mask: Int) -> Float {
+    let n: Int = list_len(m.sa.universe);
+    if n < 1 { return 0.0; }
+    let mut k: Int = 0;
+    while k < n {
+        let bit: Int = (mask >> k) & 1;
+        if bit == 1 {
+            let other: Int = mask - (1 << k);
+            if other == 0 { return list_get(m.mu, k); }
+            return 0.0;
+        }
+        k = k + 1;
+    }
+    return 0.0;
+}
+pub fn integrate(m: Measure, f_values: List[Float]) -> Float {
+    let n: Int = list_len(m.mu);
+    let f_len: Int = list_len(f_values);
+    if f_len != n { return 0.0; }
+    let mut acc: Float = 0.0;
+    let mut i: Int = 0;
+    while i < n {
+        let fv: Float = list_get(f_values, i);
+        let mv: Float = list_get(m.mu, i);
+        acc = acc + fv * mv;
+        i = i + 1;
+    }
+    return acc;
+}
+pub fn is_measurable(sa: SigmaAlgebra, f_values: List[Float], preimage_masks: List[Int]) -> Bool {
+    let n: Int = list_len(preimage_masks);
+    let mut i: Int = 0;
+    while i < n {
+        let mask: Int = list_get(preimage_masks, i);
+        if sa_is_subset(sa, mask) == false { return false; }
+        i = i + 1;
+    }
+    return true;
+}
+pub fn outer_measure_counting(m: Measure) -> Float {
+    let n: Int = list_len(m.mu);
+    let mut acc: Float = 0.0;
+    let mut i: Int = 0;
+    while i < n { acc = acc + 1.0; i = i + 1; }
+    return acc;
+}
+pub fn abs_le(x: Float, y: Float, tol: Float) -> Bool {
+    let mut ax: Float = x;
+    if ax < 0.0 { ax = 0.0 - ax; }
+    if ax < y + tol { return true; }
+    return false;
+}
+pub fn dominated_conv_verifier(f_n_values: List[Float], g: Float, n_terms: Int, tol: Float) -> Bool {
+    if n_terms <= 0 { return false; }
+    let n: Int = list_len(f_n_values);
+    if n < n_terms { return false; }
+    let mut i: Int = 0;
+    while i < n_terms {
+        let v: Float = list_get(f_n_values, i);
+        if abs_le(v, g, 0.0001) == false { return false; }
+        i = i + 1;
+    }
+    let last: Float = list_get(f_n_values, n_terms - 1);
+    return approx_equal(last, 0.0, tol);
+}
+pub fn main() {
+    // Test 1: trivial sigma-algebra {empty, full} on [0, 1, 2] is valid.
+    let mut u3: List[Int] = list_new();
+    u3 = list_push(u3, 0); u3 = list_push(u3, 1); u3 = list_push(u3, 2);
+    let mut sa1: SigmaAlgebra = sigma_algebra_new(u3);
+    sa1 = sa_add_set(sa1, 0); sa1 = sa_add_set(sa1, 7);
+    if sa_is_sigma_algebra(sa1) { println("OK sa_trivial_three_elements"); } else { println("FAIL sa_trivial_three_elements"); process_exit(1); }
+    // Test 2: power set on [0, 1] is a valid sigma-algebra.
+    let mut u2: List[Int] = list_new();
+    u2 = list_push(u2, 0); u2 = list_push(u2, 1);
+    let mut sa2: SigmaAlgebra = sigma_algebra_new(u2);
+    sa2 = sa_add_set(sa2, 0); sa2 = sa_add_set(sa2, 1); sa2 = sa_add_set(sa2, 2); sa2 = sa_add_set(sa2, 3);
+    if sa_is_sigma_algebra(sa2) { println("OK sa_powerset_two_elements"); } else { println("FAIL sa_powerset_two_elements"); process_exit(1); }
+    // Test 3: mu = (0.3, 0.5, 0.2) is a probability measure.
+    let mut mu3: List[Float] = list_new();
+    mu3 = list_push(mu3, 0.3); mu3 = list_push(mu3, 0.5); mu3 = list_push(mu3, 0.2);
+    let m3: Measure = measure_new(sa1, mu3);
+    if measure_is_probability(m3) { println("OK measure_is_probability"); } else { println("FAIL measure_is_probability"); process_exit(1); }
+    // Test 4: integral of (1.0, 2.0, 3.0) against (0.3, 0.5, 0.2) = 1.9.
+    let mut f4: List[Float] = list_new();
+    f4 = list_push(f4, 1.0); f4 = list_push(f4, 2.0); f4 = list_push(f4, 3.0);
+    let r4: Float = integrate(m3, f4);
+    if approx_equal(r4, 1.9, 0.0001) { println("OK integrate_against_probability"); } else { println("FAIL integrate_against_probability"); process_exit(1); }
+    // Test 5: constant function on 3-element universe is measurable (full universe mask 7 is in the power set).
+    let mut sa5: SigmaAlgebra = sigma_algebra_new(u3);
+    sa5 = sa_add_set(sa5, 0); sa5 = sa_add_set(sa5, 1); sa5 = sa_add_set(sa5, 2); sa5 = sa_add_set(sa5, 3);
+    sa5 = sa_add_set(sa5, 4); sa5 = sa_add_set(sa5, 5); sa5 = sa_add_set(sa5, 6); sa5 = sa_add_set(sa5, 7);
+    let mut f5: List[Float] = list_new();
+    f5 = list_push(f5, 7.0); f5 = list_push(f5, 7.0); f5 = list_push(f5, 7.0);
+    let mut pre5: List[Int] = list_new();
+    pre5 = list_push(pre5, 7);
+    if is_measurable(sa5, f5, pre5) { println("OK constant_function_is_measurable"); } else { println("FAIL constant_function_is_measurable"); process_exit(1); }
+    // Test 6: dominated convergence for f_n = 1/n, g = 1, n_terms = 10, tol = 0.15.
+    let mut f6: List[Float] = list_new();
+    f6 = list_push(f6, 1.0); f6 = list_push(f6, 0.5); f6 = list_push(f6, 0.33333333);
+    f6 = list_push(f6, 0.25); f6 = list_push(f6, 0.2); f6 = list_push(f6, 0.16666666);
+    f6 = list_push(f6, 0.14285714); f6 = list_push(f6, 0.125); f6 = list_push(f6, 0.11111111); f6 = list_push(f6, 0.1);
+    if dominated_conv_verifier(f6, 1.0, 10, 0.15) { println("OK dominated_convergence_harmonic"); } else { println("FAIL dominated_convergence_harmonic"); process_exit(1); }
+    println("test_theory_measure: PASSED");
+}

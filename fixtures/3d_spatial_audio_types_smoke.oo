@@ -1,0 +1,58 @@
+// # 3D Spatial Audio Types Adversarial Smoke Test
+//
+// Logline: Verifies AudioSource struct creation and field access with adversarial inputs.
+//
+// Setup: Pure integer audio structs. No FS or net dependencies.
+//
+// Beats:
+//   1. VALID: Test AudioSource creation and field access.
+//   2. NEGATIVE TRUST: Test with zero values for all fields.
+//   3. ADVERSARIAL: Test with extreme negative/positive values.
+//   4. DOUBLE-RUN: Verify all operations are deterministic.
+
+import "std/app/ui/3d/spatial_audio_types.oo";
+
+pub fn expect_eq_int(label: String, got: Int, want: Int) -> Bool {
+    if got == want { println("OK " + label); return true; }
+    println("FAIL " + label + " got=" + got.to_string() + " want=" + want.to_string());
+    return false;
+}
+
+pub fn main() {
+    // VALID: Normal AudioSource creation and field access
+    let source1: AudioSource = audio_source_new(100, 200, 300, 50);
+    if !expect_eq_int("source x", source1.x, 100) { return; }
+    if !expect_eq_int("source y", source1.y, 200) { return; }
+    if !expect_eq_int("source z", source1.z, 300) { return; }
+    if !expect_eq_int("source volume", audio_source_volume(source1), 50) { return; }
+    
+    // NEGATIVE TRUST: Zero values
+    let source_zero: AudioSource = audio_source_new(0, 0, 0, 0);
+    if !expect_eq_int("source zero x", source_zero.x, 0) { return; }
+    if !expect_eq_int("source zero y", source_zero.y, 0) { return; }
+    if !expect_eq_int("source zero z", source_zero.z, 0) { return; }
+    if !expect_eq_int("source zero volume", audio_source_volume(source_zero), 0) { return; }
+    
+    // ADVERSARIAL: Extreme values
+    let source_extreme: AudioSource = audio_source_new(999999, -999999, 999999, 255);
+    if !expect_eq_int("source extreme x", source_extreme.x, 999999) { return; }
+    if !expect_eq_int("source extreme y", source_extreme.y, -999999) { return; }
+    if !expect_eq_int("source extreme z", source_extreme.z, 999999) { return; }
+    if !expect_eq_int("source extreme volume", audio_source_volume(source_extreme), 255) { return; }
+    
+    let source_neg: AudioSource = audio_source_new(-100, -200, -300, -1);
+    if !expect_eq_int("source neg x", source_neg.x, -100) { return; }
+    if !expect_eq_int("source neg y", source_neg.y, -200) { return; }
+    if !expect_eq_int("source neg z", source_neg.z, -300) { return; }
+    if !expect_eq_int("source neg volume", audio_source_volume(source_neg), -1) { return; }
+    
+    // DOUBLE-RUN: Determinism
+    let source_dr1: AudioSource = audio_source_new(100, 200, 300, 50);
+    let source_dr2: AudioSource = audio_source_new(100, 200, 300, 50);
+    if !expect_eq_int("dr source x", source_dr1.x, source_dr2.x) { return; }
+    if !expect_eq_int("dr source y", source_dr1.y, source_dr2.y) { return; }
+    if !expect_eq_int("dr source z", source_dr1.z, source_dr2.z) { return; }
+    if !expect_eq_int("dr source volume", audio_source_volume(source_dr1), audio_source_volume(source_dr2)) { return; }
+    
+    println("OK: 3d_spatial_audio_types_smoke passed");
+}

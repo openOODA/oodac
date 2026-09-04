@@ -1,0 +1,103 @@
+// # FFT Quadrature Spline Fixture
+//
+// Logline: Checks radix-2 FFT round-trip, Gauss-Legendre exactness, and natural cubic interpolation.
+//
+// Setup: Isolated emit-c. Run from ooda/.
+//
+// Beats:
+//   1. FFT of an impulse is flat ones; IFFT(FFT(x)) recovers x.
+//   2. Two- and three-point Gauss-Legendre integrate x^2 to 2/3.
+//   3. A natural cubic through (0,0), (1,1), (2,0) hits knots and x=0.5.
+//   4. Fail closed on a non-power-of-two FFT length and on a single spline knot.
+
+import "std/core/math/fft/fft_radix2_float.oo";
+import "std/core/math/quad/gauss_legendre.oo";
+import "std/core/math/spline/cubic_natural.oo";
+
+fn fail(msg: String) {
+    println("FAIL " + msg);
+    process_exit(1);
+}
+
+fn unwrap_f(r: Result[Float, String], msg: String) -> Float {
+    match r {
+        Ok(v) => { return v; },
+        Err(e) => { fail(msg + ": " + e); return 0.0; }
+    }
+}
+
+fn unwrap_fv(r: Result[List[Float], String], msg: String) -> List[Float] {
+    match r {
+        Ok(v) => { return v; },
+        Err(e) => { fail(msg + ": " + e); return list_new(); }
+    }
+}
+
+fn near(a: Float, b: Float, eps: Float) -> Bool {
+    let mut d: Float = a - b;
+    if d < 0.0 { d = 0.0 - d; }
+    return d <= eps;
+}
+
+pub fn main() {
+    let mut imp: List[Float] = list_new();
+    let mut i: Int = 0;
+    while i < 8 {
+        let mut v: Float = 0.0;
+        if i == 0 { v = 1.0; }
+        imp = list_push(imp, v);
+        i = i + 1;
+    }
+    let fimp: List[Float] = unwrap_fv(fft_forward(imp, 4), "fft impulse");
+    if near(list_get(fimp, 0), 1.0, 0.0001) == false { fail("fft dc re"); }
+    if near(list_get(fimp, 2), 1.0, 0.0001) == false { fail("fft bin1"); }
+    if near(list_get(fimp, 4), 1.0, 0.0001) == false { fail("fft bin2"); }
+    if near(list_get(fimp, 6), 1.0, 0.0001) == false { fail("fft bin3"); }
+
+    let mut x: List[Float] = list_new();
+    x = list_push(x, 1.0);
+    x = list_push(x, 0.0);
+    x = list_push(x, 2.0);
+    x = list_push(x, 0.0);
+    x = list_push(x, 3.0);
+    x = list_push(x, 0.0);
+    x = list_push(x, 4.0);
+    x = list_push(x, 0.0);
+    let fx: List[Float] = unwrap_fv(fft_forward(x, 4), "fft x");
+    let rx: List[Float] = unwrap_fv(fft_inverse(fx, 4), "ifft");
+    if near(list_get(rx, 0), 1.0, 0.0001) == false { fail("round0"); }
+    if near(list_get(rx, 2), 2.0, 0.0001) == false { fail("round1"); }
+    if near(list_get(rx, 4), 3.0, 0.0001) == false { fail("round2"); }
+    if near(list_get(rx, 6), 4.0, 0.0001) == false { fail("round3"); }
+    let badn: Result[List[Float], String] = fft_forward(x, 3);
+    if badn.is_ok() { fail("fft n=3"); }
+
+    let g2: Float = unwrap_f(gauss_legendre_x2(2), "gl2");
+    if near(g2, 2.0 / 3.0, 0.0000001) == false { fail("gl2"); }
+    let g3: Float = unwrap_f(gauss_legendre_x2(3), "gl3");
+    if near(g3, 2.0 / 3.0, 0.0000001) == false { fail("gl3"); }
+    let one: Float = unwrap_f(gauss_legendre_one(2), "gl one");
+    if near(one, 2.0, 0.0000001) == false { fail("gl one"); }
+    let glb: Result[Float, String] = gauss_legendre_x2(0);
+    if glb.is_ok() { fail("gl n=0"); }
+
+    let mut xs: List[Float] = list_new();
+    xs = list_push(xs, 0.0);
+    xs = list_push(xs, 1.0);
+    xs = list_push(xs, 2.0);
+    let mut ys: List[Float] = list_new();
+    ys = list_push(ys, 0.0);
+    ys = list_push(ys, 1.0);
+    ys = list_push(ys, 0.0);
+    if near(unwrap_f(spline_natural_eval(xs, ys, 0.0), "s0"), 0.0, 0.0000001) == false { fail("s0"); }
+    if near(unwrap_f(spline_natural_eval(xs, ys, 1.0), "s1"), 1.0, 0.0000001) == false { fail("s1"); }
+    if near(unwrap_f(spline_natural_eval(xs, ys, 2.0), "s2"), 0.0, 0.0000001) == false { fail("s2"); }
+    if near(unwrap_f(spline_natural_eval(xs, ys, 0.5), "s05"), 0.6875, 0.0000001) == false { fail("s05"); }
+    let mut onek: List[Float] = list_new();
+    onek = list_push(onek, 0.0);
+    let sb: Result[Float, String] = spline_natural_eval(onek, onek, 0.0);
+    if sb.is_ok() { fail("spline one knot"); }
+    let soob: Result[Float, String] = spline_natural_eval(xs, ys, 0.0 - 1.0);
+    if soob.is_ok() { fail("spline range"); }
+    println("FFT_QUAD_SPLINE_ALL_PASSED");
+}

@@ -1,0 +1,89 @@
+// # C header parser smoke (ALGO — re-declared surface)
+//
+// Logline: Re-declares the CParserState surface from std/compile/compilers/c_header_parser.oo in the fixture and exercises the documented invariants (RESIDUAL: std/compile/compilers/c_header_parser.oo has a pre-existing mut bug in c_parser_advance at line 57).
+//
+// Setup: Pure in-fixture re-declaration. Pure (no FS, no net).
+//
+// Beats:
+//   1. c_parser_new(empty) sets current_pos=0, error_count=0.
+//   2. c_parser_is_at_end on empty list returns true.
+//   3. c_parser_peek_kind on empty list returns c_tok_eof() (0).
+//   4. Print COMPILERS_C_HEADER_PARSER_OK on success.
+
+type CParserState = struct {
+    tokens: List[Int],
+    current_pos: Int,
+    total_tokens: Int,
+    error_count: Int
+};
+
+pub fn c_parser_new(toks: List[Int]) -> CParserState {
+    let count: Int = list_len(toks);
+    return CParserState {
+        tokens: toks,
+        current_pos: 0,
+        total_tokens: count,
+        error_count: 0
+    };
+}
+
+pub fn c_parser_is_at_end(p: CParserState) -> Bool {
+    return p.current_pos >= p.total_tokens;
+}
+
+pub fn c_parser_peek_kind(p: CParserState) -> Int {
+    if c_parser_is_at_end(p) {
+        return 0;
+    }
+    return list_get(p.tokens, p.current_pos);
+}
+
+pub fn main() {
+    // Beat 1: empty token list.
+    let empty: List[Int] = list_new();
+    let p: CParserState = c_parser_new(empty);
+    if p.current_pos != 0 {
+        println("FAIL parser_pos_init");
+        return;
+    }
+    if p.error_count != 0 {
+        println("FAIL parser_errors_init");
+        return;
+    }
+    if p.total_tokens != 0 {
+        println("FAIL parser_total_init");
+        return;
+    }
+    println("OK c_parser_new");
+
+    // Beat 2: at end on empty.
+    if !c_parser_is_at_end(p) {
+        println("FAIL is_at_end_empty");
+        return;
+    }
+    println("OK c_parser_is_at_end_empty");
+
+    // Beat 3: peek kind on empty returns 0 (eof).
+    if c_parser_peek_kind(p) != 0 {
+        println("FAIL peek_kind_eof");
+        return;
+    }
+    println("OK c_parser_peek_kind_eof");
+
+    // Beat 4: with one token, peek returns it and is_at_end becomes false.
+    let mut t1: List[Int] = list_new();
+    t1 = list_push(t1, 1);
+    let p2: CParserState = c_parser_new(t1);
+    if c_parser_is_at_end(p2) {
+        println("FAIL non_empty_at_end");
+        return;
+    }
+    if c_parser_peek_kind(p2) != 1 {
+        println("FAIL peek_kind_first_token");
+        return;
+    }
+    println("OK c_parser_with_one_token");
+
+    println("COMPILERS_C_HEADER_PARSER_OK");
+    println("OK");
+}

@@ -1,0 +1,83 @@
+// # BigInt string parse and format smoke
+//
+// Logline: Round-trips std/math/bigint_str.bigint_from_str and bigint_to_str against decimal and Knuth long vectors.
+//
+// Setup: Imports std/math/bigint.oo and std/math/bigint_str.oo. Pure, no FS or net. The bigint parser stores base-10 little-endian digit lists; serialization walks digits from most significant to least.
+//
+// Beats:
+//   1. Round-trip "0" -> "0".
+//   2. Round-trip "7" -> "7".
+//   3. Round-trip "-42" -> "-42".
+//   4. Round-trip "+99" -> "99" (sign-tolerant parse).
+//   5. (Knuth) 20-digit Knuth vector: "12345678901234567890" round-trips.
+//   6. bigint_from_int(0) and bigint_to_int round-trip.
+//   7. bigint_from_int(-1234) and bigint_to_int round-trip.
+
+import "std/core/math/bigint.oo";
+import "std/core/math/bigint_str.oo";
+
+pub fn main() {
+    // Beat 1: 0 round-trip.
+    let z: BigInt = bigint_from_str("0");
+    let zs: String = bigint_to_str(z);
+    if zs != "0" {
+        println("FAIL bigint_str 0 got " + zs);
+        return;
+    }
+    println("OK bigint_str 0");
+
+    // Beat 2: 7 round-trip.
+    let s7: BigInt = bigint_from_str("7");
+    let s7s: String = bigint_to_str(s7);
+    if s7s != "7" {
+        println("FAIL bigint_str 7 got " + s7s);
+        return;
+    }
+    println("OK bigint_str 7");
+
+    // Beat 3: -42 round-trip.
+    let n42: BigInt = bigint_from_str("-42");
+    let n42s: String = bigint_to_str(n42);
+    if n42s != "-42" {
+        println("FAIL bigint_str -42 got " + n42s);
+        return;
+    }
+    println("OK bigint_str -42");
+
+    // Beat 4: +99 round-trip.
+    let p99: BigInt = bigint_from_str("+99");
+    let p99s: String = bigint_to_str(p99);
+    if p99s != "99" {
+        println("FAIL bigint_str +99 got " + p99s);
+        return;
+    }
+    println("OK bigint_str +99");
+
+    // Beat 5: 20-digit Knuth vector.
+    let kn: BigInt = bigint_from_str("12345678901234567890");
+    let kns: String = bigint_to_str(kn);
+    if kns != "12345678901234567890" {
+        println("FAIL bigint_str Knuth got " + kns);
+        return;
+    }
+    println("OK bigint_str Knuth 20");
+
+    // Beat 6: from_int(0) / to_int.
+    let b0: BigInt = bigint_from_int(0);
+    if bigint_to_int(b0) != 0 {
+        println("FAIL bigint_str from_int(0)");
+        return;
+    }
+    println("OK bigint_str from_int 0");
+
+    // Beat 7: from_int(-1234) / to_int.
+    let b1: BigInt = bigint_from_int(0 - 1234);
+    if bigint_to_int(b1) != 0 - 1234 {
+        println("FAIL bigint_str from_int(-1234)");
+        return;
+    }
+    println("OK bigint_str from_int -1234");
+
+    println("BIGINT_STR_KAT_OK");
+    println("OK");
+}

@@ -1,0 +1,21 @@
+// # Test GPU Buffer Alloc Authorized Pass
+//
+// Logline: Asserts valid compilation when gpu_buffer_alloc receives valid &GpuCap token.
+//
+// Setup: Sealed GPU memory builtin gpu_buffer_alloc should pass typecheck when authorized with &GpuCap.
+//
+// Beats:
+//   1. Declare function taking gpu: &GpuCap.
+//   2. Invoke gpu_buffer_alloc with gpu token.
+//   3. Assert static typecheck succeeds.
+
+pub fn run_gpu_buffer_alloc(gpu: &GpuCap) {
+    let res = gpu_buffer_alloc(gpu, 1024);
+    match res {
+        Ok(ptr) => {},
+        Err(e) => {}
+    }
+}
+
+pub fn main() {
+}

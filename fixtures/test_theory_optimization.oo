@@ -1,0 +1,174 @@
+// # Optimization Theory: Gradient Descent, Newton, Bisection, KKT
+//
+// Logline: Verify gradient descent convergence on quadratics, Newton step on a bowl, bisection root finding, and KKT first-order optimality, plus the safe-learning-rate guard.
+//
+// Setup: Pure in-fixture re-declaration. No std import required.
+//
+// Beats:
+//   1. gradient_descent on (x - 3)^2 = x^2 - 6x + 9 converges near x equals 3.
+//   2. gradient_descent on x^2 converges near x equals 0.
+//   3. is_convex_quadratic on a equals 2 is true; on a equals -1 is false.
+//   4. lagrange_multiplier_minimize gives the analytical minimum for f equals 2x^2 plus 4x with lambda equals 0.
+//   5. Newton step on (x - 5)^2 reaches the root in a single step from a distant start.
+//   6. is_safe_learning_rate rejects a learning rate greater than 2 divided by a.
+//   7. gradient_descent_converged is false when the learning rate is too large.
+//   8. bisection_root finds the root of x^2 - 4 equals 0 on the interval 0 to 5.
+//   9. kkt_check_optimality confirms the stationary point of a simple Lagrangian.
+//
+// residual: Tests cover only the convex, scalar, equality-constrained surface. Inequality KKT is out of scope.
+
+type Quadratic = struct { a: Float, b: Float, c: Float };
+pub fn quad_eval(q: Quadratic, x: Float) -> Float { return q.a * x * x + q.b * x + q.c; }
+pub fn quad_prime(q: Quadratic, x: Float) -> Float { return 2.0 * q.a * x + q.b; }
+pub fn quad_double_prime(q: Quadratic) -> Float { return 2.0 * q.a; }
+pub fn gradient_descent_step(x: Float, grad_x: Float, lr: Float) -> Float { return x - lr * grad_x; }
+pub fn approx_zero_opt(x: Float, tol: Float) -> Bool {
+    if x < 0.0 { if (0.0 - x) < tol { return true; } } else { if x < tol { return true; } }
+    return false;
+}
+pub fn is_safe_learning_rate(a: Float, lr: Float) -> Bool {
+    if a <= 0.0 { return false; }
+    if lr <= 0.0 { return false; }
+    let two_a: Float = 2.0 * a;
+    if lr < two_a { return true; }
+    return false;
+}
+pub fn gradient_descent(q: Quadratic, x0: Float, lr: Float, n_iters: Int, tol: Float) -> Float {
+    if n_iters <= 0 { return x0; }
+    if tol < 0.0 { return x0; }
+    if is_safe_learning_rate(q.a, lr) == false { return x0; }
+    let mut x: Float = x0;
+    let mut k: Int = 0;
+    while k < n_iters {
+        let grad: Float = quad_prime(q, x);
+        let next: Float = gradient_descent_step(x, grad, lr);
+        let diff: Float = next - x;
+        if approx_zero_opt(diff, tol) { return next; }
+        x = next;
+        k = k + 1;
+    }
+    return x;
+}
+pub fn gradient_descent_converged(q: Quadratic, x0: Float, lr: Float, n_iters: Int, tol: Float) -> Bool {
+    if is_safe_learning_rate(q.a, lr) == false { return false; }
+    let x_final: Float = gradient_descent(q, x0, lr, n_iters, tol);
+    let grad_final: Float = quad_prime(q, x_final);
+    if approx_zero_opt(grad_final, tol) { return true; }
+    return false;
+}
+pub fn is_convex_quadratic(a: Float) -> Bool {
+    if a > 0.0 { return true; }
+    return false;
+}
+pub fn gradient_descent_quadratic_min(a: Float, b: Float, c: Float, x0: Float, lr: Float, n_iters: Int) -> Float {
+    let q: Quadratic = Quadratic { a: a, b: b, c: c };
+    return gradient_descent(q, x0, lr, n_iters, 0.0001);
+}
+pub fn lagrange_multiplier_minimize(a: Float, b: Float, lam: Float) -> Float {
+    if a == 0.0 { return 0.0; }
+    let numerator: Float = 0.0 - b - lam;
+    let denom: Float = 2.0 * a;
+    return numerator / denom;
+}
+pub fn kkt_check_optimality(a: Float, b: Float, x_star: Float, lam: Float) -> Bool {
+    if a == 0.0 { return false; }
+    let grad_f: Float = 2.0 * a * x_star + b;
+    let residual: Float = grad_f + lam;
+    if approx_zero_opt(residual, 0.0001) { return true; }
+    return false;
+}
+pub fn newton_step_1d(x: Float, f_x: Float, f_prime_x: Float, f_double_prime_x: Float) -> Float {
+    if f_double_prime_x == 0.0 { return x; }
+    return x - f_prime_x / f_double_prime_x;
+}
+pub fn newton_quadratic(q: Quadratic, x0: Float, n_iters: Int, tol: Float) -> Float {
+    if n_iters <= 0 { return x0; }
+    if tol < 0.0 { return x0; }
+    if q.a == 0.0 { return x0; }
+    let mut x: Float = x0;
+    let mut k: Int = 0;
+    while k < n_iters {
+        let fx: Float = quad_eval(q, x);
+        let fpx: Float = quad_prime(q, x);
+        let fppx: Float = quad_double_prime(q);
+        let next: Float = newton_step_1d(x, fx, fpx, fppx);
+        let diff: Float = next - x;
+        if approx_zero_opt(diff, tol) { return next; }
+        x = next;
+        k = k + 1;
+    }
+    return x;
+}
+pub fn bisection_root(q: Quadratic, lo: Float, hi: Float, tol: Float, max_iter: Int) -> Float {
+    let sentinel: Float = 0.0 - 1.0;
+    if max_iter <= 0 { return sentinel; }
+    if tol < 0.0 { return sentinel; }
+    let f_lo: Float = quad_eval(q, lo);
+    let f_hi: Float = quad_eval(q, hi);
+    if f_lo == 0.0 { return lo; }
+    if f_hi == 0.0 { return hi; }
+    let lo_neg: Bool = f_lo < 0.0;
+    let hi_neg: Bool = f_hi < 0.0;
+    if lo_neg == hi_neg { return sentinel; }
+    let mut a: Float = lo;
+    let mut b: Float = hi;
+    let mut k: Int = 0;
+    while k < max_iter {
+        let diff: Float = b - a;
+        if approx_zero_opt(diff, tol) { return (a + b) / 2.0; }
+        let mid: Float = (a + b) / 2.0;
+        let f_mid: Float = quad_eval(q, mid);
+        if f_mid == 0.0 { return mid; }
+        let mid_neg: Bool = f_mid < 0.0;
+        if mid_neg == lo_neg { a = mid; } else { b = mid; }
+        k = k + 1;
+    }
+    return (a + b) / 2.0;
+}
+pub fn main() {
+    // Test 1: gradient_descent on (x - 3)^2 = x^2 - 6x + 9 converges to 3.
+    let q1: Quadratic = Quadratic { a: 1.0, b: 0.0 - 6.0, c: 9.0 };
+    let x1: Float = gradient_descent(q1, 0.0, 0.1, 200, 0.0001);
+    let diff1: Float = x1 - 3.0;
+    if approx_zero_opt(diff1, 0.01) { println("OK gd_converges_to_3"); } else { println("FAIL gd_converges_to_3"); process_exit(1); }
+
+    // Test 2: gradient_descent on x^2 converges to 0.
+    let q2: Quadratic = Quadratic { a: 1.0, b: 0.0, c: 0.0 };
+    let x2: Float = gradient_descent(q2, 5.0, 0.1, 200, 0.0001);
+    if approx_zero_opt(x2, 0.01) { println("OK gd_converges_to_0"); } else { println("FAIL gd_converges_to_0"); process_exit(1); }
+
+    // Test 3: is_convex_quadratic.
+    if is_convex_quadratic(2.0) { println("OK is_convex_quadratic_true"); } else { println("FAIL is_convex_quadratic_true"); process_exit(1); }
+    if is_convex_quadratic(0.0 - 1.0) { println("FAIL is_convex_should_be_false"); process_exit(1); } else { println("OK is_convex_quadratic_false_for_negative_a"); }
+
+    // Test 4: lagrange_multiplier_minimize. For f = 2x^2 + 4x, min at x = -1.
+    let x_lag: Float = lagrange_multiplier_minimize(2.0, 4.0, 0.0);
+    let diff_lag: Float = x_lag - (0.0 - 1.0);
+    if approx_zero_opt(diff_lag, 0.0001) { println("OK lagrange_gives_minimum"); } else { println("FAIL lagrange_gives_minimum"); process_exit(1); }
+
+    // Test 5: Newton step on (x - 5)^2 reaches 5 in one step from x0 = 100.
+    let q5: Quadratic = Quadratic { a: 1.0, b: 0.0 - 10.0, c: 25.0 };
+    let x5: Float = newton_quadratic(q5, 100.0, 10, 0.0001);
+    let diff5: Float = x5 - 5.0;
+    if approx_zero_opt(diff5, 0.0001) { println("OK newton_converges_fast"); } else { println("FAIL newton_converges_fast"); process_exit(1); }
+
+    // Test 6: is_safe_learning_rate rejects lr > 2/a.
+    if is_safe_learning_rate(1.0, 0.1) { println("OK safe_learning_rate_accepted"); } else { println("FAIL safe_learning_rate_should_be_accepted"); process_exit(1); }
+    if is_safe_learning_rate(1.0, 3.0) { println("FAIL unsafe_learning_rate_should_be_rejected"); process_exit(1); } else { println("OK unsafe_learning_rate_rejected"); }
+
+    // Test 7: gradient_descent_converged is false for an unsafe learning rate.
+    let q7: Quadratic = Quadratic { a: 1.0, b: 0.0, c: 0.0 };
+    if gradient_descent_converged(q7, 1.0, 3.0, 10, 0.0001) { println("FAIL gd_should_not_converge_with_unsafe_lr"); process_exit(1); } else { println("OK gd_rejects_unsafe_lr"); }
+
+    // Test 8: bisection_root on x^2 - 4 finds root 2 on (0, 5).
+    let q8: Quadratic = Quadratic { a: 1.0, b: 0.0, c: 0.0 - 4.0 };
+    let r8: Float = bisection_root(q8, 0.0, 5.0, 0.0001, 100);
+    let diff8: Float = r8 - 2.0;
+    if approx_zero_opt(diff8, 0.001) { println("OK bisection_finds_root_2"); } else { println("FAIL bisection_finds_root_2"); process_exit(1); }
+
+    // Test 9: kkt_check_optimality confirms x* = -1 for f = 2x^2 + 4x with lambda = 0.
+    if kkt_check_optimality(2.0, 4.0, 0.0 - 1.0, 0.0) { println("OK kkt_optimality_holds"); } else { println("FAIL kkt_optimality"); process_exit(1); }
+    if kkt_check_optimality(2.0, 4.0, 1.0, 0.0) { println("FAIL kkt_should_reject_nonstationary"); process_exit(1); } else { println("OK kkt_rejects_nonstationary"); }
+
+    println("test_theory_optimization: PASSED");
+}

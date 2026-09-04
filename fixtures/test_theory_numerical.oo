@@ -1,0 +1,233 @@
+// # Numerical Methods: Root Finding, Integration, ODE, and Linear Solve Tests
+//
+// Logline: Verify bisection and Newton-Raphson on x^2 - 4, trapezoidal and Simpson on x^2, RK4 against exp(-1), 2x2 linear solve, and convergence order.
+//
+// Setup: Pure in-fixture re-declaration. No std import required.
+//
+// Beats:
+//   1. bisect_root of x^2 - 4 finds x = 2 within tol = 0.001.
+//   2. newton_raphson on x^2 - 4 converges in well under the 100-iteration cap.
+//   3. trapezoidal_integral of x^2 on [0, 1] approximates 1/3.
+//   4. simpson_integral of x^2 on [0, 1] approximates 1/3.
+//   5. rk4_integrate of y' = -y, y(0) = 1, t = 1 yields y ~ exp(-1).
+//   6. gauss_elim_2x2 solves x + y = 3, x - y = 1 giving x = 2, y = 1.
+//   7. convergence_order(0.01, 0.1) is in the linear-convergence range.
+
+type Quad = struct { a: Float, b: Float, c: Float };
+type Ode = struct { k: Float };
+type Vec2 = struct { x: Float, y: Float };
+
+fn abs_diff(a: Float, b: Float) -> Float {
+    let d = a - b;
+    if d < 0.0 { return 0.0 - d; }
+    return d;
+}
+
+pub fn apply_quad(q: Quad, x: Float) -> Float {
+    let a = q.a; let b = q.b; let c = q.c;
+    return a * x * x + b * x + c;
+}
+
+pub fn bisect_root(a: Float, b: Float, c: Float, lo: Float, hi: Float, tol: Float, max_iter: Int) -> Float {
+    if max_iter <= 0 { return lo; }
+    if tol < 0.0 { return lo; }
+    let q = Quad { a: a, b: b, c: c };
+    let mut flow = apply_quad(q, lo);
+    let fhi = apply_quad(q, hi);
+    if flow == 0.0 { return lo; }
+    if fhi == 0.0 { return hi; }
+    if flow * fhi > 0.0 { return lo; }
+    let mut l = lo;
+    let mut h = hi;
+    let mut k: Int = 0;
+    while k < max_iter {
+        let mid = 0.5 * (l + h);
+        let fmid = apply_quad(q, mid);
+        if abs_diff(fmid, 0.0) < tol { return mid; }
+        if abs_diff(h, l) < tol { return mid; }
+        if flow * fmid < 0.0 {
+            h = mid;
+        } else {
+            l = mid;
+            flow = fmid;
+        }
+        k = k + 1;
+    }
+    return 0.5 * (l + h);
+}
+
+pub fn newton_raphson(f: Quad, f_prime: Quad, x0: Float, tol: Float, max_iter: Int) -> Float {
+    if max_iter <= 0 { return 0.0; }
+    if tol < 0.0 { return 0.0; }
+    let mut x = x0;
+    let mut k: Int = 0;
+    while k < max_iter {
+        let fx = apply_quad(f, x);
+        if abs_diff(fx, 0.0) < tol { return x; }
+        let dfx = apply_quad(f_prime, x);
+        if dfx == 0.0 { return x; }
+        let x_next = x - fx / dfx;
+        if abs_diff(x_next, x) < tol { return x_next; }
+        x = x_next;
+        k = k + 1;
+    }
+    return x;
+}
+
+pub fn trapezoidal_integral(f: Quad, a: Float, b: Float, n_intervals: Int) -> Float {
+    if n_intervals < 1 { return 0.0; }
+    let h = (b - a) / (1.0 * (n_intervals));
+    let fa = apply_quad(f, a);
+    let fb = apply_quad(f, b);
+    let mut sum = 0.5 * (fa + fb);
+    let mut i: Int = 1;
+    while i < n_intervals {
+        let xi = a + 1.0 * (i) * h;
+        sum = sum + apply_quad(f, xi);
+        i = i + 1;
+    }
+    return sum * h;
+}
+
+pub fn simpson_integral(f: Quad, a: Float, b: Float, n_intervals: Int) -> Float {
+    if n_intervals < 2 { return 0.0; }
+    if (n_intervals % 2) != 0 { return 0.0; }
+    let h = (b - a) / (1.0 * (n_intervals));
+    let fa = apply_quad(f, a);
+    let fb = apply_quad(f, b);
+    let mut sum = fa + fb;
+    let mut i: Int = 1;
+    while i < n_intervals {
+        let xi = a + 1.0 * (i) * h;
+        let w = apply_quad(f, xi);
+        if (i % 2) == 0 {
+            sum = sum + 2.0 * w;
+        } else {
+            sum = sum + 4.0 * w;
+        }
+        i = i + 1;
+    }
+    return sum * h / 3.0;
+}
+
+pub fn rk4_step(y: Float, t: Float, dt: Float, f_y: Ode) -> Float {
+    let k = f_y.k;
+    let k1 = k * y;
+    let k2 = k * (y + 0.5 * dt * k1);
+    let k3 = k * (y + 0.5 * dt * k2);
+    let k4 = k * (y + dt * k3);
+    return y + dt * (k1 + 2.0 * k2 + 2.0 * k3 + k4) / 6.0;
+}
+
+pub fn rk4_integrate(y0: Float, t0: Float, t_end: Float, dt: Float, f_y: Ode) -> Float {
+    if dt <= 0.0 { return y0; }
+    let mut y = y0;
+    let mut t = t0;
+    let mut remaining = t_end - t0;
+    while remaining > 0.0 {
+        if remaining < dt {
+            y = rk4_step(y, t, remaining, f_y);
+            remaining = 0.0;
+        } else {
+            y = rk4_step(y, t, dt, f_y);
+            t = t + dt;
+            remaining = remaining - dt;
+        }
+    }
+    return y;
+}
+
+pub fn gauss_elim_2x2(a: Float, b: Float, c: Float, d: Float, e: Float, f: Float) -> Vec2 {
+    let det = a * d - b * c;
+    if det == 0.0 { return Vec2 { x: 0.0, y: 0.0 }; }
+    let x = (e * d - b * f) / det;
+    let y = (a * f - e * c) / det;
+    return Vec2 { x: x, y: y };
+}
+
+pub fn convergence_order(err_new: Float, err_old: Float) -> Float {
+    if err_new <= 0.0 { return 0.0; }
+    if err_old <= 0.0 { return 0.0; }
+    return ln(err_old / err_new);
+}
+
+pub fn main() {
+    // Test 1: bisect_root of x^2 - 4 = 0 finds root at x = 2.0.
+    let r1 = bisect_root(1.0, 0.0, -4.0, 0.0, 4.0, 0.001, 100);
+    if abs_diff(r1, 2.0) < 0.01 {
+        println("OK bisect_x2_minus_4_finds_2");
+    } else {
+        println("FAIL bisect_x2_minus_4");
+        process_exit(1);
+    }
+
+    // Test 2: newton_raphson on x^2 - 4 converges to 2.0 quickly.
+    let f = Quad { a: 1.0, b: 0.0, c: -4.0 };
+    let fp = Quad { a: 0.0, b: 2.0, c: 0.0 };
+    let r2 = newton_raphson(f, fp, 1.0, 0.0001, 50);
+    if abs_diff(r2, 2.0) < 0.0001 {
+        println("OK newton_x2_minus_4_finds_2");
+    } else {
+        println("FAIL newton_x2_minus_4");
+        process_exit(1);
+    }
+
+    // Test 3: trapezoidal_integral of x^2 on [0, 1] = 1/3.
+    let qx2 = Quad { a: 1.0, b: 0.0, c: 0.0 };
+    let trap = trapezoidal_integral(qx2, 0.0, 1.0, 1000);
+    if abs_diff(trap, 0.3333333333333333) < 0.001 {
+        println("OK trapezoidal_x2_close_to_1_3");
+    } else {
+        println("FAIL trapezoidal_x2");
+        process_exit(1);
+    }
+
+    // Test 4: simpson_integral of x^2 on [0, 1] = 1/3 (exact for cubics).
+    let simp = simpson_integral(qx2, 0.0, 1.0, 100);
+    if abs_diff(simp, 0.3333333333333333) < 0.0001 {
+        println("OK simpson_x2_close_to_1_3");
+    } else {
+        println("FAIL simpson_x2");
+        process_exit(1);
+    }
+
+    // Test 5: rk4_integrate of y' = -y, y(0) = 1, t = 1 -> y ~ exp(-1).
+    let decay = Ode { k: -1.0 };
+    let y_end = rk4_integrate(1.0, 0.0, 1.0, 0.01, decay);
+    if abs_diff(y_end, 0.36787944117144233) < 0.0001 {
+        println("OK rk4_decay_matches_exp_neg_1");
+    } else {
+        println("FAIL rk4_decay");
+        process_exit(1);
+    }
+
+    // Test 6: gauss_elim_2x2 solves [[1,1],[1,-1]] * [x,y] = [3,1] -> x=2, y=1.
+    let sol = gauss_elim_2x2(1.0, 1.0, 1.0, -1.0, 3.0, 1.0);
+    if abs_diff(sol.x, 2.0) < 0.0001 {
+        if abs_diff(sol.y, 1.0) < 0.0001 {
+            println("OK gauss_2x2_solves_2_eq_1");
+        } else {
+            println("FAIL gauss_2x2_y");
+            process_exit(1);
+        }
+    } else {
+        println("FAIL gauss_2x2_x");
+        process_exit(1);
+    }
+
+    // Test 7: convergence_order(0.01, 0.1) is the log ratio of consecutive errors.
+    let order = convergence_order(0.01, 0.1);
+    if order > 0.0 {
+        if order < 5.0 {
+            println("OK convergence_order_in_linear_range");
+        } else {
+            println("FAIL convergence_order_too_large");
+            process_exit(1);
+        }
+    } else {
+        println("FAIL convergence_order_not_positive");
+        process_exit(1);
+    }
+
+    println("test_theory_numerical: PASSED");
+}

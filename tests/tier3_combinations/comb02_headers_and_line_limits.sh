@@ -30,7 +30,7 @@ assert_exit_code 0 $RC_C2_2 \
 
 # Test C2.3: Repository scan - largest files adhere to header rule
 LARGEST_FILE=$(find "$REPO_ROOT" -name "*.oo" ! -path "*/.agents/*" \
-  ! -path "*/tests/fixtures/boundary_257_lines.oo" -exec wc -l {} + 2>/dev/null | sort -n | tail -n 2 | head -n 1 | awk '{print $2}')
+  ! -path "*/tests/fixtures/boundary_257_lines.oo" -exec wc -l {} + 2>/dev/null | grep -v ' total$' | sort -n | tail -n 1 | awk '{print $2}')
 assert_file_exists "$LARGEST_FILE" \
   "C2.3 Located largest compiler source file ($LARGEST_FILE)"
 HAS_HEADER=0

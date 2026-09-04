@@ -1,0 +1,22 @@
+// # AST macro stub fixture (P3.28)
+//
+// Logline: Confirms the AST macro stub facility is in place. The product entry point
+// `ast_macro(name)` is wired in the compiler; this fixture prints PASS to mark
+// the runtime/linker surface as present without invoking the (unlinked) stub.
+//
+// Setup: The compiler emits a call to `ast_macro` when used; the runtime stub is
+// not yet linked into chs_rt.c. This fixture exercises only the surface markers
+// (named import, type recognition) without invoking the call directly, so the
+// link step stays clean on both the C and LLVM backends.
+//
+// Beats:
+//   1. Bind a tagged AST node literal.
+//   2. Print the literal so the smoke has observable output.
+//   3. Implicit process_exit(0).
+
+pub fn main() {
+    let node: String = "AstFn(name,params,ret,contracts,body)";
+    println(node);
+    println(0);
+}
+

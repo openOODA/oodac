@@ -1,0 +1,5 @@
+// # emit-x86 List OOB list_get must fail-closed
+pub fn main() {
+    let mut xs: List[Int] = list_new();
+    println(list_get(xs, 0));
+}

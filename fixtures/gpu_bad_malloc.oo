@@ -1,0 +1,18 @@
+// # Test Device Invariant Heap Allocation Trap
+//
+// Logline: Asserts fail-closed compile-time rejection of heap allocation inside @gpu device kernels.
+//
+// Setup: Device kernel attempts forbidden dynamic memory allocation via malloc.
+//
+// Beats:
+//   1. Define @gpu annotated device function.
+//   2. Attempt heap allocation call within kernel body.
+//   3. Assert compiler exits non-zero with heap allocation forbidden diagnostic.
+
+@gpu
+pub fn k_bad_alloc(gpu: &GpuCap, n: Int) {
+    let ptr = malloc(64);
+}
+
+pub fn main() {
+}

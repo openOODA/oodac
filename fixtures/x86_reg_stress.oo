@@ -1,0 +1,39 @@
+// # x86 register-clobber stress test
+//
+// Logline: Calls four multi-arg helpers back-to-back to stress SysV AMD64 register allocation and caller-save preservation.
+//
+// Setup: All four helpers do simple Int arithmetic. The caller chains them, prints each result, and the binary must produce "3\n12\n7\n6" in order.
+//
+// Beats:
+//   1. p1(1,2) -> 3 (rdi + rsi)
+//   2. p2(3,4,5) -> 12 (rdi + rsi + rdx)
+//   3. p3(10,3) -> 7 (rdi - rsi)
+//   4. p4(2,3) -> 6 (rdi * rsi)
+//   5. Caller prints each result via println.
+
+fn p1(a: Int, b: Int) -> Int {
+    return a + b;
+}
+
+fn p2(a: Int, b: Int, c: Int) -> Int {
+    return a + b + c;
+}
+
+fn p3(a: Int, b: Int) -> Int {
+    return a - b;
+}
+
+fn p4(a: Int, b: Int) -> Int {
+    return a * b;
+}
+
+pub fn main() {
+    let x1: Int = p1(1, 2);
+    let x2: Int = p2(3, 4, 5);
+    let x3: Int = p3(10, 3);
+    let x4: Int = p4(2, 3);
+    println(x1.to_string());
+    println(x2.to_string());
+    println(x3.to_string());
+    println(x4.to_string());
+}

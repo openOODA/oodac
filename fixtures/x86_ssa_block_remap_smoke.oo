@@ -1,0 +1,19 @@
+// # Per-block register remap smoke fixture
+//
+// Logline: If/else where both arms write to the same SSA reg, exercising the per-block remap path. The bug is two blocks writing to the same global slot for the same SSA reg; the per-block remap must give each block its own local slot.
+//
+// Setup: Drives oodac/x86_ssa_emit.oo via x86_ssa_compile.oo. Static-grep smoke only, no actual compile here.
+//
+// Beats:
+//   1. Exercise per-block SSA register remap in if/else branches.
+//   2. Output result.
+
+pub fn main() {
+    let mut x: Int = 0;
+    if x == 0 {
+        x = 1;
+    } else {
+        x = 2;
+    }
+    println(x);
+}

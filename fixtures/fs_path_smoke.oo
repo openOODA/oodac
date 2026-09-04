@@ -1,0 +1,77 @@
+// # Pure path calculus smoke
+//
+// Logline: Asserts std/fs/path.path_join and path_basename compose the correct POSIX path strings for known inputs.
+//
+// Setup: Imports std/fs/path.oo. Pure (no FS, no net).
+//
+// Beats:
+//   1. path_join("a", "b") == "a/b".
+//   2. path_join("a/", "b") == "a/b" (no double slash).
+//   3. path_join("", "b") == "b" (empty base passes through).
+//   4. path_join("a", "/abs") == "/abs" (absolute child overrides).
+//   5. path_basename("/foo/bar/baz.oo") == "baz.oo".
+//   6. path_basename("solo") == "solo".
+//   7. Print FS_PATH_OK on success.
+
+import "std/fs/file/path.oo";
+
+pub fn main() {
+    // Beat 1: simple join.
+    let j1: String = path_join("a", "b");
+    if j1 != "a/b" {
+        println("FAIL path_join(a,b): " + j1);
+        return;
+    }
+    println("OK path_join_simple");
+
+    // Beat 2: trailing slash.
+    let j2: String = path_join("a/", "b");
+    if j2 != "a/b" {
+        println("FAIL path_join(a/,b): " + j2);
+        return;
+    }
+    println("OK path_join_no_double_slash");
+
+    // Beat 3: empty base.
+    let j3: String = path_join("", "b");
+    if j3 != "b" {
+        println("FAIL path_join(empty,b): " + j3);
+        return;
+    }
+    println("OK path_join_empty_base");
+
+    // Beat 4: absolute child overrides.
+    let j4: String = path_join("a", "/abs");
+    if j4 != "/abs" {
+        println("FAIL path_join(a,/abs): " + j4);
+        return;
+    }
+    println("OK path_join_absolute_child");
+
+    // Beat 5: basename with extension.
+    let b1: String = path_basename("/foo/bar/baz.oo");
+    if b1 != "baz.oo" {
+        println("FAIL basename_full: " + b1);
+        return;
+    }
+    println("OK path_basename_with_ext");
+
+    // Beat 6: basename solo.
+    let b2: String = path_basename("solo");
+    if b2 != "solo" {
+        println("FAIL basename_solo: " + b2);
+        return;
+    }
+    println("OK path_basename_solo");
+
+    // Beat 7: path_extension is a bonus check.
+    let ext: String = path_extension("/foo/bar/baz.oo");
+    if ext != ".oo" {
+        println("FAIL extension: " + ext);
+        return;
+    }
+    println("OK path_extension");
+
+    println("FS_PATH_OK");
+    println("OK");
+}

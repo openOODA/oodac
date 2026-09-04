@@ -1,0 +1,17 @@
+// # x86 5-argument function call test
+//
+// Logline: Calls a 5-arg helper to stress SysV AMD64 register allocation beyond the standard 6-arg register window (only first 5 are passed in registers).
+//
+// Setup: s5 sums 5 Int args. Caller prints 1+2+3+4+5 = 15.
+//
+// Beats:
+//   1. s5(1,2,3,4,5) -> 15 (uses rdi, rsi, rdx, rcx, r8).
+//   2. Caller prints result.
+
+fn s5(a: Int, b: Int, c: Int, d: Int, e: Int) -> Int {
+    return a + b + c + d + e;
+}
+
+pub fn main() {
+    println(s5(1, 2, 3, 4, 5).to_string());
+}

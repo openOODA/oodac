@@ -1,0 +1,41 @@
+// # Ed25519 16-Limbs Big-Int Comparison Smoke
+//
+// Logline: Verifies std/crypto/advanced/ed25519_bigint.ed25519_limbs16_cmp and ed25519_limbs16_ge return expected order relations for the order L and constant c1 limbs.
+//
+// Setup: Imports std/crypto/advanced/ed25519_bigint.oo. Pure, no FS or net. Property test (PROP) on 16-limb comparison.
+//
+// Beats:
+//   1. cmp(L, L) = 0; ge(L, L) = true.
+//   2. cmp(L, c1) = positive (L > c1).
+//   3. cmp(c1, L) = negative.
+//   4. Print ED25519_BIGINT_PROP_OK on success.
+
+import "std/sec/asymmetric/ed25519_bigint.oo";
+
+pub fn main() {
+    let ord: List[Int] = ed25519_order_limbs16();
+    let c1: List[Int] = ed25519_c1_limbs16();
+    let cmp_self: Int = ed25519_limbs16_cmp(ord, ord);
+    if cmp_self != 0 {
+        println("FAIL cmp_self got");
+        println(cmp_self);
+        return;
+    }
+    let ge_self: Bool = ed25519_limbs16_ge(ord, ord);
+    if !ge_self {
+        println("FAIL ge_self");
+        return;
+    }
+    let cmp_ord_c1: Int = ed25519_limbs16_cmp(ord, c1);
+    if cmp_ord_c1 <= 0 {
+        println("FAIL ord > c1");
+        println(cmp_ord_c1);
+        return;
+    }
+    let cmp_c1_ord: Int = ed25519_limbs16_cmp(c1, ord);
+    if cmp_c1_ord >= 0 {
+        println("FAIL c1 < ord");
+        return;
+    }
+    println("ED25519_BIGINT_PROP_OK");
+}

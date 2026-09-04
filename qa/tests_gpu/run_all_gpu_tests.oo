@@ -1,0 +1,109 @@
+// # Master openOODA ROCm/HIP GPU Backend E2E Test Suite Runner
+//
+// Logline: Execute the 27 GPU verification suites across Tiers 1-4 targeting AMD RDNA3/CDNA3; fail-closed by output scan, not exit code alone.
+//
+// Setup: &ProcessCap forks each test as a direct subprocess (no shell). The parent scans stdout for the FAIL marker; any failure rejects the gate.
+//
+// Beats:
+//   1. Tier 1: Execute 10 Feature Coverage suites (T1.01 vector_add through T1.10 stencil).
+//   2. Tier 2: Execute 5 Boundary & Corner Case suites (T2.01-T2.05).
+//   3. Tier 3: Execute 8 Negative-Trust Invariant Probes (T3.01-T3.06 + HIP.06 + HIP.07).
+//   4. Tier 4: Execute 4 Real-World Workload & Soak Stress suites (T4.01-T4.04).
+//   5. Print summary totals; fail-closed if any suite reports FAIL.
+//
+// ## CAPs
+//   &ProcessCap: fork each test as a direct subprocess via sys_exec.
+
+// Public helper: scan a subprocess output for failure markers.
+// Returns false iff the output contains the FAIL substring (the test's failure convention)
+// or the subprocess produced no output.
+pub fn gpu_output_passes(output: String) -> Bool {
+    if str_contains(output, "FAIL") { return false; }
+    if chars_len(output) == 0 { return false; }
+    return true;
+}
+
+// Public helper: render the GPU E2E summary block.
+pub fn gpu_summary(passed: Int, failed: Int) -> String {
+    let mut s: String = "  Total Passed Suites: " + passed.to_string() + "\n";
+    s = s + "  Total Failed Suites: " + failed.to_string() + "\n";
+    s = s + "  Total Executed:      " + (passed + failed).to_string() + "\n";
+    return s;
+}
+
+fn run_gpu_test(proc: &ProcessCap, test_path: String, test_name: String) -> Bool {
+    println("\n--------------------------------------------------------------------------------");
+    println("[GPU RUNNER] Executing: " + test_name);
+    println("--------------------------------------------------------------------------------");
+    let output: String = match sys_exec(proc, "ooda/bin/ooda", "run", test_path) {
+        Ok(out) => out,
+        Err(e) => {
+            println("  [SUBPROCESS ERROR] " + test_name + " -> " + e);
+            ""
+        }
+    };
+    println(output);
+    if !gpu_output_passes(output) {
+        println("  [FAIL] " + test_name);
+        return false;
+    }
+    println("  [PASS] " + test_name);
+    return true;
+}
+
+pub fn main(proc: &ProcessCap) {
+    println("================================================================================");
+    println("      openOODA ROCm/HIP GPU BACKEND VERIFICATION COMPLETE E2E TEST SUITE        ");
+    println("================================================================================");
+
+    let mut total_passed: Int = 0;
+    let mut total_failed: Int = 0;
+
+    println("\n[TIER 1: FEATURE COVERAGE (T1.01 - T1.10)]");
+    if run_gpu_test(proc, "qa/tests_gpu/tier1_features/test_t1_f01_vector_add.oo", "T1.01: GPU Vector Addition") { total_passed = total_passed + 1; } else { total_failed = total_failed + 1; }
+    if run_gpu_test(proc, "qa/tests_gpu/tier1_features/test_t1_f02_vector_sub.oo", "T1.02: GPU Vector Subtraction") { total_passed = total_passed + 1; } else { total_failed = total_failed + 1; }
+    if run_gpu_test(proc, "qa/tests_gpu/tier1_features/test_t1_f03_vector_mul.oo", "T1.03: GPU Vector Multiplication") { total_passed = total_passed + 1; } else { total_failed = total_failed + 1; }
+    if run_gpu_test(proc, "qa/tests_gpu/tier1_features/test_t1_f04_fma.oo", "T1.04: GPU Fused Multiply-Add (FMA)") { total_passed = total_passed + 1; } else { total_failed = total_failed + 1; }
+    if run_gpu_test(proc, "qa/tests_gpu/tier1_features/test_t1_f05_sgemm.oo", "T1.05: GPU Tiled SGEMM") { total_passed = total_passed + 1; } else { total_failed = total_failed + 1; }
+    if run_gpu_test(proc, "qa/tests_gpu/tier1_features/test_t1_f06_rmsnorm.oo", "T1.06: GPU RMSNorm") { total_passed = total_passed + 1; } else { total_failed = total_failed + 1; }
+    if run_gpu_test(proc, "qa/tests_gpu/tier1_features/test_t1_f07_flash_attention.oo", "T1.07: GPU FlashAttention") { total_passed = total_passed + 1; } else { total_failed = total_failed + 1; }
+    if run_gpu_test(proc, "qa/tests_gpu/tier1_features/test_t1_f08_reduction.oo", "T1.08: GPU Parallel Warp Reduction") { total_passed = total_passed + 1; } else { total_failed = total_failed + 1; }
+    if run_gpu_test(proc, "qa/tests_gpu/tier1_features/test_t1_f09_rope.oo", "T1.09: GPU RoPE") { total_passed = total_passed + 1; } else { total_failed = total_failed + 1; }
+    if run_gpu_test(proc, "qa/tests_gpu/tier1_features/test_t1_f10_stencil.oo", "T1.10: GPU 2D/3D Stencil") { total_passed = total_passed + 1; } else { total_failed = total_failed + 1; }
+
+    println("\n[TIER 2: BOUNDARY & CORNER CASE (T2.01 - T2.05)]");
+    if run_gpu_test(proc, "qa/tests_gpu/tier2_boundaries/test_t2_b01_empty_buffers.oo", "T2.01: GPU Empty Buffer") { total_passed = total_passed + 1; } else { total_failed = total_failed + 1; }
+    if run_gpu_test(proc, "qa/tests_gpu/tier2_boundaries/test_t2_b02_single_element.oo", "T2.02: GPU Single Element") { total_passed = total_passed + 1; } else { total_failed = total_failed + 1; }
+    if run_gpu_test(proc, "qa/tests_gpu/tier2_boundaries/test_t2_b03_max_grid_dims.oo", "T2.03: GPU Max Grid Dims") { total_passed = total_passed + 1; } else { total_failed = total_failed + 1; }
+    if run_gpu_test(proc, "qa/tests_gpu/tier2_boundaries/test_t2_b04_extreme_float_values.oo", "T2.04: GPU Extreme Floats") { total_passed = total_passed + 1; } else { total_failed = total_failed + 1; }
+    if run_gpu_test(proc, "qa/tests_gpu/tier2_boundaries/test_t2_b05_non_power_of_two_dims.oo", "T2.05: GPU Non-Power-of-Two") { total_passed = total_passed + 1; } else { total_failed = total_failed + 1; }
+
+    println("\n[TIER 3: NEGATIVE-TRUST INVARIANT PROBES (T3.01 - T3.06 + HIP.06 + HIP.07)]");
+    if run_gpu_test(proc, "qa/tests_gpu/tier3_negative_trust/test_t3_n01_missing_capability_token.oo", "T3.01: Missing Capability Token") { total_passed = total_passed + 1; } else { total_failed = total_failed + 1; }
+    if run_gpu_test(proc, "qa/tests_gpu/tier3_negative_trust/test_t3_n02_invalid_device_pointers.oo", "T3.02: Invalid Device Pointers") { total_passed = total_passed + 1; } else { total_failed = total_failed + 1; }
+    if run_gpu_test(proc, "qa/tests_gpu/tier3_negative_trust/test_t3_n03_lds_out_of_bounds.oo", "T3.03: LDS Out of Bounds") { total_passed = total_passed + 1; } else { total_failed = total_failed + 1; }
+    if run_gpu_test(proc, "qa/tests_gpu/tier3_negative_trust/test_t3_n04_unaligned_memory_access.oo", "T3.04: Unaligned Memory Access") { total_passed = total_passed + 1; } else { total_failed = total_failed + 1; }
+    if run_gpu_test(proc, "qa/tests_gpu/tier3_negative_trust/test_t3_n05_device_invariants.oo", "T3.05: Device Code Invariants") { total_passed = total_passed + 1; } else { total_failed = total_failed + 1; }
+    if run_gpu_test(proc, "qa/tests_gpu/test_t3_n06_async_copy_pinning.oo", "T3.06: GPU Async Copy Buffer Pinning") { total_passed = total_passed + 1; } else { total_failed = total_failed + 1; }
+    if run_gpu_test(proc, "qa/tests_gpu/test_trap_unknown_kernel.oo", "HIP.07: Unknown Kernel Launch Trap") { total_passed = total_passed + 1; } else { total_failed = total_failed + 1; }
+    if run_gpu_test(proc, "qa/tests_gpu/test_match_numeric_mismatch.oo", "HIP.06: MATCH Numeric Compare Gate") { total_passed = total_passed + 1; } else { total_failed = total_failed + 1; }
+
+    println("\n[TIER 4: REAL-WORLD WORKLOAD & SOAK SCENARIOS (T4.01 - T4.04)]");
+    if run_gpu_test(proc, "qa/tests_gpu/tier4_soak_workloads/test_t4_w01_transformer_block_pipeline.oo", "T4.01: Transformer Block Pipeline") { total_passed = total_passed + 1; } else { total_failed = total_failed + 1; }
+    if run_gpu_test(proc, "qa/tests_gpu/tier4_soak_workloads/test_t4_w02_continuous_soak_stress.oo", "T4.02: Continuous Soak Stress 10k") { total_passed = total_passed + 1; } else { total_failed = total_failed + 1; }
+    if run_gpu_test(proc, "qa/tests_gpu/tier4_soak_workloads/test_t4_w03_async_stream_memory_pool.oo", "T4.03: Async Multi-Stream Memory Pool") { total_passed = total_passed + 1; } else { total_failed = total_failed + 1; }
+    if run_gpu_test(proc, "qa/tests_gpu/tier4_soak_workloads/test_t4_w04_physics_stencil_workload.oo", "T4.04: Physics Multi-Grid Stencil Soak") { total_passed = total_passed + 1; } else { total_failed = total_failed + 1; }
+
+    println("\n================================================================================");
+    println("                    GPU E2E TEST SUITE EXECUTION SUMMARY                        ");
+    println("================================================================================");
+    println(gpu_summary(total_passed, total_failed));
+    println("================================================================================");
+
+    if total_failed > 0 {
+        println("EXECUTION STATUS: FAILURES DETECTED.");
+        process_exit(1);
+    } else {
+        println("CERTIFICATION STATUS: 100% PASS — ALL GPU BACKEND TIERS VERIFIED.");
+    }
+}

@@ -1,0 +1,19 @@
+// # call pack binop args
+//
+// Logline: Emit-c pass fixture that calls a seven-arg pack helper with binop arguments.
+//
+// Beats:
+//   1. pack7 sums its integer arguments.
+//   2. main calls pack7 with i + 1 and col + 1.
+//   3. println prints the packed sum.
+
+pub fn pack7(a: Int, b: Int, c: Int, d: String, e: String, f: Int, g: Int) -> Int {
+    return a + b + c + f + g;
+}
+
+pub fn main() {
+    let i = 10;
+    let col = 3;
+    let r = pack7(i + 1, 1, col + 1, "PLUS", "+", 1, 1);
+    println(r);
+}

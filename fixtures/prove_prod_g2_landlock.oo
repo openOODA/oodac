@@ -1,0 +1,20 @@
+// # Product prove oo_landlock_is_available
+//
+// Logline: Fail-closed emit+gcc+run asserts oo_landlock_is_available is deterministic.
+//
+// Setup: Isolated emit-c. Calls oo_landlock_is_available (C-backed) directly.
+//
+// Beats:
+//   1. Call oo_landlock_is_available twice with the same args.
+//   2. Exit 1 if the two results differ.
+//   3. Print prod_g2_landlock: PASSED only if they match.
+
+pub fn main() {
+    let a: Int = oo_landlock_is_available();
+    let b: Int = oo_landlock_is_available();
+    if a != b {
+        println("FAIL oo_landlock_is_available");
+        process_exit(1);
+    }
+    println("prod_g2_landlock: PASSED");
+}

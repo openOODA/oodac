@@ -1,0 +1,75 @@
+// # Complex Polar Module Smoke Test
+//
+// Logline: Verifies complex number polar coordinate operations: modulus, argument, polar arithmetic, and division status.
+//
+// Setup: Imports std/math/complex_polar.oo. The runtime stubs math_sin / math_cos, so the round-trip test is omitted; the modulus and argument paths (math_sqrt, polar_atan2) are exercised instead.
+//
+// Beats:
+//   1. Test complex_polar_from_cartesian: (3, 4) -> r = 5.
+//   2. Test argument: (3, 4) -> theta = atan2(4, 3) ~= 0.9273.
+//   3. Test (5, 12) -> r = 13.
+//   4. Test polar mul: (1, pi/2) * (1, 0) -> r = 1, theta = pi/2.
+//   5. Test complex_polar_div_status: success and div-by-zero via the status API.
+
+import "std/core/math/complex_polar.oo";
+
+pub fn main() {
+    // Beat 1: (3, 4) -> r = 5.
+    let p1: ComplexPolar = complex_polar_from_cartesian(3.0, 4.0);
+    let r1: Float = p1.r;
+    if r1 != 5.0 {
+        println("FAIL: from_cartesian(3, 4).r expected 5.0, got " + r1.to_string());
+        return;
+    }
+    println("OK complex_polar_modulus");
+
+    // Beat 2: (3, 4) -> theta = atan2(4, 3) ~= 0.9273.
+    let theta1: Float = p1.theta;
+    if theta1 < 0.92 || theta1 > 0.93 {
+        println("FAIL: from_cartesian(3, 4).theta expected ~0.9273, got " + theta1.to_string());
+        return;
+    }
+    println("OK complex_polar_argument");
+
+    // Beat 3: (5, 12) -> r = 13.
+    let p2: ComplexPolar = complex_polar_from_cartesian(5.0, 12.0);
+    if p2.r != 13.0 {
+        println("FAIL: from_cartesian(5, 12).r expected 13.0, got " + p2.r.to_string());
+        return;
+    }
+    println("OK complex_polar_modulus_5_12");
+
+    // Beat 4: Polar multiplication: (1, pi/2) * (1, 0) -> r = 1, theta = pi/2.
+    let half_pi: Float = 1.5707963267948966;
+    let a: ComplexPolar = complex_polar_new(1.0, half_pi);
+    let b: ComplexPolar = complex_polar_new(1.0, 0.0);
+    let prod: ComplexPolar = complex_polar_mul(a, b);
+    if prod.r != 1.0 {
+        println("FAIL: polar_mul r expected 1.0, got " + prod.r.to_string());
+        return;
+    }
+    if prod.theta < 1.56 || prod.theta > 1.58 {
+        println("FAIL: polar_mul theta expected ~pi/2, got " + prod.theta.to_string());
+        return;
+    }
+    println("OK complex_polar_mul");
+
+    // Beat 5: complex_polar_div_status — non-zero divisor and zero divisor paths.
+    let c: ComplexPolar = complex_polar_new(2.0, half_pi);
+    let d: ComplexPolar = complex_polar_new(1.0, 0.0);
+    let div_ok: Result[Int, String] = complex_polar_div_status(c, d);
+    if div_ok.is_err() {
+        println("FAIL: div_status on non-zero divisor");
+        return;
+    }
+    let z: ComplexPolar = complex_polar_new(0.0, 0.0);
+    let div_err: Result[Int, String] = complex_polar_div_status(c, z);
+    if !div_err.is_err() {
+        println("FAIL: div_status on zero divisor should err");
+        return;
+    }
+    println("OK complex_polar_div_status");
+
+    println("COMPLEX_POLAR_FIXTURE_ALL_PASSED");
+    println("OK");
+}

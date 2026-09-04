@@ -1,0 +1,12 @@
+// # C Line Multi Lib
+//
+// Logline: Library module for multi-file #line testing.
+//
+// Setup: Single public helper.
+//
+// Beats:
+//   1. Return constant integer 42.
+
+pub fn get_val() -> Int {
+    return 42;
+}

@@ -1,0 +1,7 @@
+// # emit-x86 List[Int] two pushes then list_len
+pub fn main() {
+    let mut xs: List[Int] = list_new();
+    xs = list_push(xs, 10);
+    xs = list_push(xs, 20);
+    println(list_len(xs));
+}

@@ -1,0 +1,22 @@
+// # Negative: Negative Multiplicative Contradiction
+//
+// Logline: Proves that contradictory negative product precondition triggers compile-time unsat refusal.
+//
+// Setup: Pure .oo fixture for negative contract testing.
+//
+// Beats:
+//   1. Function requires x in [-5, -2], y in [-4, -3].
+//   2. Precondition x * y <= -1 is provably unsat (product is always in [6, 20]).
+//   3. Refuses at compile time with ERR smt unsat requires.
+
+pub fn bad_neg_mul(x: Int, y: Int) -> Int
+    requires x >= -5 && x <= -2
+    requires y >= -4 && y <= -3
+    requires x * y <= -1
+{
+    return x * y;
+}
+
+pub fn main() {
+    println(bad_neg_mul(-3, -3));
+}

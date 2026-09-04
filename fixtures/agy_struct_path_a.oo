@@ -1,0 +1,47 @@
+// # Smoke user struct emit
+//
+// Logline: Typedef, field access, mut assign, and param-name shadow must emit.
+//
+// Setup: M168 path A; List[Struct] and &mut T stay residual.
+//
+// Beats:
+//   1. get_b reads b.b when the param shadows the field.
+//   2. bump copies a Cell, adds one to v, and returns it.
+//   3. tree_len reports List[Int] length on Tree.nodes.
+
+// residual: List[Struct] nested not product; &mut T not product (by-value mut)
+type Box = struct {
+    b: Int
+    };
+type Cell = struct {
+    v: Int
+    };
+type Tree = struct {
+    nodes: List[Int]
+    };
+// AGY: param name shadows field name — b.b must typecheck/emit
+// residual: parenthesized (b).b field recv still drops `.b` in c_emit (path A uses bare)
+pub fn get_b(b: Box) -> Int {
+    return b.b;
+}
+pub fn bump(c: Cell) -> Cell {
+    // typed let: untyped `let mut m = c` still defaults to long long (env does not track user struct names)
+    let mut m: Cell = c;
+    m.v = m.v + 1;
+    return m;
+}
+pub fn tree_len(t: Tree) -> Int {
+    return list_len(t.nodes);
+}
+pub fn main() {
+    let x = Box { b: 7 };
+    println(get_b(x));
+    let mut c = Cell { v: 10 };
+    c = bump(c);
+    println(c.v);
+    let mut xs = list_new();
+    xs = list_push(xs, 1);
+    xs = list_push(xs, 2);
+    let t = Tree { nodes: xs };
+    println(tree_len(t));
+}

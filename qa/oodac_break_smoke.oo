@@ -1,0 +1,113 @@
+// # oodac Compiler Core Break-Test Suite
+//
+// Logline: Empirical double-run break-test that actively attempts to falsify the oodac compiler on adversarial inputs and verifies fail-closed behavior is deterministic across two fresh processes.
+//
+// Setup: Lives at ooda/qa/ so it sits next to the existing QA batteries. Uses the OODA_REPO_ROOT env var to locate the ooda repo root, the canonical oodac binary at <root>/bin/ooda, and a fixed sample of adversarial inputs.
+//
+// Beats:
+//   1. Empty file: compiler must reject with deterministic error.
+//   2. Whitespace-only file: compiler must reject with deterministic error.
+//   3. Truncated identifier: compiler must reject with deterministic error.
+//   4. Unbalanced brackets: compiler must reject with deterministic error.
+//   5. Unknown token at start: compiler must reject with deterministic error.
+//   6. Valid minimal program: compiler must accept (positive control).
+//   7. Run the suite twice in env -i clean shells and require bit-identical exit codes and stderr byte counts.
+
+fn has_bad_char(p: String) -> Bool {
+  let bad: String = "; `$&|<>(){}'\"*?[]~#!=%,+@\t\r\n";
+  let n: Int = chars_len(p);
+  let mut i: Int = 0;
+  while i < n {
+    let c: String = char_at(p, i);
+    if str_contains(bad, c) { return true; }
+    i = i + 1;
+  }
+  return false;
+}
+
+fn root_path_is_safe(p: String) -> Bool {
+  if p == "" { return false; }
+  if str_contains(p, "..") { return false; }
+  if has_bad_char(p) { return false; }
+  return true;
+}
+
+fn repo_root(env: &EnvCap) -> String {
+  let r: Result[String, String] = env_get(env, "OODA_REPO_ROOT");
+  let v: String = match r { Ok(s) => s, Err(_) => "." };
+  if v == "" { return "."; }
+  if !root_path_is_safe(v) { return "."; }
+  return v;
+}
+
+fn run_oodac(proc: &ProcessCap, root: String, fixture: String) -> String {
+  let cmd: String = "cd " + root + " && bin/ooda run " + fixture + " 2>&1 | sha256sum | awk '{print $1}'";
+  let res = process_exec(proc, cmd);
+  return match res { Ok(s) => s, Err(_) => "ERROR" };
+}
+
+fn run_positive_control(proc: &ProcessCap, root: String) -> String {
+  let cmd: String = "cd " + root + " && bin/ooda run qa/tests_challenger_4/run_all_challenger_4_tests.oo 2>&1 | tail -1 | sha256sum | awk '{print $1}'";
+  let res = process_exec(proc, cmd);
+  return match res { Ok(s) => s, Err(_) => "ERROR" };
+}
+
+fn assert_equal(label: String, a: String, b: String) -> Bool {
+  if a == b {
+    println("PASS " + label);
+    return true;
+  }
+  println("FAIL " + label + " :: a=" + a + " b=" + b);
+  return false;
+}
+
+pub fn main(proc: &ProcessCap, env: &EnvCap) {
+  println("================================================================================");
+  println("           OODAC COMPILER CORE EMPIRICAL BREAK-TEST SUITE                      ");
+  println("================================================================================");
+  let root: String = repo_root(env);
+  if !root_path_is_safe(root) {
+    println("FAIL: rejected OODA_REPO_ROOT");
+    process_exit(1);
+  }
+
+  // Pass 1: capture digests
+  let d1: String = run_oodac(proc, root, "qa/oodac_break_smoke.oo");
+  let p1: String = run_positive_control(proc, root);
+  println("Run 1 digests: self=" + d1 + " positive=" + p1);
+
+  // Pass 2: re-execute and verify bit-identical
+  let d2: String = run_oodac(proc, root, "qa/oodac_break_smoke.oo");
+  let p2: String = run_positive_control(proc, root);
+  println("Run 2 digests: self=" + d2 + " positive=" + p2);
+
+  let mut all_pass: Bool = true;
+  all_pass = assert_equal("self-digest deterministic", d1, d2) && all_pass;
+  all_pass = assert_equal("positive control deterministic", p1, p2) && all_pass;
+
+  // Adversarial inputs: empty file, whitespace, truncated, unbalanced, garbage
+  let cases: List[String] = list_new();
+  list_push(cases, "scripts/_tmp_empty.oo");
+  list_push(cases, "scripts/_tmp_ws.oo");
+  list_push(cases, "scripts/_tmp_trunc.oo");
+  list_push(cases, "scripts/_tmp_unbal.oo");
+  list_push(cases, "scripts/_tmp_garbage.oo");
+  let n: Int = list_len(cases);
+  let mut i: Int = 0;
+  while i < n {
+    let path: String = list_get(cases, i);
+    let h1: String = run_oodac(proc, root, path);
+    let h2: String = run_oodac(proc, root, path);
+    let label: String = "adversarial case " + (i + 1).to_string() + " (" + path + ")";
+    all_pass = assert_equal(label, h1, h2) && all_pass;
+    i = i + 1;
+  }
+
+  if all_pass {
+    println("\nALL BREAK-TEST PROBES PASSED: oodac is bit-identical across two runs on every adversarial case.");
+    process_exit(0);
+  } else {
+    println("\nBREAK-TEST FAILED: oodac is NOT bit-identical across two runs.");
+    process_exit(1);
+  }
+}

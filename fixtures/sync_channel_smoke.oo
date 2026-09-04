@@ -1,0 +1,61 @@
+// # ThreadCap channel send/recv smoke (PROP closed-channel)
+//
+// Logline: Asserts std/sync/channel.channel_create + channel_push + channel_pop round-trip a string under &ThreadCap and reject an invalid handle.
+//
+// Setup: Imports std/sync/channel.oo. Uses &ThreadCap.
+//
+// Beats:
+//   1. channel_create(thread) returns Ok with "ch:N" handle.
+//   2. channel_push with a known handle returns Ok.
+//   3. channel_pop returns Ok and the original message.
+//   4. channel_push on an invalid handle returns Err.
+//   5. Print SYNC_CHANNEL_PROP_OK on success.
+
+import "std/net/sync/channel.oo";
+
+pub fn main(thread: &ThreadCap) {
+    // Beat 1: create.
+    let r1: Result[String, String] = channel_create(thread);
+    if r1.is_err() {
+        println("FAIL channel_create");
+        return;
+    }
+    let h: String = r1.val;
+    if h == "" {
+        println("FAIL channel_create_empty_handle");
+        return;
+    }
+    println("OK channel_create handle=" + h);
+
+    // Beat 2: push a message.
+    let r2: Result[String, String] = channel_push(thread, h, "hello channel");
+    if r2.is_err() {
+        println("FAIL channel_push: err=" + r2.val);
+        return;
+    }
+    println("OK channel_push");
+
+    // Beat 3: pop and verify.
+    let r3: Result[String, String] = channel_pop(thread, h);
+    if r3.is_err() {
+        println("FAIL channel_pop");
+        return;
+    }
+    let msg: String = r3.val;
+    if msg != "hello channel" {
+        println("FAIL channel_pop_mismatch: " + msg);
+        return;
+    }
+    println("OK channel_pop_round_trip");
+
+    // Beat 4: invalid handle.
+    let r4: Result[String, String] = channel_push(thread, "not_a_handle", "x");
+    if r4.is_ok() {
+        println("FAIL channel_push_invalid_should_err");
+        return;
+    }
+    println("OK channel_push_invalid_handle_rejected");
+
+    println("SYNC_CHANNEL_PROP_OK");
+    println("OK");
+}

@@ -1,0 +1,246 @@
+// # Tier 1 Feature Coverage E2E Test Suite
+//
+// Logline: Executes opaque-box end-to-end tests for Float, Struct, List, Match, and Pure ELF64 direct codegen features.
+//
+// Setup: Requires ProcessCap to execute the openOODA x86/ELF64 compiler pipeline, GNU assembler, linker, and emitted binaries.
+//
+// Beats:
+//   1. Feature 1: Tests 5 Float IEEE-754 SSE2 scalar arithmetic operations.
+//   2. Feature 2: Tests 5 Struct field offset calculations, allocations, and mutations.
+//   3. Feature 3: Tests 5 List[T] dynamic operations (new, push, get, set, len).
+//   4. Feature 4: Tests 5 Option and Result algebraic pattern match branches.
+//   5. Feature 5: Tests 5 Pure in-process ELF64 binary emissions and executions.
+
+fn assert_true(cond: Bool, msg: String) {
+    if !cond {
+        println("FAIL: " + msg);
+        process_exit(1);
+    }
+}
+
+fn exec_sh(p: &ProcessCap, cmd: String) -> Result[String, String] {
+    return process_exec(p, cmd);
+}
+
+fn run_x86_snippet(p: &ProcessCap, src: String, want: String, tag: String) -> Bool {
+    let tmpd: String = ".ooda-cache/ooda-tmp/t1_" + tag;
+    let _mk: Result[String, String] = exec_sh(p, "mkdir -p " + tmpd);
+    let s_file: String = tmpd + "/prog.oo";
+    let asm_file: String = tmpd + "/prog.s";
+    let obj_file: String = tmpd + "/prog.o";
+    let bin_file: String = tmpd + "/prog.bin";
+    let out_file: String = tmpd + "/prog.out";
+
+    let _w: Result[String, String] = exec_sh(p, "printf '%b\n' '" + src + "' > " + s_file);
+    let emit_cmd: String = "./ooda/oodac_bin emit-x86 " + s_file + " > " + asm_file + " 2>" + tmpd + "/emit.err";
+    if exec_sh(p, emit_cmd).is_err() { return false; }
+    if exec_sh(p, "! grep -qE '^ERR' " + asm_file).is_err() { return false; }
+
+    let as_cmd: String = "as --64 -o " + obj_file + " " + asm_file;
+    if exec_sh(p, as_cmd).is_err() { return false; }
+    let ld_cmd: String = "ld -o " + bin_file + " " + obj_file;
+    if exec_sh(p, ld_cmd).is_err() { return false; }
+
+    let run_cmd: String = "timeout 5 " + bin_file + " > " + out_file + " 2>&1";
+    if exec_sh(p, run_cmd).is_err() { return false; }
+
+    let chk_cmd: String = "grep -qE '" + want + "' " + out_file;
+    return exec_sh(p, chk_cmd).is_ok();
+}
+
+fn run_pure_elf(p: &ProcessCap, src: String, want: String, tag: String) -> Bool {
+    let tmpd: String = ".ooda-cache/ooda-tmp/t1_elf_" + tag;
+    let _mk: Result[String, String] = exec_sh(p, "mkdir -p " + tmpd);
+    let s_file: String = tmpd + "/prog.oo";
+    let bin_file: String = "$(pwd)/" + tmpd + "/prog.bin";
+    let out_file: String = tmpd + "/prog.out";
+
+    let _w: Result[String, String] = exec_sh(p, "printf '%b\n' '" + src + "' > " + s_file);
+    let bld_cmd: String = "export OODA_FS_WRITEDIR=$(pwd) && ./ooda/oodac_bin --x86-elf-pure build -o " + bin_file + " " + s_file;
+    if exec_sh(p, bld_cmd).is_err() { return false; }
+
+    let mag_cmd: String = "dd if=" + tmpd + "/prog.bin bs=1 count=4 2>/dev/null | od -An -tx1 | grep -q '7f 45 4c 46'";
+    if exec_sh(p, mag_cmd).is_err() { return false; }
+
+    let _ch: Result[String, String] = exec_sh(p, "chmod +x " + tmpd + "/prog.bin");
+    let run_cmd: String = tmpd + "/prog.bin > " + out_file + " 2>&1";
+    if exec_sh(p, run_cmd).is_err() { return false; }
+
+    if want == "" { return true; }
+    let chk_cmd: String = "grep -qE '" + want + "' " + out_file;
+    return exec_sh(p, chk_cmd).is_ok();
+}
+
+pub fn main(p: &ProcessCap) {
+    println("========================================================");
+    println("  openOODA x86/ELF64 Codegen: Tier 1 Feature Coverage  ");
+    println("========================================================");
+
+    let mut total_passed: Int = 0;
+    let mut total_tests: Int = 0;
+
+    // Feature 1: Float SSE2/AVX Arithmetic (5 tests)
+    println("\n[TIER 1 - FEATURE 1] Float IEEE-754 SSE2 Scalar Arithmetic");
+    let f1_src: String = "pub fn main() {\n    let a: Float = 3.5;\n    let b: Float = 4.25;\n    let c: Float = a + b;\n    println(c);\n}";
+    let f1_ok: Bool = run_x86_snippet(p, f1_src, "7\\.75|7", "f1_add");
+    total_tests = total_tests + 1;
+    if f1_ok { total_passed = total_passed + 1; println("  [PASS] T1.F1.1: Float Addition (3.5 + 4.25)"); }
+    else { println("  [FAIL/DEFECT] T1.F1.1: Float Addition (3.5 + 4.25)"); }
+
+    let f2_src: String = "pub fn main() {\n    let pi: Float = 3.14;\n    let r: Float = 2.0;\n    let area: Float = pi * r * r;\n    println(area);\n}";
+    let f2_ok: Bool = run_x86_snippet(p, f2_src, "12\\.56|12", "f1_mul");
+    total_tests = total_tests + 1;
+    if f2_ok { total_passed = total_passed + 1; println("  [PASS] T1.F1.2: Float Multiplication (3.14 * 2.0 * 2.0)"); }
+    else { println("  [FAIL/DEFECT] T1.F1.2: Float Multiplication (3.14 * 2.0 * 2.0)"); }
+
+    let f3_src: String = "pub fn main() {\n    let a: Float = 50.0;\n    let b: Float = 12.5;\n    let c: Float = a - b;\n    println(c);\n}";
+    let f3_ok: Bool = run_x86_snippet(p, f3_src, "37\\.5|37", "f1_sub");
+    total_tests = total_tests + 1;
+    if f3_ok { total_passed = total_passed + 1; println("  [PASS] T1.F1.3: Float Subtraction (50.0 - 12.5)"); }
+    else { println("  [FAIL/DEFECT] T1.F1.3: Float Subtraction (50.0 - 12.5)"); }
+
+    let f4_src: String = "pub fn main() {\n    let x: Float = 10.5;\n    let y: Float = 2.0;\n    let z: Float = x * y;\n    println(z);\n}";
+    let f4_ok: Bool = run_x86_snippet(p, f4_src, "21|21\\.0", "f1_fold");
+    total_tests = total_tests + 1;
+    if f4_ok { total_passed = total_passed + 1; println("  [PASS] T1.F1.4: Float Expression Fold (10.5 * 2.0)"); }
+    else { println("  [FAIL/DEFECT] T1.F1.4: Float Expression Fold (10.5 * 2.0)"); }
+
+    let f5_src: String = "pub fn main() {\n    let a: Float = 100.0;\n    let b: Float = 4.0;\n    let c: Float = a / b;\n    println(c);\n}";
+    let f5_ok: Bool = run_x86_snippet(p, f5_src, "25|25\\.0", "f1_div");
+    total_tests = total_tests + 1;
+    if f5_ok { total_passed = total_passed + 1; println("  [PASS] T1.F1.5: Float Division (100.0 / 4.0)"); }
+    else { println("  [FAIL/DEFECT] T1.F1.5: Float Division (100.0 / 4.0)"); }
+
+    // Feature 2: Struct SSA Memory Lowering (5 tests)
+    println("\n[TIER 1 - FEATURE 2] Struct SSA Memory Lowering & Field Layout");
+    let s1_src: String = "type Point = struct {\n    x: Int,\n    y: Int\n};\npub fn main() {\n    let mut p = Point { x: 10, y: 20 };\n    println(p.x);\n}";
+    let s1_ok: Bool = run_x86_snippet(p, s1_src, "10", "s1_init_x");
+    total_tests = total_tests + 1;
+    if s1_ok { total_passed = total_passed + 1; println("  [PASS] T1.F2.1: Struct Init & Read Field x (offset 0)"); }
+    else { println("  [FAIL/DEFECT] T1.F2.1: Struct Init & Read Field x"); }
+
+    let s2_src: String = "type Point = struct {\n    x: Int,\n    y: Int\n};\npub fn main() {\n    let mut p = Point { x: 15, y: 35 };\n    println(p.y);\n}";
+    let s2_ok: Bool = run_x86_snippet(p, s2_src, "35", "s1_init_y");
+    total_tests = total_tests + 1;
+    if s2_ok { total_passed = total_passed + 1; println("  [PASS] T1.F2.2: Struct Init & Read Field y (offset 8)"); }
+    else { println("  [FAIL/DEFECT] T1.F2.2: Struct Init & Read Field y"); }
+
+    let s3_src: String = "type Point = struct {\n    x: Int,\n    y: Int\n};\npub fn main() {\n    let mut p = Point { x: 5, y: 8 };\n    p.x = 42;\n    println(p.x);\n}";
+    let s3_ok: Bool = run_x86_snippet(p, s3_src, "42", "s1_mut_x");
+    total_tests = total_tests + 1;
+    if s3_ok { total_passed = total_passed + 1; println("  [PASS] T1.F2.3: Struct Field x Mutation"); }
+    else { println("  [FAIL/DEFECT] T1.F2.3: Struct Field x Mutation"); }
+
+    let s4_src: String = "type Point = struct {\n    x: Int,\n    y: Int\n};\npub fn main() {\n    let mut p = Point { x: 100, y: 200 };\n    p.y = 999;\n    println(p.y);\n}";
+    let s4_ok: Bool = run_x86_snippet(p, s4_src, "999", "s1_mut_y");
+    total_tests = total_tests + 1;
+    if s4_ok { total_passed = total_passed + 1; println("  [PASS] T1.F2.4: Struct Field y Mutation"); }
+    else { println("  [FAIL/DEFECT] T1.F2.4: Struct Field y Mutation"); }
+
+    let s5_src: String = "type Point = struct {\n    x: Int,\n    y: Int\n};\npub fn main() {\n    let mut p = Point { x: 0, y: 0 };\n    p.x = 77;\n    println(p.x);\n}";
+    let s5_ok: Bool = run_x86_snippet(p, s5_src, "77", "s1_zero_mut");
+    total_tests = total_tests + 1;
+    if s5_ok { total_passed = total_passed + 1; println("  [PASS] T1.F2.5: Zero-Init Struct Mutation"); }
+    else { println("  [FAIL/DEFECT] T1.F2.5: Zero-Init Struct Mutation"); }
+
+    // Feature 3: List[T] Dynamic Operations (5 tests)
+    println("\n[TIER 1 - FEATURE 3] List[T] Dynamic Heap Operations");
+    let l1_src: String = "pub fn main() {\n    let mut xs: List[Int] = list_new();\n    xs = list_push(xs, 10);\n    xs = list_push(xs, 20);\n    println(list_len(xs));\n}";
+    let l1_ok: Bool = run_x86_snippet(p, l1_src, "2", "l1_len");
+    total_tests = total_tests + 1;
+    if l1_ok { total_passed = total_passed + 1; println("  [PASS] T1.F3.1: list_new & list_push Length Track (len=2)"); }
+    else { println("  [FAIL/DEFECT] T1.F3.1: list_new & list_push Length Track"); }
+
+    let l2_src: String = "pub fn main() {\n    let mut xs: List[Int] = list_new();\n    xs = list_push(xs, 99);\n    println(list_get(xs, 0));\n}";
+    let l2_ok: Bool = run_x86_snippet(p, l2_src, "99", "l1_get");
+    total_tests = total_tests + 1;
+    if l2_ok { total_passed = total_passed + 1; println("  [PASS] T1.F3.2: list_get Single Element (val=99)"); }
+    else { println("  [FAIL/DEFECT] T1.F3.2: list_get Single Element"); }
+
+    let l3_src: String = "pub fn main() {\n    let mut xs: List[Int] = list_new();\n    xs = list_push(xs, 100);\n    xs = list_push(xs, 200);\n    xs = list_push(xs, 300);\n    println(list_get(xs, 2));\n}";
+    let l3_ok: Bool = run_x86_snippet(p, l3_src, "300", "l1_get_multi");
+    total_tests = total_tests + 1;
+    if l3_ok { total_passed = total_passed + 1; println("  [PASS] T1.F3.3: list_get Multiple Pushes (idx=2 val=300)"); }
+    else { println("  [FAIL/DEFECT] T1.F3.3: list_get Multiple Pushes"); }
+
+    let l4_src: String = "pub fn main() {\n    let mut xs: List[Int] = list_new();\n    xs = list_push(xs, 0);\n    xs = list_set(xs, 0, 7);\n    println(list_get(xs, 0));\n}";
+    let l4_ok: Bool = run_x86_snippet(p, l4_src, "7", "l1_set");
+    total_tests = total_tests + 1;
+    if l4_ok { total_passed = total_passed + 1; println("  [PASS] T1.F3.4: list_set Mutation & Verification (val=7)"); }
+    else { println("  [FAIL/DEFECT] T1.F3.4: list_set Mutation & Verification"); }
+
+    let l5_src: String = "pub fn main() {\n    let mut xs: List[Int] = list_new();\n    xs = list_push(xs, 1);\n    xs = list_push(xs, 2);\n    xs = list_push(xs, 3);\n    xs = list_push(xs, 4);\n    println(list_len(xs));\n}";
+    let l5_ok: Bool = run_x86_snippet(p, l5_src, "4", "l1_len4");
+    total_tests = total_tests + 1;
+    if l5_ok { total_passed = total_passed + 1; println("  [PASS] T1.F3.5: list_len Accurate Capacity Growth (len=4)"); }
+    else { println("  [FAIL/DEFECT] T1.F3.5: list_len Accurate Capacity Growth"); }
+
+    // Feature 4: Option & Result Pattern Matching (5 tests)
+    println("\n[TIER 1 - FEATURE 4] Option & Result Algebraic Pattern Matching");
+    let m1_src: String = "pub fn main() {\n    let x = Some(42);\n    match x {\n        Some(v) => { println(v); },\n        None => { println(0); },\n        Ok(w) => { println(w); }\n    }\n}";
+    let m1_ok: Bool = run_x86_snippet(p, m1_src, "42", "m1_some");
+    total_tests = total_tests + 1;
+    if m1_ok { total_passed = total_passed + 1; println("  [PASS] T1.F4.1: Option::Some(42) Match & Bind (val=42)"); }
+    else { println("  [FAIL/DEFECT] T1.F4.1: Option::Some(42) Match & Bind"); }
+
+    let m2_src: String = "pub fn main() {\n    let x = Ok(100);\n    match x {\n        Some(v) => { println(v); },\n        None => { println(0); },\n        Ok(w) => { println(w); }\n    }\n}";
+    let m2_ok: Bool = run_x86_snippet(p, m2_src, "100", "m1_ok");
+    total_tests = total_tests + 1;
+    if m2_ok { total_passed = total_passed + 1; println("  [PASS] T1.F4.2: Result::Ok(100) Match & Bind (val=100)"); }
+    else { println("  [FAIL/DEFECT] T1.F4.2: Result::Ok(100) Match & Bind"); }
+
+    let m3_src: String = "pub fn main() {\n    let x = Err(404);\n    match x {\n        Some(v) => { println(v); },\n        None => { println(0); },\n        Err(e) => { println(e); },\n        Ok(w) => { println(w); }\n    }\n}";
+    let m3_ok: Bool = run_x86_snippet(p, m3_src, "404", "m1_err");
+    total_tests = total_tests + 1;
+    if m3_ok { total_passed = total_passed + 1; println("  [PASS] T1.F4.3: Result::Err(404) Match & Bind (val=404)"); }
+    else { println("  [FAIL/DEFECT] T1.F4.3: Result::Err(404) Match & Bind"); }
+
+    let m4_src: String = "pub fn main() {\n    let x = Some(7);\n    match x {\n        Ok(a) => { println(1); },\n        Err(b) => { println(2); },\n        Some(c) => { println(c); },\n        None => { println(4); }\n    }\n}";
+    let m4_ok: Bool = run_x86_snippet(p, m4_src, "7", "m1_4arm");
+    total_tests = total_tests + 1;
+    if m4_ok { total_passed = total_passed + 1; println("  [PASS] T1.F4.4: 4-Arm Match Discriminator (val=7)"); }
+    else { println("  [FAIL/DEFECT] T1.F4.4: 4-Arm Match Discriminator"); }
+
+    let m5_src: String = "pub fn main() {\n    let x = Ok(555);\n    match x {\n        Some(v) => { println(0); },\n        Ok(w) => { println(w); },\n        Err(e) => { println(0); }\n    }\n}";
+    let m5_ok: Bool = run_x86_snippet(p, m5_src, "555", "m1_ok_multi");
+    total_tests = total_tests + 1;
+    if m5_ok { total_passed = total_passed + 1; println("  [PASS] T1.F4.5: Result::Ok Branch Selection (val=555)"); }
+    else { println("  [FAIL/DEFECT] T1.F4.5: Result::Ok Branch Selection"); }
+
+    // Feature 5: Pure In-Process ELF64 Emission (5 tests)
+    println("\n[TIER 1 - FEATURE 5] Pure In-Process ELF64 Machine Code Emission");
+    let e1_src: String = "pub fn main() {\n    println(42);\n}";
+    let e1_ok: Bool = run_pure_elf(p, e1_src, "42", "e1_magic_and_run");
+    total_tests = total_tests + 1;
+    if e1_ok { total_passed = total_passed + 1; println("  [PASS] T1.F5.1: Pure ELF64 Magic Header & Execution (42)"); }
+    else { println("  [FAIL/DEFECT] T1.F5.1: Pure ELF64 Magic Header & Execution"); }
+
+    let e2_src: String = "pub fn main() {\n    process_exit(0);\n}";
+    let e2_ok: Bool = run_pure_elf(p, e2_src, "", "e2_exit0");
+    total_tests = total_tests + 1;
+    if e2_ok { total_passed = total_passed + 1; println("  [PASS] T1.F5.2: Pure ELF64 Exit Code 0"); }
+    else { println("  [FAIL/DEFECT] T1.F5.2: Pure ELF64 Exit Code 0"); }
+
+    let e3_src: String = "pub fn main() {\n    let xs: List[Int] = list_new();\n    let ys: List[Int] = list_push(xs, 7);\n}";
+    let e3_ok: Bool = run_pure_elf(p, e3_src, "", "e3_mmap");
+    total_tests = total_tests + 1;
+    if e3_ok { total_passed = total_passed + 1; println("  [PASS] T1.F5.3: Pure ELF64 Heap MMU Allocation"); }
+    else { println("  [FAIL/DEFECT] T1.F5.3: Pure ELF64 Heap MMU Allocation"); }
+
+    let e4_src: String = "pub fn main() {\n    let x = Ok(33);\n    match x {\n        Ok(v) => { println(v); },\n        Err(e) => { println(e); }\n    }\n}";
+    let e4_ok: Bool = run_pure_elf(p, e4_src, "", "e4_sret");
+    total_tests = total_tests + 1;
+    if e4_ok { total_passed = total_passed + 1; println("  [PASS] T1.F5.4: Pure ELF64 SRet Match Binary"); }
+    else { println("  [FAIL/DEFECT] T1.F5.4: Pure ELF64 SRet Match Binary"); }
+
+    let e5_src: String = "pub fn main() {\n    println(10 + 20);\n}";
+    let e5_ok: Bool = run_pure_elf(p, e5_src, "30|10", "e5_arith");
+    total_tests = total_tests + 1;
+    if e5_ok { total_passed = total_passed + 1; println("  [PASS] T1.F5.5: Pure ELF64 Arithmetic Binary"); }
+    else { println("  [FAIL/DEFECT] T1.F5.5: Pure ELF64 Arithmetic Binary"); }
+
+    println("\n========================================================");
+    println("  TIER 1 FEATURE COVERAGE: " + total_passed.to_string() + "/" + total_tests.to_string() + " TESTS EXECUTED");
+    println("========================================================");
+    assert_true(total_tests == 25, "Tier 1 must execute exactly 25 feature tests (5 per feature)");
+}

@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Why not .oo: hipcc is the ROCm host compiler (RULES 1.13). Builds liboo_hip.so for gfx1100.
+# in:  optional OUT path (default: $ROOT/liboo_hip.so)
+# out: HIP shared library with verified compute kernel suite
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+OUT="${1:-$ROOT/liboo_hip.so}"
+SRC="$ROOT/runtime/chs_rt_hip_kern.hip"
+HIPCC="${HIPCC:-/usr/bin/hipcc}"
+ARCH="${OODAC_HIP_ARCH:-gfx1100}"
+ROCM_LIB="${ROCM_LIB:-/opt/rocm/lib}"
+
+if [[ ! -f "$SRC" ]]; then
+  echo "ERR_MISSING $SRC" >&2
+  exit 1
+fi
+if ! command -v "$HIPCC" >/dev/null 2>&1; then
+  echo "ERR_NO_HIPCC" >&2
+  exit 1
+fi
+
+export LD_LIBRARY_PATH="${ROCM_LIB}:/opt/rocm/core-10.0/lib:${LD_LIBRARY_PATH:-}"
+"$HIPCC" --offload-arch="$ARCH" -O3 -fPIC -shared \
+  -Wl,-rpath,"$ROCM_LIB" -L"$ROCM_LIB" \
+  -o "$OUT" "$SRC"
+
+test -s "$OUT"
+
+echo "oodac_hip_build: $OUT arch=$ARCH [Compute Suite: VecAdd, SGEMM, RMSNorm, Attention, ReduceSum, RoPE, Stencil3D]"
+
+if [[ "$OUT" == "$ROOT/liboo_hip.so" ]]; then
+  mkdir -p "$ROOT/.ooda-cache/ooda-tmp"
+  gcc -O2 -o "$ROOT/.ooda-cache/ooda-tmp/oo_hip_so_smoke" "$ROOT/runtime/oo_hip_so_smoke.c" -ldl -lm
+  (cd "$ROOT" && OODA_HIP_LIB="$OUT" "$ROOT/.ooda-cache/ooda-tmp/oo_hip_so_smoke")
+fi
+
+echo OK_HIP_SO

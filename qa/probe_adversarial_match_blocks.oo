@@ -1,0 +1,189 @@
+// # Adversarial Match Expressions with Blocks and Returns Probe
+//
+// Logline: Adversarially stress tests match arms containing full code blocks, local bindings, and early returns.
+//
+// Setup: Requires working oodac compiler with C emit support for block match arms and early returns.
+//
+// Beats:
+//   1. Test match on Result with block containing multiple statements and early return in Err arm.
+//   2. Test match on Result with block containing multiple statements and early return in Ok arm.
+//   3. Test nested match blocks with local variable declarations and returns.
+//   4. Test match within a loop executing early returns and loop continuations.
+
+pub fn divide_safe(a: Int, b: Int) -> Result[Int, String] {
+    if b == 0 {
+        return Err("division by zero");
+    }
+    return Ok(a / b);
+}
+
+pub fn handle_with_err_early_return(a: Int, b: Int) -> Int {
+    let res: Result[Int, String] = divide_safe(a, b);
+    match res {
+        Ok(val) => {
+            let doubled: Int = val * 2;
+            return doubled + 1;
+        },
+        Err(err) => {
+            let log_msg: String = "Caught error: " + err;
+            return -999;
+        }
+    }
+    return 0;
+}
+
+pub fn handle_with_ok_early_return(flag: Bool, text: String) -> String {
+    let res: Result[String, String] = if flag { Ok(text) } else { Err("failed") };
+    match res {
+        Ok(val) => {
+            let prefix: String = "SUCCESS: ";
+            let full: String = prefix + val;
+            return full;
+        },
+        Err(err) => {
+            let fallback: String = "DEFAULT_" + err;
+            return fallback;
+        }
+    }
+    return "unreachable";
+}
+
+pub fn nested_match_blocks(v1: Result[Int, String], v2: Result[Int, String]) -> Int {
+    match v1 {
+        Ok(x) => {
+            match v2 {
+                Ok(y) => {
+                    let total: Int = x + y;
+                    return total * 10;
+                },
+                Err(e2) => {
+                    return x - 1;
+                }
+            }
+        },
+        Err(e1) => {
+            match v2 {
+                Ok(y) => {
+                    return y - 2;
+                },
+                Err(e2) => {
+                    return -100;
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+pub fn loop_match_early_return(items: List[Int]) -> Int {
+    let n: Int = list_len(items);
+    let mut sum: Int = 0;
+    for i in 0..n {
+        let val: Int = list_get(items, i);
+        let res: Result[Int, String] = divide_safe(100, val);
+        match res {
+            Ok(v) => {
+                sum = sum + v;
+            },
+            Err(e) => {
+                // Early return on zero item
+                return -sum;
+            }
+        }
+    }
+    return sum;
+}
+
+pub fn main() {
+    let mut num_errors: Int = 0;
+
+    // Test 1: Err early return
+    let t1: Int = handle_with_err_early_return(10, 2);
+    // (10 / 2) * 2 + 1 = 11
+    if t1 == 11 {
+    } else {
+        println("FAIL: handle_with_err_early_return success");
+        num_errors = num_errors + 1;
+    }
+
+    let t2: Int = handle_with_err_early_return(10, 0);
+    if t2 == -999 {
+    } else {
+        println("FAIL: handle_with_err_early_return div zero");
+        num_errors = num_errors + 1;
+    }
+
+    // Test 2: Ok early return
+    let t3: String = handle_with_ok_early_return(true, "payload");
+    if t3 == "SUCCESS: payload" {
+    } else {
+        println("FAIL: handle_with_ok_early_return true");
+        num_errors = num_errors + 1;
+    }
+
+    let t4: String = handle_with_ok_early_return(false, "payload");
+    if t4 == "DEFAULT_failed" {
+    } else {
+        println("FAIL: handle_with_ok_early_return false");
+        num_errors = num_errors + 1;
+    }
+
+    // Test 3: Nested match blocks
+    let ok5: Result[Int, String] = Ok(5);
+    let ok10: Result[Int, String] = Ok(10);
+    let err1: Result[Int, String] = Err("err1");
+    let err2: Result[Int, String] = Err("err2");
+
+    let n1: Int = nested_match_blocks(ok5, ok10);
+    // (5 + 10) * 10 = 150
+    if n1 == 150 {
+    } else {
+        println("FAIL: nested_match_blocks Ok Ok");
+        num_errors = num_errors + 1;
+    }
+
+    let n2: Int = nested_match_blocks(ok5, err2);
+    // 5 - 1 = 4
+    if n2 == 4 {
+    } else {
+        println("FAIL: nested_match_blocks Ok Err");
+        num_errors = num_errors + 1;
+    }
+
+    let n3: Int = nested_match_blocks(err1, ok10);
+    // 10 - 2 = 8
+    if n3 == 8 {
+    } else {
+        println("FAIL: nested_match_blocks Err Ok");
+        num_errors = num_errors + 1;
+    }
+
+    let n4: Int = nested_match_blocks(err1, err2);
+    if n4 == -100 {
+    } else {
+        println("FAIL: nested_match_blocks Err Err");
+        num_errors = num_errors + 1;
+    }
+
+    // Test 4: Loop match early return
+    let mut xs: List[Int] = list_new();
+    xs = list_push(xs, 10);
+    xs = list_push(xs, 20);
+    xs = list_push(xs, 0); // triggers Err
+    xs = list_push(xs, 50);
+
+    // 100/10 = 10, 100/20 = 5 -> sum = 15 before 0 triggers early return -15
+    let l_res: Int = loop_match_early_return(xs);
+    if l_res == -15 {
+    } else {
+        println("FAIL: loop_match_early_return");
+        num_errors = num_errors + 1;
+    }
+
+    if num_errors == 0 {
+        println("probe_adversarial_match_blocks: PASSED");
+    } else {
+        println("probe_adversarial_match_blocks: FAILED");
+        process_exit(1);
+    }
+}

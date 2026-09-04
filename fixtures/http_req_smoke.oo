@@ -1,0 +1,124 @@
+// # HTTP Request Smoke Test
+//
+// Logline: Build a GET request, set two headers, serialize, and assert wire format and case-insensitive lookup.
+//
+// Setup: Imports std/net/http_req.oo. Constructs HttpRequest via the public API only.
+//
+// Beats:
+//   1. Build a GET /api HTTP/1.1 request with Host and User-Agent headers.
+//   2. Serialize the request and assert it starts with "GET /api HTTP/1.1\r\n".
+//   3. Count CRLF-terminated lines and assert the body is preceded by \r\n\r\n.
+//   4. Verify case-insensitive header lookup returns the original value.
+
+import "std/net/http_req.oo";
+
+pub fn main() {
+    let mut req: HttpRequest = http_req_new("GET", "/api");
+    req = http_req_set_header(req, "Host", "example.com");
+    req = http_req_set_header(req, "User-Agent", "test");
+    req = http_req_set_body(req, "");
+
+    // Beat 1: check default version
+    if (req).version != "HTTP/1.1" {
+        println("FAIL: default version");
+        return;
+    }
+    if (req).method != "GET" {
+        println("FAIL: method");
+        return;
+    }
+    if (req).target != "/api" {
+        println("FAIL: target");
+        return;
+    }
+    println("HTTP_REQ_NEW_OK");
+
+    // Beat 2: serialize and check prefix
+    let s: String = http_req_serialize(req);
+    let prefix: String = "GET /api HTTP/1.1\r\n";
+    let plen: Int = chars_len(prefix);
+    let slen: Int = chars_len(s);
+    if slen < plen {
+        println("FAIL: serialize too short");
+        return;
+    }
+    let mut i: Int = 0;
+    while i < plen {
+        if char_at(s, i) != char_at(prefix, i) {
+            println("FAIL: prefix mismatch at " + i.to_string());
+            return;
+        }
+        i = i + 1;
+    }
+    println("HTTP_REQ_PREFIX_OK");
+
+    // Beat 3: count \r\n occurrences
+    let mut crlf_count: Int = 0;
+    let mut j: Int = 0;
+    let limit: Int = slen - 1;
+    while j < limit {
+        if char_at(s, j) == "\r" {
+            if char_at(s, j + 1) == "\n" {
+                crlf_count = crlf_count + 1;
+            }
+        }
+        j = j + 1;
+    }
+    // 1 (status line) + 2 (headers) + 1 (empty line ending headers) = 4
+    if crlf_count != 4 {
+        println("FAIL: crlf_count expected 4 got " + crlf_count.to_string());
+        return;
+    }
+    println("HTTP_REQ_LINES_OK");
+
+    // Verify the \r\n\r\n separator exists
+    let sep: String = "\r\n\r\n";
+    if !s.contains(sep) {
+        println("FAIL: missing CRLFCRLF separator");
+        return;
+    }
+    println("HTTP_REQ_SEPARATOR_OK");
+
+    // Beat 4: case-insensitive header lookup
+    let h1: Result[String, String] = http_req_get_header(req, "host");
+    if h1.is_err() {
+        println("FAIL: case-insensitive lookup of host");
+        return;
+    }
+    let h2: Result[String, String] = http_req_get_header(req, "HOST");
+    if h2.is_err() {
+        println("FAIL: case-insensitive lookup of HOST");
+        return;
+    }
+    let h3: Result[String, String] = http_req_get_header(req, "User-Agent");
+    if h3.is_err() {
+        println("FAIL: lookup of User-Agent");
+        return;
+    }
+    let h4: Result[String, String] = http_req_get_header(req, "X-Missing");
+    if !h4.is_err() {
+        println("FAIL: lookup of missing should err");
+        return;
+    }
+    println("HTTP_REQ_LOOKUP_OK");
+
+    // Beat 5: set_body
+    let req2: HttpRequest = http_req_set_body(req, "hello");
+    let s2: String = http_req_serialize(req2);
+    if !s2.contains("hello") {
+        println("FAIL: body not in serialized output");
+        return;
+    }
+    println("HTTP_REQ_BODY_OK");
+
+    // Beat 6: replace header
+    let req3: HttpRequest = http_req_set_header(req, "Host", "other.com");
+    let h5: Result[String, String] = http_req_get_header(req3, "Host");
+    if h5.is_err() {
+        println("FAIL: replaced host lookup");
+        return;
+    }
+    println("HTTP_REQ_REPLACE_OK");
+
+    println("HTTP_REQ_FIXTURE_ALL_PASSED");
+}

@@ -1,0 +1,52 @@
+// # 3D Spatial Audio Adversarial Smoke Test
+//
+// Logline: Verifies spatial audio facade initialization with adversarial inputs.
+//
+// Setup: Pure integer audio structs. No FS or net dependencies.
+//
+// Beats:
+//   1. VALID: Test spatial_audio_init wrapper function.
+//   2. NEGATIVE TRUST: Test with zero values.
+//   3. ADVERSARIAL: Test with extreme values.
+//   4. DOUBLE-RUN: Verify all operations are deterministic.
+
+import "std/app/ui/3d/spatial_audio.oo";
+
+pub fn expect_eq_int(label: String, got: Int, want: Int) -> Bool {
+    if got == want { println("OK " + label); return true; }
+    println("FAIL " + label + " got=" + got.to_string() + " want=" + want.to_string());
+    return false;
+}
+
+pub fn main() {
+    // VALID: Normal initialization
+    let source1: AudioSource = spatial_audio_init(100, 200, 300, 50);
+    if !expect_eq_int("init x", source1.x, 100) { return; }
+    if !expect_eq_int("init y", source1.y, 200) { return; }
+    if !expect_eq_int("init z", source1.z, 300) { return; }
+    if !expect_eq_int("init volume", source1.volume, 50) { return; }
+    
+    // NEGATIVE TRUST: Zero values
+    let source_zero: AudioSource = spatial_audio_init(0, 0, 0, 0);
+    if !expect_eq_int("init zero x", source_zero.x, 0) { return; }
+    if !expect_eq_int("init zero y", source_zero.y, 0) { return; }
+    if !expect_eq_int("init zero z", source_zero.z, 0) { return; }
+    if !expect_eq_int("init zero volume", source_zero.volume, 0) { return; }
+    
+    // ADVERSARIAL: Extreme values
+    let source_extreme: AudioSource = spatial_audio_init(999999, -999999, 999999, 255);
+    if !expect_eq_int("init extreme x", source_extreme.x, 999999) { return; }
+    if !expect_eq_int("init extreme y", source_extreme.y, -999999) { return; }
+    if !expect_eq_int("init extreme z", source_extreme.z, 999999) { return; }
+    if !expect_eq_int("init extreme volume", source_extreme.volume, 255) { return; }
+    
+    // DOUBLE-RUN: Determinism
+    let source_dr1: AudioSource = spatial_audio_init(100, 200, 300, 50);
+    let source_dr2: AudioSource = spatial_audio_init(100, 200, 300, 50);
+    if !expect_eq_int("dr init x", source_dr1.x, source_dr2.x) { return; }
+    if !expect_eq_int("dr init y", source_dr1.y, source_dr2.y) { return; }
+    if !expect_eq_int("dr init z", source_dr1.z, source_dr2.z) { return; }
+    if !expect_eq_int("dr init volume", source_dr1.volume, source_dr2.volume) { return; }
+    
+    println("OK: 3d_spatial_audio_smoke passed");
+}

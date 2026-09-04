@@ -1,0 +1,4 @@
+import "x86_multi_cycle_a.oo";
+pub fn fb() -> Int {
+    return 2;
+}

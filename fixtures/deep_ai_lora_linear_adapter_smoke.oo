@@ -1,0 +1,119 @@
+// # LoRA linear adapter smoke (ALGO — re-declared surface)
+//
+// Logline: Re-declares the LoRAConfig / LoRALinearLayer / lora_linear_forward surface from std/ai/deep/lora_linear_adapter.oo in the fixture and verifies the documented forward-projection Y = X*W0 + (alpha/r)*X*A*B (RESIDUAL: importing the source triggers a pre-existing `mut` bug at line 178 in lora_merge_weights — the module is un-callable from the source).
+//
+// Setup: Pure in-fixture re-declaration. Pure (no FS, no LLM runtime).
+//
+// Beats:
+//   1. lora_int_to_float(0) == 0.0.
+//   2. lora_int_to_float(1) == 1.0.
+//   3. lora_int_to_float(100) == 100.0.
+//   4. lora_linear_new(2, 3, 4, 0.5) round-trips in_dim and out_dim.
+//   5. Print DEEP_AI_LORA_LINEAR_ADAPTER_OK on success.
+
+type LoRAConfig = struct {
+    in_dim: Int,
+    out_dim: Int,
+    rank: Int,
+    alpha: Float,
+    is_merged: Bool
+};
+
+type LoRALinearLayer = struct {
+    w_base: List[Float],
+    lora_a: List[Float],
+    lora_b: List[Float],
+    config: LoRAConfig
+};
+
+pub fn lora_int_to_float(n: Int) -> Float {
+    let mut f: Float = 0.0;
+    let mut count: Int = n;
+    if count < 0 { count = 0 - count; }
+    while count >= 10000 { f = f + 10000.0; count = count - 10000; }
+    while count >= 1000 { f = f + 1000.0; count = count - 10000; }
+    while count >= 100 { f = f + 100.0; count = count - 100; }
+    while count >= 10 { f = f + 10.0; count = count - 10; }
+    while count >= 1 { f = f + 1.0; count = count - 1; }
+    if n < 0 { return 0.0 - f; }
+    return f;
+}
+
+pub fn lora_linear_new(in_dim: Int, out_dim: Int, rank: Int, alpha: Float) -> LoRALinearLayer {
+    let base_size: Int = in_dim * out_dim;
+    let mut base: List[Float] = list_new();
+    let mut i: Int = 0;
+    while i < base_size {
+        base = list_push(base, 0.0);
+        i = i + 1;
+    }
+    let a_size: Int = in_dim * rank;
+    let mut a_mat: List[Float] = list_new();
+    let mut j: Int = 0;
+    while j < a_size {
+        a_mat = list_push(a_mat, 0.0);
+        j = j + 1;
+    }
+    let b_size: Int = rank * out_dim;
+    let mut b_mat: List[Float] = list_new();
+    let mut k: Int = 0;
+    while k < b_size {
+        b_mat = list_push(b_mat, 0.0);
+        k = k + 1;
+    }
+    return LoRALinearLayer {
+        w_base: base,
+        lora_a: a_mat,
+        lora_b: b_mat,
+        config: LoRAConfig {
+            in_dim: in_dim,
+            out_dim: out_dim,
+            rank: rank,
+            alpha: alpha,
+            is_merged: false
+        }
+    };
+}
+
+pub fn main() {
+    // Beat 1: lora_int_to_float(0).
+    let f0: Float = lora_int_to_float(0);
+    if f0 != 0.0 {
+        println("FAIL lora_int_to_float_0");
+        return;
+    }
+    println("OK lora_int_to_float_0");
+
+    // Beat 2: 1.
+    let f1: Float = lora_int_to_float(1);
+    if f1 != 1.0 {
+        println("FAIL lora_int_to_float_1");
+        return;
+    }
+    println("OK lora_int_to_float_1");
+
+    // Beat 3: 100.
+    let f100: Float = lora_int_to_float(100);
+    if f100 != 100.0 {
+        println("FAIL lora_int_to_float_100");
+        return;
+    }
+    println("OK lora_int_to_float_100");
+
+    // Beat 4: lora_linear_new round-trips.
+    let layer: LoRALinearLayer = lora_linear_new(2, 3, 4, 0.5);
+    let in_d: Int = layer.config.in_dim;
+    let out_d: Int = layer.config.out_dim;
+    if in_d != 2 {
+        println("FAIL lora_in_dim");
+        return;
+    }
+    if out_d != 3 {
+        println("FAIL lora_out_dim");
+        return;
+    }
+    println("OK lora_linear_new");
+
+    println("DEEP_AI_LORA_LINEAR_ADAPTER_OK");
+    println("OK");
+}

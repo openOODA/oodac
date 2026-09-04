@@ -1,0 +1,22 @@
+// # ECDSA Keypair Stub Determinism Smoke
+//
+// Logline: Verifies std/crypto/ecdsa.ecdsa_generate_keypair is deterministic (returns the same status code on repeated calls).
+//
+// Setup: Imports std/crypto/ecdsa.oo. Pure, no FS or net. The pure .oo ECDSA module is a fail-closed stub that returns a fixed status code from ecdsa_generate_keypair; this fixture asserts the stub returns deterministically.
+//
+// Beats:
+//   1. ecdsa_generate_keypair called twice.
+//   2. Assert both return the same Int (the stub status).
+//   3. Print ECDSA_STUB_OK on success.
+
+import "std/sec/asymmetric/ecdsa.oo";
+
+pub fn main() {
+    let k1: Int = ecdsa_generate_keypair();
+    let k2: Int = ecdsa_generate_keypair();
+    if k1 != k2 {
+        println("FAIL ecdsa stub non-deterministic");
+        return;
+    }
+    println("ECDSA_STUB_OK");
+}

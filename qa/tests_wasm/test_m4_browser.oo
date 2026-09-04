@@ -1,0 +1,173 @@
+// # WebAssembly Milestone 4 Browser & WUI Sandbox Test Suite
+//
+// Logline: Build, emit, and verify WebAssembly binary modules for browser target with zero-ambient-authority imports, VDOM patch buffers, and UI event routing.
+//
+// Setup: Run with ooda/bin/ooda check or run from qa/.
+//
+// Beats:
+//   1. Import required modules.
+//   2. Execute test assertions.
+//   3. Report pass or fail with exit code.
+import "oodac/emit/wasm/wasm_leb128.oo";
+import "oodac/emit/wasm/wasm_opcodes.oo";
+import "oodac/emit/wasm/wasm_types.oo";
+import "oodac/emit/wasm/wasm_binary_builder.oo";
+import "oodac/emit/wasm/wasm_lower_expr.oo";
+import "oodac/emit/wasm/wasm_lower_stmt.oo";
+import "oodac/emit/wasm/wasm_lower_control.oo";
+import "oodac/emit/wasm/wasm_lower_fn.oo";
+import "oodac/emit/wasm/wasm_target_browser.oo";
+import "oodac/ast/ast.oo";
+
+fn assert_true(cond: Bool, msg: String) {
+    if !cond { println("ASSERTION FAILED (expected true): " + msg); process_exit(1); }
+}
+
+fn assert_eq_int(actual: Int, expected: Int, msg: String) {
+    if actual != expected {
+        println("ASSERTION FAILED: " + msg + " (expected " + expected.to_string() + ", got " + actual.to_string() + ")");
+        process_exit(1);
+    }
+}
+
+pub fn test_browser_zero_authority(fs: &FsWriteCap) -> List[Int] {
+    let mut b: WasmModuleBuilder = wasm_builder_new();
+    let target: BrowserTarget = wasm_target_browser_init(&mut b);
+
+    assert_eq_int(target.host_patch_idx, 0, "host_patch_idx is 0");
+    assert_eq_int(target.host_log_idx, 1, "host_log_idx is 1");
+    assert_eq_int(list_len(b.import_mods), 2, "exactly 2 host imports");
+
+    assert_true(list_get(b.import_mods, 0) == "env", "import 0 module is env");
+    assert_true(list_get(b.import_fields, 0) == "wui_host_patch", "import 0 field is wui_host_patch");
+
+    assert_true(list_get(b.import_mods, 1) == "env", "import 1 module is env");
+    assert_true(list_get(b.import_fields, 1) == "wui_host_log", "import 1 field is wui_host_log");
+
+    assert_true(b.has_memory, "has_memory is true");
+    assert_eq_int(list_len(b.export_names), 1, "has memory export");
+    assert_true(list_get(b.export_names, 0) == "memory", "export 0 is memory");
+
+    // Add a simple calc function
+    let mut p: List[Int] = list_new();
+    p = list_push(p, wasm_val_type_i32());
+    let mut r: List[Int] = list_new();
+    r = list_push(r, wasm_val_type_i32());
+    let ty: Int = wasm_builder_add_type(&mut b, p, r);
+    let f_idx: Int = wasm_builder_add_func(&mut b, ty);
+
+    let mut code: List[Int] = list_new();
+    code = list_push(code, op_local_get()); code = list_push(code, 0);
+    code = list_push(code, op_i32_const()); code = list_push(code, 10);
+    code = list_push(code, op_i32_mul());
+    code = list_push(code, op_end());
+    wasm_builder_set_code(&mut b, f_idx, list_new(), code);
+    wasm_builder_add_export(&mut b, "multiply_by_10", wasm_external_func(), list_len(b.import_kinds) + f_idx);
+
+    let bin: List[Int] = wasm_builder_emit(b);
+    assert_true(list_len(bin) > 20, "binary emitted > 20 bytes");
+
+    let s: String = bytes_to_str(bin);
+    let _w: Result[Void, String] = write_file(fs, "/tmp/tests_m4_browser_zero_auth.wasm", s);
+    return bin;
+}
+
+pub fn test_browser_vdom_and_events(fs: &FsWriteCap) -> List[Int] {
+    let mut b: WasmModuleBuilder = wasm_builder_new();
+    let mut target: BrowserTarget = wasm_target_browser_init(&mut b);
+
+    // 1. Emit patch buffer data: [patch_type: 5 (SetText), target_idx: 0, path_len: 4 "root", text_len: 7 "Hello WUI"]
+    let mut patch_bytes: List[Int] = list_new();
+    patch_bytes = list_push(patch_bytes, wasm_patch_type_set_text());
+    patch_bytes = list_push(patch_bytes, 0);
+    patch_bytes = list_push(patch_bytes, 4); // len of "root"
+    patch_bytes = list_push(patch_bytes, 114); patch_bytes = list_push(patch_bytes, 111);
+    patch_bytes = list_push(patch_bytes, 111); patch_bytes = list_push(patch_bytes, 116);
+    patch_bytes = list_push(patch_bytes, 9); // len of "Hello WUI"
+    patch_bytes = list_push(patch_bytes, 72); patch_bytes = list_push(patch_bytes, 101);
+    patch_bytes = list_push(patch_bytes, 108); patch_bytes = list_push(patch_bytes, 108);
+    patch_bytes = list_push(patch_bytes, 111); patch_bytes = list_push(patch_bytes, 32);
+    patch_bytes = list_push(patch_bytes, 87); patch_bytes = list_push(patch_bytes, 85);
+    patch_bytes = list_push(patch_bytes, 73);
+    wasm_browser_emit_patch_buffer(&mut b, target.patch_buf_offset, patch_bytes);
+
+    // 2. Emit wui_init
+    wasm_browser_emit_wui_init(&mut b, &mut target, -1);
+
+    // 3. Emit wui_on_event handler: returns 42 if event_type == 1 (click), else 0
+    let mut p_h: List[Int] = list_new();
+    p_h = list_push(p_h, wasm_val_type_i32());
+    p_h = list_push(p_h, wasm_val_type_i32());
+    p_h = list_push(p_h, wasm_val_type_i32());
+    let mut r_h: List[Int] = list_new();
+    r_h = list_push(r_h, wasm_val_type_i32());
+    let ty_h: Int = wasm_builder_add_type(&mut b, p_h, r_h);
+    let f_h: Int = wasm_builder_add_func(&mut b, ty_h);
+
+    let mut h_code: List[Int] = list_new();
+    // if event_type (local 0) == wui_event_click() return target_id * 100 + data_ptr
+    h_code = list_push(h_code, op_local_get()); h_code = list_push(h_code, 0);
+    h_code = list_push(h_code, op_i32_const()); h_code = list_push(h_code, wui_event_click());
+    h_code = list_push(h_code, op_i32_eq());
+    h_code = list_push(h_code, op_if()); h_code = list_push(h_code, wasm_val_type_i32());
+    h_code = list_push(h_code, op_local_get()); h_code = list_push(h_code, 1);
+    h_code = list_push(h_code, op_i32_const()); h_code = list_push(h_code, 100);
+    h_code = list_push(h_code, op_i32_mul());
+    h_code = list_push(h_code, op_local_get()); h_code = list_push(h_code, 2);
+    h_code = list_push(h_code, op_i32_add());
+    h_code = list_push(h_code, op_else());
+    h_code = list_push(h_code, op_i32_const()); h_code = list_push(h_code, 0);
+    h_code = list_push(h_code, op_end());
+    h_code = list_push(h_code, op_end());
+    wasm_builder_set_code(&mut b, f_h, list_new(), h_code);
+
+    let handler_idx: Int = list_len(b.import_kinds) + f_h;
+    wasm_browser_emit_wui_on_event(&mut b, &mut target, handler_idx);
+    wasm_browser_emit_patch_accessors(&mut b, &target);
+
+    let bin: List[Int] = wasm_builder_emit(b);
+    let s: String = bytes_to_str(bin);
+    let _w: Result[Void, String] = write_file(fs, "/tmp/tests_m4_browser_events.wasm", s);
+    return bin;
+}
+
+pub fn test_browser_ast_app(fs: &FsWriteCap) -> List[Int] {
+    // fn app_calc(ev_type: Int, target_id: Int, val: Int) -> Int:
+    // if ev_type == 1 { return target_id * 10 + val; }
+    // if ev_type == 2 { return val * 2; }
+    // return 0;
+    let cond1: String = mk_ebinop("==", mk_evar("ev_type"), mk_eint("1"));
+    let ret1: String = mk_sreturn(mk_ebinop("+", mk_ebinop("*", mk_evar("target_id"), mk_eint("10")), mk_evar("val")));
+    let if1: String = mk_eif(cond1, mk_block(ret1, mk_sempty()), "");
+
+    let cond2: String = mk_ebinop("==", mk_evar("ev_type"), mk_eint("2"));
+    let ret2: String = mk_sreturn(mk_ebinop("*", mk_evar("val"), mk_eint("2")));
+    let if2: String = mk_eif(cond2, mk_block(ret2, mk_sempty()), "");
+
+    let def_ret: String = mk_sreturn(mk_eint("0"));
+    let fn_body: String = mk_block(if1 + "," + if2 + "," + def_ret, mk_sempty());
+
+    let mut params: String = mk_param("ev_type", mk_ty_int());
+    params = params + "," + mk_param("target_id", mk_ty_int());
+    params = params + "," + mk_param("val", mk_ty_int());
+
+    let fn_node: String = mk_fn("wui_on_event", params, mk_ty_int(), "", fn_body);
+    let file_node: String = mk_file(fn_node);
+
+    let bin: List[Int] = wasm_compile_browser_module(file_node, wasm_val_type_i32());
+    assert_true(list_len(bin) > 30, "compiled browser module binary length > 30");
+
+    let s: String = bytes_to_str(bin);
+    let _w: Result[Void, String] = write_file(fs, "/tmp/tests_m4_browser_app.wasm", s);
+    return bin;
+}
+
+pub fn main(fs: &FsWriteCap) {
+    println("=========================================================");
+    println(" Running WebAssembly M4 Browser / WUI Target Unit Tests");
+    println("=========================================================");
+    test_browser_zero_authority(fs);
+    test_browser_vdom_and_events(fs);
+    test_browser_ast_app(fs);
+    println("All WASM M4 Browser / WUI unit tests emitted successfully!");
+}

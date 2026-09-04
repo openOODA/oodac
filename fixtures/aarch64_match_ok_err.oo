@@ -1,0 +1,18 @@
+// # AArch64 2-arm match (Ok/Err)
+//
+// Logline: 2-arm match on Result, proving the Ok/Err tagged-union shape compiles on aarch64.
+//
+// Setup: Bind Ok(99), match Ok(v) -> v, Err(_) -> -1, print 99.
+//
+// Beats:
+//   1. Bind Ok(99).
+//   2. Match Ok/Err.
+
+pub fn main() {
+    let r = Ok(99);
+    let v = match r {
+        Ok(x) => x,
+        Err(_) => -1,
+    };
+    println(v);
+}

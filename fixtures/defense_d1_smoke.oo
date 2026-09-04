@@ -1,0 +1,55 @@
+// # Defense D1 Control Flow Flattening Smoke Proof
+//
+// Logline: Adversarial proof for AST flatten transform and C switch-dispatcher emit.
+//
+// Setup: Pure product test. No capability tokens.
+//
+// Beats:
+//   1. Build an AstFunction with one statement and flatten it.
+//   2. Verify the returned function is marked flattened and has state ids.
+//   3. Convert the result into FlattenedBlocks and emit a C switch dispatcher.
+//   4. Validate the emitted C contains expected `switch` and `case` tokens.
+
+import "std/sec/defense/ast_morpher_types.oo";
+import "std/sec/control/control_flow_flattening.oo";
+import "oodac/ast/ast_flatten_transform.oo";
+import "oodac/emit/c/c_emit_dispatch.oo";
+import "std/core/primitives/str.oo";
+
+fn ok_fn(res: Result[AstFunction, String]) -> AstFunction {
+    if res.is_err() { process_exit(1); }
+    return match res {
+        Ok(v) => v,
+        Err(_) => ast_function_new("", ast_capability_set_new(false, false, false, false))
+    };
+}
+
+pub fn main() -> Int {
+    let caps: AstCapabilitySet = ast_capability_set_new(false, false, false, false);
+    let mut fn_ast: AstFunction = ast_function_new("add_one", caps);
+    let mut b: AstBasicBlock = ast_basic_block_new(0, 0, 0, 0);
+    let s: AstStatement = ast_statement_new(0, 0, "x = x + 1;", 0);
+    b.statements = list_push(b.statements, s);
+    b.stmt_count = 1;
+    fn_ast.blocks = list_push(fn_ast.blocks, b);
+    fn_ast.block_count = 1;
+    let flat: AstFunction = ok_fn(ast_flatten_function_body(&fn_ast, 7));
+    if !flat.is_flattened { return 1; }
+    if flat.initial_state < 0 { return 1; }
+    if flat.exit_state < 0 { return 1; }
+    if flat.block_count != 1 { return 1; }
+    let b0: AstBasicBlock = list_get(flat.blocks, 0);
+    let stmts: List[AstStatement] = b0.statements;
+    let fb: FlattenedBlock = flattened_block_new(flat.initial_state, flat.exit_state, stmts);
+    let mut fbs: List[FlattenedBlock] = list_new();
+    fbs = list_push(fbs, fb);
+    let c_code: String = emit_flattened_switch_dispatcher(fbs);
+    if !str_contains(c_code, "switch") { return 1; }
+    if !str_contains(c_code, "case") { return 1; }
+    if !str_contains(c_code, "x = x + 1;") { return 1; }
+    let mut ff: FlattenedFunction = flattened_function_new("add_one", flat.initial_state, flat.exit_state);
+    flattened_function_add_block(&mut ff, fb);
+    if !flattened_function_step(&mut ff) { return 1; }
+    if ff.dispatcher_switch_var != flat.exit_state { return 1; }
+    return 0;
+}

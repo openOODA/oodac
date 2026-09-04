@@ -1,0 +1,35 @@
+// # Sovereign ELF64 fib smoke
+//
+// Logline: Compute fib 10 with a recursive function and an iterative function.
+//
+// Setup: No imports. Used by --x86-elf-pure.
+//
+// Beats:
+//   1. Recurse fib.
+//   2. Iterate with fib_iter.
+//   3. Print both results.
+
+pub fn fib(n: Int) -> Int {
+    if n < 2 {
+        return n;
+    }
+    return fib(n - 1) + fib(n - 2);
+}
+
+pub fn fib_iter(n: Int) -> Int {
+    let mut a: Int = 0;
+    let mut b: Int = 1;
+    let mut i: Int = 0;
+    while i < n {
+        let t: Int = a + b;
+        a = b;
+        b = t;
+        i = i + 1;
+    }
+    return a;
+}
+
+pub fn main() {
+    println(fib(10));
+    println(fib_iter(10));
+}

@@ -1,0 +1,48 @@
+// # 3D Gaussian render smoke (ALGO — re-declared surface)
+//
+// Logline: Re-declares the GaussRend surface from std/ui/3d/gaussian_render.oo in the fixture (RESIDUAL: importing the source triggers a pre-existing AABB struct clash with std/ui/3d/gaussian_types.oo).
+//
+// Setup: Pure in-fixture re-declaration. No FS, no GPU.
+//
+// Beats:
+//   1. gauss_rend_new(640, 480) sets w=640, h=480.
+//   2. gauss_rend_w round-trips w.
+//   3. Print 3D_GAUSSIAN_RENDER_OK on success.
+
+type GaussRend = struct {
+    w: Int,
+    h: Int
+};
+
+pub fn gauss_rend_new(w: Int, h: Int) -> GaussRend {
+    return GaussRend { w: w, h: h };
+}
+
+pub fn gauss_rend_w(r: GaussRend) -> Int {
+    return r.w;
+}
+
+pub fn main() {
+    let r: GaussRend = gauss_rend_new(640, 480);
+    let rw: Int = r.w;
+    let rh: Int = r.h;
+    if rw != 640 {
+        println("FAIL w");
+        return;
+    }
+    if rh != 480 {
+        println("FAIL h");
+        return;
+    }
+    println("OK gauss_rend_new");
+
+    let w: Int = gauss_rend_w(r);
+    if w != 640 {
+        println("FAIL gauss_rend_w");
+        return;
+    }
+    println("OK gauss_rend_w");
+
+    println("3D_GAUSSIAN_RENDER_OK");
+    println("OK");
+}

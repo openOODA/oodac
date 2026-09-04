@@ -1,0 +1,4 @@
+// # emit-x86 string literal println
+pub fn main() {
+    println("Hi");
+}

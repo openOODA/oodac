@@ -1,0 +1,19 @@
+// # GPU add kernel with host attention string
+//
+// Logline: @gpu k_add stays elementwise plus when host main prints attention.
+//
+// Setup: Same plus kernel as gpu_vec_add. Host string must not select flash attn.
+//
+// Beats:
+//   1. Annotate k_add as an @gpu device function.
+//   2. Walk i from 0 to n and assign c[i] from a[i] plus b[i].
+//   3. Print attention from host main only.
+
+@gpu pub fn k_add(a: FloatPtr, b: FloatPtr, c: FloatPtr, n: Int) {
+    let mut i: Int = 0;
+    while i < n {
+        c[i] = a[i] + b[i];
+        i = i + 1;
+    }
+}
+pub fn main() { println("attention"); }

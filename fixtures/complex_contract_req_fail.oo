@@ -1,0 +1,20 @@
+// # Complex contract requires fail
+//
+// Logline: Call a positive-only contract with negative inputs to trigger requires failure.
+//
+// Setup: Compiled and run by scripts/test_contracts_and.oo.
+//
+// Beats:
+//   1. Function requires both arguments positive.
+//   2. main passes negative inputs so requires must fail at runtime.
+
+pub fn complex_fn(x: Int, y: Int) -> Int
+    requires (x > 0 && y > 0)
+    ensures result > 0 && (result == x + y)
+{
+    return x + y;
+}
+
+pub fn main() {
+    println(complex_fn(-1, -2));
+}

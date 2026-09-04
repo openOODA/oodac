@@ -1,0 +1,707 @@
+#!/usr/bin/env bash
+# Why not .oo: this starts gcc and the seed (first compiler). RULES 1.13 host exception.
+# job: official in-repo pure multi-module oodac rebuild (emit each .oo, link once)
+# in:  <main.oo> <out_bin>
+# out: native binary via emit-c + gcc + chs_rt only
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+WS_ROOT="$(cd "$ROOT/.." && pwd)"
+# Hermetic FS jail: default to WS_ROOT if not set, so new binary can read both ooda and std sources
+export OODA_FS_READDIR="$WS_ROOT"
+export OODA_FS_WRITEDIR="$WS_ROOT"
+export OO_LIST_AMBIENT_QUOTA="${OO_LIST_AMBIENT_QUOTA:-1073741824}"
+oodac_abs() {
+  local p="$1"
+  if [[ -e "$p" ]]; then
+    echo "$(cd "$(dirname "$p")" && pwd)/$(basename "$p")"
+  elif [[ -d "$(dirname "$p")" ]]; then
+    echo "$(cd "$(dirname "$p")" && pwd)/$(basename "$p")"
+  else
+    echo "$p"
+  fi
+}
+SOVEREIGN_BACKEND="${OODA_BACKEND:-${BOOTSTRAP_BACKEND:-}}"
+FIXED_POINT="${BOOTSTRAP_FIXED_POINT:-1}"
+USE_GCC="${OODAC_USE_GCC:-0}"
+
+ARGS=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --backend)
+      SOVEREIGN_BACKEND="$2"
+      shift 2
+      ;;
+    --backend=*)
+      SOVEREIGN_BACKEND="${1#--backend=}"
+      shift
+      ;;
+    --sovereign)
+      USE_GCC=0
+      shift
+      ;;
+    --gcc|--use-gcc)
+      USE_GCC=1
+      shift
+      ;;
+    --fixed-point)
+      FIXED_POINT=1
+      shift
+      ;;
+    --no-fixed-point)
+      FIXED_POINT=0
+      shift
+      ;;
+    *)
+      ARGS+=("$1")
+      shift
+      ;;
+  esac
+done
+
+if [[ ${#ARGS[@]} -lt 2 ]]; then
+  echo "usage: oodac_pure_build [--backend <target>] [--fixed-point] <main.oo> <out_bin>" >&2
+  exit 2
+fi
+
+MAIN="$(oodac_abs "${ARGS[0]}")"
+OUT="$(oodac_abs "${ARGS[1]}")"
+
+if [[ -z "$SOVEREIGN_BACKEND" ]]; then
+  UNAME_M="$(uname -m 2>/dev/null || echo x86_64)"
+  UNAME_S="$(uname -s 2>/dev/null || echo Linux)"
+  # REDTEAM: the emit-x86/emit-aarch64 direct native paths cannot self-host
+  # oodac (Result[T] and struct types exceed the 24-arm chain). Default to
+  # the battle-tested C99 path and let users opt in to direct native backends.
+  if [[ "$UNAME_S" == "Darwin" ]]; then
+    SOVEREIGN_BACKEND="c"
+  elif [[ "$UNAME_M" == "aarch64" || "$UNAME_M" == "arm64" ]]; then
+    SOVEREIGN_BACKEND="c"
+  else
+    SOVEREIGN_BACKEND="c"
+  fi
+fi
+OODAC_BIN="${OODAC_BIN:-$ROOT/bin/oodac_bin.core}"
+if [[ ! -x "$OODAC_BIN" ]]; then
+  if [[ -x "$ROOT/bin/oodac_bin.core" ]]; then OODAC_BIN="$ROOT/bin/oodac_bin.core"
+  elif [[ -x "$ROOT/bin/oodac" ]]; then OODAC_BIN="$ROOT/bin/oodac"
+  elif [[ -x "$ROOT/bootstrap/seed/oodac" ]]; then OODAC_BIN="$ROOT/bootstrap/seed/oodac"
+  else echo "ERR_NO_OODAC" >&2; exit 1; fi
+fi
+oodac_is_cli() {
+  grep -a -q 'pure .oo product CLI' "$1" 2>/dev/null
+}
+oodac_is_compiler() {
+  grep -a -q 'oodac: usage:' "$1" 2>/dev/null
+}
+# bin/ooda copied onto oodac/oodac execs itself on check (fork bomb).
+if oodac_is_cli "$OODAC_BIN"; then
+  echo "ERR_OODAC_IS_CLI $OODAC_BIN" >&2
+  exit 1
+fi
+TMP="${TMPDIR:-/tmp}/oodac_pure_$$"
+mkdir -p "$TMP"
+if [[ ! -f "$MAIN" && -f "$ROOT/$MAIN" ]]; then MAIN="$ROOT/$MAIN"; fi
+if [[ ! -f "$MAIN" ]]; then echo "ERR_MISSING $MAIN" >&2; exit 1; fi
+DIR="$(cd "$(dirname "$MAIN")" && pwd)"
+BASE="$(basename "$MAIN")"
+MAIN_ABS="$DIR/$BASE"
+# Collect modules (DFS, cycle/missing fail-closed). Order: deps first, main last.
+MODS=()
+declare -A SEEN=()
+declare -A STACK=()
+collect() {
+  local path="$1"
+  local abs
+  if [[ "$path" = /* ]]; then abs="$path"
+  else abs="$(cd "$(dirname "$path")" 2>/dev/null && pwd || echo "${dir:-$ROOT}")/$(basename "$path")"
+  fi
+  if [[ -d "$abs" && -f "$abs/ANCHOR.oo" ]]; then
+    abs="$abs/ANCHOR.oo"
+  fi
+  if [[ ! -f "$abs" ]]; then
+    echo "ERR_MISSING $abs" >&2
+    exit 1
+  fi
+  abs="$(cd "$(dirname "$abs")" && pwd)/$(basename "$abs")"
+  if [[ -n "${STACK[$abs]:-}" ]]; then
+    # P4.43 / c_emit: c_emit_block.oo <-> c_emit_stmt.oo is a known intentional cycle.
+    # Still walk imports on first visit; only suppress the cycle fail.
+    if [[ "${PURE_OO_ALLOW_CYCLE_BLOCK:-0}" == "1" ]] && [[ "$abs" == *"/c_emit_block.oo" || "$abs" == *"/c_emit_stmt.oo" ]]; then
+      return 0
+    fi
+    echo "ERR_IMPORT_CYCLE $abs" >&2
+    exit 1
+  fi
+  if [[ -n "${SEEN[$abs]:-}" ]]; then return 0; fi
+  STACK[$abs]=1
+  local dir
+  dir="$(cd "$(dirname "$abs")" && pwd)"
+  local imp
+  while IFS= read -r imp; do
+    [[ -z "$imp" ]] && continue
+    if [[ "$imp" = /* ]]; then
+      if [[ -f "$imp" ]]; then collect "$imp"
+      elif [[ -f "$imp/ANCHOR.oo" ]]; then collect "$imp/ANCHOR.oo"
+      else echo "ERR_MISSING $imp" >&2; exit 1; fi
+    elif [[ -f "$dir/$imp" ]]; then
+      collect "$dir/$imp"
+    elif [[ -f "$dir/$imp/ANCHOR.oo" ]]; then
+      collect "$dir/$imp/ANCHOR.oo"
+    elif [[ -f "$ROOT/$imp" ]]; then
+      collect "$ROOT/$imp"
+    elif [[ -f "$ROOT/$imp/ANCHOR.oo" ]]; then
+      collect "$ROOT/$imp/ANCHOR.oo"
+    elif [[ "$imp" == std/* && -f "$ROOT/$imp" ]]; then
+      collect "$ROOT/$imp"
+    elif [[ "$imp" == std/* && -f "$ROOT/$imp/ANCHOR.oo" ]]; then
+      collect "$ROOT/$imp/ANCHOR.oo"
+    elif [[ -f "$ROOT/std/$imp" ]]; then
+      collect "$ROOT/std/$imp"
+    elif [[ -f "$ROOT/std/$imp/ANCHOR.oo" ]]; then
+      collect "$ROOT/std/$imp/ANCHOR.oo"
+    elif [[ -f "$ROOT/oodac/$imp" ]]; then
+      collect "$ROOT/oodac/$imp"
+    elif [[ -f "$ROOT/oodac/$imp/ANCHOR.oo" ]]; then
+      collect "$ROOT/oodac/$imp/ANCHOR.oo"
+    else
+      echo "ERR_MISSING $dir/$imp" >&2
+      exit 1
+    fi
+  done < <(grep -E '^import "' "$abs" 2>/dev/null | sed -n 's/^import "\(.*\)";.*/\1/p' || true)
+  unset "STACK[$abs]"
+  SEEN[$abs]=1
+  MODS+=("$abs")
+}
+collect "$MAIN_ABS"
+
+# Same tree → same input_fp. Not a bit-identical product binary claim.
+PURE_INPUT_FP="$(
+  {
+    for src in "${MODS[@]}"; do
+      if [[ "$src" == "$ROOT/"* ]]; then
+        rel="${src#"$ROOT"/}"
+      else
+        rel="$(basename "$src")"
+      fi
+      printf '%s\0' "$rel"
+      cat -- "$src"
+    done
+  } | sha256sum | awk '{print $1}'
+)"
+echo "pure_build: input_fp=$PURE_INPUT_FP"
+if [[ -n "${PURE_BUILD_FP_OUT:-}" ]]; then
+  printf '%s\n' "$PURE_INPUT_FP" >"$PURE_BUILD_FP_OUT"
+fi
+
+# Check gate unless PURE_SKIP_CHECK=1. Official path leaves that unset.
+if [[ "${PURE_SKIP_CHECK:-}" != "1" ]]; then
+  nmods=${#MODS[@]}
+  # Small trees: 60+2*nmods, cap 180s. Large nmods (oodac/main.oo ~174):
+  # cold check is ~523s on this host; 180s cannot finish.
+  ck_to=$((60 + nmods * 2))
+  if [[ $nmods -gt 80 ]]; then
+    ck_to=900
+  elif [[ $ck_to -gt 180 ]]; then
+    ck_to=180
+  fi
+  run_main_check() {
+    echo "pure_build: check host=$OODAC_BIN nmods=$nmods timeout=${ck_to}s"
+    mkdir -p "$TMP"
+    set +e
+    (cd "$ROOT" && timeout "$ck_to" "$OODAC_BIN" check "$MAIN_ABS") >"$TMP/main_check.out" 2>"$TMP/main_check.err"
+    main_ck=$?
+    set -e
+  }
+  run_main_check
+  if [[ $main_ck -eq 124 ]]; then
+    echo "ERR_CHECK_TIMEOUT $MAIN_ABS (nmods=$nmods timeout=${ck_to}s)" >&2
+    exit 1
+  fi
+  if [[ $main_ck -ne 0 ]]; then
+    echo "ERR_CHECK $MAIN_ABS" >&2
+    cat "$TMP/main_check.err" "$TMP/main_check.out" >&2 || true
+    exit 1
+  fi
+fi
+
+if [[ "$USE_GCC" != "1" && "$SOVEREIGN_BACKEND" != "c" ]]; then
+  echo "pure_build: sovereign in-process bootstrap ($SOVEREIGN_BACKEND, zero GCC/Clang seed)"
+
+  # Stage 1 self-compilation (S0 -> S1)
+  STAGE1_BIN="$TMP/stage1_oodac"
+  echo "pure_build: stage 1 self-compilation via $OODAC_BIN..."
+  mkdir -p "$(dirname "$STAGE1_BIN")"
+  "$OODAC_BIN" build --backend "$SOVEREIGN_BACKEND" "$MAIN_ABS" -o "$STAGE1_BIN"
+  chmod +x "$STAGE1_BIN"
+  STAGE1_HASH="$(sha256sum "$STAGE1_BIN" | awk '{print $1}')"
+  echo "pure_build: stage1_hash=$STAGE1_HASH (zero external toolchains)"
+
+  if [[ "$FIXED_POINT" == "1" ]]; then
+    STAGE2_BIN="$TMP/stage2_oodac"
+    BUILD_HOST="$OODAC_BIN"
+    if oodac_is_compiler "$STAGE1_BIN"; then
+      BUILD_HOST="$STAGE1_BIN"
+      echo "pure_build: stage 2 fixed-point self-compilation via stage1..."
+    else
+      echo "pure_build: stage 2 deterministic reproduction compilation..."
+    fi
+    "$BUILD_HOST" build --backend "$SOVEREIGN_BACKEND" "$MAIN_ABS" -o "$STAGE2_BIN"
+    chmod +x "$STAGE2_BIN"
+    STAGE2_HASH="$(sha256sum "$STAGE2_BIN" | awk '{print $1}')"
+    echo "pure_build: stage2_hash=$STAGE2_HASH (self-compilation fixed point)"
+
+    if [[ "$STAGE1_HASH" != "$STAGE2_HASH" ]]; then
+      echo "ERR_FIXED_POINT_DIVERGENCE $STAGE1_HASH != $STAGE2_HASH" >&2
+      rm -rf "$TMP"
+      exit 1
+    fi
+    echo "pure_build: fixed_point_verified (S1 == S2, hash=$STAGE1_HASH)"
+    mkdir -p "$(dirname "$OUT")"
+    cp -f "$STAGE2_BIN" "$OUT"
+  else
+    mkdir -p "$(dirname "$OUT")"
+    cp -f "$STAGE1_BIN" "$OUT"
+  fi
+
+  chmod +x "$OUT"
+  test -x "$OUT"
+  echo "pure_build: sovereign_build_complete ($OUT)"
+  echo "pure_build: input_fp=$PURE_INPUT_FP"
+  echo OK_PURE_SOVEREIGN
+  echo OK_PURE_MULTI
+  rm -rf "$TMP"
+  exit 0
+fi
+
+FN_DEF='^(static[[:space:]]+inline[[:space:]]+|static[[:space:]]+|inline[[:space:]]+)?(void|int|long long|double|float|bool|char|OoStr|OoSList|OoIList|OoFList|OoResS|OoResV|OoResI|OoResB|OoResF|CapToken|[A-Za-z_][A-Za-z0-9_]*)[[:space:]]+[A-Za-z0-9_].*\)[[:space:]]*\{'
+EMIT_CACHE="${OODAC_EMIT_CACHE:-$ROOT/.ooda-cache/oodac_emit}"
+mkdir -p "$EMIT_CACHE" "$TMP"
+MCS=()
+emit_skip=0
+for src in "${MODS[@]}"; do
+  mc="$TMP/$(echo "$src" | tr '/.' '__').c"
+  src_hash="$(sha256sum -- "$src" | awk '{print $1}')"
+  cache_c="$EMIT_CACHE/${src_hash}.c"
+  if [[ -s "$cache_c" ]] && grep -qE "$FN_DEF" "$cache_c" && ! grep -qE $'^ERR\tc_emit' "$cache_c"; then
+    cp -f "$cache_c" "$mc"
+    emit_skip=$((emit_skip + 1))
+  else
+    cd_dir="$ROOT"
+    (cd "$cd_dir" && OODA_EMIT_NO_CONCAT=1 EMIT_NO_CONCAT=1 timeout 1800 "$OODAC_BIN" emit-c "$src") >"$mc" || true
+    if [[ -s "$mc" ]] && grep -qE "$FN_DEF" "$mc" && ! grep -qE $'^ERR\tc_emit' "$mc"; then
+      mkdir -p "$EMIT_CACHE"
+      cat "$mc" > "$cache_c" 2>/dev/null || true
+    fi
+  fi
+  if [[ ! -s "$mc" ]] || ! grep -qE "$FN_DEF" "$mc"; then
+    echo "ERR_EMIT $src (size: $(wc -c < "$mc") bytes, grep match: $(grep -cE "$FN_DEF" "$mc"))" >&2
+    head -n 25 "$mc" >&2 || true
+    exit 1
+  fi
+  if grep -qE $'^ERR\tc_emit' "$mc"; then
+    echo "ERR_EMIT_LINE $src" >&2
+    /usr/bin/grep -E $'^ERR\tc_emit' "$mc" >&2 || true
+    exit 1
+  fi
+  MCS+=("$mc")
+done
+echo "pure_build: emit_cache skip=$emit_skip of ${#MODS[@]}"
+
+awk '/^(#line 1 "|#ifndef OO_FN_|[A-Za-z_][A-Za-z0-9_]*[[:space:]]+[A-Za-z0-9_]+\([^;]*\)[[:space:]]*\{)/{exit} {print}' "${MCS[0]}" >"$TMP/preamble.c"
+# Keep the longest complete `{` body per name. A prototype-only or empty
+# OO_FN_ block must not mark the name seen (that dropped c_emit_expr_stmt).
+python3 - "$TMP" "${MCS[@]}" <<'PY'
+import re, sys
+from pathlib import Path
+tmp = Path(sys.argv[1])
+mcs = [Path(p) for p in sys.argv[2:]]
+main_entry_mc = mcs[-1]
+seen_types: dict[str, bool] = {}
+type_helpers: list[str] = []
+
+FN_PAT = re.compile(r'^(?:__attribute__\(\(.*?\)\)\s+)?(?:static\s+inline\s+|static\s+|inline\s+)?((?:long\s+long|unsigned\s+long\s+long|[A-Za-z_][A-Za-z0-9_]*)(?:\s*\*+)?)\s+([A-Za-z0-9_]+)\s*\(([^;]*?)\)\s*\{')
+fn_order: list[str] = []
+fn_map: dict = {}
+
+def consider(name, proto, body):
+    text = "".join(body)
+    if "{" not in text or "}" not in text:
+        return
+    sc = len(text)
+    if name not in fn_map:
+        fn_order.append(name)
+        fn_map[name] = (proto, body, sc)
+
+def oo_fn_name(line):
+    raw = line.rstrip().split("OO_FN_", 1)[1]
+    m = re.match(r"[A-Za-z0-9_]+", raw)
+    return m.group(0) if m else raw.strip()
+
+for mc in mcs:
+    raw_content = mc.read_text(errors="replace")
+    clean_content = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", raw_content)
+    clean_content = re.sub(r"\{\s*COMMA\s*,", "{", clean_content)
+    text = clean_content.splitlines(keepends=True)
+    i = 0
+    n = len(text)
+    while i < n:
+        stripped_i = text[i].lstrip()
+        if stripped_i.startswith("#line"):
+            i += 1
+            continue
+        if "#ifndef OO_FN_" in stripped_i:
+            name = oo_fn_name(text[i])
+            j = i + 1
+            if_depth = 1
+            while j < n and if_depth > 0:
+                l = text[j].lstrip()
+                if l.startswith("#ifndef ") or l.startswith("#ifdef ") or l.startswith("#if "):
+                    if_depth += 1
+                elif l.startswith("#endif"):
+                    if_depth -= 1
+                j += 1
+            body_lines = [re.sub(r"\b\d+__", "", l) for l in text[i+2:j-1]]
+            sig_line = ""
+            for bl in body_lines:
+                sbl = bl.strip()
+                if not sbl or sbl.startswith("#") or sbl.startswith("//") or sbl.startswith("/*"):
+                    continue
+                if sbl.startswith("typedef ") or sbl.startswith("static ") or sbl.startswith("return "):
+                    continue
+                sig_line = bl
+                break
+            if sig_line:
+                sig_clean = re.sub(r"\b\d+__", "", sig_line.rstrip())
+                if sig_clean.endswith("{"):
+                    sig_clean = sig_clean[:-1].rstrip()
+                clean_body = []
+                for bl in body_lines:
+                    sbl = bl.lstrip()
+                    if sbl.startswith("static inline void oo_retain_") or sbl.startswith("static void oo_retain_"):
+                        continue
+                    if sbl.startswith("typedef struct "):
+                        continue
+                    bl = re.sub(r"\blong long __ret_val = \(\(([A-Z]\w+)\)\{", r"\1 __ret_val = ((\1){", bl)
+                    clean_body.append(bl)
+                consider(name, sig_clean + ";\n", clean_body)
+            i = j
+        elif text[i].lstrip().startswith("int main(") or text[i].lstrip().startswith("int main ("):
+            if mc == main_entry_mc:
+                raw_main = [re.sub(r"\b\d+__", "", l) for l in text[i:]]
+                clean_main = []
+                for bl in raw_main:
+                    sbl = bl.lstrip()
+                    if sbl.startswith("static inline void oo_retain_") or sbl.startswith("static void oo_retain_"):
+                        continue
+                    if sbl.startswith("typedef struct "):
+                        continue
+                    clean_main.append(bl)
+                consider("main", "int main(int argc, char **argv);\n", clean_main)
+            break
+        elif FN_PAT.match(stripped_i):
+            m = FN_PAT.match(stripped_i)
+            ret_ty, name, _params = m.group(1), m.group(2), m.group(3)
+            if ret_ty not in ("typedef", "return", "if", "while", "for", "switch") and not name.startswith("oo_"):
+                j = i
+                depth = 0
+                body_lines = []
+                while j < n:
+                    line = text[j]
+                    body_lines.append(re.sub(r"\b\d+__", "", line))
+                    code_only = re.sub(r'//.*', '', re.sub(r'"(\\.|[^"\\])*"', '""', re.sub(r"'(\\.|[^'\\])*'", "''", line)))
+                    depth += code_only.count("{") - code_only.count("}")
+                    if depth == 0 and j >= i and "{" in "".join(body_lines):
+                        break
+                    j += 1
+                sig_clean = re.sub(r"\b\d+__", "", stripped_i.rstrip())
+                if sig_clean.endswith("{"):
+                    sig_clean = sig_clean[:-1].rstrip()
+                clean_body = []
+                for bl in body_lines:
+                    sbl = bl.lstrip()
+                    if sbl.startswith("static inline void oo_retain_") or sbl.startswith("static void oo_retain_"):
+                        continue
+                    if sbl.startswith("typedef struct "):
+                        continue
+                    clean_body.append(bl)
+                consider(name, sig_clean + ";\n", clean_body)
+                i = j + 1
+            else:
+                i += 1
+        else:
+            i += 1
+
+protos: list[str] = []
+bodies: list[str] = []
+seen: set[str] = set()
+for name in fn_order:
+    proto, body, _sc = fn_map[name]
+    protos.append(proto)
+    bodies.extend(body)
+    bodies.append("\n\n")
+    seen.add(name)
+(tmp / "protos.c").write_text("".join(protos))
+
+# Inject full struct definitions and list helpers into preamble
+BUILTINS = {"OoStr", "OoSList", "OoIList", "OoFList", "OoResS", "OoResV", "OoResI", "OoResII", "OoResB", "OoResF", "OoResLI", "OoResLS", "OoResLF", "OoLL_I", "OoLL_S", "OoLL_F", "OoLLL_I", "OoLLL_S", "OoLLL_F", "OoLLLL_I", "OoLLLL_S", "OoLLLL_F", "CapToken", "OoListHeader", "Token"}
+real_structs = {}
+real_retains = {}
+for mc in mcs:
+    content = mc.read_text(errors="replace")
+    for m in re.finditer(r'typedef struct (?:\w+\s+)?\{\s*(?!long long _pad;)(.*?)\}\s*(\w+);', content, re.DOTALL):
+        fields = m.group(1).strip()
+        ty = m.group(2)
+        if ty in BUILTINS or ty.startswith("OoRes") or ty.startswith("OoL_") or ty.startswith("OoOpt") or ty.startswith("OoLL"):
+            continue
+        if ty not in real_structs:
+            real_structs[ty] = f"typedef struct {ty} {{ {fields} }} {ty};"
+    for m in re.finditer(r'static\s+(?:inline\s+)?void\s+oo_retain_(\w+)\s*\(\1\s+v\)\s*\{', content):
+        ty = m.group(1)
+        if ty not in real_retains:
+            start = m.start()
+            brace_pos = content.find('{', start)
+            depth = 1
+            pos = brace_pos + 1
+            clen = len(content)
+            while pos < clen and depth > 0:
+                if content[pos] == '{':
+                    depth += 1
+                elif content[pos] == '}':
+                    depth -= 1
+                pos += 1
+            if depth == 0:
+                real_retains[ty] = content[start:pos]
+
+preamble_file = tmp / "preamble.c"
+preamble_text = preamble_file.read_text(errors="replace")
+
+# Strip stubs from preamble_text
+for ty in real_structs:
+    preamble_text = re.sub(r'#ifndef OO_TY_' + ty + r'.*?#endif\s+#endif\s*', '', preamble_text, flags=re.DOTALL)
+    preamble_text = re.sub(r'#ifndef OO_TY_' + ty + r'.*?#endif\s*', '', preamble_text, flags=re.DOTALL)
+    preamble_text = re.sub(r'#ifndef OO_FWD_' + ty + r'.*?#endif\s*', '', preamble_text, flags=re.DOTALL)
+    preamble_text = re.sub(r'#ifndef OO_HAVE_OoL_' + ty + r'.*?#endif\s*', '', preamble_text, flags=re.DOTALL)
+    preamble_text = re.sub(r'#ifndef OO_FNS_OoL_' + ty + r'.*?#endif\s*', '', preamble_text, flags=re.DOTALL)
+    preamble_text = re.sub(r'typedef struct ' + ty + r' \{ long long _pad; \} ' + ty + r';\s*', '', preamble_text)
+    preamble_text = re.sub(r'typedef struct ' + ty + r' ' + ty + r';\s*', '', preamble_text)
+    preamble_text = re.sub(r'static\s+(?:inline\s+)?void\s+oo_retain_' + ty + r'\s*\(.*?\)\s*\{\s*\}\s*', '', preamble_text)
+    preamble_text = re.sub(r'static\s+(?:inline\s+)?void\s+oo_retain_OoL_' + ty + r'\s*\(.*?\)\s*\{\s*\}\s*', '', preamble_text)
+
+# Build type section in correct dependency order
+fwd_decls = []
+list_decls = []
+struct_defs = []
+list_fns = []
+
+for ty in real_structs:
+    fwd_decls.append(f"#ifndef OO_FWD_{ty}\n#define OO_FWD_{ty}\ntypedef struct {ty} {ty};\nstatic inline void oo_retain_{ty}({ty} v);\nstatic inline void oo_release_{ty}({ty} v);\n#endif")
+
+for ty in real_structs:
+    list_decls.append(f"#ifndef OO_HAVE_OoL_{ty}\n#define OO_HAVE_OoL_{ty}\ntypedef struct OoL_{ty} {{ struct {ty} *data; long long len; long long cap; }} OoL_{ty};\nstatic inline void oo_retain_OoL_{ty}(OoL_{ty} v);\nstatic inline void oo_release_OoL_{ty}(OoL_{ty} v);\n#endif")
+
+for ty, sdef in real_structs.items():
+    struct_defs.append(f"#ifndef OO_TY_{ty}\n#define OO_TY_{ty}\n#define OO_TY_RES_{ty}\n{sdef}\n")
+    if ty in real_retains:
+        struct_defs.append(f"{real_retains[ty]}\n")
+    else:
+        struct_defs.append(f"#ifndef OO_RETAIN_{ty}\n#define OO_RETAIN_{ty}\nstatic inline void oo_retain_{ty}({ty} v) {{ }}\n#endif\n")
+    struct_defs.append(f"#ifndef OO_RELEASE_{ty}\n#define OO_RELEASE_{ty}\nstatic inline void oo_release_{ty}({ty} v) {{ }}\n#endif\n")
+    struct_defs.append(f"#ifndef OO_HAVE_OoRes_{ty}\n#define OO_HAVE_OoRes_{ty}\ntypedef struct OoRes_{ty} {{ int ok; {ty} val; OoStr err; }} OoRes_{ty};\n#endif\n")
+    struct_defs.append(f"#ifndef OO_RETAIN_OoRes_{ty}\n#define OO_RETAIN_OoRes_{ty}\nstatic inline void oo_retain_OoRes_{ty}(OoRes_{ty} v) {{ if (v.ok) oo_retain_{ty}(v.val); else oo_str_retain(v.err); }}\n#endif\n")
+    struct_defs.append(f"#ifndef OO_RELEASE_OoRes_{ty}\n#define OO_RELEASE_OoRes_{ty}\nstatic inline void oo_release_OoRes_{ty}(OoRes_{ty} v) {{ if (v.ok) oo_release_{ty}(v.val); else oo_str_release(v.err); }}\n#endif\n#endif\n")
+
+for ty in real_structs:
+    list_fns.append(f"#ifndef OO_FNS_OoL_{ty}\n#define OO_FNS_OoL_{ty}\n")
+    list_fns.append(f"static inline OoL_{ty} oo_l_{ty}_new(void) {{ OoL_{ty} l; l.data=0; l.len=0; l.cap=0; return l; }}\n")
+    list_fns.append(f"static inline long long oo_l_{ty}_len(OoL_{ty} l) {{ return l.len; }}\n")
+    list_fns.append(f"static inline {ty} oo_l_{ty}_get(OoL_{ty} l, long long i) {{ if (i<0||i>=l.len) {{ fprintf(stderr,\"ERR\\tolist_get OOB\\n\"); exit(1); }} oo_retain_{ty}(l.data[i]); return l.data[i]; }}\n")
+    list_fns.append(f"static inline OoL_{ty} oo_l_{ty}_set(OoL_{ty} l, long long i, {ty} v) {{ if (i<0||i>=l.len) {{ fprintf(stderr,\"ERR\\tolist_set OOB\\n\"); exit(1); }} l.data[i] = v; return l; }}\n")
+    list_fns.append(f"static inline OoL_{ty} oo_l_{ty}_push(OoL_{ty} l, {ty} v) {{ OoL_{ty} n; long long ncap = l.cap ? l.cap : 8; while (ncap < l.len + 1) ncap = ncap * 2; n.data = ({ty}*)malloc(sizeof({ty})*(size_t)ncap); if (!n.data) {{ fprintf(stderr, \"ERR\\tc_emit\\theap allocation failed\\n\"); exit(1); }} if (l.data && l.len > 0) memcpy(n.data, l.data, (size_t)l.len*sizeof({ty})); oo_retain_{ty}(v); n.data[l.len] = v; n.len = l.len + 1; n.cap = ncap; return n; }}\n")
+    list_fns.append(f"#ifndef OO_RETAIN_OoL_{ty}\n#define OO_RETAIN_OoL_{ty}\nstatic inline void oo_retain_OoL_{ty}(OoL_{ty} v) {{ }}\n#endif\n")
+    list_fns.append(f"#ifndef OO_RELEASE_OoL_{ty}\n#define OO_RELEASE_OoL_{ty}\nstatic inline void oo_release_OoL_{ty}(OoL_{ty} v) {{ if (v.data) free(v.data); }}\n#endif\n")
+    list_fns.append("#endif\n")
+
+type_section = "\n".join(fwd_decls) + "\n\n" + "\n".join(list_decls) + "\n\n" + "\n".join(struct_defs) + "\n\n" + "\n".join(list_fns)
+
+builtin_res_releases = ""
+
+preamble_text = preamble_text + "\n" + builtin_res_releases + "\n" + type_section + "\n"
+preamble_file.write_text(preamble_text)
+
+(tmp / "bodies.c").write_text("".join(bodies))
+print(f"pure_build: unique_fns={len(seen)} from_modules={len(mcs)}", flush=True)
+PY
+
+# Extra runtime decls: seed/old emit-c preamble can omit names current c_emit_*.oo lowers to.
+# Mirror oodac/c_emit_preamble.oo println prototypes (skip python_embed_internal).
+echo "void oo_ll_I_retain(OoLL_I x); void oo_ll_I_release(OoLL_I x); void oo_ll_S_retain(OoLL_S x); void oo_ll_S_release(OoLL_S x); void oo_ll_F_retain(OoLL_F x); void oo_ll_F_release(OoLL_F x);" >> "$TMP/preamble.c"
+echo "OoStr oo_str_lit(const char*); OoStr oo_str_concat(OoStr,OoStr); OoStr oo_str_concat_list(OoSList); OoStr oo_str_concat_multi(int, ...);" >> "$TMP/preamble.c"
+if ! grep -q "oo_retain_OoLL_S" "$TMP/preamble.c"; then
+  echo "static inline void oo_retain_OoL_I(OoIList v) { oo_ilist_retain(v); } static inline void oo_release_OoL_I(OoIList v) { oo_ilist_release(v); } static inline void oo_retain_OoLL_S(OoLL_S v) { oo_ll_S_retain(v); } static inline void oo_release_OoLL_S(OoLL_S v) { oo_ll_S_release(v); } static inline void oo_retain_OoLL_I(OoLL_I v) { oo_ll_I_retain(v); } static inline void oo_release_OoLL_I(OoLL_I v) { oo_ll_I_release(v); } static inline void oo_retain_OoLL_F(OoLL_F v) { oo_ll_F_retain(v); } static inline void oo_release_OoLL_F(OoLL_F v) { oo_ll_F_release(v); }" >> "$TMP/preamble.c"
+fi
+echo "#ifndef oo_list_quota_release_bytes" >> "$TMP/preamble.c"
+echo "#define oo_list_quota_release_bytes(cap, sz) ((void)0)" >> "$TMP/preamble.c"
+echo "#endif" >> "$TMP/preamble.c"
+echo "#ifndef oo_payload_free" >> "$TMP/preamble.c"
+echo "#define oo_payload_free(ptr) free(ptr)" >> "$TMP/preamble.c"
+echo "#endif" >> "$TMP/preamble.c"
+echo "long long oo_cap_grant_fs(void); long long oo_cap_grant_sys(void); long long oo_cap_grant_env(void); long long oo_cap_grant_net(void);" >> "$TMP/preamble.c"
+echo "long long oo_cap_grant_time(void); long long oo_cap_grant_rand(void);" >> "$TMP/preamble.c"
+echo "long long oo_cap_grant_alloc(void); long long oo_cap_grant_ffi(void);" >> "$TMP/preamble.c"
+echo "long long oo_cap_grant_thread(void); long long oo_cap_grant_gpu(void);" >> "$TMP/preamble.c"
+echo "long long oo_cap_grant_http(void); long long oo_cap_grant_tcp(void);" >> "$TMP/preamble.c"
+echo "long long oo_cap_grant_udp(void); long long oo_cap_grant_bind(void);" >> "$TMP/preamble.c"
+echo "long long oo_cap_grant_fsread(void); long long oo_cap_grant_fswrite(void);" >> "$TMP/preamble.c"
+echo "long long oo_cap_grant_process(void); long long oo_cap_grant_sync(void);" >> "$TMP/preamble.c"
+echo "long long oo_cap_grant_mem(void); long long oo_cap_grant_sign(void);" >> "$TMP/preamble.c"
+echo "long long oo_cap_grant_audio(void); long long oo_cap_grant_camera(void);" >> "$TMP/preamble.c"
+echo "long long oo_cap_grant_usb(void); long long oo_cap_grant_hid(void);" >> "$TMP/preamble.c"
+echo "long long oo_cap_grant_window(void); long long oo_cap_grant_frame(void);" >> "$TMP/preamble.c"
+echo "int oo_path_exists(long long,OoStr); long long oo_file_size(long long,OoStr); OoResS oo_env_get(long long,OoStr);" >> "$TMP/preamble.c"
+echo "OoResS oo_read_file(long long,OoStr); OoResV oo_write_file(long long,OoStr,OoStr);" >> "$TMP/preamble.c"
+echo "OoResV oo_fs_remove_file(long long,OoStr); OoResV oo_fs_rmdir(long long,OoStr); OoResV oo_fs_mkdir(long long,OoStr);" >> "$TMP/preamble.c"
+echo "OoSList oo_fs_read_dir(long long,OoStr); int oo_fs_is_dir(long long,OoStr);" >> "$TMP/preamble.c"
+echo "OoResV oo_fs_hardlink(long long,OoStr,OoStr); OoResV oo_fs_symlink(long long,OoStr,OoStr);" >> "$TMP/preamble.c"
+echo "OoResS oo_sys_exec(long long,int,OoStr*);" >> "$TMP/preamble.c"
+echo "OoSList oo_sys_args(long long); OoSList sys_args(long long);" >> "$TMP/preamble.c"
+echo "OoResS oo_sys_spawn(long long,OoStr); OoResS oo_sys_wait(long long,long long);" >> "$TMP/preamble.c"
+echo "OoResS oo_sys_kill(long long,long long,long long);" >> "$TMP/preamble.c"
+echo "OoResS oo_sys_epoll_create(long long,long long); OoResS oo_sys_inotify_init(long long);" >> "$TMP/preamble.c"
+echo "OoResS oo_sys_prctl(long long,long long);" >> "$TMP/preamble.c"
+echo "OoResS oo_rlimit_set_mem_mb(long long,long long); OoResS oo_rlimit_set_nofile(long long,long long); OoResS oo_rlimit_set_cpu_sec(long long,long long);" >> "$TMP/preamble.c"
+echo "OoSList str_split(OoStr,OoStr);" >> "$TMP/preamble.c"
+echo "void oo_emit_tmp_reset(void); void oo_emit_tmp_enter(void);" >> "$TMP/preamble.c"
+echo "void oo_emit_tmp_leave(void); void oo_emit_tmp_release_print(void);" >> "$TMP/preamble.c"
+echo "void oo_emit_tmp_own(OoStr); void oo_emit_tmp_release_all_print(void);" >> "$TMP/preamble.c"
+echo "OoStr oo_emit_tmp_bind(OoStr);" >> "$TMP/preamble.c"
+echo "typedef struct WasmEnv WasmEnv; long long wasm_lower_expr(WasmEnv* env, OoStr node);" >> "$TMP/preamble.c"
+echo "typedef struct A64X A64X; A64X a64x_nested_fn(A64X);" >> "$TMP/preamble.c"
+echo "OoResS oo_actor_restart(long long,long long); OoStr oo_read_stdin(void); OoStr oo_file_stamp(OoStr);" >> "$TMP/preamble.c"
+echo "OoResS oo_arena_create(long long,long long); OoResS oo_arena_alloc(long long,long long,long long); OoResS oo_arena_reset(long long,long long);" >> "$TMP/preamble.c"
+echo "int oo_landlock_is_available(void); OoResS oo_landlock_restrict(long long,OoStr,OoStr);" >> "$TMP/preamble.c"
+echo "OoResS oo_dns_resolve(long long,OoStr); OoResS oo_dns_resolve_ipv4(long long,OoStr);" >> "$TMP/preamble.c"
+echo "OoResS oo_fetch(long long,OoStr);" >> "$TMP/preamble.c"
+echo "OoResS oo_dlopen(long long,OoStr); OoResS oo_dlsym(long long,OoStr,OoStr);" >> "$TMP/preamble.c"
+echo "OoResS oo_dlclose(long long,OoStr);" >> "$TMP/preamble.c"
+echo "OoStr crypto_md5_internal(OoStr); OoStr crypto_sha1_internal(OoStr);" >> "$TMP/preamble.c"
+echo "OoStr crypto_aes_encrypt_internal(OoStr,OoStr);" >> "$TMP/preamble.c"
+echo "OoStr crypto_sha256_internal(OoStr); OoStr crypto_hmac_sha256_internal(OoStr,OoStr);" >> "$TMP/preamble.c"
+echo "OoStr crypto_sha3_256_internal(OoStr);" >> "$TMP/preamble.c"
+echo "OoStr crypto_aes_gcm_seal_internal(OoStr,OoStr,OoStr,OoStr); OoStr crypto_aes_gcm_open_internal(OoStr,OoStr,OoStr,OoStr,OoStr);" >> "$TMP/preamble.c"
+echo "OoStr crypto_chacha20poly1305_seal_internal(OoStr,OoStr,OoStr,OoStr); OoStr crypto_chacha20poly1305_open_internal(OoStr,OoStr,OoStr,OoStr,OoStr);" >> "$TMP/preamble.c"
+echo "OoStr crypto_mlkem768_keygen_internal(OoStr); OoStr crypto_mlkem768_encaps_internal(OoStr,OoStr); OoStr crypto_mlkem768_decaps_internal(OoStr,OoStr);" >> "$TMP/preamble.c"
+echo "OoStr crypto_mldsa65_keygen_internal(OoStr); OoStr crypto_mldsa65_sign_internal(OoStr,OoStr,OoStr); OoStr crypto_mldsa65_verify_internal(OoStr,OoStr,OoStr);" >> "$TMP/preamble.c"
+echo "OoResS json_parse_internal(OoStr); OoStr json_stringify_internal(OoStr);" >> "$TMP/preamble.c"
+
+echo "long long oo_byte_at(OoStr,long long); long long oo_bytes_len(OoStr);" >> "$TMP/preamble.c"
+echo "OoStr oo_byte_slice(OoStr,long long,long long); int oo_bytes_eq(OoStr,OoStr);" >> "$TMP/preamble.c"
+echo "OoStr oo_bytes_from_str(OoStr); OoStr oo_bytes_concat(OoStr,OoStr);" >> "$TMP/preamble.c"
+echo "OoIList oo_bytes_new(void); OoIList oo_bytes_push(OoIList,long long);" >> "$TMP/preamble.c"
+echo "long long oo_bytes_get(OoIList,long long); OoStr oo_bytes_to_str(OoIList);" >> "$TMP/preamble.c"
+echo "OoResS oo_tcp_bind(long long,long long); OoResS oo_tcp_connect(long long,OoStr,long long);" >> "$TMP/preamble.c"
+echo "OoResS oo_bind_udp(long long,long long); OoResS oo_tls_connect(long long,OoStr,long long);" >> "$TMP/preamble.c"
+echo "OoResS oo_tcp_write(long long,long long,OoStr); OoResS oo_tcp_read(long long,long long,long long);" >> "$TMP/preamble.c"
+echo "OoResS oo_udp_recv(long long,long long,long long); OoResS oo_tcp_close(long long,long long);" >> "$TMP/preamble.c"
+echo "OoResS oo_sock_raw(long long,long long);" >> "$TMP/preamble.c"
+echo "OoResS oo_mutex_lock(long long,long long); OoResS oo_mutex_unlock(long long,long long);" >> "$TMP/preamble.c"
+echo "OoResS oo_thread_spawn(long long,OoStr); OoResS oo_thread_join(long long,long long);" >> "$TMP/preamble.c"
+echo "OoResS oo_thread_join_s(long long,OoStr); OoResS oo_gpu_launch(long long,OoStr);" >> "$TMP/preamble.c"
+echo "OoResS oo_channel_new(long long); OoResS oo_channel_send(long long,long long,OoStr);" >> "$TMP/preamble.c"
+echo "OoResS oo_channel_recv(long long,long long);" >> "$TMP/preamble.c"
+echo "OoResS oo_actor_spawn(long long,OoStr); OoResS oo_actor_send(long long,long long,OoStr);" >> "$TMP/preamble.c"
+echo "OoResS oo_actor_recv(long long,long long);" >> "$TMP/preamble.c"
+echo "const char *oo_process_policy_getenv(const char*);" >> "$TMP/preamble.c"
+echo "long long oo_now_ms(long long); void oo_sleep_ms(long long,long long);" >> "$TMP/preamble.c"
+echo "long long oo_random(long long); void oo_seed(long long,long long);" >> "$TMP/preamble.c"
+echo "long long oo_alloc_bytes(long long,long long); void oo_free_bytes(long long,long long);" >> "$TMP/preamble.c"
+echo "long long oo_meta_epoch(void); long long oo_meta_mix(long long);" >> "$TMP/preamble.c"
+echo "int oo_meta_is_path_a(void); void oo_meta_decoy_touch(void);" >> "$TMP/preamble.c"
+echo "void oo_cap_require(long long,long long,const char*);" >> "$TMP/preamble.c"
+echo "void oo_print_str(OoStr); void oo_eprint_str(OoStr); void oo_print_int(long long); void oo_print_bool(int); void oo_print_double(double); void oo_println(void); void oo_eprintln(void);" >> "$TMP/preamble.c"
+echo "double oo_sin(double); double oo_cos(double); double oo_ln(double);" >> "$TMP/preamble.c"
+echo "double oo_exp(double); double oo_sqrt(double); double oo_pow(double,double);" >> "$TMP/preamble.c"
+echo "int oo_str_eq(OoStr,OoStr); int oo_str_contains(OoStr,OoStr);" >> "$TMP/preamble.c"
+echo "OoStr oo_int_to_str(long long); OoStr str_trim(OoStr); OoStr oo_str_trim(OoStr); OoStr oo_str_to_lowercase(OoStr);" >> "$TMP/preamble.c"
+if ! grep -q "static inline OoStr int_to_str" "$TMP/preamble.c"; then
+  echo "static inline OoStr int_to_str(long long n) { return oo_int_to_str(n); }" >> "$TMP/preamble.c"
+fi
+echo "OoStr oo_str_to_uppercase(OoStr); int oo_str_starts_with(OoStr,OoStr); int oo_str_ends_with(OoStr,OoStr);" >> "$TMP/preamble.c"
+echo "long long oo_str_index_of(OoStr,OoStr); OoStr oo_str_repeat(OoStr,long long);" >> "$TMP/preamble.c"
+echo "OoStr x86_emit_stream(OoStr); void x86_emit_linux64(OoSList);" >> "$TMP/preamble.c"
+if ! grep -q 'void oo_process_exit' "$TMP/preamble.c"; then
+  echo "static inline void oo_process_exit(long long c) { exit((int)c); }" >> "$TMP/preamble.c"
+fi
+if grep -q 'long long oo_import_c(OoStr);' "$TMP/preamble.c"; then
+  sed -i 's/long long oo_import_c(OoStr); long long oo_ffi_gen(OoStr); long long oo_lto_xlang_link(OoStr,OoStr);/long long oo_import_c(long long,OoStr); long long oo_ffi_gen(long long,OoStr); long long oo_lto_xlang_link(long long,OoStr,OoStr);/' "$TMP/preamble.c"
+elif ! grep -q 'long long oo_import_c(long long' "$TMP/preamble.c"; then
+  echo "long long oo_import_c(long long,OoStr); long long oo_ffi_gen(long long,OoStr); long long oo_lto_xlang_link(long long,OoStr,OoStr);" >> "$TMP/preamble.c"
+fi
+sed -i 's/OoResS oo_write_file/OoResV oo_write_file/g' "$TMP/preamble.c"
+mkdir -p "$TMP"
+touch "$TMP/protos.c" "$TMP/bodies.c"
+cat "$TMP/preamble.c" "$TMP/protos.c" "$TMP/bodies.c" >"$TMP/all.c"
+sed -i 's/OoResS oo_write_file/OoResV oo_write_file/g' "$TMP/all.c"
+echo "pure_build: native_caps"
+
+if ! grep -q 'int main\|long long main' "$TMP/all.c" && ! grep -q 'main(int argc' "$TMP/all.c"; then
+  echo "int main(void) { return 0; }" >> "$TMP/all.c"
+fi
+
+OO_SSL_CFLAGS=()
+OO_SSL_LIBS=()
+if [[ -z "${OO_HAVE_OPENSSL:-}" ]]; then
+  if [[ -f /usr/include/openssl/ssl.h || -f /usr/local/include/openssl/ssl.h \
+    || -e /usr/lib64/libssl.so || -e /usr/lib/x86_64-linux-gnu/libssl.so \
+    || -e /lib64/libssl.so.3 || -e /lib/x86_64-linux-gnu/libssl.so.3 ]]; then
+    OO_HAVE_OPENSSL=1
+  else
+    OO_HAVE_OPENSSL=0
+  fi
+fi
+if [[ "${OO_HAVE_OPENSSL}" == "1" ]]; then
+  OO_SSL_CFLAGS=(-DOO_HAVE_OPENSSL)
+  if [[ -e /usr/lib64/libssl.so.3 ]]; then
+    OO_SSL_LIBS=(/usr/lib64/libssl.so.3 /usr/lib64/libcrypto.so.3)
+  elif [[ -e /lib64/libssl.so.3 ]]; then
+    OO_SSL_LIBS=(/lib64/libssl.so.3 /lib64/libcrypto.so.3)
+  elif [[ -e /usr/lib/x86_64-linux-gnu/libssl.so.3 ]]; then
+    OO_SSL_LIBS=(/usr/lib/x86_64-linux-gnu/libssl.so.3 /usr/lib/x86_64-linux-gnu/libcrypto.so.3)
+  else
+    OO_SSL_LIBS=(-lssl -lcrypto)
+  fi
+  echo "pure_build: OO_HAVE_OPENSSL=1 (link ${OO_SSL_LIBS[*]})"
+else
+  echo "pure_build: OO_HAVE_OPENSSL=0 (TLS residual; no -lssl)"
+fi
+mkdir -p "$(dirname "$OUT")"
+gcc ${OODAC_GCC_OPT:--O2} -I"$ROOT/runtime" "${OO_SSL_CFLAGS[@]}" "$ROOT/runtime/chs_rt.c" "$TMP/all.c" \
+  -frandom-seed=0 -Wl,--build-id=none \
+  -lm -ldl -lpthread "${OO_SSL_LIBS[@]}" -o "$OUT"
+chmod +x "$OUT"
+test -x "$OUT"
+OUT_BASE="$(basename "$OUT")"
+oodac_named=0
+if [[ "$OUT_BASE" == "oodac" ]]; then
+  oodac_named=1
+fi
+if grep -a -q 'pure .oo product CLI' "$OUT" 2>/dev/null; then
+  if [[ $oodac_named -eq 1 ]]; then
+    echo "ERR_OODAC_IS_CLI $OUT" >&2
+    rm -f "$OUT"
+    exit 1
+  fi
+elif [[ $oodac_named -eq 1 ]]; then
+  if ! grep -a -q 'oodac: usage:' "$OUT" 2>/dev/null; then
+    echo "ERR_OODAC_NOT_COMPILER $OUT" >&2
+    rm -f "$OUT"
+    exit 1
+  fi
+  if ! timeout 60 "$OUT" check "$ROOT/fixtures/hello.oo" | grep -q '^OK$'; then
+    echo "ERR_OODAC_HELLO $OUT" >&2
+    rm -f "$OUT"
+    exit 1
+  fi
+fi
+echo "pure_build: input_fp=$PURE_INPUT_FP"
+echo OK_PURE_MULTI
+rm -rf "$TMP"

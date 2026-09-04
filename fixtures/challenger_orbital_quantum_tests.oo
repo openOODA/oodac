@@ -1,0 +1,156 @@
+// # Challenger 1: Orbital Mechanics & Quantum Operators Empirical Tests
+//
+// Logline: Empirically stress-tests orbital mechanics (vis-viva, v_esc = sqrt(2)*v_circ, J2 precession) and quantum operators (unitarity of Pauli/Hadamard, P(0)+P(1)=1, Born collapse).
+//
+// Setup: Pure numerical verification without ambient IO.
+//
+// Beats:
+//   1. Verify orbital vis-viva equation, circular speed, and escape velocity relationship.
+//   2. Verify J2 Earth oblateness secular nodal and perigee rates, including critical inclination.
+//   3. Verify complex matrix unitarity and involution for Pauli X, Y, Z and Hadamard gates.
+//   4. Verify Born probability sum normalization P(|0>) + P(|1>) = 1.0 and Hadamard superposition.
+
+import "std/app/combat/orbit_engine.oo";
+import "std/science/phys/quantum/complex_matrix2x2.oo";
+
+fn check_float_near(actual: Float, expected: Float, tolerance: Float) -> Bool {
+    let mut diff: Float = actual - expected;
+    if diff < 0.0 { diff = 0.0 - diff; }
+    return diff <= tolerance;
+}
+
+pub fn test_orbital_mechanics() -> Bool {
+    let mu: Float = mu_earth();
+    let r_earth: Float = radius_earth();
+    let j2: Float = j2_earth();
+
+    // Test 1: LEO orbit r = 7000 km = 7,000,000 m
+    let r: Float = 7000000.0;
+    let v_circ: Float = circular_orbit_speed(r, mu);
+    let v_esc: Float = escape_speed(r, mu);
+    let ratio: Float = v_esc / v_circ;
+    let sqrt2: Float = 1.414213562373;
+    if !check_float_near(ratio, sqrt2, 0.00001) { return false; }
+
+    // Test 2: Vis-viva circular case (r = a) matches circular speed
+    let v_vv_circ: Float = vis_viva_speed(r, r, mu);
+    if !check_float_near(v_vv_circ, v_circ, 0.00001) { return false; }
+
+    // Test 3: Vis-viva elliptical orbit energy conservation
+    let a: Float = 8000000.0;
+    let e: Float = 0.1;
+    let r_p: Float = a * (1.0 - e); // 7,200,000 m
+    let r_a: Float = a * (1.0 + e); // 8,800,000 m
+    let v_p: Float = vis_viva_speed(r_p, a, mu);
+    let v_a: Float = vis_viva_speed(r_a, a, mu);
+    let energy_p: Float = (v_p * v_p * 0.5) - (mu / r_p);
+    let energy_a: Float = (v_a * v_a * 0.5) - (mu / r_a);
+    let expected_energy: Float = (0.0 - mu) / (2.0 * a);
+    if !check_float_near(energy_p, expected_energy, 10.0) { return false; }
+    if !check_float_near(energy_a, expected_energy, 10.0) { return false; }
+
+    // Test 4: J2 secular rates at inclination 0 rad (equatorial)
+    let elem_eq: KeplerianElements = keplerian_new(a, e, 0.0, 0.0, 0.0, 0.0);
+    let rates_eq: OrbitPerturbations = calculate_j2_secular_rates(elem_eq, mu, r_earth, j2);
+    // For equatorial orbit: raan_dot < 0 (regression), argp_dot > 0 (advance)
+    if (rates_eq).j2_secular_raan_dot >= 0.0 { return false; }
+    if (rates_eq).j2_secular_argp_dot <= 0.0 { return false; }
+
+    // Test 5: J2 critical inclination i = acos(1/sqrt(5)) ~ 1.1071487 rad (~63.4349 deg)
+    // At critical inclination, 5*cos^2(i) - 1 = 0, so argp_dot = 0
+    let inc_crit: Float = 1.1071487177940905;
+    let elem_crit: KeplerianElements = keplerian_new(a, e, inc_crit, 0.0, 0.0, 0.0);
+    let rates_crit: OrbitPerturbations = calculate_j2_secular_rates(elem_crit, mu, r_earth, j2);
+    if !check_float_near((rates_crit).j2_secular_argp_dot, 0.0, 0.0000001) { return false; }
+
+    return true;
+}
+
+pub fn test_quantum_operators() -> Bool {
+    let p_i: Matrix2x2 = matrix2x2_identity();
+    let p_x: Matrix2x2 = Matrix2x2 {
+        m00: complex_zero(),
+        m01: complex_one(),
+        m10: complex_one(),
+        m11: complex_zero()
+    };
+    let neg_i: Complex = Complex { real: 0.0, imag: 0.0 - 1.0 };
+    let p_y: Matrix2x2 = Matrix2x2 {
+        m00: complex_zero(),
+        m01: neg_i,
+        m10: complex_i(),
+        m11: complex_zero()
+    };
+    let neg_one: Complex = Complex { real: 0.0 - 1.0, imag: 0.0 };
+    let p_z: Matrix2x2 = Matrix2x2 {
+        m00: complex_one(),
+        m01: complex_zero(),
+        m10: complex_zero(),
+        m11: neg_one
+    };
+    let inv_sqrt2: Float = 0.7071067811865475;
+    let neg_inv: Float = 0.0 - inv_sqrt2;
+    let h_mat: Matrix2x2 = Matrix2x2 {
+        m00: Complex { real: inv_sqrt2, imag: 0.0 },
+        m01: Complex { real: inv_sqrt2, imag: 0.0 },
+        m10: Complex { real: inv_sqrt2, imag: 0.0 },
+        m11: Complex { real: neg_inv, imag: 0.0 }
+    };
+
+    // Test 1: Unitarity of I, X, Y, Z, H
+    if !matrix2x2_is_unitary(&p_i, 0.0001) { return false; }
+    if !matrix2x2_is_unitary(&p_x, 0.0001) { return false; }
+    if !matrix2x2_is_unitary(&p_y, 0.0001) { return false; }
+    if !matrix2x2_is_unitary(&p_z, 0.0001) { return false; }
+    if !matrix2x2_is_unitary(&h_mat, 0.0001) { return false; }
+
+    // Test 2: Involutory properties: X^2 = I, Y^2 = I, Z^2 = I, H^2 = I
+    let x2: Matrix2x2 = matrix2x2_mul(&p_x, &p_x);
+    let y2: Matrix2x2 = matrix2x2_mul(&p_y, &p_y);
+    let z2: Matrix2x2 = matrix2x2_mul(&p_z, &p_z);
+    let h2: Matrix2x2 = matrix2x2_mul(&h_mat, &h_mat);
+
+    if !check_float_near((x2.m00).real, 1.0, 0.0001) { return false; }
+    if !check_float_near((y2.m00).real, 1.0, 0.0001) { return false; }
+    if !check_float_near((z2.m00).real, 1.0, 0.0001) { return false; }
+    if !check_float_near((h2.m00).real, 1.0, 0.0001) { return false; }
+
+    // Test 3: Qubit probability sum P(|0>) + P(|1>) = 1.0 for arbitrary state
+    let q_arbitrary: QubitState = qubit_new(complex_new(0.6, 0.0), complex_new(0.0, 0.8));
+    let p0: Float = qubit_prob0(&q_arbitrary);
+    let p1: Float = qubit_prob1(&q_arbitrary);
+    if !check_float_near(p0 + p1, 1.0, 0.000001) { return false; }
+    if !check_float_near(p0, 0.36, 0.000001) { return false; }
+    if !check_float_near(p1, 0.64, 0.000001) { return false; }
+
+    // Test 4: Hadamard superpositions: H |0> = |+>, P(0) = 0.5, P(1) = 0.5
+    let q_zero: QubitState = qubit_zero();
+    let q_plus: QubitState = matrix2x2_apply(&h_mat, &q_zero);
+    let p0_plus: Float = qubit_prob0(&q_plus);
+    let p1_plus: Float = qubit_prob1(&q_plus);
+    if !check_float_near(p0_plus, 0.5, 0.0001) { return false; }
+    if !check_float_near(p1_plus, 0.5, 0.0001) { return false; }
+
+    // Test 5: Born measurement collapse
+    // After collapsing |+> to 0, state is |0>, p0 = 1.0, p1 = 0.0
+    let q_collapsed_0: QubitState = qubit_new(q_plus.alpha, complex_zero());
+    let q_norm_0: QubitState = qubit_normalize(q_collapsed_0);
+    if !check_float_near(qubit_prob0(&q_norm_0), 1.0, 0.00001) { return false; }
+    if !check_float_near(qubit_prob1(&q_norm_0), 0.0, 0.00001) { return false; }
+
+    return true;
+}
+
+pub fn main() {
+    let t1: Bool = test_orbital_mechanics();
+    if !t1 {
+        println("FAIL: test_orbital_mechanics");
+        process_exit(1);
+    }
+    let t2: Bool = test_quantum_operators();
+    if !t2 {
+        println("FAIL: test_quantum_operators");
+        process_exit(1);
+    }
+    println("challenger_orbital_quantum_tests: PASSED");
+}

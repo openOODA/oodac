@@ -1,0 +1,80 @@
+// # ChaCha20-Poly1305 AEAD Roundtrip Smoke
+//
+// Logline: Caller generates a fresh 12-byte nonce via the RandCap, then calls crypto_chacha20poly1305_seal_internal and crypto_chacha20poly1305_open_internal to verify a roundtrip (32-byte key, 12-byte random nonce, 8-byte AAD).
+//
+// Setup: Imports std/crypto/keys_ops.oo for hex helpers. Pure, no FS or net. Roundtrip check (RT) instead of a KAT because the .oo runtime lacks a published AEAD reference vector for the seal output. The earlier aead_seal / aead_open wrappers were deleted; callers must drive the C internal directly with a fresh random nonce.
+//
+// Beats:
+//   1. Build 32-byte key, 8-byte AAD, 13-byte plaintext.
+//   2. Generate a fresh 12-byte nonce via random(rand).
+//   3. Seal to ciphertext_and_tag (hex-encoded ct || tag).
+//   4. Split hex output into ct_hex and tag_hex; open to recover plaintext.
+//   5. Assert recovered plaintext equals the input.
+//   6. Print AEAD_RT_OK on success.
+
+import "std/sec/asymmetric/keys_ops.oo";
+
+pub fn main(rand: &RandCap) {
+    let mut kb: List[Int] = list_new();
+    let mut i: Int = 0;
+    while i < 32 {
+        kb = list_push(kb, i + 1);
+        i = i + 1;
+    }
+    let key: String = bytes_to_str(kb);
+
+    // Generate a fresh 12-byte nonce via the vetted random capability.
+    let mut nb: List[Int] = list_new();
+    let mut j: Int = 0;
+    while j < 12 {
+        let r: Int = random(rand);
+        let b: Int = r & 255;
+        nb = list_push(nb, b);
+        j = j + 1;
+    }
+    let nonce: String = bytes_to_str(nb);
+
+    let aad: String = "metadata";
+    let pt: String = "Hello, World!";
+
+    let pt_len: Int = chars_len(pt);
+    let hex_seal: String = crypto_chacha20poly1305_seal_internal(key, nonce, pt, aad);
+    if hex_seal == "" {
+        println("FAIL aead seal empty");
+        return;
+    }
+
+    // The seal output is hex(ct || tag). Split into ct_hex and tag_hex.
+    let total_hex: Int = chars_len(hex_seal);
+    let ct_hex_len: Int = pt_len * 2;
+    let tag_hex_len: Int = total_hex - ct_hex_len;
+    let mut ct_hex: String = "";
+    let mut tag_hex: String = "";
+    let mut k: Int = 0;
+    while k < ct_hex_len {
+        let ch: Int = byte_at(hex_seal, k);
+        let mut b1: List[Int] = bytes_new();
+        b1 = bytes_push(b1, ch);
+        ct_hex = ct_hex + bytes_to_str(b1);
+        k = k + 1;
+    }
+    let mut m: Int = ct_hex_len;
+    while m < total_hex {
+        let ch: Int = byte_at(hex_seal, m);
+        let mut b2: List[Int] = bytes_new();
+        b2 = bytes_push(b2, ch);
+        tag_hex = tag_hex + bytes_to_str(b2);
+        m = m + 1;
+    }
+    if tag_hex_len != 32 {
+        println("FAIL aead tag length");
+        return;
+    }
+
+    let pt_back: String = crypto_chacha20poly1305_open_internal(key, nonce, ct_hex, tag_hex, aad);
+    if pt_back != pt {
+        println("FAIL aead open mismatch");
+        return;
+    }
+    println("AEAD_RT_OK");
+}

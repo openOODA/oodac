@@ -1,0 +1,26 @@
+// # Break and continue
+//
+// Logline: Sum a while loop that skips 3 and stops at 8.
+//
+// Beats:
+//   1. Count i from 1 through the while i < 10 body.
+//   2. Continue when i is 3; break when i is 8.
+//   3. Print the accumulated sum.
+
+// while + if break/continue (interp + CHS C + WASM + LLVM integer subset).
+// Tail `if` without trailing `;` must lower (dual-engine honesty).
+pub fn main() {
+    let mut i = 0;
+    let mut s = 0;
+    while i < 10 {
+        i = i + 1;
+        if i == 3 {
+            continue;
+        }
+        if i == 8 {
+            break;
+        }
+        s = s + i;
+    }
+    println(s);
+}

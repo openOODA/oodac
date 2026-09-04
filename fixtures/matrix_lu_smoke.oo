@@ -1,0 +1,88 @@
+// # Int Scaled Matrix LU Decomposition Smoke Test
+//
+// Logline: Verifies 3x3 Int scaled (1.0 = 1000) matrix LU decomposition, linear solve, and determinant through the status-projection API.
+//
+// Setup: Solve 2x + y - z = 8, -3x - y + 2z = -11, -2x + y + 2z = -3, where the unique solution is x=2, y=3, z=-1 (scaled: 2000, 3000, -1000). The matrix has non-zero pivots so the no-pivot solver path is exercised.
+//
+// Beats:
+//   1. Build the scaled 3x3 matrix.
+//   2. matrix_lu_decompose_status returns Ok(1) confirming decomposition succeeds.
+//   3. matrix_solve_status returns Ok(1) confirming forward/back substitution succeeds.
+//   4. matrix_det_status returns Ok(1) confirming determinant computation succeeds.
+//   5. Build a singular matrix and assert matrix_lu_decompose_status returns Err.
+//   6. Print MATRIX_LU_FIXTURE_ALL_PASSED on success.
+
+import "std/core/math/matrix_lu.oo";
+
+pub fn main() {
+    // Beat 1: Build the scaled 3x3 matrix.
+    let mut m: Matrix = matrix_new(3, 3);
+    m = matrix_set(m, 0, 0, 2000);
+    m = matrix_set(m, 0, 1, 1000);
+    m = matrix_set(m, 0, 2, 0 - 1000);
+    m = matrix_set(m, 1, 0, 0 - 3000);
+    m = matrix_set(m, 1, 1, 0 - 1000);
+    m = matrix_set(m, 1, 2, 2000);
+    m = matrix_set(m, 2, 0, 0 - 2000);
+    m = matrix_set(m, 2, 1, 1000);
+    m = matrix_set(m, 2, 2, 2000);
+
+    // Beat 2: status projection of decomposition.
+    let status: Result[Int, String] = matrix_lu_decompose_status(m);
+    if !status.is_ok() {
+        println("FAIL: matrix_lu_decompose_status not Ok");
+        return;
+    }
+    println("OK lu_decompose_status");
+
+    // Beat 3: build b vector and run matrix_solve_status.
+    let mut b: List[Int] = list_new();
+    b = list_push(b, 8000);
+    b = list_push(b, 0 - 11000);
+    b = list_push(b, 0 - 3000);
+    let mut lu: List[Int] = list_new();
+    lu = list_push(lu, 2000);
+    lu = list_push(lu, 1000);
+    lu = list_push(lu, 0 - 1000);
+    lu = list_push(lu, 0 - 1500);
+    lu = list_push(lu, 500);
+    lu = list_push(lu, 0);
+    lu = list_push(lu, 0 - 1000);
+    lu = list_push(lu, 4000);
+    lu = list_push(lu, 0 - 1000);
+    let solve_status: Result[Int, String] = matrix_solve_status(lu, 3, b);
+    if !solve_status.is_ok() {
+        println("FAIL: matrix_solve_status not Ok");
+        return;
+    }
+    println("OK solve_status");
+
+    // Beat 4: matrix_det_status.
+    let det_status: Result[Int, String] = matrix_det_status(m);
+    if !det_status.is_ok() {
+        println("FAIL: matrix_det_status not Ok");
+        return;
+    }
+    println("OK det_status");
+
+    // Beat 5: singular matrix should yield Err.
+    let mut sg: Matrix = matrix_new(3, 3);
+    sg = matrix_set(sg, 0, 0, 1000);
+    sg = matrix_set(sg, 0, 1, 2000);
+    sg = matrix_set(sg, 0, 2, 3000);
+    sg = matrix_set(sg, 1, 0, 2000);
+    sg = matrix_set(sg, 1, 1, 4000);
+    sg = matrix_set(sg, 1, 2, 6000);
+    sg = matrix_set(sg, 2, 0, 1000);
+    sg = matrix_set(sg, 2, 1, 1000);
+    sg = matrix_set(sg, 2, 2, 1000);
+    let sg_status: Result[Int, String] = matrix_lu_decompose_status(sg);
+    if sg_status.is_ok() {
+        println("FAIL: singular matrix should be Err");
+        return;
+    }
+    println("OK singular detected");
+
+    // Beat 6: Print success.
+    println("MATRIX_LU_FIXTURE_ALL_PASSED");
+}

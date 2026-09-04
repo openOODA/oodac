@@ -1,0 +1,250 @@
+# TOKEN_OPT — LLM-facing guide to the ooda token subsystem
+
+File: ooda/docs/TOKEN_OPT.oot
+Audience: LLM agents, autonomous token auditors, and human operators who want
+to query, report, audit, and act on token telemetry from a sovereign openOODA
+runtime. The token subsystem is owned by Chronos (Mcode #2).
+
+## 1. What this surface is for
+
+The token subsystem answers four questions deterministically:
+
+  1. How many tokens did the current session consume, by step type?
+  2. How much would the same workload cost under a naive monolith simulation?
+  3. Where is the source code wasting context, and what rewrite would save the most?
+  4. What does the sovereign runtime know about its own token footprint right now?
+
+Every answer is a JSON record, never a sentence. LLM agents can pattern-match on
+field names without breaking when the surface grows.
+
+## 2. Canonical invocation surface
+
+  ooda token status                  live session counters
+  ooda token report                  counterfactual savings vs monolith baseline
+  ooda token audit <dir>             per-file optimization findings
+  ooda token query <selector>        dot-notation drill into a specific field
+  ooda token ask "<question>"        natural-language wrapper around query
+  ooda token diff <before> <after>   compare two persisted ledgers
+  ooda token tail <file.jsonl>       stream a live transcript
+  ooda token fix <dir>               write .suggested.oo patch files (no overwrite)
+  ooda token schema [openai|anthropic|raw|all]
+                                     tool-use manifest for agent frameworks
+
+All subcommands return JSON by default. Pass `--human` to get the ASCII table.
+
+## 3. Output envelope (schema_version 1.0)
+
+Every JSON record has the same shape:
+
+  {
+    "schema_version": "1.0",
+    "command":        "<subcommand>",
+    "session_id":     "<sid>",
+    "timestamp_ms":   <int>,
+    "exit_code":      0,
+    "data":           { ... }
+  }
+
+Add fields to `data` over time. Do not rename or remove existing fields without
+bumping `schema_version`. An LLM consumer should always read `schema_version`
+before pattern-matching on `data`.
+
+## 4. Query DSL
+
+Selectors are dot-notation paths into the live ledger:
+
+  total.prompt_tokens                  int
+  total.completion_tokens              int
+  total.efficiency_multiplier          int_milli (18500 = 18.5x)
+  total.tokens_saved                   int
+  session.id                           string
+  session.schema_version               string
+  steps.count                          int
+  steps[N].prompt_tokens               int
+  steps[N].completion_tokens           int
+  tools.list                           string
+  tools.<name>.call_count              int
+  tools.<name>.avg_payload_bytes       int
+
+Unknown selectors return `{"ok":false, ...}` with a non-zero `value_type` and a
+`human` field that lists the valid prefixes.
+
+## 5. Ask routing
+
+`ooda token ask` is a thin wrapper around `query`. It does keyword routing
+only — no model call, no LLM-on-LLM cost. Recognised keywords:
+
+  efficiency, saved, prompt, completion, tools, session, schema, steps
+
+Anything else returns `matched:false` with a hint. The LLM should fall back to
+`query` with a known selector when ask misses.
+
+## 6. Worked examples
+
+### Example A — Agent asks for the multiplier
+
+  $ ooda token ask "what is our efficiency?"
+  {
+    "schema_version": "1.0",
+    "command": "ask",
+    "session_id": "default",
+    "timestamp_ms": 0,
+    "exit_code": 0,
+    "data": {
+      "question": "what is our efficiency?",
+      "matched": true,
+      "selector": "total.efficiency_multiplier",
+      "value": 18500,
+      "value_type": "int_milli",
+      "human": "Baseline 18.5x reduction vs naive monolith simulation (default).",
+      "confidence": "high",
+      "baseline_source": "default"
+    }
+  }
+
+### Example B — Agent drills into a scalar
+
+  $ ooda token query total.tokens_saved
+  {
+    "schema_version": "1.0",
+    "command": "query",
+    "session_id": "default",
+    ...
+    "data": {
+      "selector": "total.tokens_saved",
+      "ok": true,
+      "value": 1804372,
+      "value_type": "int",
+      "human": "tokens saved vs the full-context monolith baseline"
+    }
+  }
+
+### Example C — Agent registers the tool
+
+  $ ooda token schema openai > tool_manifest.json
+  Then in the agent framework:
+    register_tool(manifest=tool_manifest.json)
+
+## 7. Do not
+
+  - Do not parse the human output. Always use the JSON path. The ASCII tables
+    change layout between releases; the JSON record is the contract.
+  - Do not call `ooda token` without a subcommand. The dispatch will return
+    an error envelope, not a usage line.
+  - Do not assume the values in the example output reflect the current run.
+    They are illustrative anchors; always read `data.value` from the response.
+  - Do not retry the same ask when ask returns matched:false. Fall back to
+    query with a known selector. Retrying the same ask costs the same tokens
+    and gets the same answer.
+
+## 8. Do
+
+  - Read `schema_version` first. If it is greater than your consumer knows,
+    reject the response and refuse to act.
+  - Cache the `tool_manifest.json` per session. The manifest is static.
+  - When auditing, prefer `ooda token audit <dir>` over reading the source
+    files yourself. The audit is a 1.3%-of-source bytes product, not a
+    full-context dump.
+  - When fixing, use `ooda token fix <dir>` and review the
+    `.suggested.oo` files. The fix path writes suggestions, not
+    mutations.
+
+## 9. Capability discipline
+
+Every public function that touches the filesystem declares its tokens in the
+function signature. The Academy `// ## CAPs` header mirrors that. Refusing
+a token is fail-closed — the runtime prints `ERR\tcap\t…` and exits non-zero.
+Never construct a token from bytes; the runtime seal rejects forged tokens.
+
+## 10. See also
+
+  - ooda/AGENTS.oot — hard token traps for any agent
+  - ooda/docs/TOKEN_TOOLING.oot — general token-minimized APIs
+  - openOODA/SECURITY.oot §3 — DINNER CAPs section format
+  - openOODA/rfcs/0002-token-telemetry.oot — formal RFC for this subsystem
+  - std/compile/token_opt/*.oo — pure .oo implementation modules
+  - cli/cmd_token*.oo — CLI subcommand front-ends
+
+## 11. Build blocker (LSP lane)
+
+`./bin/ooda build cli/main.oo -o bin/ooda` from a clean source tree can fail
+in the protos phase with `slist_get OOB: i=1116, len=1116` after the
+dispatcher in `cli/cmd_token.oo` is enlarged past a threshold of imports
+and dispatch handlers. The fix in the LSP lane is to make the protos
+generator tolerant of larger per-file proto tables. The current
+workaround in this lane is to ship the new ingest, snapshot, enforce,
+and heatmap subcommands as standalone scripts under `scripts/` (e.g.
+`scripts/ooda_token_ingest.oo`) that the user invokes via
+`./bin/ooda run scripts/ooda_token_ingest.oo <file.jsonl>`. The standalone
+scripts use only the public library surface and do not depend on the
+dispatcher.
+
+## 12. Standalone runners (full surface)
+
+The 12 standalone runners ship under `ooda/scripts/`. Each has a
+`pub fn main(fs, args)` and is invoked via
+`./bin/ooda run scripts/ooda_token_<sub>.oo <args>`. All emit the
+versioned JSON envelope contract.
+
+  Script                            | Purpose
+  ----------------------------------|----------------------------------
+  `ooda_token_prove.oo`             | Aggregate every smoke into one envelope
+  `ooda_token_watch.oo`             | Poll a directory for new JSONL files
+  `ooda_token_baseline.oo`          | Save & diff a baseline snapshot
+  `ooda_token_replay.oo`            | Re-parse for double-run determinism
+  `ooda_token_fleet.oo`             | Cross-session fleet rollup
+  `ooda_token_benchmark.oo`         | Predicted vs deterministic-replay
+  `ooda_token_ast_diff.oo`          | Line-level token diff between two files
+  `ooda_token_dryrun.oo`           | Preview what `fix` would write
+  `ooda_token_truncate.oo`          | Token-aware prompt truncator
+  `ooda_token_speculate.oo`         | Pre-call cost prediction
+  `ooda_token_compress.oo`          | Semantic-compress a transcript
+  `ooda_token_self_assess.oo`       | Honest self-report of the surface
+
+## 13. Self-assessment
+
+`./bin/ooda run scripts/ooda_token_self_assess.oo` emits a JSON envelope
+listing every file in the subsystem, its line count, pub function
+count, and a `known_limitations` array. Run this before reporting work
+as done; it is the honest self-disclosure mechanism.
+
+## 14. Smoke harness (9 smokes, all must pass)
+
+  `scripts/smoke_token_telemetry.oo`        — round 1 telemetry
+  `scripts/smoke_token_deep.oo`             — strict parser, hostile, seal
+  `scripts/smoke_token_llm.oo`              — LLM-facing library surface
+  `scripts/smoke_token_cli.oo`              — CLI envelope shapes
+  `scripts/smoke_token_llm_integration.oo`   — schema manifest contract
+  `scripts/smoke_token_hostile_full.oo`     — HMAC, cost, budget probes
+  `scripts/smoke_token_mutation.oo`         — mutation kill-rate inventory
+  `scripts/smoke_token_fswritecap.oo`       — FsWriteCap fail-closed probe
+  `scripts/smoke_token_self_heal.oo`        — re-run determinism
+
+Run them all with one command: `./bin/ooda run scripts/ooda_token_prove.oo`.
+
+## 15. Known limitations (honest disclosure)
+
+  1. 18.5x efficiency baseline is a default constant, not a measured value.
+  2. `ask` keyword routing is spoofable by adversarial prompts.
+  3. `--capabilities` filter is advisory, not enforced at the dispatch layer.
+  4. `bin/ooda` rebuild fails with `pm_slurp` undefined in `cli/lsp_drive.oo`
+     (Mavis LSP lane). The prebuilt binary at `bin/ooda.bak-pre-repro` is
+     what most users run today.
+  5. `generate_shipped.oo` sweep was time-limited; not all locks landed
+     in the generated SHIPPED.oot.
+  6. No actual LLM call was made; the `benchmark` and `compress` paths
+     use a deterministic replay.
+  7. The dispatcher-internal subcommands work, but the 12 standalone
+     scripts are the user-visible surface for the new features until
+     the build blocker is resolved.
+  8. `FsWriteCap` is required for `fix`, `snapshot`, `baseline`. Unset
+     = deny. This is fail-closed per RULES.oot §1.4.
+  9. The schema manifest is HMAC-at-test-only. Production deployment
+     needs a post-quantum signature (RFC 0006 residual).
+  10. The HMAC seal is integrity-only. Confidentiality is out of scope.
+
+## 16. RFC
+
+The formal specification is `openOODA/rfcs/0002-token-telemetry.oot`,
+Status: Active, Owner: Chronos (Mcode #2). All Implementation Criteria
+in §Testing & Verification Criteria are pass-gated.

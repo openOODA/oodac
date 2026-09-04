@@ -1,0 +1,18 @@
+// # AllocCap malloc free
+//
+// Logline: malloc 64 bytes under AllocCap, free the pointer, and print ok.
+//
+// Beats:
+//   1. Bind p: Int = malloc(alloc, 64).
+//   2. free(alloc, p).
+//   3. Print ok.
+
+// M166/M167 path A: product malloc/free under AllocCap (aliases alloc_bytes/free_bytes)
+// Not OS malloc / heap sandbox / GC — process-local AllocCap seal only.
+// M167: typed let bind (untyped `let p = malloc(...)` SEGV on tip host until pure rebuild
+// ships c_emit_let free-name short-circuit). Nested free(malloc(...)) also product-green.
+pub fn main(alloc: &AllocCap) {
+    let p: Int = malloc(alloc, 64);
+    free(alloc, p);
+    println("ok");
+}

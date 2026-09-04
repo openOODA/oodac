@@ -1,0 +1,72 @@
+// # DoublyLinkedList symmetric-links smoke
+//
+// Logline: Asserts std/collections/linked_list_doubly.oo push_back and push_front produce a list where peek_front and peek_back are consistent with the data ordering.
+//
+// Setup: Imports std/collections/linked_list.oo (companion to silence an oodac unused-import false positive in the DLL module) and std/collections/linked_list_doubly.oo. Pure.
+//
+// Beats:
+//   1. Empty DLL: len = 0, peek_front/peek_back both Err.
+//   2. push_back 10, 20; peek_front = 10, peek_back = 20.
+//   3. push_front 5; peek_front = 5, peek_back = 20 (symmetric insert).
+//   4. Verify len after every operation; LruCache-style companion import kept for build determinism.
+//   5. LINKED_LIST_DOUBLY_OK on success.
+//
+// residual: the DLL module triggers an oodac "unused import" warning when imported alone; the linked_list import is a build-time companion and is itself asserted in this fixture.
+
+import "std/core/collection/linked_list.oo";
+import "std/core/collection/linked_list_doubly.oo";
+
+pub fn expect_eq_int(label: String, got: Int, want: Int) -> Bool {
+    if got == want { println("OK " + label); return true; }
+    println("FAIL " + label + " got=" + got.to_string() + " want=" + want.to_string());
+    return false;
+}
+
+pub fn expect_true(label: String, cond: Bool) -> Bool {
+    if cond { println("OK " + label); return true; }
+    println("FAIL " + label);
+    return false;
+}
+
+pub fn expect_false(label: String, cond: Bool) -> Bool {
+    if cond { println("FAIL " + label); return false; }
+    println("OK " + label);
+    return true;
+}
+
+pub fn unwrap_int(r: Result[Int, String]) -> Int {
+    if r.is_err() { return 0 - 1; }
+    return r.unwrap();
+}
+
+pub fn main() {
+    let dll0: DoublyLinkedList = dlist_new();
+    if !expect_eq_int("initial len", dlist_len(dll0), 0) { return; }
+    let pfe: Result[Int, String] = dlist_peek_front(dll0);
+    let pbe: Result[Int, String] = dlist_peek_back(dll0);
+    if !expect_false("peek_front empty is_err", pfe.is_ok()) { return; }
+    if !expect_false("peek_back empty is_err", pbe.is_ok()) { return; }
+
+    let mut dll: DoublyLinkedList = dll0;
+    dll = dlist_push_back(dll, 10);
+    dll = dlist_push_back(dll, 20);
+    if !expect_eq_int("len after 2 push_back", dlist_len(dll), 2) { return; }
+    if !expect_eq_int("peek_front = 10", unwrap_int(dlist_peek_front(dll)), 10) { return; }
+    if !expect_eq_int("peek_back = 20", unwrap_int(dlist_peek_back(dll)), 20) { return; }
+
+    dll = dlist_push_front(dll, 5);
+    if !expect_eq_int("len after push_front", dlist_len(dll), 3) { return; }
+    if !expect_eq_int("peek_front = 5 after push_front", unwrap_int(dlist_peek_front(dll)), 5) { return; }
+    if !expect_eq_int("peek_back = 20 unchanged", unwrap_int(dlist_peek_back(dll)), 20) { return; }
+
+    dll = dlist_push_back(dll, 30);
+    if !expect_eq_int("len after more push_back", dlist_len(dll), 4) { return; }
+    if !expect_eq_int("peek_back = 30", unwrap_int(dlist_peek_back(dll)), 30) { return; }
+    if !expect_eq_int("peek_front still 5", unwrap_int(dlist_peek_front(dll)), 5) { return; }
+
+    // Companion import: ensure it really is a sibling assertion, not a stale shim.
+    let ll: LinkedList = linked_list_new();
+    if !expect_eq_int("companion linked_list initial len", linked_list_len(ll), 0) { return; }
+
+    println("LINKED_LIST_DOUBLY_OK");
+}

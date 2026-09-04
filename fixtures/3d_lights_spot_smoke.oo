@@ -1,0 +1,65 @@
+// # 3D Lights Spot Adversarial Smoke Test
+//
+// Logline: Verifies SpotLight creation and field access with adversarial inputs.
+//
+// Setup: Pure struct operations. No FS or net dependencies.
+//
+// Beats:
+//   1. VALID: Normal SpotLight creation and field access.
+//   2. NEGATIVE TRUST: Test with zero and default values.
+//   3. ADVERSARIAL: Test with extreme position and direction values.
+//   4. DOUBLE-RUN: Verify all operations are deterministic.
+
+import "std/app/ui/3d/lights_engine.oo";
+
+pub fn expect_eq_int(label: String, got: Int, want: Int) -> Bool {
+    if got == want { println("OK " + label); return true; }
+    println("FAIL " + label + " got=" + got.to_string() + " want=" + want.to_string());
+    return false;
+}
+
+pub fn main() {
+    // VALID: SpotLight default
+    let spot_def: SpotLight = spot_light_default();
+    if !expect_eq_int("spot r", spot_def.r, 255) { return; }
+    if !expect_eq_int("spot g", spot_def.g, 255) { return; }
+    if !expect_eq_int("spot b", spot_def.b, 255) { return; }
+    if !expect_eq_int("spot a", spot_def.a, 255) { return; }
+    if !expect_eq_int("spot intensity", spot_def.intensity, 220) { return; }
+    if !expect_eq_int("spot x", spot_def.x, 0) { return; }
+    if !expect_eq_int("spot y", spot_def.y, 10) { return; }
+    if !expect_eq_int("spot z", spot_def.z, 0) { return; }
+    if !expect_eq_int("spot radius", spot_def.radius, 80) { return; }
+    if !expect_eq_int("spot inner_cos_255", spot_def.inner_cos_255, 220) { return; }
+    if !expect_eq_int("spot outer_cos_255", spot_def.outer_cos_255, 180) { return; }
+    if !expect_eq_int("spot cast_shadow", spot_def.cast_shadow, 1) { return; }
+    if !expect_eq_int("spot enabled", spot_def.enabled, 1) { return; }
+
+    // NEGATIVE TRUST: Verify direction components
+    if !expect_eq_int("spot dir_x", spot_def.dir_x, 0) { return; }
+    if !expect_eq_int("spot dir_y", spot_def.dir_y, -1) { return; }
+    if !expect_eq_int("spot dir_z", spot_def.dir_z, 0) { return; }
+
+    // ADVERSARIAL: Test with large values
+    let spot_custom: SpotLight = SpotLight {
+        r: 100, g: 150, b: 200, a: 255,
+        intensity: 500,
+        x: 1000, y: 2000, z: 3000,
+        dir_x: 1, dir_y: 0, dir_z: 0,
+        radius: 1000,
+        inner_cos_255: 200,
+        outer_cos_255: 150,
+        cast_shadow: 1,
+        enabled: 1
+    };
+    if !expect_eq_int("spot_custom x", spot_custom.x, 1000) { return; }
+    if !expect_eq_int("spot_custom radius", spot_custom.radius, 1000) { return; }
+
+    // DOUBLE-RUN: Determinism check
+    let spot_dr1: SpotLight = spot_light_default();
+    let spot_dr2: SpotLight = spot_light_default();
+    if !expect_eq_int("dr spot r", spot_dr1.r, spot_dr2.r) { return; }
+    if !expect_eq_int("dr spot intensity", spot_dr1.intensity, spot_dr2.intensity) { return; }
+
+    println("OK: 3d_lights_spot_smoke passed");
+}

@@ -1,0 +1,13 @@
+// # Phase A decoy hello identifier (Tier 5 #27)
+//
+// Logline: println of the four-letter string hello must not select the greet template.
+//
+// Setup: Driven by scripts/x86_no_template_smoke.oo. Body is not greet("openOODA Developer").
+//
+// Beats:
+//   1. Print the literal hello.
+//   2. Contain no greet call and no openOODA Developer concat.
+
+pub fn main() {
+    println("hello");
+}

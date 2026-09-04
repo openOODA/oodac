@@ -1,0 +1,18 @@
+// # Unannotated string-list return
+//
+// Logline: Return a one-element List[String] without a type annotation on the local.
+//
+// Beats:
+//   1. pack pushes "SKIP" onto list_new().
+//   2. Return the list from pack.
+//   3. Print list_len 1.
+
+pub fn pack() -> List[String] {
+    let mut r = list_new();
+    r = list_push(r, "SKIP");
+    return r;
+}
+pub fn main() {
+    let x = pack();
+    println(list_len(x));
+}

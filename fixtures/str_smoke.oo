@@ -1,0 +1,129 @@
+// # String Adversarial Smoke Test
+//
+// Logline: Verifies string length, comparison, concatenation, contains, and parsing with adversarial inputs.
+//
+// Setup: Pure string operations. No FS or net dependencies.
+//
+// Beats:
+//   1. VALID: Normal string length, equality, contains, and concatenation.
+//   2. NEGATIVE TRUST: Test with empty strings and edge cases.
+//   3. ADVERSARIAL: Test with extreme lengths and special characters.
+//   4. DOUBLE-RUN: Verify all operations are deterministic.
+
+import "std/core/primitives/str.oo";
+
+pub fn expect_eq_int(label: String, got: Int, want: Int) -> Bool {
+    if got == want { println("OK " + label); return true; }
+    println("FAIL " + label + " got=" + got.to_string() + " want=" + want.to_string());
+    return false;
+}
+
+pub fn expect_eq_str(label: String, got: String, want: String) -> Bool {
+    if got == want { println("OK " + label); return true; }
+    println("FAIL " + label + " got=" + got + " want=" + want);
+    return false;
+}
+
+pub fn expect_true(label: String, cond: Bool) -> Bool {
+    if cond { println("OK " + label); return true; }
+    println("FAIL " + label);
+    return false;
+}
+
+pub fn expect_false(label: String, cond: Bool) -> Bool {
+    if !cond { println("OK " + label); return true; }
+    println("FAIL " + label);
+    return false;
+}
+
+pub fn main() {
+    // VALID: String length
+    let s1: String = "hello openOODA";
+    if !expect_eq_int("len", str_len(s1), 14) { return; }
+
+    // VALID: String empty
+    let s_empty: String = "";
+    if !expect_true("is_empty", str_is_empty(s_empty)) { return; }
+    if !expect_false("not empty", str_is_empty(s1)) { return; }
+
+    // VALID: String equality
+    let s2: String = "hello openOODA";
+    if !expect_true("eq same", str_eq(s1, s2)) { return; }
+    let s3: String = "different";
+    if !expect_false("eq diff", str_eq(s1, s3)) { return; }
+
+    // VALID: String contains
+    if !expect_true("contains open", str_contains(s1, "open")) { return; }
+    if !expect_false("contains xyz", str_contains(s1, "xyz")) { return; }
+
+    // VALID: String concatenation
+    let s_concat: String = str_concat("hello ", "world");
+    if !expect_eq_str("concat", s_concat, "hello world") { return; }
+
+    // VALID: Character at index
+    let s_char: String = str_char_at(s1, 0);
+    if !expect_eq_str("char_at 0", s_char, "h") { return; }
+
+    // VALID: String slice
+    let s_slice: String = str_sub(s1, 0, 5);
+    if !expect_eq_str("sub 0-5", s_slice, "hello") { return; }
+
+    // VALID: starts_with
+    if !expect_true("starts hello", str_starts_with(s1, "hello")) { return; }
+    if !expect_false("starts world", str_starts_with(s1, "world")) { return; }
+
+    // VALID: ends_with
+    if !expect_true("ends OODA", str_ends_with(s1, "OODA")) { return; }
+    if !expect_false("ends hello", str_ends_with(s1, "hello")) { return; }
+
+    // VALID: chr
+    let c_a: String = chr(97);
+    if !expect_eq_str("chr 97", c_a, "a") { return; }
+    let c_space: String = chr(32);
+    if !expect_eq_str("chr 32", c_space, " ") { return; }
+
+    // VALID: str_trim (from runtime)
+    let s_trim: String = "  hello  ";
+    let s_trimmed: String = str_trim(s_trim);
+    if !expect_eq_str("trim", s_trimmed, "hello") { return; }
+
+    // NEGATIVE TRUST: Empty string operations
+    let s_empty2: String = "";
+    if !expect_eq_int("empty len", str_len(s_empty2), 0) { return; }
+    if !expect_true("empty contains empty", str_contains(s_empty2, "")) { return; }
+    let s_concat_empty: String = str_concat(s_empty2, "test");
+    if !expect_eq_str("concat empty", s_concat_empty, "test") { return; }
+
+    // ADVERSARIAL: Long string
+    let mut s_long: String = "a";
+    let mut i: Int = 0;
+    while i < 100 {
+        s_long = str_concat(s_long, "a");
+        i = i + 1;
+    }
+    if !expect_eq_int("long len", str_len(s_long), 101) { return; }
+
+    // ADVERSARIAL: Special characters
+    let s_special: String = "hello\nworld\t!";
+    if !expect_true("contains newline", str_contains(s_special, "\n")) { return; }
+
+    // ADVERSARIAL: Negative chr
+    let c_neg: String = chr(-1);
+    if !expect_eq_str("chr -1", c_neg, "") { return; }
+
+    // ADVERSARIAL: Large chr
+    let c_large: String = chr(1000000);
+    if !expect_eq_str("chr large", c_large, "") { return; }
+
+    // DOUBLE-RUN: Determinism check
+    let s_dr1: String = "determinism test";
+    let s_dr2: String = "determinism test";
+    if !expect_eq_int("dr len", str_len(s_dr1), str_len(s_dr2)) { return; }
+    if !expect_true("dr eq", str_eq(s_dr1, s_dr2)) { return; }
+
+    let s_concat_dr1: String = str_concat(s_dr1, " suffix");
+    let s_concat_dr2: String = str_concat(s_dr2, " suffix");
+    if !expect_eq_str("dr concat", s_concat_dr1, s_concat_dr2) { return; }
+
+    println("OK: str_smoke passed");
+}

@@ -1,0 +1,144 @@
+// # Adversarial String Literal Equality Probe
+//
+// Logline: Adversarially stress tests string literal equality comparisons across nested branches and complex expressions.
+//
+// Setup: Requires working oodac compiler with C runtime string interning and comparison lowering.
+//
+// Beats:
+//   1. Test basic equality and inequality with string literals in variable-to-literal and literal-to-variable order.
+//   2. Test nested if-else if chains and compound boolean expressions with logical AND/OR.
+//   3. Test string comparisons inside functions, loops, and expression positions.
+//   4. Test edge cases with empty strings, special characters, long strings, and Unicode sequences.
+
+fn check_str_equality(s: String, expected: String) -> Bool {
+    if s == expected {
+        return true;
+    }
+    return false;
+}
+
+fn check_str_branch(tag: String) -> Int {
+    if tag == "alpha" {
+        return 1;
+    } else if tag == "beta" {
+        return 2;
+    } else if tag == "gamma" {
+        return 3;
+    } else if tag == "" {
+        return 0;
+    } else {
+        return -1;
+    }
+}
+
+fn check_compound_expr(s: String, flag: Bool) -> Bool {
+    if (s == "admin" || s == "root") && flag == true {
+        return true;
+    }
+    if s != "guest" && !flag {
+        return true;
+    }
+    return false;
+}
+
+fn check_nested_branches(a: String, b: String) -> Int {
+    let mut score: Int = 0;
+    if a == "open" {
+        score = score + 10;
+        if b == "sesame" {
+            score = score + 5;
+        } else if b == "door" {
+            score = score + 2;
+        } else {
+            score = score - 1;
+        }
+    } else if a == "close" {
+        score = score + 20;
+        if b == "vault" {
+            score = score + 10;
+        }
+    } else {
+        score = score - 100;
+    }
+    return score;
+}
+
+pub fn main() {
+    let mut num_passed: Int = 0;
+    let mut num_errors: Int = 0;
+
+    // Test 1: Basic equality and inequality
+    let greeting: String = "hello world";
+    if greeting == "hello world" {
+        num_passed = num_passed + 1;
+    } else {
+        println("FAIL: greeting == hello world");
+        num_errors = num_errors + 1;
+    }
+
+    if greeting != "goodbye" {
+        num_passed = num_passed + 1;
+    } else {
+        println("FAIL: greeting != goodbye");
+        num_errors = num_errors + 1;
+    }
+
+    // Test 2: Function parameter vs literal
+    if check_str_equality("test_str", "test_str") && !check_str_equality("foo", "bar") {
+        num_passed = num_passed + 1;
+    } else {
+        println("FAIL: check_str_equality");
+        num_errors = num_errors + 1;
+    }
+
+    // Test 3: Branching dispatcher
+    if check_str_branch("alpha") == 1 && check_str_branch("beta") == 2 && check_str_branch("gamma") == 3 && check_str_branch("") == 0 && check_str_branch("unknown") == -1 {
+        num_passed = num_passed + 1;
+    } else {
+        println("FAIL: check_str_branch");
+        num_errors = num_errors + 1;
+    }
+
+    // Test 4: Compound expressions
+    if check_compound_expr("admin", true) && check_compound_expr("root", true) && !check_compound_expr("user", true) && check_compound_expr("other", false) {
+        num_passed = num_passed + 1;
+    } else {
+        println("FAIL: check_compound_expr");
+        num_errors = num_errors + 1;
+    }
+
+    // Test 5: Nested branches
+    if check_nested_branches("open", "sesame") == 15 && check_nested_branches("open", "door") == 12 && check_nested_branches("open", "other") == 9 && check_nested_branches("close", "vault") == 30 && check_nested_branches("invalid", "") == -100 {
+        num_passed = num_passed + 1;
+    } else {
+        println("FAIL: check_nested_branches");
+        num_errors = num_errors + 1;
+    }
+
+    // Test 6: String concatenation and dynamic equality
+    let part1: String = "foo";
+    let part2: String = "bar";
+    let combined: String = part1 + "_" + part2;
+    if combined == "foo_bar" {
+        num_passed = num_passed + 1;
+    } else {
+        println("FAIL: dynamic combined == foo_bar");
+        num_errors = num_errors + 1;
+    }
+
+    // Test 7: Empty string and whitespace comparisons
+    let empty: String = "";
+    if empty == "" && empty != " " && " " != "  " {
+        num_passed = num_passed + 1;
+    } else {
+        println("FAIL: empty and whitespace");
+        num_errors = num_errors + 1;
+    }
+
+    if num_errors == 0 {
+        println("probe_adversarial_str_equality: PASSED");
+    } else {
+        println("probe_adversarial_str_equality: FAILED");
+        process_exit(1);
+    }
+}

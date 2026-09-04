@@ -1,0 +1,88 @@
+// # IntervalTree overlap-query property smoke
+//
+// Logline: Asserts std/collections/interval_tree.oo interval_tree_has_overlap and interval_tree_find_overlaps return the correct set of tags for any [q_low, q_high] query.
+//
+// Setup: Imports std/collections/interval_tree.oo. Pure.
+//
+// Beats:
+//   1. Empty tree: len = 0, has_overlap returns false.
+//   2. Insert four tagged intervals; len = 4.
+//   3. has_overlap correctly identifies overlap and non-overlap queries.
+//   4. find_overlaps returns the matching tag list (best-effort: at least the correct count).
+//   5. INTERVAL_TREE_OK on success.
+
+import "std/core/collection/interval_tree.oo";
+
+pub fn expect_eq_int(label: String, got: Int, want: Int) -> Bool {
+    if got == want { println("OK " + label); return true; }
+    println("FAIL " + label + " got=" + got.to_string() + " want=" + want.to_string());
+    return false;
+}
+
+pub fn expect_true(label: String, cond: Bool) -> Bool {
+    if cond { println("OK " + label); return true; }
+    println("FAIL " + label);
+    return false;
+}
+
+pub fn expect_false(label: String, cond: Bool) -> Bool {
+    if cond { println("FAIL " + label); return false; }
+    println("OK " + label);
+    return true;
+}
+
+pub fn list_count(xs: List[Int], target: Int) -> Int {
+    let n: Int = list_len(xs);
+    let mut c: Int = 0;
+    let mut i: Int = 0;
+    while i < n {
+        if list_get(xs, i) == target { c = c + 1; }
+        i = i + 1;
+    }
+    return c;
+}
+
+pub fn main() {
+    let it0: IntervalTree = interval_tree_new();
+    if !expect_eq_int("initial len", interval_tree_len(it0), 0) { return; }
+    if !expect_true("initial is_empty", interval_tree_is_empty(it0)) { return; }
+    if !expect_false("empty overlap", interval_tree_has_overlap(it0, 0, 100)) { return; }
+
+    let mut it: IntervalTree = it0;
+    it = interval_tree_insert(it, 1, 5, 10);
+    it = interval_tree_insert(it, 10, 20, 20);
+    it = interval_tree_insert(it, 25, 30, 30);
+    it = interval_tree_insert(it, 100, 110, 100);
+    if !expect_eq_int("len after 4 inserts", interval_tree_len(it), 4) { return; }
+    if !expect_false("not empty", interval_tree_is_empty(it)) { return; }
+
+    // Overlap queries.
+    if !expect_true("overlap [3,4] hits tag 10", interval_tree_has_overlap(it, 3, 4)) { return; }
+    if !expect_true("overlap [15,17] hits tag 20", interval_tree_has_overlap(it, 15, 17)) { return; }
+    if !expect_true("overlap [21,25] boundary hits tag 20 or 30", interval_tree_has_overlap(it, 21, 25)) { return; }
+    if !expect_true("overlap [99,101] hits tag 100", interval_tree_has_overlap(it, 99, 101)) { return; }
+    if !expect_false("no overlap [6,9]", interval_tree_has_overlap(it, 6, 9)) { return; }
+    if !expect_false("no overlap [31,99]", interval_tree_has_overlap(it, 31, 99)) { return; }
+
+    // find_overlaps returns the matching tag list.
+    let hits1: List[Int] = interval_tree_find_overlaps(it, 0, 50);
+    if !expect_eq_int("hits1 count", list_len(hits1), 3) { return; }
+    if !expect_eq_int("hits1 has 10", list_count(hits1, 10), 1) { return; }
+    if !expect_eq_int("hits1 has 20", list_count(hits1, 20), 1) { return; }
+    if !expect_eq_int("hits1 has 30", list_count(hits1, 30), 1) { return; }
+    if !expect_eq_int("hits1 has 100", list_count(hits1, 100), 0) { return; }
+
+    let hits2: List[Int] = interval_tree_find_overlaps(it, 100, 110);
+    if !expect_eq_int("hits2 count", list_len(hits2), 1) { return; }
+    if !expect_eq_int("hits2 has 100", list_count(hits2, 100), 1) { return; }
+
+    let hits3: List[Int] = interval_tree_find_overlaps(it, 31, 99);
+    if !expect_eq_int("hits3 count", list_len(hits3), 0) { return; }
+
+    // remove the [1,5]/10 interval and re-check.
+    let it2: IntervalTree = interval_tree_remove(it, 1, 5);
+    if !expect_eq_int("len after remove", interval_tree_len(it2), 3) { return; }
+    if !expect_false("no overlap [3,4] after remove", interval_tree_has_overlap(it2, 3, 4)) { return; }
+
+    println("INTERVAL_TREE_OK");
+}

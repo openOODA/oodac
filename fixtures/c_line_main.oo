@@ -1,0 +1,15 @@
+// # C Line Multi Main
+//
+// Logline: Entry point for multi-file #line testing.
+//
+// Setup: Imports fixtures/c_line_lib.oo.
+//
+// Beats:
+//   1. Call get_val from library and print.
+
+import "fixtures/c_line_lib.oo";
+
+pub fn main() {
+    let v: Int = get_val();
+    println(v);
+}

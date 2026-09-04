@@ -1,0 +1,46 @@
+// # FIPS 205 SLH-DSA Parameter Set Distinction Smoke
+//
+// Logline: Verifies std/crypto/pqc_nist/fips205_slh_dsa_params.slh_dsa_params_128s, _192s, _256s return distinct parameter records (different n) for the three FIPS 205 security levels.
+//
+// Setup: Imports std/crypto/pqc_nist/fips205_slh_dsa_params.oo. Pure, no FS or net. Property test (PROP).
+//
+// Beats:
+//   1. Build slh_dsa_params_128s, _192s, _256s.
+//   2. Assert their n fields are distinct.
+//   3. Print SLH_DSA_PARAMS_PROP_OK on success.
+
+import "std/sec/asymmetric/fips205_slh_dsa_params.oo";
+
+pub fn main() {
+    let p128: SlhDsaParams = slh_dsa_params_128s();
+    let p192: SlhDsaParams = slh_dsa_params_192s();
+    let p256: SlhDsaParams = slh_dsa_params_256s();
+    let n128: Int = p128.n;
+    let n192: Int = p192.n;
+    let n256: Int = p256.n;
+    if n128 == 0 {
+        println("FAIL n128 zero");
+        return;
+    }
+    if n192 == 0 {
+        println("FAIL n192 zero");
+        return;
+    }
+    if n256 == 0 {
+        println("FAIL n256 zero");
+        return;
+    }
+    if n128 == n192 {
+        println("FAIL n128 == n192");
+        return;
+    }
+    if n192 == n256 {
+        println("FAIL n192 == n256");
+        return;
+    }
+    if n128 == n256 {
+        println("FAIL n128 == n256");
+        return;
+    }
+    println("SLH_DSA_PARAMS_PROP_OK");
+}

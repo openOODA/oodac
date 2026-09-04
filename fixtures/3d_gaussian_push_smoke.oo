@@ -1,0 +1,120 @@
+// # 3D Gaussian Push Adversarial Smoke Test
+//
+// Logline: Verifies GaussianCloud push dispatcher and splat accessor functions with adversarial inputs.
+//
+// Setup: Pure struct operations importing gaussian_push_lo and gaussian_push_hi. No FS or net dependencies.
+//
+// Beats:
+//   1. VALID: Normal push operations to low and high partitions.
+//   2. NEGATIVE TRUST: Test boundary conditions at count 8.
+//   3. ADVERSARIAL: Test out-of-bounds access and full cloud.
+//   4. DOUBLE-RUN: Verify all operations are deterministic.
+
+import "std/app/ui/3d/gaussian_push.oo";
+import "std/app/ui/3d/gaussian_types.oo";
+
+pub fn expect_eq_int(label: String, got: Int, want: Int) -> Bool {
+    if got == want { println("OK " + label); return true; }
+    println("FAIL " + label + " got=" + got.to_string() + " want=" + want.to_string());
+    return false;
+}
+
+pub fn expect_eq_gaussian(label: String, got: Gaussian3D, want: Gaussian3D) -> Bool {
+    let cond: Bool = got.cx == want.cx && got.cy == want.cy && 
+                     got.cz == want.cz && got.opacity == want.opacity;
+    if cond { println("OK " + label); return true; }
+    println("FAIL " + label);
+    return false;
+}
+
+pub fn main() {
+    // VALID: Empty cloud
+    let cloud_empty: GaussianCloud = gaussian_cloud_new();
+    if !expect_eq_int("empty count", gaussian_cloud_count(cloud_empty), 0) { return; }
+
+    // VALID: Push to low partition (count < 8)
+    let g1: Gaussian3D = gaussian3d_new(10, 20, 30, 255);
+    let cloud1: GaussianCloud = gaussian_cloud_push(cloud_empty, g1);
+    if !expect_eq_int("push 1 count", gaussian_cloud_count(cloud1), 1) { return; }
+
+    let g2: Gaussian3D = gaussian3d_new(40, 50, 60, 200);
+    let cloud2: GaussianCloud = gaussian_cloud_push(cloud1, g2);
+    if !expect_eq_int("push 2 count", gaussian_cloud_count(cloud2), 2) { return; }
+
+    // VALID: Access by index
+    let retrieved0: Gaussian3D = gaussian_cloud_get(cloud2, 0);
+    if !expect_eq_gaussian("get index 0", retrieved0, g1) { return; }
+
+    let retrieved1: Gaussian3D = gaussian_cloud_get(cloud2, 1);
+    if !expect_eq_gaussian("get index 1", retrieved1, g2) { return; }
+
+    // VALID: Push to high partition (count >= 8)
+    let g3: Gaussian3D = gaussian3d_new(70, 80, 90, 150);
+    let g4: Gaussian3D = gaussian3d_new(100, 110, 120, 100);
+    let g5: Gaussian3D = gaussian3d_new(130, 140, 150, 50);
+    let g6: Gaussian3D = gaussian3d_new(160, 170, 180, 25);
+    let g7: Gaussian3D = gaussian3d_new(190, 200, 210, 10);
+    let g8: Gaussian3D = gaussian3d_new(220, 230, 240, 5);
+
+    let cloud3: GaussianCloud = gaussian_cloud_push(cloud2, g3);
+    let cloud4: GaussianCloud = gaussian_cloud_push(cloud3, g4);
+    let cloud5: GaussianCloud = gaussian_cloud_push(cloud4, g5);
+    let cloud6: GaussianCloud = gaussian_cloud_push(cloud5, g6);
+    let cloud7: GaussianCloud = gaussian_cloud_push(cloud6, g7);
+    let cloud8: GaussianCloud = gaussian_cloud_push(cloud7, g8);
+    if !expect_eq_int("push 8 count", gaussian_cloud_count(cloud8), 8) { return; }
+
+    // NEGATIVE TRUST: Boundary at count 8 (next goes to high partition)
+    let g9: Gaussian3D = gaussian3d_new(250, 260, 270, 1);
+    let cloud9: GaussianCloud = gaussian_cloud_push(cloud8, g9);
+    if !expect_eq_int("push 9 count (high partition)", gaussian_cloud_count(cloud9), 9) { return; }
+
+    // NEGATIVE TRUST: Access index 8
+    let retrieved8: Gaussian3D = gaussian_cloud_get(cloud9, 8);
+    if !expect_eq_gaussian("get index 8", retrieved8, g9) { return; }
+
+    // ADVERSARIAL: Out-of-bounds access (should return identity)
+    let retrieved_oob: Gaussian3D = gaussian_cloud_get(cloud9, 100);
+    let ident: Gaussian3D = gaussian3d_identity();
+    if !expect_eq_gaussian("get oob returns identity", retrieved_oob, ident) { return; }
+
+    // ADVERSARIAL: Negative index access
+    let retrieved_neg: Gaussian3D = gaussian_cloud_get(cloud9, -1);
+    if !expect_eq_gaussian("get neg index returns identity", retrieved_neg, ident) { return; }
+
+    // ADVERSARIAL: Fill to capacity
+    let g10: Gaussian3D = gaussian3d_new(280, 290, 300, 1);
+    let g11: Gaussian3D = gaussian3d_new(310, 320, 330, 1);
+    let g12: Gaussian3D = gaussian3d_new(340, 350, 360, 1);
+    let g13: Gaussian3D = gaussian3d_new(370, 380, 390, 1);
+    let g14: Gaussian3D = gaussian3d_new(400, 410, 420, 1);
+    let g15: Gaussian3D = gaussian3d_new(430, 440, 450, 1);
+    let g16: Gaussian3D = gaussian3d_new(460, 470, 480, 1);
+
+    let mut cloud_full: GaussianCloud = gaussian_cloud_push(cloud9, g10);
+    cloud_full = gaussian_cloud_push(cloud_full, g11);
+    cloud_full = gaussian_cloud_push(cloud_full, g12);
+    cloud_full = gaussian_cloud_push(cloud_full, g13);
+    cloud_full = gaussian_cloud_push(cloud_full, g14);
+    cloud_full = gaussian_cloud_push(cloud_full, g15);
+    cloud_full = gaussian_cloud_push(cloud_full, g16);
+    if !expect_eq_int("full cloud count", gaussian_cloud_count(cloud_full), 16) { return; }
+
+    // ADVERSARIAL: Push beyond capacity (should stay at 16)
+    let g17: Gaussian3D = gaussian3d_new(500, 510, 520, 1);
+    let cloud_overflow: GaussianCloud = gaussian_cloud_push(cloud_full, g17);
+    if !expect_eq_int("overflow cloud count", gaussian_cloud_count(cloud_overflow), 16) { return; }
+
+    // DOUBLE-RUN: Determinism check
+    let cloud_dr: GaussianCloud = gaussian_cloud_new();
+    let g_dr: Gaussian3D = gaussian3d_new(1, 2, 3, 255);
+    let cloud_dr1: GaussianCloud = gaussian_cloud_push(cloud_dr, g_dr);
+    let cloud_dr2: GaussianCloud = gaussian_cloud_push(cloud_dr, g_dr);
+    if !expect_eq_int("dr push count", gaussian_cloud_count(cloud_dr1), gaussian_cloud_count(cloud_dr2)) { return; }
+
+    let retrieved_dr1: Gaussian3D = gaussian_cloud_get(cloud_dr1, 0);
+    let retrieved_dr2: Gaussian3D = gaussian_cloud_get(cloud_dr2, 0);
+    if !expect_eq_gaussian("dr push get", retrieved_dr1, retrieved_dr2) { return; }
+
+    println("OK: 3d_gaussian_push_smoke passed");
+}

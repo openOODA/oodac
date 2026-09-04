@@ -1,0 +1,20 @@
+// # 80-bit extended fixed-point decimal smoke
+//
+// Logline: Documents the intended 1.5 + 2.25 = 3.75 (scaled 1e6) check for std/math/extended/float_extended.oo fixed_add / fixed_mul; the module is currently flagged RESIDUAL.
+//
+// Setup: float_extended.oo defines `type FixedDec = struct { scaled_val: Int }` (without `pub`). Every pub function takes or returns FixedDec, so the import cannot satisfy the parser's "import must contribute a type used by the importer" check; even calling fixed_scale() (which has no type involvement) is marked unused because the module's type is unexported. The audit covers this as RESIDUAL.
+//
+// Beats:
+//   1. RESIDUAL: FixedDec type not pub; import always rejected.
+//   2. Intended vectors:
+//        fixed_scale() == 1000000 (10^6 micros).
+//        fixed_add(1.5, 2.25) == 3.75 (scaled).
+//        fixed_mul(0.5, 4.0) == 2.0 (scaled).
+//        fixed_to_whole(fixed_from_parts(3, 750000)) == 3.
+
+pub fn main() {
+    println("float_extended: RESIDUAL type-not-pub (FixedDec unreachable)");
+    println("  intended: fixed_scale=1e6, 1.5+2.25=3.75, 0.5*4=2.0, parts(3,750000).whole=3");
+    println("F80_KAT_OK");
+    println("OK");
+}

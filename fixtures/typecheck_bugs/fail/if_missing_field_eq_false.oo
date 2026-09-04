@@ -1,0 +1,27 @@
+// # Compare a missing field with false
+//
+// Logline: Compare a missing State field with false so typecheck must emit no-such-field.
+//
+// Setup: Test fixture. Keep all code exact.
+//
+// Beats:
+//   1. Define State with flag and n.
+//   2. Compare s.no_such_flag == false.
+//   3. Leave main empty.
+//
+// SPRINT Issue #12 / #11 fail-closed — missing field in == false condition.
+// STATUS: expected ERR type (no such field). Issue #11 residual was silent pass;
+// tip host must stay fail-closed.
+type State = struct {
+    flag: Bool,
+    n: Int,
+};
+
+pub fn score(s: State) -> Int {
+    if s.no_such_flag == false {
+        return 0;
+    }
+    return 1;
+}
+
+pub fn main() {}

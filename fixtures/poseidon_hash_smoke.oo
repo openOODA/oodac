@@ -1,0 +1,31 @@
+// # Poseidon Hash Field Operation Smoke
+//
+// Logline: Verifies std/crypto/advanced/poseidon_hash.poseidon_params_t3, poseidon_sbox_x5, and poseidon_hash_2 are deterministic and respect t=3 field mod p.
+//
+// Setup: Imports std/crypto/advanced/poseidon_hash.oo. Pure, no FS or net. Property test (PROP) on the t=3 parameter set.
+//
+// Beats:
+//   1. Build t=3 params with prime p=11.
+//   2. poseidon_sbox_x5(2, 11) = 2^5 mod 11 = 32 mod 11 = 10.
+//   3. poseidon_hash_2 returns a deterministic Int across two calls.
+//   4. Print POSEIDON_PROP_OK on success.
+
+import "std/sec/zk/poseidon_hash.oo";
+
+pub fn main() {
+    let p: PoseidonParams = poseidon_params_t3(11);
+    let sbox_val: Int = poseidon_sbox_x5(2, 11);
+    let exp: Int = 10;
+    if sbox_val != exp {
+        println("FAIL sbox got");
+        println(sbox_val);
+        return;
+    }
+    let h1: Int = poseidon_hash_2(0, 0, p);
+    let h2: Int = poseidon_hash_2(0, 0, p);
+    if h1 != h2 {
+        println("FAIL poseidon non-deterministic");
+        return;
+    }
+    println("POSEIDON_PROP_OK");
+}

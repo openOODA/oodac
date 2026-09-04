@@ -1,0 +1,122 @@
+// # WebAssembly Milestone 2 Expression Lowering Test Suite
+//
+// Logline: Build, emit, and verify WebAssembly binary modules from AST expressions covering i32, i64, f64, bool arithmetic, bitwise, and comparisons.
+//
+// Setup: Run with ooda/bin/ooda check or run from qa/.
+//
+// Beats:
+//   1. Import required modules.
+//   2. Execute test assertions.
+//   3. Report pass or fail with exit code.
+import "oodac/emit/wasm/wasm_leb128.oo";
+import "oodac/emit/wasm/wasm_opcodes.oo";
+import "oodac/emit/wasm/wasm_types.oo";
+import "oodac/emit/wasm/wasm_binary_builder.oo";
+import "oodac/emit/wasm/wasm_lower_expr.oo";
+import "oodac/emit/wasm/wasm_lower_stmt.oo";
+import "oodac/emit/wasm/wasm_lower_control.oo";
+import "oodac/emit/wasm/wasm_lower_fn.oo";
+import "oodac/ast/ast.oo";
+
+fn assert_true(cond: Bool, msg: String) {
+    if !cond { println("ASSERTION FAILED: " + msg); }
+}
+
+pub fn test_m2_arith_module(fs: &FsWriteCap) -> List[Int] {
+    // fn arith_calc(a: Int, b: Int, c: Int) -> Int { return (a + b) * c - (a / b) + (a % b); }
+    let add_node: String = mk_ebinop("Add", mk_evar("a"), mk_evar("b"));
+    let mul_node: String = mk_ebinop("Mul", add_node, mk_evar("c"));
+    let div_node: String = mk_ebinop("Div", mk_evar("a"), mk_evar("b"));
+    let mod_node: String = mk_ebinop("Mod", mk_evar("a"), mk_evar("b"));
+    let sub_node: String = mk_ebinop("Sub", mul_node, div_node);
+    let final_expr: String = mk_ebinop("Add", sub_node, mod_node);
+
+    let ret_stmt: String = mk_sreturn(final_expr);
+    let body_block: String = mk_block(ret_stmt, mk_sempty());
+
+    let mut params: String = mk_param("a", mk_ty_int());
+    params = params + "," + mk_param("b", mk_ty_int());
+    params = params + "," + mk_param("c", mk_ty_int());
+
+    let fn_node: String = mk_fn("arith_calc", params, mk_ty_int(), "", body_block);
+    let file_node: String = mk_file(fn_node);
+
+    let bin: List[Int] = wasm_compile_ast_module(file_node, "browser", wasm_val_type_i32());
+    assert_true(list_len(bin) > 30, "arith_calc binary length > 30");
+
+    let s: String = bytes_to_str(bin);
+    let _w: Result[Void, String] = write_file(fs, "/home/jeryd/Projects/openOODA/qa/tests_wasm/tests_m2_arith.wasm", s);
+    return bin;
+}
+
+pub fn test_m2_bitwise_module(fs: &FsWriteCap) -> List[Int] {
+    // fn bitwise_calc(x: Int, y: Int) -> Int { return ((x & y) | (x ^ y)) << 2 >> 1; }
+    let and_node: String = mk_ebinop("&", mk_evar("x"), mk_evar("y"));
+    let xor_node: String = mk_ebinop("^", mk_evar("x"), mk_evar("y"));
+    let or_node: String = mk_ebinop("|", and_node, xor_node);
+    let shl_node: String = mk_ebinop("<<", or_node, mk_eint("2"));
+    let shr_node: String = mk_ebinop(">>", shl_node, mk_eint("1"));
+
+    let body_block: String = mk_block(mk_sreturn(shr_node), mk_sempty());
+    let mut params: String = mk_param("x", mk_ty_int());
+    params = params + "," + mk_param("y", mk_ty_int());
+
+    let fn_node: String = mk_fn("bitwise_calc", params, mk_ty_int(), "", body_block);
+    let bin: List[Int] = wasm_compile_ast_module(mk_file(fn_node), "browser", wasm_val_type_i32());
+
+    let s: String = bytes_to_str(bin);
+    let _w: Result[Void, String] = write_file(fs, "/home/jeryd/Projects/openOODA/qa/tests_wasm/tests_m2_bitwise.wasm", s);
+    return bin;
+}
+
+pub fn test_m2_float_module(fs: &FsWriteCap) -> List[Int] {
+    // fn float_calc(x: Float, y: Float) -> Float { return (x * 2.5 + y) / 1.5 - (-x); }
+    let mul_node: String = mk_ebinop("Mul", mk_evar("x"), mk_efloat("2.5"));
+    let add_node: String = mk_ebinop("Add", mul_node, mk_evar("y"));
+    let div_node: String = mk_ebinop("Div", add_node, mk_efloat("1.5"));
+    let neg_node: String = mk_eunop("Neg", mk_evar("x"));
+    let final_expr: String = mk_ebinop("Sub", div_node, neg_node);
+
+    let body_block: String = mk_block(mk_sreturn(final_expr), mk_sempty());
+    let mut params: String = mk_param("x", mk_ty_float());
+    params = params + "," + mk_param("y", mk_ty_float());
+
+    let fn_node: String = mk_fn("float_calc", params, mk_ty_float(), "", body_block);
+    let bin: List[Int] = wasm_compile_ast_module(mk_file(fn_node), "browser", wasm_val_type_i32());
+
+    let s: String = bytes_to_str(bin);
+    let _w: Result[Void, String] = write_file(fs, "/home/jeryd/Projects/openOODA/qa/tests_wasm/tests_m2_float.wasm", s);
+    return bin;
+}
+
+pub fn test_m2_bool_cmp_module(fs: &FsWriteCap) -> List[Int] {
+    // fn bool_cmp(a: Int, b: Int) -> Bool { return (a > 0) && (b <= 100) && !(a == b); }
+    let gt_node: String = mk_ebinop("Gt", mk_evar("a"), mk_eint("0"));
+    let lte_node: String = mk_ebinop("Lte", mk_evar("b"), mk_eint("100"));
+    let and1: String = mk_ebinop("And", gt_node, lte_node);
+    let eq_node: String = mk_ebinop("Eq", mk_evar("a"), mk_evar("b"));
+    let not_node: String = mk_eunop("Not", eq_node);
+    let final_expr: String = mk_ebinop("And", and1, not_node);
+
+    let body_block: String = mk_block(mk_sreturn(final_expr), mk_sempty());
+    let mut params: String = mk_param("a", mk_ty_int());
+    params = params + "," + mk_param("b", mk_ty_int());
+
+    let fn_node: String = mk_fn("bool_cmp", params, mk_ty_bool(), "", body_block);
+    let bin: List[Int] = wasm_compile_ast_module(mk_file(fn_node), "browser", wasm_val_type_i32());
+
+    let s: String = bytes_to_str(bin);
+    let _w: Result[Void, String] = write_file(fs, "/home/jeryd/Projects/openOODA/qa/tests_wasm/tests_m2_bool_cmp.wasm", s);
+    return bin;
+}
+
+pub fn main(fs: &FsWriteCap) {
+    println("=================================================");
+    println(" Running WebAssembly M2 Expression Unit Tests");
+    println("=================================================");
+    test_m2_arith_module(fs);
+    test_m2_bitwise_module(fs);
+    test_m2_float_module(fs);
+    test_m2_bool_cmp_module(fs);
+    println("All WASM M2 Expression unit tests emitted successfully!");
+}

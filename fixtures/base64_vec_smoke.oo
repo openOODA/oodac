@@ -1,0 +1,88 @@
+// # Base64 vector (List[Int]) codec round-trip smoke
+//
+// Logline: Asserts std/encoding/base64_vec.b64v_encode_std, b64v_decode_std, and b64v_alphabet_std against RFC 4648 §10 vectors on the List[Int] byte-buffer form.
+//
+// Setup: Imports std/encoding/base64_vec.oo. Pure. Local base64_vec_dummy naming to keep the type-checker's unused-import heuristic satisfied for the b64v_ prefix.
+//
+// Beats:
+//   1. b64v_alphabet_std() is the 64-char standard alphabet.
+//   2. b64v_block_size() == 3 (RFC 4648 24-bit packing).
+//   3. Encode "foobar" via List[Int] -> "Zm9vYmFy".
+//   4. Decode round-trip on three blocks.
+
+import "std/core/encoding/base64_vec.oo";
+import "std/core/primitives/byte_out.oo";
+
+pub fn main() {
+    let base64_vec_dummy: Int = 0;
+    let byte_out_dummy: Int = 0;
+    let warmup: Int = byte_out_dummy + 1;
+    let warmup_used: Int = warmup + 0;
+
+    // Beat 1: standard alphabet.
+    let al: String = b64v_alphabet_std();
+    if al != "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/" {
+        println("FAIL alphabet");
+        return;
+    }
+    let alu: String = b64v_alphabet_url();
+    if alu != "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_" {
+        println("FAIL alphabet url");
+        return;
+    }
+    println("OK alphabets");
+
+    // Beat 2: block size.
+    let bsz: Int = b64v_block_size();
+    if bsz != 3 {
+        println("FAIL block size got " + bsz.to_string());
+        return;
+    }
+    println("OK block size 3");
+
+    // Beat 3: encode "foobar" (6 bytes -> 8 chars + padding).
+    // Build byte list for "foobar" (102,111,111,98,97,114).
+    let mut d: List[Int] = list_new();
+    d = list_push(d, 102);
+    d = list_push(d, 111);
+    d = list_push(d, 111);
+    d = list_push(d, 98);
+    d = list_push(d, 97);
+    d = list_push(d, 114);
+    let e: String = b64v_encode_std(d);
+    if e != "Zm9vYmFy" {
+        println("FAIL encode foobar got " + e);
+        return;
+    }
+    println("OK encode foobar");
+
+    // Beat 4: decode round-trip.
+    let dr: ByteOut = b64v_decode_std("Zm9vYmFy");
+    if dr.flag != 1 {
+        println("FAIL decode Zm9vYmFy flag");
+        return;
+    }
+    let drn: Int = list_len(dr.bytes);
+    if drn != 6 {
+        println("FAIL decode len got " + drn.to_string());
+        return;
+    }
+    if list_get(dr.bytes, 0) != 102 || list_get(dr.bytes, 1) != 111 || list_get(dr.bytes, 2) != 111 {
+        println("FAIL decode bytes");
+        return;
+    }
+    println("OK decode round-trip");
+
+    // URL-safe form round-trip.
+    let eu: String = b64v_encode_url(d);
+    let dru: ByteOut = b64v_decode_url(eu);
+    if dru.flag != 1 || list_len(dru.bytes) != 6 {
+        println("FAIL url round-trip");
+        return;
+    }
+    println("OK url-safe round-trip");
+
+    let total: Int = base64_vec_dummy + 1;
+    println("BASE64V_RT_OK");
+    println("total=" + total.to_string());
+}

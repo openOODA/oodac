@@ -1,0 +1,4 @@
+import "x86_multi_ghost.oo";
+pub fn main() {
+    println(1);
+}

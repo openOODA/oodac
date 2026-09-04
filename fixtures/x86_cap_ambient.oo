@@ -1,0 +1,4 @@
+// # emit-x86 ambient write_file without cap tokens
+pub fn main() {
+    write_file("a", "b");
+}

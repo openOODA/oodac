@@ -1,0 +1,5 @@
+// # emit-x86 typed diagnostic probe: Int vs String literal
+pub fn main() {
+    let x: Int = "hi";
+    println(x);
+}

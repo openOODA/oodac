@@ -1,0 +1,62 @@
+// # 3D Scene Types Adversarial Smoke Test
+//
+// Logline: Verifies Scene creation, length, and add operations with adversarial inputs.
+//
+// Setup: Pure struct operations. No FS or net dependencies.
+//
+// Beats:
+//   1. VALID: Normal Scene creation and operations.
+//   2. NEGATIVE TRUST: Test with empty scene.
+//   3. ADVERSARIAL: Test with many adds.
+//   4. DOUBLE-RUN: Verify all operations are deterministic.
+
+import "std/app/ui/3d/scene_types.oo";
+
+pub fn expect_eq_int(label: String, got: Int, want: Int) -> Bool {
+    if got == want { println("OK " + label); return true; }
+    println("FAIL " + label + " got=" + got.to_string() + " want=" + want.to_string());
+    return false;
+}
+
+pub fn main() {
+    // VALID: Empty scene creation
+    let scene1: Scene = scene_new();
+    if !expect_eq_int("new scene next_id", scene1.next_id, 1) { return; }
+    if !expect_eq_int("new scene count", scene_len(scene1), 0) { return; }
+
+    // VALID: Scene add
+    let scene2: Scene = scene_add(scene1);
+    if !expect_eq_int("add once next_id", scene2.next_id, 2) { return; }
+    if !expect_eq_int("add once count", scene_len(scene2), 1) { return; }
+
+    // VALID: Multiple adds
+    let scene3: Scene = scene_add(scene2);
+    if !expect_eq_int("add twice next_id", scene3.next_id, 3) { return; }
+    if !expect_eq_int("add twice count", scene_len(scene3), 2) { return; }
+
+    // NEGATIVE TRUST: Empty scene length
+    if !expect_eq_int("empty scene length", scene_len(scene1), 0) { return; }
+
+    // ADVERSARIAL: Many adds
+    let mut scene_many: Scene = scene_new();
+    let mut i: Int = 0;
+    while i < 100 {
+        scene_many = scene_add(scene_many);
+        i = i + 1;
+    }
+    if !expect_eq_int("many adds count", scene_len(scene_many), 100) { return; }
+    if !expect_eq_int("many adds next_id", scene_many.next_id, 101) { return; }
+
+    // DOUBLE-RUN: Determinism check
+    let scene_dr1: Scene = scene_new();
+    let scene_dr2: Scene = scene_new();
+    if !expect_eq_int("dr new next_id", scene_dr1.next_id, scene_dr2.next_id) { return; }
+    if !expect_eq_int("dr new count", scene_len(scene_dr1), scene_len(scene_dr2)) { return; }
+
+    let scene_dr_add1: Scene = scene_add(scene_dr1);
+    let scene_dr_add2: Scene = scene_add(scene_dr2);
+    if !expect_eq_int("dr add next_id", scene_dr_add1.next_id, scene_dr_add2.next_id) { return; }
+    if !expect_eq_int("dr add count", scene_len(scene_dr_add1), scene_len(scene_dr_add2)) { return; }
+
+    println("OK: 3d_scene_types_smoke passed");
+}

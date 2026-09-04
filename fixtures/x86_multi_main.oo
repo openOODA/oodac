@@ -1,0 +1,5 @@
+// # emit-x86 multi-file main: import lib and print multiply_add(2, 3, 4)
+import "x86_multi_lib.oo";
+pub fn main() {
+    println(multiply_add(2, 3, 4));
+}

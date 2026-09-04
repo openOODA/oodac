@@ -1,0 +1,79 @@
+// # Nonlinear root-finder fixture
+//
+// Logline: Fail-closed checks for 2D damped Newton-Raphson and 1D Brent-Dekker sample roots.
+//
+// Setup: Isolated emit-c. Imports newton_raphson_multi.oo and brent_root.oo.
+//
+// Beats:
+//   1. Newton from [0,1] recovers (1,2) or (2,1) and F components near 0.
+//   2. Brent on [1,2] recovers the tabulated cubic root and f near 0.
+//   3. Brent on [0,1] returns Err (no sign change).
+
+import "std/core/math/opt/newton_raphson_multi.oo";
+import "std/core/math/opt/brent_root.oo";
+
+fn fail(msg: String) {
+    println("FAIL " + msg);
+    process_exit(1);
+}
+
+fn unwrap_f(r: Result[Float, String], msg: String) -> Float {
+    match r {
+        Ok(v) => { return v; },
+        Err(e) => { fail(msg + ": " + e); return 0.0; }
+    }
+}
+
+fn unwrap_fv(r: Result[List[Float], String], msg: String) -> List[Float] {
+    match r {
+        Ok(v) => { return v; },
+        Err(e) => { fail(msg + ": " + e); return list_new(); }
+    }
+}
+
+fn near(a: Float, b: Float, eps: Float) -> Bool {
+    let mut d: Float = a - b;
+    if d < 0.0 { d = 0.0 - d; }
+    return d <= eps;
+}
+
+pub fn main() {
+    let mut x0: List[Float] = list_new();
+    x0 = list_push(x0, 0.0);
+    x0 = list_push(x0, 1.0);
+    let root: List[Float] = unwrap_fv(newton_solve(x0, 1.0, 50, 0.000000001), "newton");
+    let rx: Float = list_get(root, 0);
+    let ry: Float = list_get(root, 1);
+    let mut r12: Bool = false;
+    if near(rx, 1.0, 0.000001) {
+        if near(ry, 2.0, 0.000001) {
+            r12 = true;
+        }
+    }
+    let mut r21: Bool = false;
+    if near(rx, 2.0, 0.000001) {
+        if near(ry, 1.0, 0.000001) {
+            r21 = true;
+        }
+    }
+    if r12 == false {
+        if r21 == false {
+            fail("newton root");
+        }
+    }
+    let fv: List[Float] = unwrap_fv(newton_sample_f(root), "newton f");
+    if near(list_get(fv, 0), 0.0, 0.000001) == false { fail("newton f0"); }
+    if near(list_get(fv, 1), 0.0, 0.000001) == false { fail("newton f1"); }
+
+    let br: Float = unwrap_f(brent_solve(1.0, 2.0, 0.0000000001, 100), "brent");
+    if near(brent_sample_f(br), 0.0, 0.00000001) == false { fail("brent f"); }
+    if near(br, 1.5213797068045676, 0.000001) == false { fail("brent tabulated"); }
+
+    let bad: Result[Float, String] = brent_solve(0.0, 1.0, 0.00000001, 50);
+    match bad {
+        Ok(_) => { fail("brent no bracket"); },
+        Err(_) => {}
+    }
+
+    println("NONLINEAR_ROOTS_ALL_PASSED");
+}

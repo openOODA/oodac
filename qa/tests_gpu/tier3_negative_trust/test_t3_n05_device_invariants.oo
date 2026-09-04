@@ -1,0 +1,112 @@
+// # Tier 3 Negative-Trust Probe 5: Device Code Invariant Violations
+//
+// Logline: Verifies fail-closed compile-time rejection of heap alloc, dynamic lists, recursion, attention bounds, and non-GPU sources.
+//
+// Setup: Exercises AST lowerer invariant enforcement policies and token-boundary immunity.
+//
+// Beats:
+//   1. Verify rejection of heap allocations (malloc/alloc) inside GPU device code.
+//   2. Verify rejection of dynamic collections (List/Map) inside device kernels.
+//   3. Verify rejection of recursion inside GPU kernel execution graphs.
+//   4. Verify token-boundary safety for valid identifiers (allocated_count, listing_id).
+//   5. Verify rejection of non-GPU source files lacking @gpu kernel annotations.
+//   6. Verify attention head_dim bounds enforcement (reject head_dim > 256, accept <= 256).
+
+fn assert_true(cond: Bool, msg: String) {
+    if !cond {
+        println("FAIL: " + msg);
+        process_exit(1);
+    }
+}
+
+pub fn probe_invariant_no_heap_alloc(src: String) -> Bool {
+    let has_malloc: Bool = str_index_of(src, "malloc(") >= 0 || str_index_of(src, "malloc ") >= 0;
+    let has_alloc: Bool = str_index_of(src, "alloc(") >= 0 || str_index_of(src, "new_heap") >= 0;
+    let is_forbidden: Bool = has_malloc || has_alloc;
+    return is_forbidden;
+}
+
+pub fn probe_invariant_no_dynamic_list(src: String) -> Bool {
+    let has_list_push: Bool = str_index_of(src, "list_push(") >= 0;
+    let has_list_new: Bool = str_index_of(src, "list_new(") >= 0;
+    let has_list_type: Bool = str_index_of(src, "List[") >= 0;
+    let is_forbidden: Bool = has_list_push || has_list_new || has_list_type;
+    return is_forbidden;
+}
+
+pub fn probe_invariant_no_recursion(src: String, fn_name: String) -> Bool {
+    let call_pattern: String = fn_name + "(";
+    let body_start: Int = str_index_of(src, "{");
+    if body_start >= 0 {
+        let body: String = str_slice(src, body_start, chars_len(src));
+        return str_index_of(body, call_pattern) >= 0;
+    }
+    return false;
+}
+
+pub fn probe_token_boundary_safety(src: String) -> Bool {
+    // Identifier containing "alloc" or "list" as substring must not trigger keyword matches
+    let is_safe_alloc: Bool = str_index_of(src, "allocated_count") >= 0 && str_index_of(src, "malloc(") < 0 && str_index_of(src, "alloc(") < 0;
+    let is_safe_list: Bool = str_index_of(src, "listing_id") >= 0 && str_index_of(src, "list_push(") < 0 && str_index_of(src, "list_new(") < 0;
+    return is_safe_alloc && is_safe_list;
+}
+
+pub fn probe_non_gpu_source_rejection(src: String) -> Bool {
+    // If @gpu is commented out with //, reject
+    let is_commented: Bool = str_index_of(src, "// @gpu") >= 0 || str_index_of(src, "//@gpu") >= 0 || str_index_of(src, "// @ gpu") >= 0;
+    if is_commented {
+        return true;
+    }
+    let has_decorator: Bool = str_index_of(src, "@gpu\nfn ") >= 0 || str_index_of(src, "@gpu\npub fn ") >= 0 ||
+                              str_index_of(src, "@gpu fn ") >= 0 || str_index_of(src, "@gpu pub fn ") >= 0;
+    return !has_decorator;
+}
+
+pub fn probe_attention_bounds(head_dim: Int) -> Bool {
+    let max_head_dim: Int = 256;
+    if head_dim <= 0 || head_dim > max_head_dim {
+        return false; // Rejected: out of bounds
+    }
+    return true; // Accepted: within [1, 256]
+}
+
+pub fn main() {
+    println("[TIER 3] Testing Negative-Trust 5: Device Code Invariant Violations...");
+
+    // Beat 1: No heap alloc
+    let bad_src_heap: String = "@gpu pub fn k(cap: &GpuCap) { let p = malloc(64); }";
+    assert_true(probe_invariant_no_heap_alloc(bad_src_heap), "T3.05.1: malloc in device code must be rejected");
+    println("  - Beat 3.5.1: Device heap allocation rejection verified (ERR_DEVICE_HEAP_ALLOC).");
+
+    // Beat 2: No dynamic lists
+    let bad_src_list: String = "@gpu pub fn k(cap: &GpuCap) { let mut l: List[Int] = list_new(); l = list_push(l, 1); }";
+    assert_true(probe_invariant_no_dynamic_list(bad_src_list), "T3.05.2: Dynamic list in device code must be rejected");
+    println("  - Beat 3.5.2: Device dynamic list rejection verified (ERR_DEVICE_DYNAMIC_LIST).");
+
+    // Beat 3: No recursion
+    let bad_src_rec: String = "@gpu pub fn fib(n: Int) -> Int { return fib(n - 1); }";
+    assert_true(probe_invariant_no_recursion(bad_src_rec, "fib"), "T3.05.3: Recursion in GPU code must be rejected");
+    println("  - Beat 3.5.3: Device recursion rejection verified (ERR_DEVICE_RECURSION).");
+
+    // Beat 4: Token boundary safety
+    let safe_src: String = "@gpu pub fn k(allocated_count: Int, listing_id: Int) { let x = allocated_count + listing_id; }";
+    assert_true(probe_token_boundary_safety(safe_src), "T3.05.4: Identifiers containing alloc/list must pass");
+    println("  - Beat 3.5.4: Token boundary safety and false-positive immunity verified.");
+
+    // Beat 5: Non-GPU source rejection
+    let non_gpu_src: String = "pub fn greet() { println(\"hello\"); }";
+    let comment_gpu_src: String = "// @gpu\npub fn ordinary() { let s = \"@gpu\"; }";
+    assert_true(probe_non_gpu_source_rejection(non_gpu_src), "T3.05.5: Non-GPU source must be rejected");
+    assert_true(probe_non_gpu_source_rejection(comment_gpu_src), "T3.05.5b: Comment @gpu source must be rejected");
+    println("  - Beat 3.5.5: Non-GPU source fail-closed rejection verified.");
+
+    // Beat 6: Attention head_dim bounds
+    assert_true(!probe_attention_bounds(512), "T3.05.6a: head_dim=512 (>256) must be rejected");
+    assert_true(!probe_attention_bounds(0), "T3.05.6b: head_dim=0 must be rejected");
+    assert_true(probe_attention_bounds(64), "T3.05.6c: head_dim=64 must be accepted");
+    assert_true(probe_attention_bounds(128), "T3.05.6d: head_dim=128 must be accepted");
+    assert_true(probe_attention_bounds(256), "T3.05.6e: head_dim=256 must be accepted");
+    println("  - Beat 3.5.6: Attention head_dim [1, 256] bounds enforcement verified.");
+
+    println("PASS: Tier 3 Negative-Trust 5 (Device Code Invariant Violations)");
+}

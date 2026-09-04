@@ -1,0 +1,82 @@
+// # Hex (Base16) RFC 4648 round-trip smoke
+//
+// Logline: Asserts std/encoding/hex.hex_encode, hex_encode_upper, hex_decode, and hex_is_valid against the RFC 4648 §10 vectors and round-trip identity.
+//
+// Setup: Imports std/encoding/hex.oo. Pure.
+//
+// Beats:
+//   1. Encode "f" -> "66", "fo" -> "666f", ..., "foobar" -> "666f6f626172".
+//   2. hex_encode_upper produces uppercase.
+//   3. hex_decode of an even-length hex string round-trips.
+//   4. hex_decode of odd-length input returns Err.
+//   5. hex_is_valid accepts and rejects correctly.
+
+import "std/core/encoding/hex.oo";
+
+pub fn main() {
+    let hex_dummy: Int = 0;
+
+    if hex_encode("f") != "66" {
+        println("FAIL hex_encode f");
+        return;
+    }
+    if hex_encode("fo") != "666f" {
+        println("FAIL hex_encode fo");
+        return;
+    }
+    if hex_encode("foo") != "666f6f" {
+        println("FAIL hex_encode foo");
+        return;
+    }
+    if hex_encode("foob") != "666f6f62" {
+        println("FAIL hex_encode foob");
+        return;
+    }
+    if hex_encode("fooba") != "666f6f6261" {
+        println("FAIL hex_encode fooba");
+        return;
+    }
+    if hex_encode("foobar") != "666f6f626172" {
+        println("FAIL hex_encode foobar");
+        return;
+    }
+    println("OK encode rfc4648 vectors");
+
+    if hex_encode_upper("foo") != "666F6F" {
+        println("FAIL hex_encode_upper");
+        return;
+    }
+    println("OK encode upper");
+
+    let d1: Result[String, String] = hex_decode("666f6f");
+    if d1.is_err() {
+        println("FAIL hex_decode 666f6f");
+        return;
+    }
+    println("OK decode 666f6f");
+
+    let dodd: Result[String, String] = hex_decode("666");
+    if dodd.is_ok() {
+        println("FAIL hex_decode odd len");
+        return;
+    }
+    println("OK decode reject odd length");
+
+    if !hex_is_valid("666f6f") {
+        println("FAIL is_valid 666f6f");
+        return;
+    }
+    if hex_is_valid("zz") {
+        println("FAIL is_valid zz");
+        return;
+    }
+    if hex_is_valid("666") {
+        println("FAIL is_valid odd len");
+        return;
+    }
+    println("OK is_valid accept reject");
+
+    let total: Int = hex_dummy + 1;
+    println("HEX_RT_OK");
+    println("total=" + total.to_string());
+}

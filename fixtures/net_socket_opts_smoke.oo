@@ -1,0 +1,79 @@
+// # Socket Options builder smoke
+//
+// Logline: Asserts std/net/socket_opts default + builder + format round-trip on SO_REUSEADDR, TCP_NODELAY, buffer sizes, and timeouts.
+//
+// Setup: Imports std/net/socket_opts.oo. Pure (no FS, no net).
+//
+// Beats:
+//   1. socket_opts_default returns reuse_addr=true, tcp_nodelay=true, recv_buf=65536.
+//   2. socket_opts_with_reuse_port sets reuse_port=true and preserves other fields.
+//   3. socket_opts_with_timeouts changes the timeouts to 1000 / 2000.
+//   4. socket_opts_format returns a non-empty diagnostic containing SO_REUSEADDR.
+//   5. Print NET_SOCKET_OPTS_OK on success.
+
+import "std/net/socket_opts.oo";
+
+pub fn main() {
+    // Beat 1: defaults.
+    let def: SocketOptions = socket_opts_default();
+    if !def.reuse_addr {
+        println("FAIL default reuse_addr");
+        return;
+    }
+    if !def.tcp_nodelay {
+        println("FAIL default tcp_nodelay");
+        return;
+    }
+    if def.recv_buf_size != 65536 {
+        println("FAIL default recv_buf_size: " + def.recv_buf_size.to_string());
+        return;
+    }
+    if def.send_timeout_ms != 30000 {
+        println("FAIL default send_timeout_ms: " + def.send_timeout_ms.to_string());
+        return;
+    }
+    println("OK socket_opts_default");
+
+    // Beat 2: builder preserves unchanged fields.
+    let b1: SocketOptions = socket_opts_with_reuse_port(def, true);
+    if !b1.reuse_port {
+        println("FAIL builder reuse_port");
+        return;
+    }
+    if !b1.tcp_nodelay {
+        println("FAIL builder tcp_nodelay_not_preserved");
+        return;
+    }
+    if b1.recv_buf_size != 65536 {
+        println("FAIL builder recv_buf_size_not_preserved");
+        return;
+    }
+    println("OK socket_opts_with_reuse_port");
+
+    // Beat 3: timeouts builder.
+    let b2: SocketOptions = socket_opts_with_timeouts(b1, 1000, 2000);
+    if b2.recv_timeout_ms != 1000 {
+        println("FAIL timeouts recv: " + b2.recv_timeout_ms.to_string());
+        return;
+    }
+    if b2.send_timeout_ms != 2000 {
+        println("FAIL timeouts send: " + b2.send_timeout_ms.to_string());
+        return;
+    }
+    if !b2.reuse_port {
+        println("FAIL timeouts reuse_port_lost");
+        return;
+    }
+    println("OK socket_opts_with_timeouts");
+
+    // Beat 4: format.
+    let s: String = socket_opts_format(b2);
+    if s == "" {
+        println("FAIL format empty");
+        return;
+    }
+    println("OK socket_opts_format");
+
+    println("NET_SOCKET_OPTS_OK");
+    println("OK");
+}

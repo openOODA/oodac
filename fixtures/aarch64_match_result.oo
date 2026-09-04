@@ -1,0 +1,19 @@
+// # Exhaustive Result match
+//
+// Logline: Match Ok and Err and print one.
+//
+// Setup: OPEN-5 Result floor. Both arms are present.
+//
+// Beats:
+//   1. Bind Ok(99).
+//   2. Match Ok and Err.
+//   3. Print the value.
+
+pub fn main() {
+    let r = Ok(99);
+    let v = match r {
+        Ok(x) => x,
+        Err(_) => -1,
+    };
+    println(v);
+}

@@ -1,0 +1,8 @@
+// # Match arm with bound arithmetic
+pub fn main() {
+    let x = Some(32);
+    match x {
+        Some(v) => { println(v + 10); },
+        None => { println(0); }
+    }
+}

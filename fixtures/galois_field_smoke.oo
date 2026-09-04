@@ -1,0 +1,97 @@
+// # Prime field Galois arithmetic smoke
+//
+// Logline: Asserts std/math/galois_field.gf_add, gf_mul, gf_inv against Fermat's Little Theorem (a * a^(p-2) = 1 mod p) for a Fermat prime p = 257 (the smallest Fermat prime strictly greater than 2^8 / AES byte space).
+//
+// Setup: Imports std/math/galois_field.oo. Pure modular arithmetic over a prime field F_p. Fermat's Little Theorem guarantees a^(p-1) = 1 mod p for any a not divisible by p; the module implements gf_inv via a^(p-2). The test exercises add, sub, mul, and the inverse property on F_257.
+//
+// Beats:
+//   1. gf_add: 3 + 4 = 7 mod 257.
+//   2. gf_add: 200 + 200 = 143 mod 257 (wraps once).
+//   3. gf_sub: 5 - 9 = 253 mod 257 (negative becomes positive).
+//   4. gf_mul: 3 * 4 = 12 mod 257.
+//   5. gf_mul: 100 * 100 = 10000 mod 257 = 234 (10000 - 38*257 = 10000 - 9766 = 234).
+//   6. gf_inv: 3 * gf_inv(3) = 1 mod 257 (Fermat inverse).
+//   7. gf_div: 10 / 4 = 10 * gf_inv(4) = 10 * 193 = 1930 mod 257 = 1930 - 7*257 = 1930 - 1799 = 131; verify.
+//   8. gf_pow: 2^8 = 256 mod 257 = -1 (Fermat signature).
+
+import "std/core/math/galois_field.oo";
+
+pub fn main() {
+    // Beat 1: 3 + 4 = 7.
+    let f: GaloisField = gf_new(257);
+    let a3: FieldElement = gf_elem(f, 3);
+    let a4: FieldElement = gf_elem(f, 4);
+    let s1: FieldElement = gf_add(a3, a4);
+    if s1.val != 7 {
+        println("FAIL gf_add 3+4 expected 7, got " + s1.val.to_string());
+        return;
+    }
+    println("OK gf_add 3+4");
+
+    // Beat 2: 200 + 200 = 143 (wraps once: 400 - 257 = 143).
+    let a200: FieldElement = gf_elem(f, 200);
+    let s2: FieldElement = gf_add(a200, a200);
+    if s2.val != 143 {
+        println("FAIL gf_add 200+200 expected 143, got " + s2.val.to_string());
+        return;
+    }
+    println("OK gf_add 200+200 wraps");
+
+    // Beat 3: 5 - 9 = 253 (negative becomes 257 - 4 = 253).
+    let a5: FieldElement = gf_elem(f, 5);
+    let a9: FieldElement = gf_elem(f, 9);
+    let s3: FieldElement = gf_sub(a5, a9);
+    if s3.val != 253 {
+        println("FAIL gf_sub 5-9 expected 253, got " + s3.val.to_string());
+        return;
+    }
+    println("OK gf_sub 5-9");
+
+    // Beat 4: 3 * 4 = 12.
+    let s4: FieldElement = gf_mul(a3, a4);
+    if s4.val != 12 {
+        println("FAIL gf_mul 3*4 expected 12, got " + s4.val.to_string());
+        return;
+    }
+    println("OK gf_mul 3*4");
+
+    // Beat 5: 100 * 100 = 10000 mod 257 = 10000 - 38*257 = 10000 - 9766 = 234.
+    let a100: FieldElement = gf_elem(f, 100);
+    let s5: FieldElement = gf_mul(a100, a100);
+    if s5.val != 234 {
+        println("FAIL gf_mul 100*100 expected 234, got " + s5.val.to_string());
+        return;
+    }
+    println("OK gf_mul 100*100");
+
+    // Beat 6: 3 * inv(3) = 1 (Fermat inverse).
+    let inv3: FieldElement = gf_inv(a3);
+    let check_inv: FieldElement = gf_mul(a3, inv3);
+    if check_inv.val != 1 {
+        println("FAIL gf_inv 3*inv(3) expected 1, got " + check_inv.val.to_string());
+        return;
+    }
+    println("OK gf_inv Fermat");
+
+    // Beat 7: 10 / 4 = 10 * inv(4). inv(4) = 4^255 mod 257 = 193 (since 4*193 = 772 = 3*257 + 1).
+    // 10 * 193 = 1930 = 7*257 + 131, so 10/4 = 131.
+    let a10: FieldElement = gf_elem(f, 10);
+    let q: FieldElement = gf_div(a10, a4);
+    if q.val != 131 {
+        println("FAIL gf_div 10/4 expected 131, got " + q.val.to_string());
+        return;
+    }
+    println("OK gf_div 10/4");
+
+    // Beat 8: 2^8 = 256 mod 257 = 256 (Fermat: 2^(p-1) = 1, so 2^256 = 1; 2^8 is just 256).
+    let a2: FieldElement = gf_elem(f, 2);
+    let p2: FieldElement = gf_pow(a2, 8);
+    if p2.val != 256 {
+        println("FAIL gf_pow 2^8 expected 256, got " + p2.val.to_string());
+        return;
+    }
+    println("OK gf_pow 2^8");
+
+    println("GALOIS_KAT_OK");
+    println("OK");
+}

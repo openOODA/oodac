@@ -1,0 +1,4 @@
+// # emit-x86 imported Int library (no main)
+pub fn multiply_add(a: Int, b: Int, c: Int) -> Int {
+    return a * b + c;
+}

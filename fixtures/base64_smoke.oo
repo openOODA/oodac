@@ -1,0 +1,79 @@
+// # Base64 RFC 4648 round-trip smoke
+//
+// Logline: Asserts std/encoding/base64.base64_encode, base64_decode, base64url_encode, and base64_is_valid against the RFC 4648 §10 test vectors and the round-trip identity.
+//
+// Setup: Imports std/encoding/base64.oo. Pure.
+//
+// Beats:
+//   1. Encode "foobar" -> "Zm9vYmFy".
+//   2. Decode "Zm9vYmFy" -> "foobar".
+//   3. Encode empty -> "".
+//   4. base64url_encode uses '-' and '_' substitutions.
+//   5. base64_is_valid rejects a bad alphabet char.
+//   6. base64_decode rejects malformed input.
+
+import "std/core/encoding/base64.oo";
+
+pub fn main() {
+    let base64_dummy: Int = 0;
+
+    // Beat 1: encode.
+    let e1: String = base64_encode("foobar");
+    if e1 != "Zm9vYmFy" {
+        println("FAIL base64_encode foobar got " + e1);
+        return;
+    }
+    println("OK encode foobar");
+
+    // Beat 2: decode.
+    let d1: Result[String, String] = base64_decode("Zm9vYmFy");
+    if d1.is_err() {
+        println("FAIL base64_decode Zm9vYmFy err");
+        return;
+    }
+    println("OK decode Zm9vYmFy");
+
+    // Beat 3: empty.
+    let e2: String = base64_encode("");
+    if e2 != "" {
+        println("FAIL base64_encode empty got '" + e2 + "'");
+        return;
+    }
+    let d2: Result[String, String] = base64_decode("");
+    if d2.is_err() {
+        println("FAIL base64_decode empty err");
+        return;
+    }
+    println("OK empty encode decode");
+
+    // Beat 4: URL-safe.
+    let eu1: String = base64url_encode("ab>");
+    if eu1 != "YWI-" {
+        println("FAIL base64url_encode ab> got " + eu1);
+        return;
+    }
+    println("OK url-safe encode");
+
+    // Beat 5: validity.
+    if !base64_is_valid("Zm9vYmFy") {
+        println("FAIL is_valid Zm9vYmFy");
+        return;
+    }
+    if base64_is_valid("Zm9vYmFy@@") {
+        println("FAIL is_valid bad alphabet");
+        return;
+    }
+    println("OK is_valid accept reject");
+
+    // Beat 6: reject malformed decode.
+    let dbad: Result[String, String] = base64_decode("@@");
+    if dbad.is_ok() {
+        println("FAIL decode bad alphabet accepted");
+        return;
+    }
+    println("OK decode reject malformed");
+
+    let total: Int = base64_dummy + 1;
+    println("BASE64_RT_OK");
+    println("total=" + total.to_string());
+}

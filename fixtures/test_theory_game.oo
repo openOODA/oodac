@@ -1,0 +1,243 @@
+// # Game theory: Nash equilibrium, Shapley value, Pareto frontier
+//
+// Logline: Verify a 2x2 matching pennies Nash equilibrium, the Shapley efficiency axiom, and Pareto dominance filter.
+//
+// Setup: Pure in-fixture re-declaration. No std import required.
+//
+// Beats:
+//   1. Matching pennies has a mixed Nash equilibrium at p=0.5, q=0.5.
+//   2. Shapley values for 3-player majority game sum to v(123).
+//   3. Pareto frontier correctly identifies non-dominated points.
+
+type PayoffMatrix = struct {
+    a: List[Float],
+    b: List[Float]
+};
+
+pub fn expected_payoff_a(pm: PayoffMatrix, row: Int, q: Float) -> Float {
+    let col0: Float = list_get(pm.a, row * 2);
+    let col1: Float = list_get(pm.a, row * 2 + 1);
+    return (1.0 - q) * col0 + q * col1;
+}
+
+pub fn expected_payoff_b(pm: PayoffMatrix, col: Int, p: Float) -> Float {
+    let row0: Float = list_get(pm.b, col);
+    let row1: Float = list_get(pm.b, col + 2);
+    return (1.0 - p) * row0 + p * row1;
+}
+
+pub fn abs_le(a: Float, tol: Float) -> Bool {
+    if a < 0.0 {
+        if (0.0 - a) <= tol {
+            return true;
+        }
+    } else {
+        if a <= tol {
+            return true;
+        }
+    }
+    return false;
+}
+
+pub fn is_indifferent(pm: PayoffMatrix, p: Float, q: Float) -> Bool {
+    let diff_a: Float = expected_payoff_a(pm, 0, q) - expected_payoff_a(pm, 1, q);
+    let diff_b: Float = expected_payoff_b(pm, 0, p) - expected_payoff_b(pm, 1, p);
+    if abs_le(diff_a, 0.0001) {
+        if abs_le(diff_b, 0.0001) {
+            return true;
+        }
+    }
+    return false;
+}
+
+pub fn lookup_v(v: List[Float], mask: Int) -> Float {
+    let n: Int = list_len(v);
+    if mask < 0 {
+        return 0.0;
+    }
+    if mask >= n {
+        return 0.0;
+    }
+    return list_get(v, mask);
+}
+
+pub fn pow2(n: Int) -> Int {
+    if n <= 0 {
+        return 1;
+    }
+    let mut acc: Int = 1;
+    let mut i: Int = 0;
+    while i < n {
+        acc = acc * 2;
+        i = i + 1;
+    }
+    return acc;
+}
+
+pub fn shapley_perm(v: List[Float], p: List[Int]) -> List[Float] {
+    let mut values: List[Float] = list_new();
+    values = list_push(values, 0.0);
+    values = list_push(values, 0.0);
+    values = list_push(values, 0.0);
+    let mut k: Int = 0;
+    let mut prev_mask: Int = 0;
+    while k < 3 {
+        let player: Int = list_get(p, k);
+        let v_prev: Float = lookup_v(v, prev_mask);
+        let v_with: Float = lookup_v(v, prev_mask + pow2(player));
+        let contrib: Float = v_with - v_prev;
+        let mut updated: List[Float] = list_new();
+        let mut u: Int = 0;
+        while u < 3 {
+            if u == player {
+                updated = list_push(updated, list_get(values, u) + contrib);
+            } else {
+                updated = list_push(updated, list_get(values, u));
+            }
+            u = u + 1;
+        }
+        values = updated;
+        prev_mask = prev_mask + pow2(player);
+        k = k + 1;
+    }
+    return values;
+}
+
+pub fn shapley_total(v: List[Float]) -> Float {
+    let mut p: List[Int] = list_new();
+    let mut q: List[Int] = list_new();
+    let mut r: List[Int] = list_new();
+    p = list_push(p, 0);
+    p = list_push(p, 1);
+    p = list_push(p, 2);
+    q = list_push(q, 0);
+    q = list_push(q, 2);
+    q = list_push(q, 1);
+    r = list_push(r, 1);
+    r = list_push(r, 2);
+    r = list_push(r, 0);
+    let v1: List[Float] = shapley_perm(v, p);
+    let v2: List[Float] = shapley_perm(v, q);
+    let v3: List[Float] = shapley_perm(v, r);
+    let s1: Float = list_get(v1, 0) + list_get(v1, 1) + list_get(v1, 2);
+    let s2: Float = list_get(v2, 0) + list_get(v2, 1) + list_get(v2, 2);
+    let s3: Float = list_get(v3, 0) + list_get(v3, 1) + list_get(v3, 2);
+    return (s1 + s2 + s3 + s1 + s2 + s3) / 6.0;
+}
+
+pub fn dominates_xy(ax: Float, ay: Float, bx: Float, by: Float) -> Bool {
+    let mut all_geq: Bool = true;
+    let mut any_gt: Bool = false;
+    if ax < bx {
+        if (bx - ax) > 0.0001 {
+            all_geq = false;
+        }
+    } else {
+        if (ax - bx) > 0.0001 {
+            any_gt = true;
+        }
+    }
+    if ay < by {
+        if (by - ay) > 0.0001 {
+            all_geq = false;
+        }
+    } else {
+        if (ay - by) > 0.0001 {
+            any_gt = true;
+        }
+    }
+    if all_geq {
+        if any_gt {
+            return true;
+        }
+    }
+    return false;
+}
+
+pub fn is_pareto(xs: List[Float], ys: List[Float], idx: Int) -> Bool {
+    let n: Int = list_len(xs);
+    if idx < 0 {
+        return false;
+    }
+    if idx >= n {
+        return false;
+    }
+    let xi: Float = list_get(xs, idx);
+    let yi: Float = list_get(ys, idx);
+    let mut j: Int = 0;
+    while j < n {
+        if j != idx {
+            let xj: Float = list_get(xs, j);
+            let yj: Float = list_get(ys, j);
+            if dominates_xy(xj, yj, xi, yi) {
+                return false;
+            }
+        }
+        j = j + 1;
+    }
+    return true;
+}
+
+pub fn approx_eq(a: Float, b: Float, tol: Float) -> Bool {
+    return abs_le(a - b, tol);
+}
+
+pub fn main() {
+    let mut a: List[Float] = list_new();
+    a = list_push(a, 1.0);
+    a = list_push(a, 0.0 - 1.0);
+    a = list_push(a, 0.0 - 1.0);
+    a = list_push(a, 1.0);
+    let mut b: List[Float] = list_new();
+    b = list_push(b, 0.0 - 1.0);
+    b = list_push(b, 1.0);
+    b = list_push(b, 1.0);
+    b = list_push(b, 0.0 - 1.0);
+    let pm: PayoffMatrix = PayoffMatrix { a: a, b: b };
+    if is_indifferent(pm, 0.5, 0.5) {
+        println("OK matching_pennies_nash_p05q05");
+    } else {
+        println("FAIL matching_pennies_nash");
+        process_exit(1);
+    }
+
+    let mut v_majority: List[Float] = list_new();
+    v_majority = list_push(v_majority, 0.0);
+    v_majority = list_push(v_majority, 0.0);
+    v_majority = list_push(v_majority, 0.0);
+    v_majority = list_push(v_majority, 0.0);
+    v_majority = list_push(v_majority, 1.0);
+    v_majority = list_push(v_majority, 1.0);
+    v_majority = list_push(v_majority, 1.0);
+    v_majority = list_push(v_majority, 2.0);
+    let total: Float = shapley_total(v_majority);
+    if approx_eq(total, 2.0, 0.0001) {
+        println("OK shapley_efficiency_majority_game");
+    } else {
+        println("FAIL shapley_efficiency");
+        process_exit(1);
+    }
+
+    let mut xs: List[Float] = list_new();
+    xs = list_push(xs, 1.0);
+    xs = list_push(xs, 2.0);
+    xs = list_push(xs, 1.5);
+    let mut ys: List[Float] = list_new();
+    ys = list_push(ys, 5.0);
+    ys = list_push(ys, 4.0);
+    ys = list_push(ys, 1.0);
+    if is_pareto(xs, ys, 0) {
+        println("OK pareto_p0_optimal");
+    } else {
+        println("FAIL pareto_p0");
+        process_exit(1);
+    }
+    if is_pareto(xs, ys, 2) {
+        println("FAIL pareto_p2_should_be_dominated");
+        process_exit(1);
+    } else {
+        println("OK pareto_p2_dominated");
+    }
+
+    println("test_theory_game: PASSED");
+}

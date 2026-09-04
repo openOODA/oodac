@@ -1,0 +1,252 @@
+// # WebAssembly Milestone 3 String Lowering Test Suite
+//
+// Logline: Build, emit, and verify WebAssembly binary modules exercising UTF-8 string layout, RODATA literals, string length, byte indexing, equality, and dynamic concatenation.
+//
+// Setup: Run with ooda/bin/ooda check or run from qa/.
+//
+// Beats:
+//   1. Import required modules.
+//   2. Execute test assertions.
+//   3. Report pass or fail with exit code.
+import "oodac/emit/wasm/wasm_leb128.oo";
+import "oodac/emit/wasm/wasm_opcodes.oo";
+import "oodac/emit/wasm/wasm_types.oo";
+import "oodac/emit/wasm/wasm_binary_builder.oo";
+import "oodac/emit/wasm/wasm_mem_layout.oo";
+import "oodac/emit/wasm/wasm_lower_expr.oo";
+import "oodac/emit/wasm/wasm_lower_string.oo";
+import "oodac/ast/ast.oo";
+
+fn assert_true(cond: Bool, msg: String) {
+    if !cond { println("ASSERTION FAILED: " + msg); }
+}
+
+pub fn test_str_lit_module(fs: &FsWriteCap) -> List[Int] {
+    let mut b: WasmModuleBuilder = wasm_builder_new();
+    let mut mem: WasmMemLayout = wasm_mem_layout_new();
+    wasm_mem_init(&mut b, 1, 2);
+
+    let p_hello: Int = wasm_rodata_add_string(&mut mem, "Hello, openOODA WASM UTF-8 String!");
+    let p_foo: Int = wasm_rodata_add_string(&mut mem, "Foo");
+    let p_bar: Int = wasm_rodata_add_string(&mut mem, "Bar");
+    wasm_mem_emit_data_section(&mut b, &mem);
+
+    // Func 0: get_hello_ptr() -> Int
+    let ty_ret_i: Int = wasm_builder_add_type(&mut b, list_new(), list_push(list_new(), wasm_val_type_i32()));
+    let f0: Int = wasm_builder_add_func(&mut b, ty_ret_i);
+    let mut bc0: List[Int] = list_new();
+    bc0 = list_push(bc0, op_i32_const()); bc0 = wasm_append(bc0, encode_i32_leb128(p_hello)); bc0 = list_push(bc0, op_end());
+    wasm_builder_set_code(&mut b, f0, list_new(), bc0);
+    wasm_builder_add_export(&mut b, "get_hello_ptr", wasm_external_func(), f0);
+
+    // Func 1: get_foo_ptr() -> Int
+    let f1: Int = wasm_builder_add_func(&mut b, ty_ret_i);
+    let mut bc1: List[Int] = list_new();
+    bc1 = list_push(bc1, op_i32_const()); bc1 = wasm_append(bc1, encode_i32_leb128(p_foo)); bc1 = list_push(bc1, op_end());
+    wasm_builder_set_code(&mut b, f1, list_new(), bc1);
+    wasm_builder_add_export(&mut b, "get_foo_ptr", wasm_external_func(), f1);
+
+    // Func 2: get_bar_ptr() -> Int
+    let f2: Int = wasm_builder_add_func(&mut b, ty_ret_i);
+    let mut bc2: List[Int] = list_new();
+    bc2 = list_push(bc2, op_i32_const()); bc2 = wasm_append(bc2, encode_i32_leb128(p_bar)); bc2 = list_push(bc2, op_end());
+    wasm_builder_set_code(&mut b, f2, list_new(), bc2);
+    wasm_builder_add_export(&mut b, "get_bar_ptr", wasm_external_func(), f2);
+
+    // Func 3: str_len(ptr: Int) -> Int
+    let ty_1_1: Int = wasm_builder_add_type(&mut b, list_push(list_new(), wasm_val_type_i32()), list_push(list_new(), wasm_val_type_i32()));
+    let f3: Int = wasm_builder_add_func(&mut b, ty_1_1);
+    let mut env3: WasmEnv = wasm_env_new("browser", wasm_val_type_i32());
+    wasm_env_bind_var(&mut env3, "ptr", wasm_val_type_i32());
+    wasm_emit_str_len(&mut env3, 0); wasm_env_emit(&mut env3, op_end());
+    wasm_builder_set_code(&mut b, f3, list_new(), env3.bytecode);
+    wasm_builder_add_export(&mut b, "str_len", wasm_external_func(), f3);
+
+    // Func 4: str_byte_at(ptr: Int, idx: Int) -> Int
+    let mut p2: List[Int] = list_new();
+    p2 = list_push(p2, wasm_val_type_i32()); p2 = list_push(p2, wasm_val_type_i32());
+    let ty_2_1: Int = wasm_builder_add_type(&mut b, p2, list_push(list_new(), wasm_val_type_i32()));
+    let f4: Int = wasm_builder_add_func(&mut b, ty_2_1);
+    let mut env4: WasmEnv = wasm_env_new("browser", wasm_val_type_i32());
+    wasm_env_bind_var(&mut env4, "ptr", wasm_val_type_i32());
+    wasm_env_bind_var(&mut env4, "idx", wasm_val_type_i32());
+    wasm_emit_str_byte_at(&mut env4, 0, 1); wasm_env_emit(&mut env4, op_end());
+    wasm_builder_set_code(&mut b, f4, list_new(), env4.bytecode);
+    wasm_builder_add_export(&mut b, "str_byte_at", wasm_external_func(), f4);
+
+    let bin: List[Int] = wasm_builder_emit(b);
+    let s: String = bytes_to_str(bin);
+    let _w: Result[Void, String] = write_file(fs, "/home/jeryd/Projects/openOODA/qa/tests_wasm/tests_m3_str_lit.wasm", s);
+    return bin;
+}
+
+pub fn test_str_eq_module(fs: &FsWriteCap) -> List[Int] {
+    let mut b: WasmModuleBuilder = wasm_builder_new();
+    let mut mem: WasmMemLayout = wasm_mem_layout_new();
+    wasm_mem_init(&mut b, 1, 2);
+
+    let p_apple1: Int = wasm_rodata_add_string(&mut mem, "apple");
+    let p_apple2: Int = wasm_rodata_add_string(&mut mem, "apple");
+    let p_apply: Int = wasm_rodata_add_string(&mut mem, "apply");
+    let p_app: Int = wasm_rodata_add_string(&mut mem, "app");
+    let p_banana: Int = wasm_rodata_add_string(&mut mem, "banana");
+    wasm_mem_emit_data_section(&mut b, &mem);
+
+    let ty_ret_i: Int = wasm_builder_add_type(&mut b, list_new(), list_push(list_new(), wasm_val_type_i32()));
+    let f_app1: Int = wasm_builder_add_func(&mut b, ty_ret_i);
+    let mut bc: List[Int] = list_new();
+    bc = list_push(bc, op_i32_const()); bc = wasm_append(bc, encode_i32_leb128(p_apple1)); bc = list_push(bc, op_end());
+    wasm_builder_set_code(&mut b, f_app1, list_new(), bc);
+    wasm_builder_add_export(&mut b, "get_apple1_ptr", wasm_external_func(), f_app1);
+
+    let f_apply: Int = wasm_builder_add_func(&mut b, ty_ret_i);
+    let mut bc_ap: List[Int] = list_new();
+    bc_ap = list_push(bc_ap, op_i32_const()); bc_ap = wasm_append(bc_ap, encode_i32_leb128(p_apply)); bc_ap = list_push(bc_ap, op_end());
+    wasm_builder_set_code(&mut b, f_apply, list_new(), bc_ap);
+    wasm_builder_add_export(&mut b, "get_apply_ptr", wasm_external_func(), f_apply);
+
+    let f_app: Int = wasm_builder_add_func(&mut b, ty_ret_i);
+    let mut bc_a: List[Int] = list_new();
+    bc_a = list_push(bc_a, op_i32_const()); bc_a = wasm_append(bc_a, encode_i32_leb128(p_app)); bc_a = list_push(bc_a, op_end());
+    wasm_builder_set_code(&mut b, f_app, list_new(), bc_a);
+    wasm_builder_add_export(&mut b, "get_app_ptr", wasm_external_func(), f_app);
+
+    let f_ban: Int = wasm_builder_add_func(&mut b, ty_ret_i);
+    let mut bc_b: List[Int] = list_new();
+    bc_b = list_push(bc_b, op_i32_const()); bc_b = wasm_append(bc_b, encode_i32_leb128(p_banana)); bc_b = list_push(bc_b, op_end());
+    wasm_builder_set_code(&mut b, f_ban, list_new(), bc_b);
+    wasm_builder_add_export(&mut b, "get_banana_ptr", wasm_external_func(), f_ban);
+
+    // Func test_eq(p1: Int, p2: Int) -> Int
+    let mut p2: List[Int] = list_new();
+    p2 = list_push(p2, wasm_val_type_i32()); p2 = list_push(p2, wasm_val_type_i32());
+    let ty_2_1: Int = wasm_builder_add_type(&mut b, p2, list_push(list_new(), wasm_val_type_i32()));
+    let f_eq: Int = wasm_builder_add_func(&mut b, ty_2_1);
+    let mut env_eq: WasmEnv = wasm_env_new("browser", wasm_val_type_i32());
+    wasm_env_bind_var(&mut env_eq, "p1", wasm_val_type_i32());
+    wasm_env_bind_var(&mut env_eq, "p2", wasm_val_type_i32());
+    let l1: Int = wasm_env_bind_var(&mut env_eq, "l1", wasm_val_type_i32());
+    let l2: Int = wasm_env_bind_var(&mut env_eq, "l2", wasm_val_type_i32());
+    let i_loc: Int = wasm_env_bind_var(&mut env_eq, "i", wasm_val_type_i32());
+    wasm_emit_str_eq(&mut env_eq, 0, 1, l1, l2, i_loc);
+    wasm_env_emit(&mut env_eq, op_end());
+
+    let mut locs_eq: List[Int] = list_new();
+    locs_eq = list_push(locs_eq, wasm_val_type_i32()); locs_eq = list_push(locs_eq, wasm_val_type_i32()); locs_eq = list_push(locs_eq, wasm_val_type_i32());
+    wasm_builder_set_code(&mut b, f_eq, locs_eq, env_eq.bytecode);
+    wasm_builder_add_export(&mut b, "test_eq", wasm_external_func(), f_eq);
+
+    // Func test_ne(p1: Int, p2: Int) -> Int
+    let f_ne: Int = wasm_builder_add_func(&mut b, ty_2_1);
+    let mut env_ne: WasmEnv = wasm_env_new("browser", wasm_val_type_i32());
+    wasm_env_bind_var(&mut env_ne, "p1", wasm_val_type_i32());
+    wasm_env_bind_var(&mut env_ne, "p2", wasm_val_type_i32());
+    let nl1: Int = wasm_env_bind_var(&mut env_ne, "l1", wasm_val_type_i32());
+    let nl2: Int = wasm_env_bind_var(&mut env_ne, "l2", wasm_val_type_i32());
+    let ni_loc: Int = wasm_env_bind_var(&mut env_ne, "i", wasm_val_type_i32());
+    wasm_emit_str_ne(&mut env_ne, 0, 1, nl1, nl2, ni_loc);
+    wasm_env_emit(&mut env_ne, op_end());
+    wasm_builder_set_code(&mut b, f_ne, locs_eq, env_ne.bytecode);
+    wasm_builder_add_export(&mut b, "test_ne", wasm_external_func(), f_ne);
+
+    let bin: List[Int] = wasm_builder_emit(b);
+    let s: String = bytes_to_str(bin);
+    let _w: Result[Void, String] = write_file(fs, "/home/jeryd/Projects/openOODA/qa/tests_wasm/tests_m3_str_eq.wasm", s);
+    return bin;
+}
+
+pub fn test_str_concat_module(fs: &FsWriteCap) -> List[Int] {
+    let mut b: WasmModuleBuilder = wasm_builder_new();
+    let mut mem: WasmMemLayout = wasm_mem_layout_new();
+    wasm_mem_init(&mut b, 1, 4);
+
+    let p_hello: Int = wasm_rodata_add_string(&mut mem, "Hello, ");
+    let p_world: Int = wasm_rodata_add_string(&mut mem, "World!");
+    let p_full: Int = wasm_rodata_add_string(&mut mem, "Hello, World!");
+    wasm_mem_emit_data_section(&mut b, &mem);
+
+    let ty_ret_i: Int = wasm_builder_add_type(&mut b, list_new(), list_push(list_new(), wasm_val_type_i32()));
+    let f_h: Int = wasm_builder_add_func(&mut b, ty_ret_i);
+    let mut bch: List[Int] = list_new();
+    bch = list_push(bch, op_i32_const()); bch = wasm_append(bch, encode_i32_leb128(p_hello)); bch = list_push(bch, op_end());
+    wasm_builder_set_code(&mut b, f_h, list_new(), bch);
+    wasm_builder_add_export(&mut b, "get_hello_ptr", wasm_external_func(), f_h);
+
+    let f_w: Int = wasm_builder_add_func(&mut b, ty_ret_i);
+    let mut bcw: List[Int] = list_new();
+    bcw = list_push(bcw, op_i32_const()); bcw = wasm_append(bcw, encode_i32_leb128(p_world)); bcw = list_push(bcw, op_end());
+    wasm_builder_set_code(&mut b, f_w, list_new(), bcw);
+    wasm_builder_add_export(&mut b, "get_world_ptr", wasm_external_func(), f_w);
+
+    let f_full: Int = wasm_builder_add_func(&mut b, ty_ret_i);
+    let mut bcf: List[Int] = list_new();
+    bcf = list_push(bcf, op_i32_const()); bcf = wasm_append(bcf, encode_i32_leb128(p_full)); bcf = list_push(bcf, op_end());
+    wasm_builder_set_code(&mut b, f_full, list_new(), bcf);
+    wasm_builder_add_export(&mut b, "get_full_expected_ptr", wasm_external_func(), f_full);
+
+    // concat_strings(p1: Int, p2: Int) -> Int
+    let mut p2: List[Int] = list_new();
+    p2 = list_push(p2, wasm_val_type_i32()); p2 = list_push(p2, wasm_val_type_i32());
+    let ty_2_1: Int = wasm_builder_add_type(&mut b, p2, list_push(list_new(), wasm_val_type_i32()));
+    let f_cat: Int = wasm_builder_add_func(&mut b, ty_2_1);
+    let mut env_cat: WasmEnv = wasm_env_new("browser", wasm_val_type_i32());
+    wasm_env_bind_var(&mut env_cat, "p1", wasm_val_type_i32());
+    wasm_env_bind_var(&mut env_cat, "p2", wasm_val_type_i32());
+    let np: Int = wasm_env_bind_var(&mut env_cat, "new_ptr", wasm_val_type_i32());
+    let l1: Int = wasm_env_bind_var(&mut env_cat, "l1", wasm_val_type_i32());
+    let l2: Int = wasm_env_bind_var(&mut env_cat, "l2", wasm_val_type_i32());
+    let tot: Int = wasm_env_bind_var(&mut env_cat, "tot", wasm_val_type_i32());
+    let i_loc: Int = wasm_env_bind_var(&mut env_cat, "i", wasm_val_type_i32());
+    wasm_emit_str_concat(&mut env_cat, 0, 1, np, l1, l2, tot, i_loc, mem.heap_base);
+    wasm_env_emit(&mut env_cat, op_end());
+
+    let mut locs_cat: List[Int] = list_new();
+    locs_cat = list_push(locs_cat, wasm_val_type_i32()); locs_cat = list_push(locs_cat, wasm_val_type_i32());
+    locs_cat = list_push(locs_cat, wasm_val_type_i32()); locs_cat = list_push(locs_cat, wasm_val_type_i32());
+    locs_cat = list_push(locs_cat, wasm_val_type_i32());
+    wasm_builder_set_code(&mut b, f_cat, locs_cat, env_cat.bytecode);
+    wasm_builder_add_export(&mut b, "concat_strings", wasm_external_func(), f_cat);
+
+    // slice_string(ptr: Int, start: Int, end: Int) -> Int
+    let mut p3: List[Int] = list_new();
+    p3 = list_push(p3, wasm_val_type_i32()); p3 = list_push(p3, wasm_val_type_i32()); p3 = list_push(p3, wasm_val_type_i32());
+    let ty_3_1: Int = wasm_builder_add_type(&mut b, p3, list_push(list_new(), wasm_val_type_i32()));
+    let f_sl: Int = wasm_builder_add_func(&mut b, ty_3_1);
+    let mut env_sl: WasmEnv = wasm_env_new("browser", wasm_val_type_i32());
+    wasm_env_bind_var(&mut env_sl, "ptr", wasm_val_type_i32());
+    wasm_env_bind_var(&mut env_sl, "start", wasm_val_type_i32());
+    wasm_env_bind_var(&mut env_sl, "end", wasm_val_type_i32());
+    let snp: Int = wasm_env_bind_var(&mut env_sl, "new_ptr", wasm_val_type_i32());
+    let slen: Int = wasm_env_bind_var(&mut env_sl, "slen", wasm_val_type_i32());
+    let si: Int = wasm_env_bind_var(&mut env_sl, "i", wasm_val_type_i32());
+    wasm_emit_str_slice(&mut env_sl, 0, 1, 2, snp, slen, si, mem.heap_base);
+    wasm_env_emit(&mut env_sl, op_end());
+
+    let mut locs_sl: List[Int] = list_new();
+    locs_sl = list_push(locs_sl, wasm_val_type_i32()); locs_sl = list_push(locs_sl, wasm_val_type_i32());
+    locs_sl = list_push(locs_sl, wasm_val_type_i32());
+    wasm_builder_set_code(&mut b, f_sl, locs_sl, env_sl.bytecode);
+    wasm_builder_add_export(&mut b, "slice_string", wasm_external_func(), f_sl);
+
+    // str_len(ptr: Int) -> Int
+    let ty_1_1: Int = wasm_builder_add_type(&mut b, list_push(list_new(), wasm_val_type_i32()), list_push(list_new(), wasm_val_type_i32()));
+    let f_len: Int = wasm_builder_add_func(&mut b, ty_1_1);
+    let mut env_l: WasmEnv = wasm_env_new("browser", wasm_val_type_i32());
+    wasm_env_bind_var(&mut env_l, "ptr", wasm_val_type_i32());
+    wasm_emit_str_len(&mut env_l, 0); wasm_env_emit(&mut env_l, op_end());
+    wasm_builder_set_code(&mut b, f_len, list_new(), env_l.bytecode);
+    wasm_builder_add_export(&mut b, "str_len", wasm_external_func(), f_len);
+
+    let bin: List[Int] = wasm_builder_emit(b);
+    let s: String = bytes_to_str(bin);
+    let _w: Result[Void, String] = write_file(fs, "/home/jeryd/Projects/openOODA/qa/tests_wasm/tests_m3_str_concat.wasm", s);
+    return bin;
+}
+
+pub fn main(fs: &FsWriteCap) {
+    println("Running Milestone 3 UTF-8 String Unit Tests");
+    let b1: List[Int] = test_str_lit_module(fs); assert_true(list_len(b1) > 20, "str_lit module emitted");
+    let b2: List[Int] = test_str_eq_module(fs); assert_true(list_len(b2) > 20, "str_eq module emitted");
+    let b3: List[Int] = test_str_concat_module(fs); assert_true(list_len(b3) > 20, "str_concat module emitted");
+    println("All Milestone 3 String test modules emitted successfully!");
+}

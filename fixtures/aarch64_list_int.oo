@@ -1,0 +1,20 @@
+// # AArch64 List[Int] runtime
+//
+// Logline: List[T] runtime probe for the AArch64 backend.
+//
+// Setup: Uses the aarch64_emit_list.oo matcher to drive a real
+// list_new/list_push/list_len chain through the AAPCS64 frame
+// prologue and bl calls.
+//
+// Beats:
+//   1. Create empty list.
+//   2. Push three values.
+//   3. Print the length.
+
+pub fn main() {
+    let mut xs: List[Int] = list_new();
+    xs = list_push(xs, 42);
+    xs = list_push(xs, 7);
+    xs = list_push(xs, 99);
+    println(list_len(xs));
+}

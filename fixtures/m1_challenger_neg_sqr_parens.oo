@@ -1,0 +1,20 @@
+// # Negative Test: Unsatisfiable Parenthesized Square
+//
+// Logline: Fails closed when parenthesized expression squared is required to be negative.
+//
+// Setup: Pure .oo test for fail-closed SMT refusal on (x + 1) * (x + 1) < 0.
+//
+// Beats:
+//   1. Function invalid requires (x + 1) * (x + 1) < 0.
+//   2. Structural AST matcher recognizes identical factor slices.
+//   3. Compiler refuses with ERR smt unsat requires at 13:5.
+
+pub fn invalid(x: Int) -> Int
+    requires (x + 1) * (x + 1) < 0
+{
+    return x;
+}
+
+pub fn main() {
+    println(invalid(4));
+}

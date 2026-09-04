@@ -1,0 +1,17 @@
+// # x86 SSA mem2reg const-init fold fixture
+//
+// Logline: Provides the const-init `let y: Int = 0` + `while y < 3` + `println(y)` main that the mem2reg and const-fold passes fold.
+//
+// Setup: Parse-only fixture for scripts/x86_ssa_opt_smoke.oo. Do not execute.
+//
+// Beats:
+//   1. Declare y with the const-init 0.
+//   2. Loop while y < 3.
+//   3. Print y on each iteration.
+
+pub fn main() {
+    let y: Int = 0;
+    while y < 3 {
+        println(y);
+    }
+}

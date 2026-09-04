@@ -1,0 +1,99 @@
+// # CSV RFC 4180 round-trip smoke
+//
+// Logline: Asserts std/encoding/csv.csv_field_count, csv_nth_field, csv_escape_field, csv_join_row, and csv_parse_document against RFC 4180 §2 examples (basic, quoted, escaped quote) and CR/LF row counting.
+//
+// Setup: Imports std/encoding/csv.oo. Pure.
+//
+// Beats:
+//   1. csv_field_count("a,b,c") == 3.
+//   2. csv_field_count handles a quoted embedded comma: "a,b",c -> 2.
+//   3. csv_field_count handles an escaped quote: "a""b",c -> 2.
+//   4. csv_nth_field returns the right field for indices 0..n-1.
+//   5. csv_escape_field quotes and doubles internal quotes per RFC 4180 §2.5-2.7.
+//   6. csv_join_row joins fields with comma.
+//   7. csv_parse_document counts LF and CRLF rows correctly.
+
+import "std/core/encoding/csv.oo";
+
+pub fn main() {
+    let csv_dummy: Int = 0;
+
+    // Beat 1: basic three fields.
+    let c1: Int = csv_field_count("a,b,c");
+    if c1 != 3 {
+        println("FAIL field count a,b,c got " + c1.to_string());
+        return;
+    }
+    println("OK field count basic");
+
+    // Beat 2: quoted embedded comma is one field.
+    let c2: Int = csv_field_count("\"a,b\",c");
+    if c2 != 2 {
+        println("FAIL field count quoted got " + c2.to_string());
+        return;
+    }
+    println("OK field count quoted");
+
+    // Beat 3: escaped quote is one field.
+    let c3: Int = csv_field_count("\"a\"\"b\",c");
+    if c3 != 2 {
+        println("FAIL field count esc quote got " + c3.to_string());
+        return;
+    }
+    println("OK field count esc quote");
+
+    // Beat 4: nth field.
+    if csv_nth_field("a,b,c", 0) != "a" || csv_nth_field("a,b,c", 1) != "b" || csv_nth_field("a,b,c", 2) != "c" {
+        println("FAIL nth_field basic");
+        return;
+    }
+    if csv_nth_field("\"a,b\",c", 0) != "a,b" {
+        println("FAIL nth_field quoted");
+        return;
+    }
+    if csv_nth_field("\"a\"\"b\",c", 0) != "a\"b" {
+        println("FAIL nth_field esc quote");
+        return;
+    }
+    println("OK nth field");
+
+    // Beat 5: escape.
+    if csv_escape_field("hello") != "hello" {
+        println("FAIL escape hello");
+        return;
+    }
+    if csv_escape_field("a,b") != "\"a,b\"" {
+        println("FAIL escape a,b");
+        return;
+    }
+    if csv_escape_field("a\"b") != "\"a\"\"b\"" {
+        println("FAIL escape a\"b");
+        return;
+    }
+    println("OK escape");
+
+    // Beat 6: join.
+    let j1: String = csv_join_row("a", "b");
+    if j1 != "a,b" {
+        println("FAIL join a,b got " + j1);
+        return;
+    }
+    println("OK join");
+
+    // Beat 7: document row count.
+    let dr1: Int = csv_parse_document("a,b\nc,d\ne,f\n");
+    if dr1 != 3 {
+        println("FAIL doc 3 rows lf got " + dr1.to_string());
+        return;
+    }
+    let dr2: Int = csv_parse_document("a,b\r\nc,d\r\n");
+    if dr2 != 2 {
+        println("FAIL doc 2 rows crlf got " + dr2.to_string());
+        return;
+    }
+    println("OK document rows");
+
+    let total: Int = csv_dummy + 1;
+    println("CSV_RT_OK");
+    println("total=" + total.to_string());
+}

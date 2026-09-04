@@ -1,0 +1,150 @@
+// # Adversarial String Byte Operations Probe
+//
+// Logline: Adversarially stress tests str_byte_at and byte_at across boundary offsets and multi-byte UTF-8 characters.
+//
+// Setup: Requires working oodac compiler with C runtime oo_byte_at lowering.
+//
+// Beats:
+//   1. Test byte extraction on ASCII strings and boundary indices (0, len-1, len, out-of-bounds, negative).
+//   2. Test multi-byte UTF-8 byte sequences for 2-byte, 3-byte, and 4-byte Unicode scalar values.
+//   3. Test empty strings and single-byte strings across valid and invalid offsets.
+//   4. Test byte_slice and bytes_len parity with byte_at accessors.
+
+pub fn test_ascii_bytes() -> Int {
+    let s: String = "Hello, World!";
+    let n: Int = bytes_len(s);
+    let mut errs: Int = 0;
+
+    // Index 0: 'H' (72)
+    let b0: Int = byte_at(s, 0);
+    if b0 != 72 { errs = errs + 1; }
+
+    // Index 4: 'o' (111)
+    let b4: Int = byte_at(s, 4);
+    if b4 != 111 { errs = errs + 1; }
+
+    // Index 12: '!' (33)
+    let b12: Int = byte_at(s, n - 1);
+    if b12 != 33 { errs = errs + 1; }
+
+    // Boundary: OOB at len -> returns -1
+    let boob: Int = byte_at(s, n);
+    if boob != -1 { errs = errs + 1; }
+
+    // Boundary: OOB past len -> returns -1
+    let boob2: Int = byte_at(s, n + 100);
+    if boob2 != -1 { errs = errs + 1; }
+
+    // Boundary: Negative offset -> returns -1
+    let bneg: Int = byte_at(s, -1);
+    if bneg != -1 { errs = errs + 1; }
+
+    return errs;
+}
+
+pub fn test_utf8_multibyte() -> Int {
+    let mut errs: Int = 0;
+
+    // 2-byte UTF-8: "é" (U+00E9) -> 0xC3, 0xA9 (195, 169)
+    let s2: String = "é";
+    let n2: Int = bytes_len(s2);
+    if n2 == 2 {
+        let b0: Int = byte_at(s2, 0);
+        let b1: Int = byte_at(s2, 1);
+        if b0 != 195 || b1 != 169 { errs = errs + 1; }
+    } else {
+        errs = errs + 1;
+    }
+
+    // 3-byte UTF-8: "€" (U+20AC) -> 0xE2, 0x82, 0xAC (226, 130, 172)
+    let s3: String = "€";
+    let n3: Int = bytes_len(s3);
+    if n3 == 3 {
+        let b0: Int = byte_at(s3, 0);
+        let b1: Int = byte_at(s3, 1);
+        let b2: Int = byte_at(s3, 2);
+        if b0 != 226 || b1 != 130 || b2 != 172 { errs = errs + 1; }
+    } else {
+        errs = errs + 1;
+    }
+
+    // Mixed ASCII and UTF-8: "A€B" -> len 5 (65, 226, 130, 172, 66)
+    let s_mix: String = "A€B";
+    let nm: Int = bytes_len(s_mix);
+    if nm == 5 {
+        if byte_at(s_mix, 0) != 65 { errs = errs + 1; }
+        if byte_at(s_mix, 1) != 226 { errs = errs + 1; }
+        if byte_at(s_mix, 2) != 130 { errs = errs + 1; }
+        if byte_at(s_mix, 3) != 172 { errs = errs + 1; }
+        if byte_at(s_mix, 4) != 66 { errs = errs + 1; }
+        if byte_at(s_mix, 5) != -1 { errs = errs + 1; }
+    } else {
+        errs = errs + 1;
+    }
+
+    return errs;
+}
+
+pub fn test_empty_string_boundaries() -> Int {
+    let empty: String = "";
+    let mut errs: Int = 0;
+    if bytes_len(empty) != 0 { errs = errs + 1; }
+    if byte_at(empty, 0) != -1 { errs = errs + 1; }
+    if byte_at(empty, -1) != -1 { errs = errs + 1; }
+    if byte_at(empty, 10) != -1 { errs = errs + 1; }
+    return errs;
+}
+
+pub fn test_byte_slice_and_buffer() -> Int {
+    let mut errs: Int = 0;
+    let s: String = "ABCDEF";
+    let sub: String = byte_slice(s, 2, 5); // "CDE"
+    if sub != "CDE" { errs = errs + 1; }
+    if bytes_len(sub) != 3 { errs = errs + 1; }
+    if byte_at(sub, 0) != 67 { errs = errs + 1; }
+    if byte_at(sub, 2) != 69 { errs = errs + 1; }
+
+    // Slice boundary edge cases
+    let empty_sub: String = byte_slice(s, 4, 2); // invalid range -> empty
+    if empty_sub != "" { errs = errs + 1; }
+
+    let oob_sub: String = byte_slice(s, 0, 100); // clamped to end -> "ABCDEF"
+    if oob_sub != "ABCDEF" { errs = errs + 1; }
+
+    return errs;
+}
+
+pub fn main() {
+    let mut num_errors: Int = 0;
+
+    let e1: Int = test_ascii_bytes();
+    if e1 != 0 {
+        println("FAIL: test_ascii_bytes");
+        num_errors = num_errors + e1;
+    }
+
+    let e2: Int = test_utf8_multibyte();
+    if e2 != 0 {
+        println("FAIL: test_utf8_multibyte");
+        num_errors = num_errors + e2;
+    }
+
+    let e3: Int = test_empty_string_boundaries();
+    if e3 != 0 {
+        println("FAIL: test_empty_string_boundaries");
+        num_errors = num_errors + e3;
+    }
+
+    let e4: Int = test_byte_slice_and_buffer();
+    if e4 != 0 {
+        println("FAIL: test_byte_slice_and_buffer");
+        num_errors = num_errors + e4;
+    }
+
+    if num_errors == 0 {
+        println("probe_adversarial_str_byte_at: PASSED");
+    } else {
+        println("probe_adversarial_str_byte_at: FAILED");
+        process_exit(1);
+    }
+}

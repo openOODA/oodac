@@ -1,0 +1,92 @@
+// # GPU Runner Double-Run Determinism Test
+//
+// Logline: Verify gpu_output_passes and gpu_summary are bit-identical across two calls and cover the right input space.
+//
+// Setup: FsReadCap accepted for bin/ooda run compatibility. No ProcessCap exercised; tests the pure helpers only.
+//
+// Beats:
+//   1. Test gpu_output_passes with 5 inputs (clean, with FAIL, empty, PASS-only, mixed).
+//   2. Test gpu_summary renders the right Total/Passed/Failed lines for 3 (passed, failed) pairs.
+//   3. Run the helpers twice with the same input; assert byte-identical output.
+
+import "gpuhelpers.oo";
+
+fn assert_true(cond: Bool, msg: String) {
+    if !cond {
+        println("FAIL: " + msg);
+        process_exit(1);
+    }
+}
+
+fn test_output_scan() {
+    println("--- Tier G.1: Output Scan (gpu_output_passes) ---");
+    let clean: String = "Hello\nPASS gpu_t1\nWorld\n";
+    assert_true(gpu_output_passes(clean) == true, "clean output must pass");
+
+    let with_fail: String = "Hello\nFAIL gpu_t1 drift\nWorld\n";
+    assert_true(gpu_output_passes(with_fail) == false, "output containing FAIL must not pass");
+
+    let empty: String = "";
+    assert_true(gpu_output_passes(empty) == false, "empty output must not pass");
+
+    let pass_only: String = "PASS gpu_t1\nPASS gpu_t2\n";
+    assert_true(gpu_output_passes(pass_only) == true, "PASS-only output must pass");
+
+    let mixed: String = "PROBE 1 OK\nFAIL: kernel launch invalid\nPROBE 2 OK\n";
+    assert_true(gpu_output_passes(mixed) == false, "output with FAIL substring anywhere must not pass");
+
+    println("  [PASS] Tier G.1: output scan correct on 5 distinct inputs.");
+}
+
+fn test_summary() {
+    println("--- Tier G.2: Summary Rendering (gpu_summary) ---");
+    let s1: String = gpu_summary(27, 0);
+    assert_true(str_contains(s1, "Total Passed Suites: 27"), "summary must include passed=27");
+    assert_true(str_contains(s1, "Total Failed Suites: 0"), "summary must include failed=0");
+    assert_true(str_contains(s1, "Total Executed:      27"), "summary must include total=27");
+
+    let s2: String = gpu_summary(20, 7);
+    assert_true(str_contains(s2, "Total Passed Suites: 20"), "summary must include passed=20");
+    assert_true(str_contains(s2, "Total Failed Suites: 7"), "summary must include failed=7");
+    assert_true(str_contains(s2, "Total Executed:      27"), "summary must include total=27 for (20,7)");
+
+    let s3: String = gpu_summary(0, 0);
+    assert_true(str_contains(s3, "Total Executed:      0"), "summary must include total=0 for (0,0)");
+
+    println("  [PASS] Tier G.2: summary rendering correct on 3 distinct (passed, failed) pairs.");
+}
+
+fn test_double_run() {
+    println("--- Tier G.3: Double-Run Determinism ---");
+    // Run the helpers twice and assert byte-identical output.
+    let mut a1: String = "";
+    a1 = a1 + gpu_output_passes("x\nPASS\n").to_string() + ";";
+    a1 = a1 + gpu_output_passes("x\nFAIL\n").to_string() + ";";
+    a1 = a1 + gpu_output_passes("").to_string() + ";";
+    a1 = a1 + gpu_summary(15, 12);
+
+    let mut a2: String = "";
+    a2 = a2 + gpu_output_passes("x\nPASS\n").to_string() + ";";
+    a2 = a2 + gpu_output_passes("x\nFAIL\n").to_string() + ";";
+    a2 = a2 + gpu_output_passes("").to_string() + ";";
+    a2 = a2 + gpu_summary(15, 12);
+
+    assert_true(a1 == a2, "helper output must be byte-identical across two invocations");
+    println("  [PASS] Tier G.3: gpu_output_passes and gpu_summary are deterministic (Run_1 == Run_2).");
+}
+
+pub fn run_test_gpu_runner() {
+    println("===================================================================");
+    println("  GPU RUNNER DOUBLE-RUN DETERMINISM TEST SUITE                   ");
+    println("===================================================================");
+    test_output_scan();
+    test_summary();
+    test_double_run();
+    println("===================================================================");
+    println("  GPU RUNNER TEST SUITE: ALL PROBES PASSED (100%)                 ");
+    println("===================================================================");
+}
+
+pub fn main(_fs: &FsReadCap) {
+    run_test_gpu_runner();
+}

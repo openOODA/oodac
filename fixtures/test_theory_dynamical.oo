@@ -1,0 +1,238 @@
+// # Dynamical systems: fixed points, contraction, Lyapunov stability
+//
+// Logline: Verify Banach fixed-point theorem on a strict contraction, affine fixed point, Lyapunov decay, and orbit convergence to an attractor.
+//
+// Setup: Pure in-fixture re-declaration. No std import required.
+//
+// Beats:
+//   1. Affine map f(x) = 0.5*x has unique fixed point 0.
+//   2. f(x) = 0.5*x is a strict contraction: k = 0.5 < 1.
+//   3. Banach: contraction implies unique fixed point exists.
+//   4. Iterated f from x0 = 1.0 converges to 0.
+//   5. Lyapunov function V(x) = x^2 decreases under f(x) = 0.5*x.
+//   6. Attractor basin: orbit starting at x0 = 1.0 reaches |x| < 0.01 within 10 iterations.
+
+type Map1D = struct {
+    a: Float,
+    b: Float
+};
+
+pub fn map_apply(m: Map1D, x: Float) -> Float {
+    return m.a * x + m.b;
+}
+
+pub fn fixed_point_iterate(m: Map1D, x0: Float, n: Int) -> Float {
+    let mut x: Float = x0;
+    let mut k: Int = 0;
+    while k < n {
+        x = map_apply(m, x);
+        k = k + 1;
+    }
+    return x;
+}
+
+pub fn fixed_point_converge(m: Map1D, x0: Float, tol: Float, max_iter: Int) -> Float {
+    if tol < 0.0 {
+        return x0;
+    }
+    if max_iter <= 0 {
+        return x0;
+    }
+    let mut x: Float = x0;
+    let mut k: Int = 0;
+    while k < max_iter {
+        let x_next: Float = map_apply(m, x);
+        let diff: Float = x_next - x;
+        if diff < 0.0 {
+            if (0.0 - diff) < tol {
+                return x_next;
+            }
+        } else {
+            if diff < tol {
+                return x_next;
+            }
+        }
+        x = x_next;
+        k = k + 1;
+    }
+    return x;
+}
+
+pub fn is_fixed_point(m: Map1D, x: Float, tol: Float) -> Bool {
+    let fx: Float = map_apply(m, x);
+    let diff: Float = fx - x;
+    if diff < 0.0 {
+        if (0.0 - diff) < tol {
+            return true;
+        }
+    } else {
+        if diff < tol {
+            return true;
+        }
+    }
+    return false;
+}
+
+pub fn contraction_coefficient(m: Map1D, samples: Int) -> Float {
+    if samples < 2 {
+        return 2.0;
+    }
+    let step: Float = 1.0 / (1.0 * (samples - 1));
+    let mut max_k: Float = 0.0;
+    let mut i: Int = 0;
+    while i < samples {
+        let xi: Float = 1.0 * (i) * step;
+        let mut j: Int = 0;
+        while j < samples {
+            let xj: Float = 1.0 * (j) * step;
+            let diff_x: Float = xi - xj;
+            if diff_x < 0.0 {
+                if (0.0 - diff_x) > 0.0001 {
+                    let diff_y: Float = map_apply(m, xi) - map_apply(m, xj);
+                    let k_local: Float = diff_y / diff_x;
+                    if k_local < 0.0 {
+                        if (0.0 - k_local) > max_k {
+                            max_k = 0.0 - k_local;
+                        }
+                    } else {
+                        if k_local > max_k {
+                            max_k = k_local;
+                        }
+                    }
+                }
+            } else {
+                if diff_x > 0.0001 {
+                    let diff_y: Float = map_apply(m, xi) - map_apply(m, xj);
+                    let k_local: Float = diff_y / diff_x;
+                    if k_local < 0.0 {
+                        if (0.0 - k_local) > max_k {
+                            max_k = 0.0 - k_local;
+                        }
+                    } else {
+                        if k_local > max_k {
+                            max_k = k_local;
+                        }
+                    }
+                }
+            }
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+    return max_k;
+}
+
+pub fn lyapunov_decay(m: Map1D, samples: Int) -> Bool {
+    if samples < 3 {
+        return false;
+    }
+    let step: Float = 1.0 / (1.0 * (samples - 1));
+    let mut i: Int = 1;
+    while i < samples {
+        let x: Float = 1.0 * (i) * step;
+        let vx: Float = x * x;
+        let fx: Float = map_apply(m, x);
+        let vfx: Float = fx * fx;
+        if vfx >= vx {
+            return false;
+        }
+        i = i + 1;
+    }
+    return true;
+}
+
+pub fn attractor_steps(m: Map1D, x0: Float, x_star: Float, tol: Float, max_iter: Int) -> Int {
+    if max_iter <= 0 {
+        return 0 - 1;
+    }
+    if tol < 0.0 {
+        return 0 - 1;
+    }
+    let mut x: Float = x0;
+    let mut k: Int = 0;
+    while k < max_iter {
+        let diff: Float = x - x_star;
+        if diff < 0.0 {
+            if (0.0 - diff) < tol {
+                return k;
+            }
+        } else {
+            if diff < tol {
+                return k;
+            }
+        }
+        x = map_apply(m, x);
+        k = k + 1;
+    }
+    return 0 - 1;
+}
+
+pub fn approx_zero(x: Float, tol: Float) -> Bool {
+    if x < 0.0 {
+        if (0.0 - x) < tol {
+            return true;
+        }
+    } else {
+        if x < tol {
+            return true;
+        }
+    }
+    return false;
+}
+
+pub fn main() {
+    let m: Map1D = Map1D { a: 0.5, b: 0.0 };
+    if is_fixed_point(m, 0.0, 0.0001) {
+        println("OK affine_fp_at_zero");
+    } else {
+        println("FAIL affine_fp_at_zero");
+        process_exit(1);
+    }
+
+    let k: Float = contraction_coefficient(m, 50);
+    if k < 1.0 {
+        println("OK contraction_k_less_than_1");
+    } else {
+        println("FAIL contraction_k");
+        process_exit(1);
+    }
+
+    let converged: Float = fixed_point_converge(m, 1.0, 0.0001, 100);
+    if approx_zero(converged, 0.01) {
+        println("OK orbit_converges_to_zero");
+    } else {
+        println("FAIL orbit_converges");
+        process_exit(1);
+    }
+
+    if lyapunov_decay(m, 50) {
+        println("OK lyapunov_v_x_squared_decreases");
+    } else {
+        println("FAIL lyapunov_decay");
+        process_exit(1);
+    }
+
+    let steps: Int = attractor_steps(m, 1.0, 0.0, 0.01, 100);
+    if steps > 0 {
+        if steps < 20 {
+            println("OK attractor_basin_within_20_steps");
+        } else {
+            println("FAIL attractor_too_slow");
+            process_exit(1);
+        }
+    } else {
+        println("FAIL attractor_basin_did_not_converge");
+        process_exit(1);
+    }
+
+    let m2: Map1D = Map1D { a: 1.5, b: 0.0 };
+    let k2: Float = contraction_coefficient(m2, 50);
+    if k2 >= 1.0 {
+        println("OK non_contraction_rejected");
+    } else {
+        println("FAIL non_contraction_should_have_k_ge_1");
+        process_exit(1);
+    }
+
+    println("test_theory_dynamical: PASSED");
+}

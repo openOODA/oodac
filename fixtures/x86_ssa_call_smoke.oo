@@ -1,0 +1,7 @@
+// # emit-x86 1-arg SysV-style const call
+pub fn add(a: Int) -> Int {
+    return a + 1;
+}
+pub fn main() {
+    println(add(41));
+}

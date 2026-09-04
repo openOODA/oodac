@@ -1,0 +1,252 @@
+# x86 codegen style sheet
+
+Logline: Distills the recurring patterns from the 41 oodac/x86_emit_*.oo modules into a single how-to for adding a new feature module.
+
+Setup: The reader has read openOODA/FORMAT.oot, knows what AT&T assembly is, and has opened ooda/oodac/x86_emit.oo to see the dispatch chain.
+
+Beats:
+  1. List the 10 conventions every emit module follows, each with a real file:line citation.
+  2. List the anti-patterns to refuse, each with a real file:line citation.
+  3. Give an 8-step tutorial for adding x86_emit_<feature>.oo.
+  4. Show the canonical file layout and the smoke test pattern.
+  5. Reference the 16 modules this sheet was distilled from.
+
+residual: typed-AST path (Tier 5 #24) and AArch64 stay later.
+
+# X86 CODEGEN STYLE — How to Add a New emit Module
+
+File: openOODA/docs/x86-codegen-style.oot
+Status: smoke
+
+The 41 modules in `ooda/oodac/x86_emit_*.oo` are a small DSL on top of the tokenizer and the SysV AT&T assembler. The shape is uniform. This sheet records that shape so the next module is a copy-paste-and-rename job, not a design exercise.
+
+## 1. Conventions — the 10 patterns every emit module follows
+
+1. **Public match fn returns `List[String]`, empty on shape mismatch.**
+   `x86_emit_int.oo:15` (`x86_match_int_write`), `x86_emit_list.oo:28`
+   (`x86_match_list`), `x86_emit_match.oo:85` (`x86_match_match_test`),
+   `x86_emit_loop.oo:30` (`x86_match_while_loop`), `x86_emit_struct.oo:54`
+   (`x86_match_struct`). First body line is `let empty: List[String] = list_new();`
+   at `x86_emit_int.oo:16`, `x86_emit_list.oo:29`, `x86_emit_match.oo:86`.
+
+2. **Public emit fn takes the spec, calls `println` for each AT&T line,
+   returns nothing.** `x86_emit_int.oo:101` (`x86_emit_int_write`),
+   `x86_emit_match.oo:183` (`x86_emit_match_test`), `x86_emit_loop.oo:138`
+   (`x86_emit_while_loop`), `x86_emit_fn.oo:194` (`x86_emit_id_call`),
+   `x86_emit_rec.oo:150` (`x86_emit_rec`).
+
+3. **Token helpers come from `x86_emit_harv.oo`.** `x86_tok_k` and
+   `x86_tok_t` are at `x86_emit_harv.oo:30-36`; every matcher imports
+   `x86_emit_harv.oo` (`x86_emit_int.oo:13`, `x86_emit_list.oo:14`,
+   `x86_emit_match.oo:16`, `x86_emit_loop.oo:16`).
+
+4. **Top comment line is the product floor stamp.** Every emit fn prints
+   `println("# openOODA x86_64 product floor (AT&T, Linux, as+ld)")`
+   as the first line. See `x86_emit_int.oo:102`, `x86_emit_list.oo:103`,
+   `x86_emit_match.oo:187`, `x86_emit_loop.oo:145`, `x86_emit_struct.oo:128`,
+   `x86_emit_fn.oo:195`, `x86_emit_rec.oo:151`.
+
+5. **Standard ELF prelude: `.section .text`, `.globl _start`, `.globl main`,
+   `.p2align 4`.** `x86_emit_int.oo:103-105`, `x86_emit_list.oo:106`,
+   `x86_emit_match.oo:188`, `x86_emit_loop.oo:155-157`,
+   `x86_emit_fn.oo:200-203`, `x86_emit_struct.oo:130`.
+
+6. **Standard SysV frame: `push %rbp` / `mov %rsp, %rbp` / `sub $N, %rsp` at
+   entry; `add $N, %rsp` / `pop %rbp` / `ret` at exit.** See
+   `x86_emit_int.oo:54-56` and `:96-98`, `x86_emit_match.oo:190,214`,
+   `x86_emit_loop.oo:160-162,181-185`, `x86_emit_rec.oo:159-162,178-180`.
+   The `x86_emit_frame.oo:13-20` helpers wrap enter and leave and are reused
+   at `x86_emit_fn.oo:205,207`.
+
+7. **SysV args in `%rdi`, `%rsi`, `%rdx`; return value in `%rax`.**
+   `x86_emit_int.oo:57` (`mov %rdi, %rax`), `x86_emit_struct.oo:209-211`
+   (`%rdi` is struct pointer, `%rsi` is value, store at disp),
+   `x86_emit_rec.oo:188-189` (return in `%rax`, move to `%rdi` then
+   call `_println_int`).
+
+8. **Exit is `mov $60, %rax; xor %rdi, %rdi; syscall`.** Repeated at
+   `x86_emit_int.oo:111-113`, `x86_emit_list.oo:131`, `x86_emit_match.oo:214`,
+   `x86_emit_loop.oo:183-185`, `x86_emit_struct.oo:231`,
+   `x86_emit_fn.oo:218-220`, `x86_emit_rec.oo:192-194`.
+
+9. **Hard errors print `ERR\tx86_emit\t<msg>` and call `process_exit(1)`.**
+   `x86_emit.oo:59-60` (empty source), `x86_emit.oo:196-197` (float not
+   const-foldable), `x86_emit_float.oo:140-143` (float test),
+   `x86_emit_list.oo:24-25` (list test), `x86_emit_struct.oo:176-177,197-198`.
+
+10. **Academy header is 4 elements: `// # Title`, `Logline`, `Setup`,
+    `Beats 1..N`.** `x86_emit.oo:1-14` sets the dispatch order in its
+    beats; `x86_emit_match.oo:1-14` lists 4 beats ending in `residual:`;
+    `x86_emit_contract.oo:1-13` and `x86_emit_secret.oo:1-14` close with
+    `residual:`.
+
+11. **Imports stay minimal: `token_fmt.oo` plus the helpers the file
+    actually calls.** `x86_emit_harv.oo:15` imports only `token_fmt.oo`;
+    `x86_emit_list.oo:13-16` imports token fmt, harv, int, and runtime.
+    `x86_emit_diag.oo:14` is a one-import file. No wildcard imports.
+
+12. **Integer printing reuses `x86_emit_int_routine` from `x86_emit_int.oo:50`.**
+    Emit a one-shot program? Call `x86_emit_int_routine();` then
+    `mov %rax, %rdi; call _println_int;`. See `x86_emit_match.oo:189,213`,
+    `x86_emit_struct.oo:132,227`, `x86_emit_rec.oo:156,189`. Float uses
+    the parallel `x86_emit_float_routine` (`x86_emit_float.oo:210,217`).
+
+## 2. Anti-patterns — 8 things to refuse
+
+1. **Hardcoded body that runs on shape mismatch.** Never let a function
+   print assembly when the matcher returned `empty`. The dispatch in
+   `x86_emit.oo:88-90,93-95,98-100,128-131,133-135` guards every arm
+   with `if list_len(...) >= N { ...; return; }`. Skip that guard and a
+   bad source silently miscompiles to the last program the run cached.
+
+2. **Hardcoded constants in arithmetic.** Always lift numbers from the
+   token stream with `x86_tok_t`. `x86_emit_struct.oo:181` writes
+   `movq $" + fval + ", ..."`; the literal `8` (field width) is
+   legitimate because every field is 8 bytes by ABI choice
+   (`x86_emit_struct.oo:39`: `idx * 8`). Do not magic up user values.
+
+3. **Dead code paths.** `x86_emit_loop.oo:69` returns `empty` on
+   unknown OP — the fall-through at `:62-69` is short. Avoid `else
+   { /* unreachable */ }` blocks that pass a hand-rolled `error` path;
+   `return empty;` from a matcher is the only safe miss.
+
+4. **Imports that are not used.** `x86_emit_match.oo:15-17` imports
+   `token_fmt`, `x86_emit_harv`, `x86_emit_int`. Each is referenced;
+   `x86_emit_int` is needed for `x86_emit_int_routine` at `:189`. A
+   stale import signals an intent that did not ship.
+
+5. **Forgetting the empty-source check.** Matchers that call
+   `tokenize_lines(src)` on an empty string get a zero-length list and
+   fall through every branch. The right place to guard is the top of
+   the match fn: `x86_emit_struct.oo:56`, `x86_emit_match.oo:87`,
+   `x86_emit_rec.oo:110`, `x86_emit_fn.oo:144-146`. The dispatcher
+   already guards (`x86_emit.oo:58-61`); never rely on it.
+
+6. **`println` of debug text in the emit fn.** The emit fn is the
+   compiler. The only `println` allowed is the AT&T line itself or an
+   `ERR\t<kind>\t<msg>` hard error. No "compiling...", no
+   `process_exit(0)` on the success path, no banner.
+
+7. **Drilling into body before finding `KW_FN main`.** Every matcher
+   that needs main scans tokens for `KW_FN` then `IDENT == "main"`
+   (`x86_emit_int.oo:21`, `x86_emit_match.oo:92`,
+   `x86_emit_loop.oo:36-39`, `x86_emit_rec.oo:90-92`). Skip the
+   `KW_FN main` check and you match a body inside the wrong fn.
+
+8. **Returning a non-`List[String]` from a match fn.** The dispatch
+   chain in `x86_emit.oo:46-205` reads every match result with
+   `list_len(...)` and `list_get(...)`. Returning `Bool`, `Int`, or
+   `""` breaks the chain and the next arm never runs.
+
+## 3. The 8-step tutorial — adding x86_emit_<feature>.oo
+
+1. **Pick the feature name and the shape to accept.** Write one English
+   sentence: "this module accepts `<source shape>` and emits `<AT&T
+   pattern>`." Example: `x86_emit_float.oo:3` accepts `let ... : Float
+   = FLOAT; println(FLOAT_EXPR)` and emits the folded `.double` plus
+   `movsd` and `_println_float`.
+
+2. **Write the Academy header.** Use the 4-element header
+   (`FORMAT.oot` §1.1). Title, Logline, Setup, Beats 1..4, optional
+   `residual:`. Mirror the length of `x86_emit_match.oo:1-14`.
+
+3. **Declare imports.** `import "token_fmt.oo";` is always needed for
+   `tokenize_lines`. Add `x86_emit_harv.oo` for `x86_tok_k`,
+   `x86_tok_t`, `x86_bind_idx`. Add `x86_emit_int.oo` if you print
+   integers, `x86_emit_frame.oo` if you call a routine.
+
+4. **Write `pub fn x86_match_<feature>(src: String) -> List[String]`.**
+   First line: `let empty: List[String] = list_new();`. Guard
+   `chars_len(src) == 0` and return `empty`. Call
+   `tokenize_lines(src)`, walk the tokens, return `empty` on every
+   shape miss, return the spec list on the hit. Model on
+   `x86_match_while_loop` (`x86_emit_loop.oo:30-136`) for a control
+   flow shape, or `x86_match_struct` (`x86_emit_struct.oo:54-69`)
+   for a single boolean "is this in scope?" check.
+
+5. **Write the emit fn.** Public, takes the spec, prints the product
+   floor stamp, then `.section .text` / `.globl _start` /
+   `.globl main` / `.p2align 4`, then a SysV frame, then the body,
+   then the exit syscall. Model on `x86_emit_while_loop`
+   (`x86_emit_loop.oo:138-186`).
+
+6. **Wire the dispatcher.** Add two lines to `x86_emit.oo`: one
+   `import` near `:16-44` and one arm near `:80-205` shaped
+   `let f: List[String] = x86_match_<feature>(src); if list_len(f)
+   >= N { x86_emit_<feature>(f); return; }`. Place the arm before
+   the `x86_collect_prints` fallback at `:203-204`.
+
+7. **Run a smoke compile.** Write a 5-line `tests/qa/cases/`
+   fixture that uses the new feature, run `oodac check <file>` on
+   each touched .oo, then run the case through the
+   `as + ld` driver.
+
+8. **Add a `_test` shape and a `_<feature>_test()` error fn if the
+   shape can fail mid-body.** `x86_emit_float.oo:140-143` prints
+   `ERR\tx86_emit\tfloat not const-foldable...` and
+   `process_exit(1)`. `x86_emit_list.oo:23-26` does the same. The
+   error message must name the shape you accept so the user can
+   rewrite the source.
+
+## 4. File layout — the canonical 4-block order
+
+A new module follows this order top to bottom:
+
+1. **Academy header** (lines 1 to ~15). Four `//` elements plus
+   optional `residual:`.
+2. **`import` lines** (~3 to 6 lines). `token_fmt.oo` first, then
+   harv, then feature-specific helpers.
+3. **Public match fn** (`pub fn x86_match_<feature>`). This is the
+   gate. It either returns a populated `List[String]` or an empty
+   list. Helpers are private (`fn x86_<feature>_<helper>`), as in
+   `x86_emit_match.oo:19,39` and `x86_emit_struct.oo:71,105`.
+4. **Public emit fn** (`pub fn x86_emit_<feature>`). Prints
+   the assembly. Often calls `_routines` from other modules
+   (`x86_emit_int_routine`, `x86_emit_alloc_routine`,
+   `x86_emit_list_runtime`). Order: header comment, ELF prelude,
+   routine bodies, `main: _start:` label, frame, body, epilogue,
+   exit syscall.
+
+There is no `main` and no test harness inside an emit module. Tests
+live under `tests/qa/cases/` and call into the module via the
+dispatcher.
+
+## 5. Test pattern — what smoke to write
+
+After the file lands, write at minimum:
+
+- A **happy path** fixture: the smallest source that matches your
+  shape. It should produce the same AT&T output as the closest
+  cousin module. Diff against the cousin's expected output.
+- A **shape-miss** fixture: a source that fails one token check.
+  Confirm the dispatcher falls through to the next arm
+  (`x86_emit.oo:88-90` style) and reaches the
+  `x86_collect_prints` fallback.
+- A **hard-error** fixture: a source that the match fn accepts but
+  the body rejects (e.g. a `let [mut] x: Float = FLOAT;` followed by
+  `println(unbound_ident)` for `x86_emit_float.oo`). The expected
+  exit code is `1` and the expected stderr is one line of
+  `ERR\tx86_emit\t<msg>`.
+
+Use `ooda/scripts/c_compile_drift.oo` or its x86 twin to diff the
+output. The smoke runner is `tests/qa/run.oo`.
+
+## 6. References — the 16 modules read for this sheet
+
+1. `ooda/oodac/x86_emit.oo` — the 22-arm dispatch chain.
+2. `ooda/oodac/x86_emit_int.oo` — int write, `_println_int`.
+3. `ooda/oodac/x86_emit_list.oo` — list runtime and matcher.
+4. `ooda/oodac/x86_emit_struct.oo` — struct layout, field access,
+   `_alloc`.
+5. `ooda/oodac/x86_emit_match.oo` — tagged-union match with N arms.
+6. `ooda/oodac/x86_emit_loop.oo` — while loop with 6 comparison ops.
+7. `ooda/oodac/x86_emit_float.oo` — const-folded Float, SSE movsd.
+8. `ooda/oodac/x86_emit_contract.oo` — requires/ensures/spec/verify.
+9. `ooda/oodac/x86_emit_secret.oo` — SECRET taint gate.
+10. `ooda/oodac/x86_emit_diag.oo` — 4-line diagnostic formatter.
+11. `ooda/oodac/x86_emit_alu.oo` — const-int ALU fold.
+12. `ooda/oodac/x86_emit_harv.oo` — token helpers, `x86_bind_idx`.
+13. `ooda/oodac/x86_emit_rec.oo` — recursive fn lowering.
+14. `ooda/oodac/x86_emit_frame.oo` — frame enter/leave helpers.
+15. `ooda/oodac/x86_emit_fn.oo` — one-arg SysV identity call.
+16. `ooda/oodac/x86_emit_bind.oo` — same-fn let binds.

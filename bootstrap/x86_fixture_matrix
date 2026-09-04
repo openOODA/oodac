@@ -1,0 +1,47 @@
+#!/usr/bin/env python3
+# Why not .oo: host matrix driver for 100+ emit-x86 as+ld rows (RULES 1.13).
+import os, subprocess, sys
+lst_path = sys.argv[1] if len(sys.argv) > 1 else "scripts/x86_fixture_matrix.list"
+os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+fail = 0
+tmp = ".ooda-cache/ooda-tmp/x86_fixture_matrix"
+os.makedirs(tmp, exist_ok=True)
+for line in open(lst_path):
+    line = line.rstrip("\n")
+    if not line or line.startswith("#"):
+        continue
+    path, want = line.split("\t", 1)
+    r = subprocess.run(["./oodac_bin", "emit-x86", path], capture_output=True, text=True, timeout=30)
+    text = (r.stdout or "") + (r.stderr or "")
+    if want == "SKIP":
+        continue
+    if want in ("ERR", "TIMEOUT"):
+        if r.returncode == 0 and not text.lstrip().startswith("ERR"):
+            print("FAIL expected ERR", path)
+            fail = 1
+        continue
+    if r.returncode != 0 or text.lstrip().startswith("ERR"):
+        print("FAIL emit", path, text[:80])
+        fail = 1
+        continue
+    open(tmp + "/m.s", "w").write(r.stdout)
+    if subprocess.run(["as", "--64", "-o", tmp + "/m.o", tmp + "/m.s"]).returncode != 0:
+        print("FAIL as", path)
+        fail = 1
+        continue
+    if subprocess.run(["ld", "-o", tmp + "/m.bin", tmp + "/m.o"]).returncode != 0:
+        print("FAIL ld", path)
+        fail = 1
+        continue
+    try:
+        q = subprocess.run([tmp + "/m.bin"], capture_output=True, timeout=2)
+    except subprocess.TimeoutExpired:
+        print("FAIL timeout", path)
+        fail = 1
+        continue
+    got = q.stdout.decode("utf-8", "replace")
+    exp = want.replace("\\n", "\n")
+    if got != exp:
+        print("FAIL stdout", path, "got", repr(got), "want", repr(exp))
+        fail = 1
+sys.exit(fail)

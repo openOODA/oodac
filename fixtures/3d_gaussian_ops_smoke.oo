@@ -1,0 +1,66 @@
+// # 3D Gaussian Ops Adversarial Smoke Test
+//
+// Logline: Verifies Gaussian3D operations wrapper with adversarial inputs.
+//
+// Setup: Pure struct operations importing gaussian_types. No FS or net dependencies.
+//
+// Beats:
+//   1. VALID: Normal gaussian_ops_init creation.
+//   2. NEGATIVE TRUST: Test with zero and identity values.
+//   3. ADVERSARIAL: Test with extreme coordinate and opacity values.
+//   4. DOUBLE-RUN: Verify all operations are deterministic.
+
+import "std/app/ui/3d/gaussian_ops.oo";
+
+pub fn expect_eq_int(label: String, got: Int, want: Int) -> Bool {
+    if got == want { println("OK " + label); return true; }
+    println("FAIL " + label + " got=" + got.to_string() + " want=" + want.to_string());
+    return false;
+}
+
+pub fn expect_eq_gaussian(label: String, got: Gaussian3D, want: Gaussian3D) -> Bool {
+    let cond: Bool = got.cx == want.cx && got.cy == want.cy && 
+                     got.cz == want.cz && got.opacity == want.opacity;
+    if cond { println("OK " + label); return true; }
+    println("FAIL " + label);
+    return false;
+}
+
+pub fn main() {
+    // VALID: Normal initialization
+    let g1: Gaussian3D = gaussian_ops_init(10, 20, 30, 255);
+    if !expect_eq_int("ops_init cx", g1.cx, 10) { return; }
+    if !expect_eq_int("ops_init cy", g1.cy, 20) { return; }
+    if !expect_eq_int("ops_init cz", g1.cz, 30) { return; }
+    if !expect_eq_int("ops_init opacity", g1.opacity, 255) { return; }
+
+    // NEGATIVE TRUST: Zero values
+    let g_zero: Gaussian3D = gaussian_ops_init(0, 0, 0, 0);
+    if !expect_eq_int("ops_init zero cx", g_zero.cx, 0) { return; }
+    if !expect_eq_int("ops_init zero opacity", g_zero.opacity, 0) { return; }
+
+    // NEGATIVE TRUST: Identity-equivalent
+    let g_ident: Gaussian3D = gaussian_ops_init(0, 0, 0, 0);
+    let ident: Gaussian3D = gaussian3d_identity();
+    if !expect_eq_gaussian("ops_init equals identity", g_ident, ident) { return; }
+
+    // ADVERSARIAL: Large values
+    let g_large: Gaussian3D = gaussian_ops_init(1000000, 2000000, 3000000, 255);
+    if !expect_eq_int("ops_init large cx", g_large.cx, 1000000) { return; }
+
+    // ADVERSARIAL: Negative values
+    let g_neg: Gaussian3D = gaussian_ops_init(-100, -200, -300, 128);
+    if !expect_eq_int("ops_init neg cx", g_neg.cx, -100) { return; }
+    if !expect_eq_int("ops_init neg opacity", g_neg.opacity, 128) { return; }
+
+    // ADVERSARIAL: Maximum opacity
+    let g_max_op: Gaussian3D = gaussian_ops_init(0, 0, 0, 255);
+    if !expect_eq_int("ops_init max opacity", g_max_op.opacity, 255) { return; }
+
+    // DOUBLE-RUN: Determinism check
+    let g_dr1: Gaussian3D = gaussian_ops_init(42, 84, 126, 200);
+    let g_dr2: Gaussian3D = gaussian_ops_init(42, 84, 126, 200);
+    if !expect_eq_gaussian("dr ops_init", g_dr1, g_dr2) { return; }
+
+    println("OK: 3d_gaussian_ops_smoke passed");
+}

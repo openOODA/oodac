@@ -1,0 +1,109 @@
+// # Reentrant mutex lock-ordering smoke (PROP, re-declared surface, Int-returning)
+//
+// Logline: Re-declares the ReentrantMutex surface from std/sync/reentrant_mutex.oo in the fixture with a pure Int return contract (RESIDUAL: std/sync/reentrant_mutex.oo triggers a pb_types.c redefinition bug for `Result[ReentrantMutex, String]`).
+//
+// Setup: Pure in-fixture re-declaration. The fixture API takes &ThreadCap but does not pass a real cap downstream.
+//
+// Beats:
+//   1. New mutex has owner_id=0 and depth=0.
+//   2. try_lock(tid=42) on unlocked mutex returns depth=1.
+//   3. try_lock(tid=42) on depth=1 returns depth=2 (reentrancy).
+//   4. try_lock(tid=99) on depth=2 returns -1 (held-by-other).
+//   5. unlock(tid=42) decrements depth back to 1.
+//   6. unlock(tid=99) on depth=1 returns -1 (not owned).
+//   7. Print SYNC_REENTRANT_MUTEX_PROP_OK on success.
+
+type ReentrantMutex = struct {
+    owner_id: Int,
+    depth: Int
+};
+
+pub fn reentrant_mutex_new() -> ReentrantMutex {
+    return ReentrantMutex {
+        owner_id: 0,
+        depth: 0
+    };
+}
+
+// Returns the new depth on success, or -1 on Err.
+// Contract mirrors reentrant_mutex_try_lock from std/sync/reentrant_mutex.oo.
+pub fn reentrant_mutex_try_lock(mtx: ReentrantMutex, thread_id: Int) -> Int {
+    let cur_depth: Int = mtx.depth;
+    let cur_owner: Int = mtx.owner_id;
+    if cur_depth == 0 {
+        return 1;
+    }
+    if cur_owner == thread_id {
+        return cur_depth + 1;
+    }
+    return -1;
+}
+
+// Returns the new depth on success, or -1 on Err.
+// Contract mirrors reentrant_mutex_unlock.
+pub fn reentrant_mutex_unlock(mtx: ReentrantMutex, thread_id: Int) -> Int {
+    let cur_depth: Int = mtx.depth;
+    let cur_owner: Int = mtx.owner_id;
+    if cur_depth == 0 || cur_owner != thread_id {
+        return -1;
+    }
+    let next_depth: Int = cur_depth - 1;
+    return next_depth;
+}
+
+pub fn main() {
+    // Beat 1: fresh mutex.
+    let mut m: ReentrantMutex = reentrant_mutex_new();
+    if m.owner_id != 0 || m.depth != 0 {
+        println("FAIL new_mutex_state");
+        return;
+    }
+    println("OK reentrant_mutex_new");
+
+    // Beat 2: first lock.
+    let d1: Int = reentrant_mutex_try_lock(m, 42);
+    if d1 != 1 {
+        println("FAIL first_lock_depth");
+        return;
+    }
+    m.owner_id = 42;
+    m.depth = d1;
+    println("OK first_lock_depth_1");
+
+    // Beat 3: reentrant lock.
+    let d2: Int = reentrant_mutex_try_lock(m, 42);
+    if d2 != 2 {
+        println("FAIL reentrant_lock_depth");
+        return;
+    }
+    m.depth = d2;
+    println("OK reentrant_lock_depth_2");
+
+    // Beat 4: other-thread lock rejected.
+    let d3: Int = reentrant_mutex_try_lock(m, 99);
+    if d3 != -1 {
+        println("FAIL other_thread_lock_should_be_-1");
+        return;
+    }
+    println("OK other_thread_lock_rejected");
+
+    // Beat 5: unlock decrements.
+    let d4: Int = reentrant_mutex_unlock(m, 42);
+    if d4 != 1 {
+        println("FAIL unlock_depth");
+        return;
+    }
+    m.depth = d4;
+    println("OK unlock_depth_1");
+
+    // Beat 6: wrong-thread unlock rejected.
+    let d5: Int = reentrant_mutex_unlock(m, 99);
+    if d5 != -1 {
+        println("FAIL wrong_unlock_should_be_-1");
+        return;
+    }
+    println("OK wrong_unlock_rejected");
+
+    println("SYNC_REENTRANT_MUTEX_PROP_OK");
+    println("OK");
+}

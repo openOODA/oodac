@@ -1,0 +1,66 @@
+// # Base32 RFC 4648 round-trip smoke
+//
+// Logline: Asserts std/encoding/base32.base32_encode and base32_decode against all six RFC 4648 §10 test vectors (1, 2, 3, 4, 5, 6 bytes), plus empty.
+//
+// Setup: Imports std/encoding/base32.oo. Pure.
+//
+// Beats:
+//   1. Encode "f" -> "MY======".
+//   2. Encode "fo" -> "MZXQ====".
+//   3. Encode "foo" -> "MZXW6===".
+//   4. Encode "foob" -> "MZXW6YQ=".
+//   5. Encode "fooba" -> "MZXW6YTB".
+//   6. Encode "foobar" -> "MZXW6YTBOI======".
+//   7. Encode empty -> "".
+
+import "std/core/encoding/base32.oo";
+
+pub fn main() {
+    let base32_dummy: Int = 0;
+
+    if base32_encode("f") != "MY======" {
+        println("FAIL base32 encode f");
+        return;
+    }
+    println("OK encode f");
+
+    if base32_encode("fo") != "MZXQ====" {
+        println("FAIL base32 encode fo");
+        return;
+    }
+    println("OK encode fo");
+
+    if base32_encode("foo") != "MZXW6===" {
+        println("FAIL base32 encode foo");
+        return;
+    }
+    println("OK encode foo");
+
+    if base32_encode("foob") != "MZXW6YQ=" {
+        println("FAIL base32 encode foob");
+        return;
+    }
+    println("OK encode foob");
+
+    if base32_encode("fooba") != "MZXW6YTB" {
+        println("FAIL base32 encode fooba");
+        return;
+    }
+    println("OK encode fooba");
+
+    if base32_encode("foobar") != "MZXW6YTBOI======" {
+        println("FAIL base32 encode foobar");
+        return;
+    }
+    println("OK encode foobar");
+
+    if base32_encode("") != "" {
+        println("FAIL base32 encode empty");
+        return;
+    }
+    println("OK encode empty");
+
+    let total: Int = base32_dummy + 1;
+    println("BASE32_RT_OK");
+    println("total=" + total.to_string());
+}

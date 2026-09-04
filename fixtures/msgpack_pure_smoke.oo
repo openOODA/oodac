@@ -1,0 +1,62 @@
+// # MessagePack pure encoder smoke test
+//
+// Logline: Verifies the safe-API MessagePack encoder for nil, bool, int, str, bin, array, and map with msgpack_kind constants.
+//
+// Setup: Imports std/encoding/msgpack_pure.oo (the safe API). The MsgValue-tree decoder lives in msgpack_pure_tree.oo.
+//
+// Beats:
+//   1. Encode nil and check the 0xc0 prefix via msgpack_kind_nil().
+//   2. Encode true/false and check 0xc3/0xc2 prefixes.
+//   3. Encode small int (0) and check the 0x00 prefix.
+//   4. Encode negative int (-1) and check the 0xff prefix.
+//   5. Encode bin and check the 0xc4 prefix.
+//   6. Encode array of size 3 and check the 0x93 prefix.
+//   7. Print MSGPACK_PURE_OK on success.
+
+import "std/core/encoding/msgpack_pure.oo";
+
+fn mpsm_assert(label: String, ok: Bool) {
+    if !ok {
+        println("FAIL " + label);
+        process_exit(1);
+    }
+    println("OK " + label);
+}
+
+pub fn main() {
+    // Beat 1: nil.
+    let bn: ByteOut = msgpack_pure_enc_nil();
+    let dn: List[Int] = (bn).bytes;
+    mpsm_assert("nil kind 1", msgpack_kind_nil() == 1);
+    mpsm_assert("nil byte 0xc0", list_get(dn, 0) == 192);
+
+    // Beat 2: bool true/false.
+    let bt: ByteOut = msgpack_pure_enc_bool(1);
+    let dt: List[Int] = (bt).bytes;
+    mpsm_assert("true 0xc3", list_get(dt, 0) == 195);
+    let bf: ByteOut = msgpack_pure_enc_bool(0);
+    let df: List[Int] = (bf).bytes;
+    mpsm_assert("false 0xc2", list_get(df, 0) == 194);
+
+    // Beat 3: int 0.
+    let bi0: ByteOut = msgpack_pure_enc_int(0);
+    let di0: List[Int] = (bi0).bytes;
+    mpsm_assert("int 0 prefix 0x00", list_get(di0, 0) == 0);
+
+    // Beat 4: int -1.
+    let bin1: ByteOut = msgpack_pure_enc_int(0 - 1);
+    let din1: List[Int] = (bin1).bytes;
+    mpsm_assert("int -1 prefix 0xff", list_get(din1, 0) == 255);
+
+    // Beat 5: bin prefix.
+    let bb: ByteOut = msgpack_pure_enc_bin(list_new());
+    let db: List[Int] = (bb).bytes;
+    mpsm_assert("bin prefix 0xc4", list_get(db, 0) == 196);
+
+    // Beat 6: array of 3 elements.
+    let ba: ByteOut = msgpack_pure_enc_array(3, list_new());
+    let da: List[Int] = (ba).bytes;
+    mpsm_assert("array 3 prefix 0x93", list_get(da, 0) == 147);
+
+    println("MSGPACK_PURE_OK");
+}

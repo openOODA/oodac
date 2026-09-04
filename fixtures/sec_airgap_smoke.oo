@@ -1,0 +1,55 @@
+// # Sovereign air-gap binary synthesis smoke (PILLAR)
+//
+// Logline: Asserts std/sec/airgap.airgap_verify_elf64_magic + airgap_verify_elf64_machine + airgap_verify_wasm_magic accept the documented magic numbers and machine IDs.
+//
+// Setup: Imports std/sec/airgap.oo. Pure (no FS, no net).
+//
+// Beats:
+//   1. airgap_verify_elf64_magic on (127, 69, 76, 70) returns true.
+//   2. airgap_verify_elf64_magic on a wrong byte returns false.
+//   3. airgap_verify_elf64_machine for x86_64 accepts id 62.
+//   4. airgap_verify_elf64_machine for aarch64 accepts id 183.
+//   5. airgap_verify_wasm_magic on (0, 97, 115, 109, 1) returns true.
+//   6. Print SEC_AIRGAP_OK on success.
+
+import "std/sec/airgap.oo";
+
+pub fn main() {
+    // Beat 1: ELF64 magic.
+    if !airgap_verify_elf64_magic(127, 69, 76, 70) {
+        println("FAIL elf_magic_correct");
+        return;
+    }
+    println("OK airgap_verify_elf64_magic");
+
+    // Beat 2: wrong byte.
+    if airgap_verify_elf64_magic(127, 69, 76, 71) {
+        println("FAIL elf_magic_wrong_should_be_false");
+        return;
+    }
+    println("OK elf_magic_wrong_rejected");
+
+    // Beat 3: x86_64 machine id.
+    if !airgap_verify_elf64_machine(62, "x86_64") {
+        println("FAIL x86_64_id");
+        return;
+    }
+    println("OK x86_64_machine");
+
+    // Beat 4: aarch64 machine id.
+    if !airgap_verify_elf64_machine(183, "aarch64") {
+        println("FAIL aarch64_id");
+        return;
+    }
+    println("OK aarch64_machine");
+
+    // Beat 5: wasm magic.
+    if !airgap_verify_wasm_magic(0, 97, 115, 109, 1) {
+        println("FAIL wasm_magic");
+        return;
+    }
+    println("OK airgap_verify_wasm_magic");
+
+    println("SEC_AIRGAP_OK");
+    println("OK");
+}

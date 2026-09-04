@@ -1,0 +1,44 @@
+// # Test for short-circuiting logic operators
+//
+// Logline: Verify correct WebAssembly compilation and execution.
+//
+// Setup: Run with ooda/bin/ooda check or run from qa/.
+//
+// Beats:
+//   1. Import required modules.
+//   2. Execute test assertions.
+//   3. Report pass or fail with exit code.
+import "oodac/emit/wasm/wasm_leb128.oo";
+import "oodac/emit/wasm/wasm_opcodes.oo";
+import "oodac/emit/wasm/wasm_types.oo";
+import "oodac/emit/wasm/wasm_binary_builder.oo";
+import "oodac/emit/wasm/wasm_lower_expr.oo";
+import "oodac/emit/wasm/wasm_lower_stmt.oo";
+import "oodac/emit/wasm/wasm_lower_control.oo";
+import "oodac/emit/wasm/wasm_lower_fn.oo";
+import "oodac/ast/ast.oo";
+pub fn test_short_circuit(fs: &FsWriteCap) -> List[Int] {
+    // fn check_div(x: Int) -> Int {
+    //     if (x != 0) && ((100 / x) > 1) { return 1; }
+    //     return 0;
+    // }
+    let c1: String = mk_ebinop("!=", mk_evar("x"), mk_eint("0"));
+    let div_expr: String = mk_ebinop("/", mk_eint("100"), mk_evar("x"));
+    let c2: String = mk_ebinop(">", div_expr, mk_eint("1"));
+    let cond: String = mk_ebinop("&&", c1, c2);
+
+    let if_node: String = mk_eif(
+        cond,
+        mk_block(mk_sreturn(mk_eint("1")), mk_sempty()),
+        mk_block(mk_sreturn(mk_eint("0")), mk_sempty())
+    );
+    let body: String = mk_block(if_node, mk_sempty());
+    let fn_node: String = mk_fn("check_div", mk_param("x", mk_ty_int()), mk_ty_int(), "", body);
+    let bin: List[Int] = wasm_compile_ast_module(mk_file(fn_node), "browser", wasm_val_type_i32());
+    let _w: Result[Void, String] = write_file(fs, "/home/jeryd/Projects/openOODA/qa/tests_wasm/test_short_circuit.wasm", bytes_to_str(bin));
+    return bin;
+}
+
+pub fn main(fs: &FsWriteCap) {
+    test_short_circuit(fs);
+}

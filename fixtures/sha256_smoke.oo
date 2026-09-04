@@ -1,0 +1,30 @@
+// # SHA-256 Smoke Test
+//
+// Logline: Verifies std/crypto/sha256.sha256_hex against the FIPS 180-4 published KAT vectors for empty and "abc".
+//
+// Setup: Imports std/crypto/sha256.oo (pure .oo) and asserts exact hex equality.
+//
+// Beats:
+//   1. Assert sha256_hex("") equals e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.
+//   2. Assert sha256_hex("abc") equals ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad.
+//   3. Print SHA256_KAT_OK on success.
+
+import "std/sec/hash/sha256.oo";
+
+pub fn main() {
+    let got_empty: String = sha256_hex("");
+    let exp_empty: String = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+    if got_empty != exp_empty {
+        println("FAIL: sha256 empty");
+        println(got_empty);
+        return;
+    }
+    let got_abc: String = sha256_hex("abc");
+    let exp_abc: String = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+    if got_abc != exp_abc {
+        println("FAIL: sha256 abc");
+        println(got_abc);
+        return;
+    }
+    println("SHA256_KAT_OK");
+}

@@ -1,0 +1,45 @@
+// # Amplify drop_depth
+// Logline: Nested lets in deep scopes force drop_depth to rescan bind strings.
+// Setup: Test fixture. Keep all code exact.
+// Beats: 1. Bind many lets per nest. 2. Nest ifs to grow depth. 3. Print accumulator.
+// RULES.oot 1.7: Under 256 lines.
+
+pub fn f0(x: Int) -> Int {
+    let mut acc: Int = x;
+    let c0: Int = acc + 0;
+    if c0 > 0 {
+        let v0: Int = 1;
+        acc = acc + v0;
+        let c1: Int = acc + 1;
+        if c1 > 0 {
+            let v1: Int = 10;
+            acc = acc + v1;
+            let c2: Int = acc + 2;
+            if c2 > 0 {
+                let v2: Int = 20;
+                acc = acc + v2;
+                let c3: Int = acc + 3;
+                if c3 > 0 {
+                    let v3: Int = 30;
+                    acc = acc + v3;
+                    let c4: Int = acc + 4;
+                    if c4 > 0 {
+                        let v4: Int = 40;
+                        acc = acc + v4;
+                        let c5: Int = acc + 5;
+                        if c5 > 0 {
+                            let v5: Int = 50;
+                            acc = acc + v5;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return acc;
+}
+
+pub fn main() {
+    let r0: Int = f0(1);
+    println(r0.to_string());
+}

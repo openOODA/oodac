@@ -1,0 +1,73 @@
+// # UTF-8 validator smoke (RFC 3629)
+//
+// Logline: Asserts std/text/utf8_validator.utf8_is_lead_byte, utf8_is_continuation_byte, utf8_sequence_len against RFC 3629 boundaries.
+//
+// Setup: Imports std/text/utf8_validator.oo. Pure (no FS, no net).
+//
+// Beats:
+//   1. ASCII lead 65 (65) is a 1-byte sequence.
+//   2. Lead 194 (194) is a 2-byte sequence.
+//   3. Lead 226 (226) is a 3-byte sequence.
+//   4. Lead 240 (240) is a 4-byte sequence.
+//   5. Continuation 128 is continuation; 65 is not.
+//   6. Invalid lead 255 yields sequence_len 0.
+//   7. Print TEXT_UTF8_VALIDATOR_OK on success.
+
+import "std/core/text/utf8_validator.oo";
+
+pub fn main() {
+    // Beat 1: ASCII.
+    let l1: Int = utf8_sequence_len(65);
+    if l1 != 1 {
+        println("FAIL ascii_seq_len: " + l1.to_string());
+        return;
+    }
+    if !utf8_is_lead_byte(65) {
+        println("FAIL ascii_is_lead");
+        return;
+    }
+    println("OK utf8_ascii");
+
+    // Beat 2: 2-byte lead 194 (110x_xxxx).
+    if utf8_sequence_len(194) != 2 {
+        println("FAIL 2byte_seq_len");
+        return;
+    }
+    println("OK utf8_2byte_lead");
+
+    // Beat 3: 3-byte lead 226 (1110_xxxx).
+    if utf8_sequence_len(226) != 3 {
+        println("FAIL 3byte_seq_len");
+        return;
+    }
+    println("OK utf8_3byte_lead");
+
+    // Beat 4: 4-byte lead 240 (1111_0xxx).
+    if utf8_sequence_len(240) != 4 {
+        println("FAIL 4byte_seq_len");
+        return;
+    }
+    println("OK utf8_4byte_lead");
+
+    // Beat 5: continuation byte 128.
+    if !utf8_is_continuation_byte(128) {
+        println("FAIL cont_128");
+        return;
+    }
+    if utf8_is_continuation_byte(65) {
+        println("FAIL cont_65");
+        return;
+    }
+    println("OK utf8_continuation_byte");
+
+    // Beat 6: invalid lead 255 yields 0.
+    let bad: Int = utf8_sequence_len(255);
+    if bad != 0 {
+        println("FAIL invalid_lead: " + bad.to_string());
+        return;
+    }
+    println("OK utf8_invalid_lead");
+
+    println("TEXT_UTF8_VALIDATOR_OK");
+    println("OK");
+}

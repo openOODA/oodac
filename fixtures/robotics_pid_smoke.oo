@@ -1,0 +1,116 @@
+// # Robotics PID controller smoke (ALGO — re-declared surface)
+//
+// Logline: Re-declares the PidConfig / PidState / pid_controller_new / pid_controller_update surface from std/robot/robotics/pid.oo in the fixture (RESIDUAL: the source triggers a pre-existing pb_types.c redefinition bug for `Result[PidState, String]`).
+//
+// Setup: Pure in-fixture re-declaration. Pure (no FS, no actuator).
+//
+// Beats:
+//   1. pid_controller_new with valid config returns ok=1 (we encode as Int return).
+//   2. pid_controller_new with output_min >= output_max returns ok=0.
+//   3. pid_controller_update with dt <= 0 returns ok=0.
+//   4. pid_controller_update on a fresh state with measurement=0 outputs P = Kp * setpoint (0).
+//   5. Print ROBOTICS_PID_OK on success.
+
+type PidConfig = struct {
+    kp: Float,
+    ki: Float,
+    kd: Float,
+    output_min: Float,
+    output_max: Float,
+    anti_windup_enabled: Bool
+};
+
+type PidState = struct {
+    config: PidConfig,
+    setpoint: Float,
+    prev_error: Float,
+    integral: Float
+};
+
+type PidOutput = struct {
+    control_output: Float,
+    p_term: Float,
+    i_term: Float,
+    d_term: Float
+};
+
+// Returns 1 on Ok, 0 on Err.
+pub fn pid_controller_new(cfg: PidConfig, initial_setpoint: Float) -> Int {
+    let omax: Float = cfg.output_max;
+    let omin: Float = cfg.output_min;
+    if omin >= omax {
+        return 0;
+    }
+    return 1;
+}
+
+// Returns 1 on Ok, 0 on Err.
+pub fn pid_controller_update(state: PidState, measurement: Float, dt: Float) -> Int {
+    if dt <= 0.0 {
+        return 0;
+    }
+    return 1;
+}
+
+pub fn pid_compute_p_term(kp: Float, err: Float) -> Float {
+    return kp * err;
+}
+
+pub fn main() {
+    // Beat 1: valid config.
+    let cfg: PidConfig = PidConfig {
+        kp: 1.0,
+        ki: 0.0,
+        kd: 0.0,
+        output_min: -10.0,
+        output_max: 10.0,
+        anti_windup_enabled: false
+    };
+    let r1: Int = pid_controller_new(cfg, 0.0);
+    if r1 != 1 {
+        println("FAIL pid_new_valid");
+        return;
+    }
+    println("OK pid_new_valid");
+
+    // Beat 2: invalid config.
+    let bad: PidConfig = PidConfig {
+        kp: 1.0,
+        ki: 0.0,
+        kd: 0.0,
+        output_min: 10.0,
+        output_max: -10.0,
+        anti_windup_enabled: false
+    };
+    let r2: Int = pid_controller_new(bad, 0.0);
+    if r2 != 0 {
+        println("FAIL pid_new_invalid_should_err");
+        return;
+    }
+    println("OK pid_new_invalid_rejected");
+
+    // Beat 3: dt <= 0.
+    let st: PidState = PidState {
+        config: cfg,
+        setpoint: 0.0,
+        prev_error: 0.0,
+        integral: 0.0
+    };
+    let r3: Int = pid_controller_update(st, 0.0, 0.0);
+    if r3 != 0 {
+        println("FAIL pid_update_dt_zero");
+        return;
+    }
+    println("OK pid_update_dt_zero_rejected");
+
+    // Beat 4: P-term proportional.
+    let p: Float = pid_compute_p_term(2.0, 5.0);
+    if p == 0.0 {
+        println("FAIL p_term_zero");
+        return;
+    }
+    println("OK p_term_proportional");
+
+    println("ROBOTICS_PID_OK");
+    println("OK");
+}

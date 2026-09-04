@@ -1,0 +1,34 @@
+// # Enclave enter with a measured isolate
+//
+// Logline: Measure domain + payload + sys token. Name-only SHA-256 must fail.
+//
+// Setup: OPEN-74. oo_enclave_enter requires &SysCap. Not SGX.
+//
+// Beats:
+//   1. Measurement is 64 hex chars and deterministic.
+//   2. A different identity differs.
+//   3. Name-only sha256(sealed_fn) is refused.
+
+pub fn main(sys: &SysCap) {
+    let m: String = oo_enclave_enter(sys, "sealed_fn");
+    let again: String = oo_enclave_enter(sys, "sealed_fn");
+    let other: String = oo_enclave_enter(sys, "other_fn");
+    if chars_len(m) != 64 {
+        println("FAIL meas len");
+        process_exit(1);
+    }
+    if m != again {
+        println("FAIL match");
+        process_exit(1);
+    }
+    if m == other {
+        println("FAIL distinct");
+        process_exit(1);
+    }
+    let name_only: String = crypto_sha256_internal("sealed_fn");
+    if m == name_only {
+        println("FAIL name_only");
+        process_exit(1);
+    }
+    println("open74: PASSED");
+}

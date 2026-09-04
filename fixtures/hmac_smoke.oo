@@ -1,0 +1,49 @@
+// # HMAC-SHA256 RFC 4231 KAT Smoke
+//
+// Logline: Asserts std/crypto/hmac.hmac_sha256 against the RFC 4231 test case 1 published vector (key=0x0b*20, data="Hi There").
+//
+// Setup: Imports std/crypto/hmac.oo. Pure, no FS or net.
+//
+// Beats:
+//   1. hmac_sha256(key=0x0b*20, msg="Hi There") = b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7.
+//   2. Print HMAC_KAT_OK on success.
+
+import "std/sec/mac/hmac.oo";
+
+pub fn hex_to_str(h: String) -> String {
+    let mut out: List[Int] = list_new();
+    let hx: String = "0123456789abcdef";
+    let mut i: Int = 0;
+    let hn: Int = h.len();
+    while i < hn {
+        let mut hi: Int = 0;
+        while hi < 16 {
+            if byte_at(h, i) == byte_at(hx, hi) {
+                break;
+            }
+            hi = hi + 1;
+        }
+        let mut lo: Int = 0;
+        while lo < 16 {
+            if byte_at(h, i + 1) == byte_at(hx, lo) {
+                break;
+            }
+            lo = lo + 1;
+        }
+        out = list_push(out, hi * 16 + lo);
+        i = i + 2;
+    }
+    return bytes_to_str(out);
+}
+
+pub fn main() {
+    let key: String = hex_to_str("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b");
+    let msg: String = "Hi There";
+    let mac: String = hmac_sha256(key, msg);
+    let exp: String = "b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7";
+    if mac != exp {
+        println("FAIL hmac got " + mac);
+        return;
+    }
+    println("HMAC_KAT_OK");
+}

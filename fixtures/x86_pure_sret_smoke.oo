@@ -1,0 +1,21 @@
+// # Sovereign ELF64 SRet and match smoke
+//
+// Logline: Returns small and large aggregates via SysV ABI and AAPCS64 SRet and matches Result.
+//
+// Setup: No imports. Used by in-process ELF64 emitters.
+//
+// Beats:
+//   1. Bind aggregate fields.
+//   2. Match Result Ok/Err.
+//   3. Print payload.
+
+pub fn main() {
+    let pa = 3;
+    let pb = 4;
+    let pc = 5;
+    return Ok(7);
+    match x {
+        Ok(v) => println(v)
+        Err(e) => println(e)
+    }
+}

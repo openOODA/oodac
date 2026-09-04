@@ -1,0 +1,50 @@
+// # Float Literal Encoder Edge Case Test
+//
+// Logline: Empirically verify wasm_encode_f64_lit output across float literal edge cases.
+//
+// Setup: Run with ooda/bin/ooda check or run from qa/.
+//
+// Beats:
+//   1. Import required modules.
+//   2. Execute test assertions.
+//   3. Report pass or fail with exit code.
+import "oodac/emit/wasm/wasm_leb128.oo";
+import "oodac/emit/wasm/wasm_opcodes.oo";
+import "oodac/emit/wasm/wasm_types.oo";
+import "oodac/emit/wasm/wasm_binary_builder.oo";
+import "oodac/emit/wasm/wasm_lower_expr.oo";
+import "oodac/emit/wasm/wasm_lower_stmt.oo";
+import "oodac/emit/wasm/wasm_lower_control.oo";
+import "oodac/emit/wasm/wasm_lower_fn.oo";
+import "oodac/ast/ast.oo";
+
+pub fn test_float_lit(fs: &FsWriteCap, lit_str: String, fn_name: String) -> List[Int] {
+    let fn_body: String = mk_block(mk_sreturn(mk_efloat(lit_str)), mk_sempty());
+    let fn_node: String = mk_fn(fn_name, "", mk_ty_float(), "", fn_body);
+    let file_node: String = mk_file(fn_node);
+    let bin: List[Int] = wasm_compile_ast_module(file_node, "browser", wasm_val_type_i32());
+    return bin;
+}
+
+pub fn main(fs: &FsWriteCap) {
+    let b1 = test_float_lit(fs, "0.0", "lit_0_0");
+    let b2 = test_float_lit(fs, "-0.0", "lit_neg_0_0");
+    let b3 = test_float_lit(fs, "0.00", "lit_0_00");
+    let b4 = test_float_lit(fs, "1.5", "lit_1_5");
+    let b5 = test_float_lit(fs, "-1.5", "lit_neg_1_5");
+
+    let mut b: WasmModuleBuilder = wasm_builder_new();
+    wasm_builder_set_memory(&mut b, 1, 2);
+    wasm_builder_add_export(&mut b, "memory", wasm_external_memory(), 0);
+
+    let fn1: String = mk_fn("lit_0_0", "", mk_ty_float(), "", mk_block(mk_sreturn(mk_efloat("0.0")), mk_sempty()));
+    let fn2: String = mk_fn("lit_neg_0_0", "", mk_ty_float(), "", mk_block(mk_sreturn(mk_efloat("-0.0")), mk_sempty()));
+    let fn3: String = mk_fn("lit_0_00", "", mk_ty_float(), "", mk_block(mk_sreturn(mk_efloat("0.00")), mk_sempty()));
+    let fn4: String = mk_fn("lit_1_5", "", mk_ty_float(), "", mk_block(mk_sreturn(mk_efloat("1.5")), mk_sempty()));
+    let fn5: String = mk_fn("lit_neg_1_5", "", mk_ty_float(), "", mk_block(mk_sreturn(mk_efloat("-1.5")), mk_sempty()));
+
+    let file_all: String = mk_file(fn1 + "," + fn2 + "," + fn3 + "," + fn4 + "," + fn5);
+    let bin_all: List[Int] = wasm_compile_ast_module(file_all, "browser", wasm_val_type_i32());
+    let _w: Result[Void, String] = write_file(fs, "/home/jeryd/Projects/openOODA/qa/tests_wasm/test_float_lits.wasm", bytes_to_str(bin_all));
+    println("Emitted test_float_lits.wasm");
+}

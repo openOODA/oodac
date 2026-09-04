@@ -1,0 +1,79 @@
+// # ODE integrator fixtures
+//
+// Logline: Fail-closed checks for adaptive RKF45 and symplectic leapfrog on the unit harmonic oscillator.
+//
+// Setup: Isolated emit-c. Run from ooda/.
+//
+// Beats:
+//   1. RKF45 from t=0 to pi matches y=cos(t), v=-sin(t) and adapts h.
+//   2. A large RKF45 step with tight atol rejects or shrinks h_next.
+//   3. Leapfrog energy stays bounded and (y,v) stays near the unit circle.
+
+import "std/core/math/ode/rkf45_adaptive.oo";
+import "std/core/math/ode/symplectic_leapfrog.oo";
+
+fn fail(msg: String) {
+    println("FAIL " + msg);
+    process_exit(1);
+}
+
+fn unwrap_fv(r: Result[List[Float], String], msg: String) -> List[Float] {
+    match r {
+        Ok(v) => { return v; },
+        Err(e) => { fail(msg + ": " + e); return list_new(); }
+    }
+}
+
+fn near(a: Float, b: Float, eps: Float) -> Bool {
+    let mut d: Float = a - b;
+    if d < 0.0 { d = 0.0 - d; }
+    return d <= eps;
+}
+
+fn test_rkf45_step() {
+    let st: List[Float] = rkf45_harmonic_step(0.0, 1.0, 0.0, 0.5, 1.0, 0.00000001);
+    let h_next: Float = list_get(st, 3);
+    let err: Float = list_get(st, 4);
+    let acc: Float = list_get(st, 5);
+    if err <= 0.0 { fail("rkf45 step err"); }
+    if acc == 1.0 {
+        if h_next >= 0.5 { fail("rkf45 h_next not shrunk"); }
+    }
+}
+
+fn test_rkf45_pi() {
+    let h0: Float = 0.1;
+    let pi: Float = 3.141592653589793;
+    let pack: List[Float] = unwrap_fv(rkf45_harmonic_integrate(1.0, 0.0, 0.0, pi, h0, 1.0, 0.00000001, 10000), "rkf45 integrate");
+    let y: Float = list_get(pack, 0);
+    let v: Float = list_get(pack, 1);
+    let t: Float = list_get(pack, 2);
+    let h_final: Float = list_get(pack, 3);
+    if near(y, 0.0 - 1.0, 0.0001) == false { fail("rkf45 y(pi)"); }
+    if near(v, 0.0, 0.0001) == false { fail("rkf45 v(pi)"); }
+    if near(t, pi, 0.0001) == false { fail("rkf45 t"); }
+    if h_final == h0 { fail("rkf45 h_final unchanged"); }
+}
+
+fn test_leapfrog() {
+    let pack: List[Float] = unwrap_fv(leapfrog_harmonic(1.0, 0.0, 0.05, 200, 1.0), "leapfrog");
+    let y: Float = list_get(pack, 0);
+    let v: Float = list_get(pack, 1);
+    let e: Float = list_get(pack, 2);
+    let e0: Float = list_get(pack, 3);
+    if near(e0, 0.5, 0.0000001) == false { fail("leapfrog E0"); }
+    let mut den: Float = e0;
+    if den < 0.0 { den = 0.0 - den; }
+    let mut rel: Float = (e - e0) / den;
+    if rel < 0.0 { rel = 0.0 - rel; }
+    if rel > 0.01 { fail("leapfrog energy drift"); }
+    let r2: Float = y * y + v * v;
+    if near(r2, 1.0, 0.05) == false { fail("leapfrog radius"); }
+}
+
+pub fn main() {
+    test_rkf45_step();
+    test_rkf45_pi();
+    test_leapfrog();
+    println("ODE_INTEGRATORS_ALL_PASSED");
+}

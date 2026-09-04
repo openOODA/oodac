@@ -1,0 +1,30 @@
+// # Smoke return List[Int]
+//
+// Logline: Returning one of two Int lists from make_list must stay leak-safe.
+//
+// Setup: M2 list-of-ints return; both arms allocate.
+//
+// Beats:
+//   1. Push 10 and 20, or 30 on the other arm.
+//   2. Return the chosen list.
+//   3. Print slots from make_list(1) and make_list(0).
+
+fn make_list(x: Int) -> List[Int] {
+    let mut lst: List[Int] = list_new();
+    lst = list_push(lst, 10);
+    lst = list_push(lst, 20);
+    if x > 0 {
+        return lst;
+    }
+    let mut lst2: List[Int] = list_new();
+    lst2 = list_push(lst2, 30);
+    return lst2;
+}
+
+pub fn main() {
+    let l1: List[Int] = make_list(1);
+    let l0: List[Int] = make_list(0);
+    println(list_get(l1, 0));
+    println(list_get(l1, 1));
+    println(list_get(l0, 0));
+}

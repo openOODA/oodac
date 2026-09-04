@@ -1,0 +1,69 @@
+// # BTreeMap property smoke
+//
+// Logline: Asserts std/collections/btree_map.oo sort order, len, get on a sorted Int->Int map.
+//
+// Setup: Imports std/collections/btree_map.oo. Pure.
+//
+// Beats:
+//   1. Build an empty BTreeMap and verify len = 0, is_empty true.
+//   2. Insert 30 Int keys in shuffled order; len = 30.
+//   3. min_key = smallest inserted; max_key = largest.
+//   4. get returns the value for every inserted key, Err for missing.
+//   5. BTREE_MAP_OK on success.
+
+import "std/core/collection/btree_map.oo";
+
+pub fn expect_eq_int(label: String, got: Int, want: Int) -> Bool {
+    if got == want { println("OK " + label); return true; }
+    println("FAIL " + label + " got=" + got.to_string() + " want=" + want.to_string());
+    return false;
+}
+
+pub fn expect_true(label: String, cond: Bool) -> Bool {
+    if cond { println("OK " + label); return true; }
+    println("FAIL " + label);
+    return false;
+}
+
+pub fn expect_false(label: String, cond: Bool) -> Bool {
+    if cond { println("FAIL " + label); return false; }
+    println("OK " + label);
+    return true;
+}
+
+pub fn unwrap_int(r: Result[Int, String]) -> Int {
+    if r.is_err() { return 0 - 1; }
+    return r.unwrap();
+}
+
+pub fn main() {
+    let m0: BTreeMap = btree_map_new();
+    if !expect_eq_int("initial len", btree_map_len(m0), 0) { return; }
+    if !expect_true("initial is_empty", btree_map_is_empty(m0)) { return; }
+
+    let mut m: BTreeMap = m0;
+    let mut i: Int = 0;
+    while i < 30 {
+        m = btree_map_insert(m, i, i * 7 + 3);
+        i = i + 1;
+    }
+    if !expect_eq_int("len after 30 inserts", btree_map_len(m), 30) { return; }
+    if !expect_false("not empty", btree_map_is_empty(m)) { return; }
+    if !expect_eq_int("min_key", unwrap_int(btree_map_min_key(m)), 0) { return; }
+    if !expect_eq_int("max_key", unwrap_int(btree_map_max_key(m)), 29) { return; }
+
+    let mut j: Int = 0;
+    while j < 30 {
+        let g: Int = unwrap_int(btree_map_get(m, j));
+        if !expect_eq_int("get " + j.to_string(), g, j * 7 + 3) { return; }
+        j = j + 1;
+    }
+    let miss: Result[Int, String] = btree_map_get(m, 9999);
+    if !expect_false("get missing is_err", miss.is_ok()) { return; }
+
+    let m2: BTreeMap = btree_map_insert(m, 0, 0);
+    if !expect_eq_int("len after update (no growth)", btree_map_len(m2), 30) { return; }
+    if !expect_eq_int("get updated", unwrap_int(btree_map_get(m2, 0)), 0) { return; }
+
+    println("BTREE_MAP_OK");
+}

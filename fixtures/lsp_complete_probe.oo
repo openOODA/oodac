@@ -1,0 +1,13 @@
+// # LSP completion probe
+//
+// Logline: A tiny .oo source with a capability reference and a function.
+//
+// Setup: Read as embedded textDocument.text by lsp_complete_smoke.oo.
+//
+// Beats:
+//   1. Provide &Fs and fn cursor sites.
+//   2. Stay small enough to embed in JSON.
+
+pub fn main() {
+    let cap: &Fs = ...;
+}

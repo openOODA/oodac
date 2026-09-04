@@ -1,0 +1,4 @@
+// # emit-x86 integer arithmetic println
+pub fn main() {
+    println(40 + 2);
+}

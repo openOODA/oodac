@@ -1,0 +1,27 @@
+// # Emit path-A metamorphic decoys
+//
+// Logline: Path-A layout decoy smoke requires emit to contain the decoy symbol.
+//
+// Beats:
+//   1. Keep the line-start path-a directive so emit opts in.
+//   2. Call two helpers after reading the meta epoch.
+//   3. Exit if the epoch is zero; otherwise print their sum.
+
+// METAMORPHIC: path-a
+// Path-A layout decoy smoke — emit must contain __oo_meta_decoy_
+
+pub fn helper_a() -> Int {
+    return 1;
+}
+
+pub fn helper_b() -> Int {
+    return 2;
+}
+
+pub fn main() {
+    let e = meta_epoch();
+    if e == 0 {
+        process_exit(1);
+    }
+    println(helper_a() + helper_b());
+}

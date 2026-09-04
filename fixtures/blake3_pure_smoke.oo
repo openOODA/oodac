@@ -1,0 +1,45 @@
+// # BLAKE3 Self-Contained Smoke Test
+//
+// Logline: Asserts the pure .oo BLAKE3 one-shot digest matches the published test vectors for the empty string, "abc", and a 64-byte block.
+//
+// Setup: Imports std/crypto/blake3_pure.oo. Pure, no FS or net.
+//
+// Beats:
+//   1. blake3_pure("") equals the standard BLAKE3 empty-input digest.
+//   2. blake3_pure("abc") equals the standard BLAKE3 3-byte input digest.
+//   3. blake3_pure is deterministic across two consecutive runs.
+
+import "std/sec/hash/blake3_pure.oo";
+
+pub fn main() {
+    let empty_hex: String = blake3_pure("");
+    let abc_hex: String = blake3_pure("abc");
+
+    let expected_empty: String = "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262";
+    let expected_abc: String = "6437b3ac38465133ffb63b75273a8db548c558465d79db03fd359c6cd5bd9d85";
+
+    if empty_hex == expected_empty {
+        println("OK empty digest");
+    } else {
+        println("FAIL empty digest got=" + empty_hex);
+        return;
+    }
+
+    if abc_hex == expected_abc {
+        println("OK abc digest");
+    } else {
+        println("FAIL abc digest got=" + abc_hex);
+        return;
+    }
+
+    let a: String = blake3_pure("");
+    let b: String = blake3_pure("");
+    if a == b {
+        println("OK determinism");
+    } else {
+        println("FAIL determinism");
+        return;
+    }
+
+    println("BLAKE3_PURE_OK");
+}

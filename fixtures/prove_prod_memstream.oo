@@ -1,0 +1,32 @@
+// # Product mem_stream prove
+//
+// Logline: Fail-closed emit+gcc+run of shipped mem_stream_from_string/len/seek.
+//
+// Setup: Product std/io/mem_stream.oo. Seed "hi".
+//
+// Beats:
+//   1. from_string hi len 2; seek 1 then read_pos 1.
+//   2. Exit 1 before PASSED on a miss.
+
+import "std/core/io/mem_stream.oo";
+
+pub fn main() {
+    let s0: MemStream = mem_stream_from_string("hi");
+    let n: Int = mem_stream_len(s0);
+    if n != 2 {
+        println("FAIL memstream len");
+        process_exit(1);
+    }
+    let sr: Result[MemStream, String] = mem_stream_seek_read(s0, 1);
+    if sr.is_err() {
+        println("FAIL memstream seek");
+        process_exit(1);
+    }
+    let s: MemStream = match sr { Ok(v) => v, Err(_) => s0 };
+    let p: Int = s.read_pos;
+    if p != 1 {
+        println("FAIL memstream seek");
+        process_exit(1);
+    }
+    println("prod_memstream: PASSED");
+}

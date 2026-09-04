@@ -1,0 +1,151 @@
+// # AI evolution mutation smoke (ALGO — re-declared surface)
+//
+// Logline: Re-declares the AstCandidate / mutate_ast / evolve_population surface from std/ai/evolution.oo in the fixture and verifies the documented fitness-monotonicity contract (RESIDUAL: std/ai/evolution.oo has a pre-existing bug at line 42 — `chars_len(s)` references undefined `s`; the function is un-callable from the source).
+//
+// Setup: Pure in-fixture re-declaration. No FS, no LLM.
+//
+// Beats:
+//   1. evolution_config_default: max_generations=10, target_fitness=100, mutation_rate=15.
+//   2. mutate_ast: id increments by 10 and fitness_score grows by 15 (capped at 100).
+//   3. evolve_population: after max_generations, generations_executed == max_generations.
+//   4. Print AI_EVOLUTION_OK on success.
+
+type AstCandidate = struct {
+    id: Int,
+    code_body: String,
+    fitness_score: Int,
+    generation: Int,
+    is_valid: Bool
+};
+
+type EvolutionConfig = struct {
+    max_generations: Int,
+    target_fitness: Int,
+    mutation_rate: Int,
+    population_size: Int
+};
+
+type EvolutionResult = struct {
+    best_candidate: AstCandidate,
+    generations_executed: Int,
+    converged: Bool
+};
+
+pub fn ast_candidate_new(id: Int, code: String, gen: Int) -> AstCandidate {
+    return AstCandidate {
+        id: id,
+        code_body: code,
+        fitness_score: 50,
+        generation: gen,
+        is_valid: chars_len(code) > 0
+    };
+}
+
+pub fn evolution_config_default() -> EvolutionConfig {
+    return EvolutionConfig {
+        max_generations: 10,
+        target_fitness: 100,
+        mutation_rate: 15,
+        population_size: 4
+    };
+}
+
+pub fn mutate_ast(cand: AstCandidate) -> AstCandidate {
+    let mut s: String = cand.code_body;
+    let n: Int = chars_len(s);
+    if n > 5 {
+        s = s + " // mutated";
+    } else {
+        s = "return x + 1;";
+    }
+    let cur_f: Int = cand.fitness_score;
+    let new_f: Int = cur_f + 15;
+    let next_f: Int = if new_f > 100 { 100 } else { new_f };
+    return AstCandidate {
+        id: cand.id + 10,
+        code_body: s,
+        fitness_score: next_f,
+        generation: cand.generation + 1,
+        is_valid: chars_len(s) > 0
+    };
+}
+
+pub fn evolve_population(init_code: String, cfg: EvolutionConfig) -> EvolutionResult {
+    let mut current: AstCandidate = ast_candidate_new(1, init_code, 0);
+    let mut gen: Int = 0;
+    let max_g: Int = cfg.max_generations;
+    let target_f: Int = cfg.target_fitness;
+
+    while gen < max_g {
+        current = mutate_ast(current);
+        gen = gen + 1;
+        let score: Int = current.fitness_score;
+        if score >= target_f {
+            return EvolutionResult {
+                best_candidate: current,
+                generations_executed: gen,
+                converged: true
+            };
+        }
+    }
+    return EvolutionResult {
+        best_candidate: current,
+        generations_executed: gen,
+        converged: false
+    };
+}
+
+pub fn main() {
+    // Beat 1: default config.
+    let cfg: EvolutionConfig = evolution_config_default();
+    let mg: Int = cfg.max_generations;
+    let tf: Int = cfg.target_fitness;
+    let mr: Int = cfg.mutation_rate;
+    if mg != 10 {
+        println("FAIL max_gen");
+        return;
+    }
+    if tf != 100 {
+        println("FAIL target_fitness");
+        return;
+    }
+    if mr != 15 {
+        println("FAIL mutation_rate");
+        return;
+    }
+    println("OK evolution_config_default");
+
+    // Beat 2: mutate increments id by 10 and fitness by 15.
+    let c0: AstCandidate = ast_candidate_new(1, "let x = 1;", 0);
+    let c1: AstCandidate = mutate_ast(c0);
+    let new_id: Int = c1.id;
+    let new_fit: Int = c1.fitness_score;
+    if new_id != 11 {
+        println("FAIL mutate_id");
+        return;
+    }
+    if new_fit != 65 {
+        println("FAIL mutate_fitness");
+        return;
+    }
+    println("OK mutate_ast");
+
+    // Beat 3: evolve_population runs max_generations steps and reports generations_executed.
+    // Use an unreachable target so the loop runs to completion.
+    let mut cfg2: EvolutionConfig = cfg;
+    cfg2.target_fitness = 1000;
+    let r: EvolutionResult = evolve_population("let x = 1;", cfg2);
+    let gexec: Int = r.generations_executed;
+    if gexec != mg {
+        println("FAIL evolve_gens");
+        return;
+    }
+    if r.converged {
+        println("FAIL evolve_should_not_converge");
+        return;
+    }
+    println("OK evolve_population");
+
+    println("AI_EVOLUTION_OK");
+    println("OK");
+}

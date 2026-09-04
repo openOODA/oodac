@@ -1,0 +1,13 @@
+// # ok fs read cap read
+//
+// Logline: Check-pass fixture that grants read_file through a precise FsReadCap token.
+//
+// Beats:
+//   1. ok takes fs: &FsReadCap.
+//   2. read_file is called with that token.
+//   3. Check must accept the granular grant.
+
+pub fn ok(fs: &FsReadCap) {
+    let r = read_file(fs, "/tmp/x");
+}
+pub fn main() {}

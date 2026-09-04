@@ -1,0 +1,14 @@
+// # Type Error Int Assigned String Fixture
+//
+// Logline: Check fails closed when String is assigned to Int.
+//
+// Setup: Int let binding receiving String literal.
+//
+// Beats:
+//   1. Declare let x: Int = "hi".
+//   2. Type checker emits error at line 13.
+//
+
+pub fn main() {
+    let x: Int = "hi";
+}

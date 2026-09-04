@@ -1,0 +1,32 @@
+// # FHE CKKS Encoder Determinism Smoke
+//
+// Logline: Verifies std/crypto/fhe_lattices/fhe_ckks_encoder.ckks_encoder_new is deterministic and produces a valid encoder for degree_n=4 slots and scale=1.0.
+//
+// Setup: Imports std/crypto/fhe_lattices/fhe_ckks_encoder.oo. Pure, no FS or net. Property test (PROP).
+//
+// Beats:
+//   1. ckks_encoder_new(4, 1.0) returns a valid encoder with degree_n=4.
+//   2. Two calls produce equal encoder records (determinism).
+//   3. Print CKKS_ENCODER_PROP_OK on success.
+
+import "std/sec/asymmetric/fhe_ckks_encoder.oo";
+
+pub fn main() {
+    let enc1: CkksEncoder = ckks_encoder_new(4, 1.0);
+    let enc2: CkksEncoder = ckks_encoder_new(4, 1.0);
+    let n1: Int = enc1.degree_n;
+    let n2: Int = enc2.degree_n;
+    if n1 != 4 {
+        println("FAIL n1");
+        return;
+    }
+    if n2 != 4 {
+        println("FAIL n2");
+        return;
+    }
+    if n1 != n2 {
+        println("FAIL non-deterministic");
+        return;
+    }
+    println("CKKS_ENCODER_PROP_OK");
+}

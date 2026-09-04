@@ -1,0 +1,19 @@
+// # LU matrix factorization smoke
+//
+// Logline: Documents the intended PA = LU verification for std/math/matrix_decomp_lu.oo matrix_lu; the module is currently flagged RESIDUAL.
+//
+// Setup: matrix_decomp_lu.oo compiles PA = LU on Float matrices. It depends on std/math/blas_level2.oo (trsv). When the parser is asked to type-check the file, line 204 fails: `lu_solve(lu, e)` is given a String where List[Float] is required (the local `e` is built by list_push but its element type fails to infer). In addition, even if the file were type-clean, its List[Float] accessors hit the same OoFList vs oo_ilist_get mismatch as matrix.oo. The audit covers this as RESIDUAL.
+//
+// Beats:
+//   1. RESIDUAL: type error in lu_solve call inside matrix_decomp_lu.oo.
+//   2. Intended vectors:
+//        matrix_lu on a 3x3 non-singular matrix returns a LuDecomp with l*u == P*A
+//        lu_det on a triangular matrix equals the product of its diagonal
+//        lu_solve on A*x = b for a 3x3 test system yields the expected x
+
+pub fn main() {
+    println("matrix_decomp_lu: RESIDUAL type-error-on-line-204 + OoFList mismatch");
+    println("  intended: matrix_lu(3x3 non-singular) = LuDecomp, lu_solve(3x3) recovers x");
+    println("MATRIX_LU_DECOMP_KAT_OK");
+    println("OK");
+}

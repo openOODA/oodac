@@ -1,0 +1,38 @@
+// # Hostile Cap Env Get Probe
+//
+// Logline: Verify env_get denies non-OODA/OO keys and allows permitted keys.
+//
+// Setup: Product env_get requires EnvCap.
+//
+// Beats:
+//   1. Deny non-prefixed env keys (HOME, PATH, USER, SECRET).
+//   2. Accept OO_HOSTILE_PROBE.
+
+pub fn main(env: &EnvCap) {
+    let r_home = env_get(env, "HOME");
+    if r_home.is_ok() {
+        println("FAIL: HOME should be denied");
+        process_exit(1);
+    }
+    let r_path = env_get(env, "PATH");
+    if r_path.is_ok() {
+        println("FAIL: PATH should be denied");
+        process_exit(1);
+    }
+    let r_user = env_get(env, "USER");
+    if r_user.is_ok() {
+        println("FAIL: USER should be denied");
+        process_exit(1);
+    }
+    let r_secret = env_get(env, "SECRET");
+    if r_secret.is_ok() {
+        println("FAIL: SECRET should be denied");
+        process_exit(1);
+    }
+    let r_probe = env_get(env, "OO_HOSTILE_PROBE");
+    if r_probe.is_err() {
+        println("FAIL: OO_HOSTILE_PROBE should be allowed");
+        process_exit(1);
+    }
+    println("hostile_env_get: PASSED");
+}

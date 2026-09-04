@@ -1,0 +1,59 @@
+// # Hardware attestation quote smoke (PILLAR)
+//
+// Logline: Asserts std/sec/attestation_quote.attestation_quote_create + attestation_quote_verify_trust + attestation_quote_compute_trust_score produce a non-empty quote with is_trusted=true on a well-formed payload and false on a missing signature.
+//
+// Setup: Imports std/sec/attestation_quote.oo. Pure (no FS, no real TPM).
+//
+// Beats:
+//   1. attestation_quote_create with all fields non-empty yields is_trusted=true.
+//   2. Empty signature flips is_trusted to false.
+//   3. Empty nonce flips is_trusted to false.
+//   4. attestation_quote_compute_trust_score returns >= 0 and <= 100.
+//   5. Print SEC_ATTESTATION_QUOTE_OK on success.
+
+import "std/sec/attestation_quote.oo";
+
+pub fn main() {
+    // Beat 1: well-formed quote.
+    let q1: AttestationQuote = attestation_quote_create("q1", "nonce1", "sig1", "key1", 1000);
+    if !q1.is_trusted {
+        println("FAIL quote_trusted");
+        return;
+    }
+    if q1.created_at != 1000 {
+        println("FAIL quote_ts");
+        return;
+    }
+    println("OK attestation_quote_create");
+
+    // Beat 2: empty signature.
+    let q2: AttestationQuote = attestation_quote_create("q2", "nonce2", "", "key1", 1000);
+    if q2.is_trusted {
+        println("FAIL empty_sig_should_be_untrusted");
+        return;
+    }
+    println("OK empty_signature_rejected");
+
+    // Beat 3: empty nonce.
+    let q3: AttestationQuote = attestation_quote_create("q3", "", "sig3", "key1", 1000);
+    if q3.is_trusted {
+        println("FAIL empty_nonce_should_be_untrusted");
+        return;
+    }
+    println("OK empty_nonce_rejected");
+
+    // Beat 4: trust score is bounded.
+    let score: Int = attestation_quote_calculate_trust_score(&q1);
+    if score < 0 {
+        println("FAIL trust_score_negative");
+        return;
+    }
+    if score > 100 {
+        println("FAIL trust_score_above_100");
+        return;
+    }
+    println("OK trust_score_in_range");
+
+    println("SEC_ATTESTATION_QUOTE_OK");
+    println("OK");
+}

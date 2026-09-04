@@ -1,0 +1,76 @@
+// # Principles Substratum Smoke Test
+//
+// Logline: Double-run verification of physical constants, units, and conservation.
+//
+// Setup: Validates NIST constants, dimensional algebra, and Landauer limit.
+//
+// Beats:
+//   1. Check CODATA constants and fine structure.
+//   2. Check dimensional algebra.
+//   3. Check thermodynamic and capability invariants.
+
+import "std/core/principles/constants.oo";
+import "std/core/principles/dimensional_units.oo";
+import "std/science/phys/classical/conservation_laws.oo";
+import "std/science/phys/classical/thermodynamics.oo";
+import "std/core/principles/landauer_principle.oo";
+import "std/core/principles/zero_ambient_authority.oo";
+
+fn ps_got(r: Result[Float, String]) -> Float {
+    match r { Ok(v) => { return v; }, Err(_) => { return 0.0 - 1.0; } }
+}
+
+fn main() -> Int {
+    let consts: PhysicalConstants = constants_codata_2022();
+    if consts.speed_of_light != 299792458.0 {
+        return 1;
+    }
+    
+    let alpha: Float = constants_fine_structure();
+    if alpha < 0.007 || alpha > 0.008 {
+        return 2;
+    }
+
+    let dim_f: DimensionVector = units_dim_force();
+    let dim_l: DimensionVector = units_dim_length();
+    let q1: Quantity = Quantity { value: 10.0, dim: dim_f };
+    let q2: Quantity = Quantity { value: 2.0, dim: dim_l };
+    let q_work: Quantity = units_quantity_mul(q1, q2);
+    let work_val: Float = q_work.value;
+    if work_val != 20.0 {
+        return 3;
+    }
+
+    let e_cons: Bool = conservation_check_energy(100.0, 100.00000001, 0.00001);
+    if !e_cons {
+        return 4;
+    }
+
+    let carnot: Float = thermodynamics_carnot_max_efficiency(300.0, 600.0);
+    if carnot != 0.5 {
+        return 5;
+    }
+
+    let landauer_r: Result[Float, String] = landauer_minimum_joules_per_bit(300.0);
+    if landauer_r.is_ok() == false {
+        return 6;
+    }
+    let landauer_300k: Float = ps_got(landauer_r);
+    if landauer_300k <= 0.0 || landauer_300k > 0.0000000000000000001 {
+        return 6;
+    }
+
+    let tok: CapabilityToken = CapabilityToken {
+        capability_id: 42,
+        grantee_id: 1001,
+        permissions_mask: 7,
+        valid_until_epoch_ms: 2000000000000,
+        signature: 3735928559
+    };
+    if !zero_cap_is_valid(tok, 1, 1000000000000) {
+        return 7;
+    }
+
+    println("PASS: Principles Substratum Verified");
+    return 0;
+}

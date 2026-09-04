@@ -1,0 +1,19 @@
+// # Smoke nested string scopes
+//
+// Logline: An inner string local must release at block end without touching outer.
+//
+// Setup: M2 nested bare-block String locals.
+//
+// Beats:
+//   1. Bind outer "o".
+//   2. Bind inner "i" in a block and print it.
+//   3. Print outer after the block.
+
+pub fn main() {
+    let outer = "o";
+    {
+        let inner = "i";
+        println(inner);
+    }
+    println(outer);
+}

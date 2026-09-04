@@ -1,0 +1,70 @@
+# 256-Line Cap Boundary Index — openOODA v2.11.0
+# File: openOODA/docs/CAP_BOUNDARY.oot
+#
+# Purpose: enumerate every product .oo/.oot file at exactly 256 lines, with a split-heuristic per file so the next contributor does not cross the cap. Cross-checked against qa/tests_onboarding/tier1_features/test_t1_f02_format_line_counts_le256.oo.
+#
+# Method: single-pass `find openOODA ooda -type f ( -name *.oo -o -name *.oot ) -exec wc -l {} +` filtered to $1 == 256 and the result is the 10-file list below. The enforcer would PASS today (zero over-cap) but these 10 files are at the cliff edge.
+#
+# ## Cap state (2026-09-01)
+#
+# Total product .oo/.oot files: 43746 - 2 fixture outliers (41605, 53391 lines, smoke-test corpora) - dist/* (release bundles) = ~thousand active source files.
+# Over-cap (>256): 0
+# At-cap (==256): 10 (this file's content)
+# Near-cap (>=240): ~40
+#
+# ## 10 Boundary Files (the high-risk cohort)
+#
+# Format: <path> : <split-heuristic>
+#
+# 1. openOODA/rfcs/0016-contract-gate-expansion.oot : split into 0016-§3.1-arm-let.oot + 0016-§3.2-arm-if.oot + 0016-§3.3-arm-while.oot + 0016-§3.4-arm-call.oot + 0016-§3.5-arm-return.oot. Domain seam: one refine_check_<feature> arm per file.
+#
+# 2. openOODA/std/AUDIT_TLDR.oot : split by subdirectory cluster. §sec/* → std_sec_tldr.oot, §phys/* → std_phys_tldr.oot, §math/* → std_math_tldr.oot, §compile/* → std_compile_tldr.oot, §net/econ/encoding/* → std_misc_tldr.oot.
+#
+# 3. ooda/cli/cmd_pm_add.oo : split by command path. cmd_pm_add_resolve.oo (the resolve+manifest walk) + cmd_pm_add_install.oo (CAS+lock+vendor write) + cmd_pm_add_main.oo (CLI parse+dispatch). The current file carries 9 imports and 3 large internal helpers; the seam is the resolve/install split.
+#
+# 4. ooda/oodac/c_emit_struct.oo : split into c_emit_struct_decl.oo (typedef emission, ~half) + c_emit_struct_lit.oo (struct-lit type extraction). Domain seam: declaration path vs. expression path.
+#
+# 5. ooda/oodac/bc_emit_stmt.oo : only 2 public functions (bc_emit_block, bc_emit_stmt); do NOT split. Instead, future grows must come from new modules in ooda/oodac/bc_emit_stmt_<feature>.oo (e.g. bc_emit_stmt_match.oo for a new match arm). 256 is the natural ceiling.
+#
+# 6. ooda/oodac/c_emit_match_let.oo : split into c_emit_match_let_succ.oo (Ok/Some arm) + c_emit_match_let_fail.oo (Err/None arm). Domain seam: success vs. failure path.
+#
+# 7. ooda/oodac/llvm_emit_call.oo : split into llvm_emit_call_print.oo (println emitter) + llvm_emit_call_op.oo (Ok/Err/list/math/user-call emitter). Domain seam: print path vs. operator path.
+#
+# 8. ooda/oodac/llvm_emit_mem.oo : split into llvm_emit_mem_decl.oo (struct decls) + llvm_emit_mem_access.oo (GEP+field+lit). Domain seam: declaration vs. access.
+#
+# 9. ooda/oodac/llvm_emit_stmt.oo : split into llvm_emit_stmt_ctrl.oo (let/assign/return/while/if/for) + llvm_emit_stmt_match.oo (Result match + struct field mutate) + llvm_emit_stmt_verify.oo (top-level verify lowering). Domain seam: control flow vs. pattern match vs. test block.
+#
+# 10. ooda/oodac/wasm_binary_builder.oo : split by section type. wasm_binary_builder_core.oo (type + import + function + memory sections) + wasm_binary_builder_payload.oo (export + code + data sections). Domain seam: declaration sections vs. payload sections.
+#
+# ## Cap Enforcement (single gate)
+#
+# The enforcer at qa/tests_onboarding/tier1_features/test_t1_f02_format_line_counts_le256.oo is the canonical gate. It uses sys_exec to run:
+#
+#   find openOODA ooda -type f ( -name *.oo -o -name *.oot ) \
+#     ! -path '*/.agents/*' ! -path '*/.git/*' \
+#     ! -path '*/bootstrap/corpus/*' ! -path '*/wasm_interpreter/*' \
+#     ! -path '*/qa_challenger_*' \
+#     -exec wc -l {} + | awk '$1 > 256 && $2 != "total"'
+#
+# It is in the 27/27 onboarding gate. A failing enforcer blocks release.
+#
+# ## How to add a feature to a boundary file
+#
+# 1. Read the file's split-heuristic above.
+# 2. Pick the side of the seam that matches your feature.
+# 3. Create <feature>.oo (max 256 lines) in the same directory.
+# 4. Import it from the boundary file with `import "<feature>.oo";`.
+# 5. Delegate. Do not grow the boundary file.
+# 6. Run the enforcer. Confirm zero over-cap.
+#
+# ## Why 256?
+#
+# The 256-line ceiling is the Boyd E-M ceiling: a single .oo file is one bounded operational unit. A 256-line file is the highest-throughput shape a human can read, review, and reason about in one pass. Files above 256 accumulate drag (D) without proportional target gain (T), and Ps = ((T-D)/W)*V collapses. Below 240 lines the file is sub-tactical: it is one beat, not a complete protocol.
+#
+# ## Cross-references
+#
+# - FORMAT.oot §1: the 4-element Academy header (256-line cap is implicit in §3 file-limits)
+# - QUICKREF.oot §1: "every file ≤ 256 lines" listed as critical constraint #1
+# - ROADMAP.oot R1 release gate: "100% files ≤ 256 lines"
+# - REDTEAM.oot §8: the enforcer is a required member of the release gate package
+# - audit/lsp_redteam_2026_09_01_deepdive.oot §5: LSP files all <256 (the lsp/ cohort)

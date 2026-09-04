@@ -1,0 +1,25 @@
+// # Test Attention Head Dimension Bounds Trap
+//
+// Logline: Asserts fail-closed compile-time rejection when attention head dimension exceeds 256.
+//
+// Setup: Fused FlashAttention kernel parameter declares head_dim greater than 256.
+//
+// Beats:
+//   1. Declare attention kernel with head_dim exceeding maximum 256 ceiling.
+//   2. Attempt HIP emission through compiler front-end.
+//   3. Assert compiler exits non-zero with head_dim exceeds maximum 256 diagnostic.
+
+@gpu
+pub fn k_attention_bounds_violation(
+    q: FloatPtr,
+    k: FloatPtr,
+    v: FloatPtr,
+    out: FloatPtr,
+    seq_len: Int,
+    head_dim: Int = 512
+) {
+    let tid: Int = 0;
+}
+
+pub fn main() {
+}

@@ -1,0 +1,71 @@
+// # DisjointSet union-find property smoke
+//
+// Logline: Asserts std/collections/disjoint_set.oo dsu_union reduces component count and dsu_connected is reflexive, symmetric, and transitive under a transitive union sequence.
+//
+// Setup: Imports std/collections/disjoint_set.oo. Pure.
+//
+// Beats:
+//   1. Build a DisjointSet of 12 elements; num_sets = 12, every element is its own root.
+//   2. Union 0+1, 2+3, 4+5; num_sets = 9, connected pairs report true, disjoint pairs report false.
+//   3. Union 0+2; transitive path: 0 and 3 are now connected.
+//   4. dsu_find returns the same root for all members of a component and different roots across components.
+//   5. DISJOINT_SET_OK on success.
+
+import "std/core/collection/disjoint_set.oo";
+
+pub fn expect_eq_int(label: String, got: Int, want: Int) -> Bool {
+    if got == want { println("OK " + label); return true; }
+    println("FAIL " + label + " got=" + got.to_string() + " want=" + want.to_string());
+    return false;
+}
+
+pub fn expect_true(label: String, cond: Bool) -> Bool {
+    if cond { println("OK " + label); return true; }
+    println("FAIL " + label);
+    return false;
+}
+
+pub fn expect_false(label: String, cond: Bool) -> Bool {
+    if cond { println("FAIL " + label); return false; }
+    println("OK " + label);
+    return true;
+}
+
+pub fn main() {
+    let d0: DisjointSet = dsu_new(12);
+    if !expect_eq_int("initial len", dsu_len(d0), 12) { return; }
+    if !expect_eq_int("initial num_sets", dsu_num_sets(d0), 12) { return; }
+
+    let mut d: DisjointSet = d0;
+    d = dsu_union(d, 0, 1);
+    d = dsu_union(d, 2, 3);
+    d = dsu_union(d, 4, 5);
+    if !expect_eq_int("num_sets after 3 unions", dsu_num_sets(d), 9) { return; }
+    if !expect_true("0 connected 1", dsu_connected(d, 0, 1)) { return; }
+    if !expect_true("2 connected 3", dsu_connected(d, 2, 3)) { return; }
+    if !expect_false("0 not connected 2", dsu_connected(d, 0, 2)) { return; }
+    if !expect_false("6 alone", dsu_connected(d, 6, 0)) { return; }
+
+    // Transitive union: 0 and 3 should now be connected.
+    d = dsu_union(d, 0, 2);
+    if !expect_eq_int("num_sets after 4th union", dsu_num_sets(d), 8) { return; }
+    if !expect_true("0 connected 3 after transitive union", dsu_connected(d, 0, 3)) { return; }
+
+    // All members of a component share the same root.
+    let r0: Int = dsu_find(d, 0);
+    if !expect_eq_int("root 0", r0, dsu_find(d, 1)) { return; }
+    if !expect_eq_int("root 0 == root 2", dsu_find(d, 0), dsu_find(d, 2)) { return; }
+    if !expect_eq_int("root 0 == root 3", dsu_find(d, 0), dsu_find(d, 3)) { return; }
+    if !expect_eq_int("root 4 == root 5", dsu_find(d, 4), dsu_find(d, 5)) { return; }
+
+    // Unioning a pair already in the same component is a no-op on num_sets.
+    d = dsu_union(d, 0, 3);
+    if !expect_eq_int("no-op union num_sets", dsu_num_sets(d), 8) { return; }
+
+    // Out-of-bounds find returns -1 and connected short-circuits to false.
+    if !expect_eq_int("find -1", dsu_find(d, 0 - 1), 0 - 1) { return; }
+    if !expect_eq_int("find 99", dsu_find(d, 99), 0 - 1) { return; }
+    if !expect_false("connected out-of-bounds", dsu_connected(d, 0, 99)) { return; }
+
+    println("DISJOINT_SET_OK");
+}

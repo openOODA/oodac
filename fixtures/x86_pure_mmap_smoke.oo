@@ -1,0 +1,16 @@
+// # Sovereign ELF64 mmap bump-arena smoke
+//
+// Logline: Allocates a list cell with sys_mmap and prints the stored integer.
+//
+// Setup: No imports. Used by --x86-elf-pure.
+//
+// Beats:
+//   1. Create an empty list.
+//   2. Push one integer.
+//   3. Print the element.
+
+pub fn main() {
+    let mut xs: List[Int] = list_new();
+    xs = list_push(xs, 7);
+    println(list_get(xs, 0));
+}

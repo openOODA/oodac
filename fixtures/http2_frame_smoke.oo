@@ -1,0 +1,116 @@
+// # HTTP/2 frame round-trip smoke
+//
+// Logline: Asserts std/net/http2_frame builders and helpers (frame_type_name, has_flag, format) for the RFC 7540 §11 frame types DATA, HEADERS, SETTINGS, PING, GOAWAY, WINDOW_UPDATE.
+//
+// Setup: Imports std/net/http2_frame.oo. Pure.
+//
+// Beats:
+//   1. http2_frame_type_name maps 0=DATA, 1=HEADERS, 4=SETTINGS, 6=PING, 7=GOAWAY; 99=UNKNOWN.
+//   2. http2_frame_data produces type=0, length=5, stream_id=1, flags=1.
+//   3. http2_frame_headers sets type=1, flags=END_STREAM|END_HEADERS=5.
+//   4. http2_frame_has_flag reads END_STREAM (1) and END_HEADERS (4).
+//   5. http2_frame_format prints the frame description.
+
+import "std/net/http2_frame.oo";
+
+pub fn main() {
+    let http2_frame_dummy: Int = 0;
+
+    // Beat 1: names.
+    if http2_frame_type_name(0) != "DATA" {
+        println("FAIL DATA name");
+        return;
+    }
+    if http2_frame_type_name(1) != "HEADERS" {
+        println("FAIL HEADERS name");
+        return;
+    }
+    if http2_frame_type_name(4) != "SETTINGS" {
+        println("FAIL SETTINGS name");
+        return;
+    }
+    if http2_frame_type_name(6) != "PING" {
+        println("FAIL PING name");
+        return;
+    }
+    if http2_frame_type_name(7) != "GOAWAY" {
+        println("FAIL GOAWAY name");
+        return;
+    }
+    if http2_frame_type_name(99) != "UNKNOWN" {
+        println("FAIL UNKNOWN name");
+        return;
+    }
+    println("OK type names");
+
+    // Beat 2: DATA frame.
+    let f1: Http2Frame = http2_frame_data(1, "hello", true);
+    if f1.frame_type != 0 {
+        println("FAIL f1 type got " + f1.frame_type.to_string());
+        return;
+    }
+    if f1.length != 5 {
+        println("FAIL f1 length got " + f1.length.to_string());
+        return;
+    }
+    if f1.stream_id != 1 {
+        println("FAIL f1 stream_id got " + f1.stream_id.to_string());
+        return;
+    }
+    if f1.flags != 1 {
+        println("FAIL f1 flags got " + f1.flags.to_string());
+        return;
+    }
+    println("OK DATA frame");
+
+    // Beat 3: HEADERS frame, END_STREAM|END_HEADERS=5.
+    let f2: Http2Frame = http2_frame_headers(3, "hpack", true, true);
+    if f2.frame_type != 1 {
+        println("FAIL f2 type got " + f2.frame_type.to_string());
+        return;
+    }
+    if f2.flags != 5 {
+        println("FAIL f2 flags got " + f2.flags.to_string());
+        return;
+    }
+    println("OK HEADERS frame");
+
+    // Beat 4: has_flag for END_STREAM (1) and END_HEADERS (4).
+    if !http2_frame_has_flag(f1, 1) {
+        println("FAIL f1 END_STREAM bit");
+        return;
+    }
+    if !http2_frame_has_flag(f2, 1) {
+        println("FAIL f2 END_STREAM bit");
+        return;
+    }
+    if !http2_frame_has_flag(f2, 4) {
+        println("FAIL f2 END_HEADERS bit");
+        return;
+    }
+    if http2_frame_has_flag(f1, 4) {
+        println("FAIL f1 END_HEADERS set");
+        return;
+    }
+    println("OK flag bits");
+
+    // Beat 5: format.
+    let desc: String = http2_frame_format(f1);
+    if !desc.contains("type=DATA") {
+        println("FAIL format type got " + desc);
+        return;
+    }
+    if !desc.contains("stream=1") {
+        println("FAIL format stream got " + desc);
+        return;
+    }
+    if !desc.contains("length=5") {
+        println("FAIL format length got " + desc);
+        return;
+    }
+    println("OK frame format");
+
+    let total: Int = http2_frame_dummy + 1;
+    println("HTTP2_FRAME_RT_OK");
+    println("total=" + total.to_string());
+}

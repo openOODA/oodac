@@ -1,0 +1,65 @@
+// # HTTP Response parser smoke test
+//
+// Logline: Verifies HTTP/1.1 response parsing via the safe http_resp_parse_status API plus inline re-parse of status line, headers, and body.
+//
+// Setup: Imports std/net/http_resp.oo (the safe API). The full Result[HttpResponse, String] http_resp_parse lives in http_resp_parse.oo.
+//
+// Beats:
+//   1. http_resp_parse_status returns Ok for a valid HTTP/1.1 response.
+//   2. Inline re-parse extracts version, status code, reason, headers, and body.
+//   3. Reason text via http_resp_status_text for known codes (200, 404, 500).
+//   4. Error path: empty or non-HTTP input.
+//   5. Print HTTP_RESP_FIXTURE_ALL_PASSED on success.
+
+import "std/net/http_resp.oo";
+
+fn hrsm_assert(label: String, ok: Bool) {
+    if !ok {
+        println("FAIL " + label);
+        process_exit(1);
+    }
+    println("OK " + label);
+}
+
+pub fn main() {
+    let raw: String = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 5\r\n\r\nhello";
+
+    // Beat 1: status projection.
+    let st: Result[Int, String] = http_resp_parse_status(raw);
+    hrsm_assert("parse_status 200 OK", st.is_ok());
+
+    let bad: String = "garbage";
+    let st_bad: Result[Int, String] = http_resp_parse_status(bad);
+    hrsm_assert("parse_status err", st_bad.is_err());
+
+    // Beat 2: inline re-parse of the status line.
+    let cr1: Int = str_index_of(raw, "\r\n");
+    let status_line: String = str_slice(raw, 0, cr1);
+    let s1: Int = str_index_of(status_line, " ");
+    let after_first_space: String = str_slice(status_line, s1 + 1, chars_len(status_line));
+    let s2b: Int = str_index_of(after_first_space, " ");
+    let code: String = str_slice(after_first_space, 0, s2b);
+    let reason: String = str_slice(after_first_space, s2b + 1, chars_len(after_first_space));
+    hrsm_assert("status line starts HTTP/1.1", str_slice(status_line, 0, 8) == "HTTP/1.1");
+    hrsm_assert("status code 200", code == "200");
+    hrsm_assert("reason OK", reason == "OK");
+
+    // Body is after the second \r\n\r\n.
+    let cr2: Int = str_index_of(raw, "\r\n\r\n");
+    let body: String = str_slice(raw, cr2 + 4, chars_len(raw));
+    hrsm_assert("body hello", body == "hello");
+
+    // Beat 3: reason text.
+    let r200: String = http_resp_status_text(200);
+    let r404: String = http_resp_status_text(404);
+    let r500: String = http_resp_status_text(500);
+    hrsm_assert("reason 200", r200 == "OK");
+    hrsm_assert("reason 404", r404 == "Not Found");
+    hrsm_assert("reason 500", r500 == "Internal Server Error");
+
+    // Beat 4: error path.
+    let e1: Result[Int, String] = http_resp_parse_status("");
+    hrsm_assert("empty err", e1.is_err());
+
+    println("HTTP_RESP_FIXTURE_ALL_PASSED");
+}

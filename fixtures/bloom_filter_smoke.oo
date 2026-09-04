@@ -1,0 +1,68 @@
+// # BloomFilter no-false-negative property smoke
+//
+// Logline: Asserts std/collections/bloom_filter.oo bloom_contains returns true for every item that was added (the no-false-negative property).
+//
+// Setup: Imports std/collections/bloom_filter.oo. Pure.
+//
+// Beats:
+//   1. Build a 1024-bit filter with 4 hashes; len = 0.
+//   2. Add 30 distinct strings; len = 30.
+//   3. bloom_contains returns true for all 30 added items.
+//   4. (Sanity) An obviously absent string returns false most of the time; this is not strict but confirms the bitmap is not all-ones.
+//   5. BLOOM_FILTER_OK on success.
+
+import "std/core/collection/bloom_filter.oo";
+
+pub fn expect_eq_int(label: String, got: Int, want: Int) -> Bool {
+    if got == want { println("OK " + label); return true; }
+    println("FAIL " + label + " got=" + got.to_string() + " want=" + want.to_string());
+    return false;
+}
+
+pub fn expect_true(label: String, cond: Bool) -> Bool {
+    if cond { println("OK " + label); return true; }
+    println("FAIL " + label);
+    return false;
+}
+
+pub fn expect_false(label: String, cond: Bool) -> Bool {
+    if cond { println("FAIL " + label); return false; }
+    println("OK " + label);
+    return true;
+}
+
+pub fn make_word(i: Int) -> String {
+    let s: String = "item-" + i.to_string() + "-pad";
+    return s;
+}
+
+pub fn main() {
+    let bf0: BloomFilter = bloom_new(1024, 4);
+    if !expect_eq_int("initial len", bloom_len(bf0), 0) { return; }
+    if !expect_true("initial is_empty", bloom_is_empty(bf0)) { return; }
+    if !expect_eq_int("num_bits", bloom_num_bits(bf0), 1024) { return; }
+
+    let mut bf: BloomFilter = bf0;
+    let mut i: Int = 0;
+    while i < 30 {
+        bf = bloom_add(bf, make_word(i));
+        i = i + 1;
+    }
+    if !expect_eq_int("len after 30 adds", bloom_len(bf), 30) { return; }
+    if !expect_false("not empty", bloom_is_empty(bf)) { return; }
+
+    // No-false-negative property: every item that was added must report contains = true.
+    let mut k: Int = 0;
+    while k < 30 {
+        if !expect_true("contains item " + k.to_string(), bloom_contains(bf, make_word(k))) { return; }
+        k = k + 1;
+    }
+
+    // Re-adding an item does not change the bitmap much; len increments but the
+    // contains result stays true.
+    bf = bloom_add(bf, "item-0-pad");
+    if !expect_eq_int("len after dup add", bloom_len(bf), 31) { return; }
+    if !expect_true("contains item-0 after dup", bloom_contains(bf, "item-0-pad")) { return; }
+
+    println("BLOOM_FILTER_OK");
+}

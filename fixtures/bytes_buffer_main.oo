@@ -1,0 +1,23 @@
+// # Byte buffer free names
+//
+// Logline: Build a List[Int] 0..255 buffer and print get, to_str, and concat.
+//
+// Beats:
+//   1. Push 65 and 66 into a new bytes buffer.
+//   2. Print gets, to_str, and len of the string form.
+//   3. Prove bytes_from_str and bytes_concat.
+
+// M164 path A: List[Int] 0..255 Byte buffer free names (no multi-import)
+pub fn main() {
+    let mut bs: List[Int] = bytes_new();
+    bs = bytes_push(bs, 65);
+    bs = bytes_push(bs, 66);
+    println(bytes_get(bs, 0));
+    println(bytes_get(bs, 1));
+    println(bytes_get(bs, 99));
+    println(bytes_to_str(bs));
+    println(bytes_len(bytes_to_str(bs)));
+    println(byte_at(bytes_to_str(bs), 0));
+    println(bytes_eq(bytes_from_str("AB"), "AB"));
+    println(bytes_eq(bytes_concat("A", "B"), "AB"));
+}

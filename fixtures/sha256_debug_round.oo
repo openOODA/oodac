@@ -1,0 +1,67 @@
+// # SHA-256 First Round Debug
+//
+// Logline: Computes the first round of SHA-256 for the empty-message padded block and prints intermediate values; used to locate the bug in my hand-coded SHA-256.
+//
+// Setup: Pure. All logic in main. Masks operand before each right shift to defeat the .oo language's arithmetic right shift.
+//
+// Beats:
+//   1. Compute rotr(0x510e527f, 6), rotr(0x510e527f, 11), rotr(0x510e527f, 25) for Sigma1(e) and assert the known FIPS intermediate values.
+//   2. Compute T1 for the first round and assert it equals the FIPS-known first-round T1.
+//   3. Print the eight 32-bit hex nibble groups of the first round's T1 so the hand-check matches the inlined implementation.
+
+pub fn main() {
+    let mask32: Int = 4294967295;
+    let hex: String = "0123456789abcdef";
+    let em: Int = 1359893119;
+    println("e=" + em.to_string());
+    let r6a: Int = em >> 6;
+    let r6b: Int = (em << 26) & mask32;
+    let r6: Int = r6a | r6b;
+    println("rotr6=" + r6.to_string());
+    let r11a: Int = em >> 11;
+    let r11b: Int = (em << 21) & mask32;
+    let r11: Int = r11a | r11b;
+    println("rotr11=" + r11.to_string());
+    let r25a: Int = em >> 25;
+    let r25b: Int = (em << 7) & mask32;
+    let r25: Int = r25a | r25b;
+    println("rotr25=" + r25.to_string());
+    let sigma1: Int = (r6 ^ r11 ^ r25) & mask32;
+    println("sigma1=" + sigma1.to_string());
+    let fm: Int = 2600822924;
+    let gm: Int = 528734635;
+    let ch: Int = (em & fm) ^ ((mask32 - em) & gm);
+    println("ch=" + ch.to_string());
+    let vh: Int = 1541459225;
+    let k0: Int = 1116352408;
+    let w0: Int = 2147483648 & mask32;
+    let t1: Int = (vh + sigma1 + ch + k0 + w0) & mask32;
+    println("t1=" + t1.to_string());
+    let t1_expected: Int = 1567144881;
+    println("t1_exp=" + t1_expected.to_string());
+    if t1 != t1_expected {
+        println("T1 MISMATCH");
+    } else {
+        println("T1 OK");
+    }
+    let am: Int = 1779033703;
+    let r2a: Int = am >> 2;
+    let r2b: Int = (am << 30) & mask32;
+    let r2: Int = r2a | r2b;
+    let r13a: Int = am >> 13;
+    let r13b: Int = (am << 19) & mask32;
+    let r13: Int = r13a | r13b;
+    let r22a: Int = am >> 22;
+    let r22b: Int = (am << 10) & mask32;
+    let r22: Int = r22a | r22b;
+    let sigma0: Int = (r2 ^ r13 ^ r22) & mask32;
+    println("sigma0=" + sigma0.to_string());
+    let bm: Int = 3144134277;
+    let cm: Int = 1013904242;
+    let mj: Int = (am & bm) ^ (am & cm) ^ (bm & cm);
+    println("mj=" + mj.to_string());
+    let t2: Int = (sigma0 + mj) & mask32;
+    println("t2=" + t2.to_string());
+    let na: Int = (t1 + t2) & mask32;
+    println("na=" + na.to_string());
+}

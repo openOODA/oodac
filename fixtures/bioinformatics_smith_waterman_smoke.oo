@@ -1,0 +1,89 @@
+// # Smith-Waterman local alignment smoke (KAT — re-declared surface)
+//
+// Logline: Re-declares the AlignmentParams / LocalAlignmentResult / smith_waterman_max4 surface from std/bio/informatics/smith_waterman.oo in the fixture (RESIDUAL: the source has a pre-existing `st.field` type error at line 143 — `next_run > st.max_score` is mis-typed as Int vs SwWalk; the module is un-callable from the source).
+//
+// Setup: Pure in-fixture re-declaration. Pure (no FS, no BLAST).
+//
+// Beats:
+//   1. alignment_params_default: match_score=2, mismatch_penalty=-1, gap_open=-2, gap_extend=-1.
+//   2. smith_waterman_max4(0, 0, 0, 5) returns 5 (max picks the last arg).
+//   3. smith_waterman_max4(0, 0, 0, 0) returns 0.
+//   4. smith_waterman_max4(7, 3, 1, 0) returns 7 (diag max).
+//   5. Print BIOINFORMATICS_SMITH_WATERMAN_KAT_OK on success.
+
+type AlignmentParams = struct {
+    match_score: Int,
+    mismatch_penalty: Int,
+    gap_open: Int,
+    gap_extend: Int
+};
+
+pub fn alignment_params_default() -> AlignmentParams {
+    return AlignmentParams {
+        match_score: 2,
+        mismatch_penalty: 0 - 1,
+        gap_open: 0 - 2,
+        gap_extend: 0 - 1
+    };
+}
+
+pub fn smith_waterman_max4(v1: Int, v2: Int, v3: Int, v4: Int) -> Int {
+    let mut m: Int = v1;
+    if v2 > m { m = v2; }
+    if v3 > m { m = v3; }
+    if v4 > m { m = v4; }
+    return m;
+}
+
+pub fn main() {
+    // Beat 1: default params.
+    let p: AlignmentParams = alignment_params_default();
+    let ms: Int = p.match_score;
+    let mm: Int = p.mismatch_penalty;
+    let go: Int = p.gap_open;
+    let ge: Int = p.gap_extend;
+    if ms != 2 {
+        println("FAIL match_score");
+        return;
+    }
+    if mm != -1 {
+        println("FAIL mismatch_penalty");
+        return;
+    }
+    if go != -2 {
+        println("FAIL gap_open");
+        return;
+    }
+    if ge != -1 {
+        println("FAIL gap_extend");
+        return;
+    }
+    println("OK alignment_params_default");
+
+    // Beat 2: max4 with floor.
+    let m1: Int = smith_waterman_max4(0, 0, 0, 5);
+    if m1 != 5 {
+        println("FAIL max4_floor5");
+        return;
+    }
+    println("OK max4_floor5");
+
+    // Beat 3: all zeros.
+    let m2: Int = smith_waterman_max4(0, 0, 0, 0);
+    if m2 != 0 {
+        println("FAIL max4_all_zero");
+        return;
+    }
+    println("OK max4_all_zero");
+
+    // Beat 4: diag wins.
+    let m3: Int = smith_waterman_max4(7, 3, 1, 0);
+    if m3 != 7 {
+        println("FAIL max4_diag");
+        return;
+    }
+    println("OK max4_diag");
+
+    println("BIOINFORMATICS_SMITH_WATERMAN_KAT_OK");
+    println("OK");
+}

@@ -1,0 +1,9 @@
+{"step":0,"type":"USER_INPUT","prompt":"audit the std/ directory","completion":"","tool_payload":""}
+{"step":1,"type":"PLANNER_RESPONSE","prompt":"ctx","completion":"scan std/ for token waste","tool_payload":""}
+{"step":2,"type":"TOOL_CALL","prompt":"ctx","completion":"scanned","tool_payload":"{\"files_scanned\":4539,\"wasted_tokens\":12400}"}
+{"step":3,"type":"PLANNER_RESPONSE","prompt":"ctx","completion":"prioritize the top 10","tool_payload":""}
+{"step":4,"type":"TOOL_CALL","prompt":"ctx","completion":"prioritized","tool_payload":"{\"top\":10,\"max_savings\":8400}"}
+{"step":5,"type":"REVIEWER_RESPONSE","prompt":"ctx","completion":"approved","tool_payload":""}
+{"step":6,"type":"USER_INPUT","prompt":"write a fix","completion":"","tool_payload":""}
+{"step":7,"type":"PLANNER_RESPONSE","prompt":"ctx","completion":"emit sidecar suggestions","tool_payload":""}
+{"step":8,"type":"TOOL_CALL","prompt":"ctx","completion":"emitted","tool_payload":"{\"sidecars\":10}"}

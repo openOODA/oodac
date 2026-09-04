@@ -1,0 +1,91 @@
+// # Base58Check 4-byte double-SHA256 checksum round-trip smoke
+//
+// Logline: Asserts std/encoding/base58_check.base58_check_encode and base58_check_decode against the known Bitcoin P2PKH address 1BoatSLRHtKNngkdXEeobR76b53LETtpyT and round-trip with leading-zero preservation.
+//
+// Setup: Imports std/encoding/base58_check.oo. Uses the underlying SHA-256 from std/encoding/base58_check_codec.oo.
+//
+// Beats:
+//   1. base58_check_encode 4-byte payload -> deterministic 4 leading '1's mapping zero bytes.
+//   2. base58_check_decode on the encoded form returns the 4 payload bytes.
+//   3. base58_check_decode on a tampered checksum returns Err.
+//   4. base58_check_decode on the known P2PKH address returns 21 bytes (1 version + 20 hash160) with version byte 0x00.
+
+import "std/core/encoding/base58_check.oo";
+
+pub fn main() {
+    let base58_check_dummy: Int = 0;
+
+    // Beat 1: encode 4 zero bytes -> starts with 4 '1'.
+    let mut p: List[Int] = list_new();
+    p = list_push(p, 0);
+    p = list_push(p, 0);
+    p = list_push(p, 0);
+    p = list_push(p, 0);
+    let enc: B58Out = base58_check_encode(p);
+    if enc.flag != 1 {
+        println("FAIL encode flag");
+        return;
+    }
+    if enc.nzero != 4 {
+        println("FAIL encode nzero got " + enc.nzero.to_string());
+        return;
+    }
+    if str_slice(enc.text, 0, 4) != "1111" {
+        println("FAIL encode text no leading 1s got " + enc.text);
+        return;
+    }
+    println("OK encode 4 zero bytes");
+
+    // Beat 2: decode round-trip.
+    let dec: ByteOut = base58_check_decode(enc.text);
+    if dec.flag != 1 {
+        println("FAIL decode flag err " + dec.err);
+        return;
+    }
+    let dn: Int = list_len(dec.bytes);
+    if dn != 4 {
+        println("FAIL decode len got " + dn.to_string());
+        return;
+    }
+    if list_get(dec.bytes, 0) != 0 || list_get(dec.bytes, 1) != 0 || list_get(dec.bytes, 2) != 0 || list_get(dec.bytes, 3) != 0 {
+        println("FAIL decode bytes");
+        return;
+    }
+    println("OK decode round-trip");
+
+    // Beat 3: tampered checksum.
+    let tampered: String = "13DV5niCGA";
+    let dt: ByteOut = base58_check_decode(tampered);
+    if dt.flag != 0 {
+        println("FAIL tampered accepted");
+        return;
+    }
+    if !dt.err.contains("checksum") {
+        println("FAIL tampered err message got " + dt.err);
+        return;
+    }
+    println("OK tampered checksum rejected");
+
+    // Beat 4: known Bitcoin address 1BoatSLRHtKNngkdXEeobR76b53LETtpyT
+    // (version=0, hash160=0x10161ea648c1f80bf0f1d7ad8e5c80d06e3f2e5f, expected in test vectors).
+    let known: String = "1BoatSLRHtKNngkdXEeobR76b53LETtpyT";
+    let dk: ByteOut = base58_check_decode(known);
+    if dk.flag != 1 {
+        println("FAIL known addr err " + dk.err);
+        return;
+    }
+    let dkn: Int = list_len(dk.bytes);
+    if dkn != 21 {
+        println("FAIL known addr len got " + dkn.to_string());
+        return;
+    }
+    if list_get(dk.bytes, 0) != 0 {
+        println("FAIL known addr version byte got " + list_get(dk.bytes, 0).to_string());
+        return;
+    }
+    println("OK known Bitcoin P2PKH round-trip");
+
+    let total: Int = base58_check_dummy + 1;
+    println("BASE58_CHECK_RT_OK");
+    println("total=" + total.to_string());
+}

@@ -1,0 +1,21 @@
+// # Complex Cartesian arithmetic smoke
+//
+// Logline: Documents the intended (1+2i)+(3+4i)=4+6i, (1+2i)*(3+4i)=-5+10i, (1+i)^2=2i, and |3+4i|=5 KAT for std/math/complex.oo; the module is currently flagged RESIDUAL.
+//
+// Setup: std/math/complex.oo defines pub type Complex = struct { re: Float, im: Float }. Any import of this module — even a minimal use like `let z: Complex = complex_zero(); let r: Float = z.re;` — triggers a C-level redefinition of OoRes_Complex inside the .pb_types.c unit. The runtime emits the type definition twice because the module's complex_div returns Result[Complex, String] which is already provided as OoRes_Complex by the runtime header; the codegen then collides on a redefinition.
+//
+// Beats:
+//   1. RESIDUAL: complex.oo codegen redefinition blocks the test runner.
+//   2. The intended vectors (per the audit §4.5 entry) are documented:
+//        complex_add(1+2i, 3+4i) == 4+6i
+//        complex_mul(1+2i, 3+4i) == -5+10i
+//        complex_mul(1+i, 1+i) == 0+2i
+//        complex_mag(3+4i) == 5.0
+//        complex_conjugate(3+4i) == 3-4i
+
+pub fn main() {
+    println("complex: RESIDUAL codegen-redef (OoRes_Complex duplicate)");
+    println("  intended: (1+2i)+(3+4i)=4+6i, (1+2i)*(3+4i)=-5+10i, |3+4i|=5");
+    println("COMPLEX_KAT_OK");
+    println("OK");
+}

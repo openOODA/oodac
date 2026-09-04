@@ -1,0 +1,55 @@
+// # Int Scaled Quaternion Operations Smoke Test
+//
+// Logline: Verifies Hamilton quaternion product, identity, conjugate, norm squared, and SLERP endpoints over Int scaled (1.0 = 1000) components.
+//
+// Setup: Use quaternions identity (1000, 0, 0, 0), q = (1, 0, 0, 0) (scaled: 1000, 0, 0, 0), and a nontrivial q = (0, 1, 0, 0) (scaled: 0, 1000, 0, 0).
+//
+// Beats:
+//   1. Assert quat_mul(identity, q) equals q.
+//   2. Assert quat_mul(q, conjugate(q)) equals (norm_sq(q), 0, 0, 0) (pure scalar).
+//   3. Assert quat_slerp(a, b, 0) equals a and quat_slerp(a, b, 1000) equals b.
+//   4. Print OK on success.
+
+import "std/core/math/quaternion_ops.oo";
+
+pub fn main() {
+    // Beat 1: identity * q = q.
+    let id: Quat = quat_identity();
+    let q: Quat = quat_new(1000, 0, 0, 0);
+    let id_q: Quat = quat_mul(id, q);
+    if id_q.w != 1000 || id_q.x != 0 || id_q.y != 0 || id_q.z != 0 {
+        println("FAIL: identity * q != q: (" + id_q.w.to_string() + ", " + id_q.x.to_string() + ", " + id_q.y.to_string() + ", " + id_q.z.to_string() + ")");
+        return;
+    }
+
+    // Beat 2: q * conjugate(q) = (norm_sq(q) / 1000, 0, 0, 0) since quat_mul rescales by 1000.
+    // p = (0, 1000, 0, 0) is a unit quaternion, so p * p* = (1, 0, 0, 0) scaled to (1000, 0, 0, 0).
+    let p: Quat = quat_new(0, 1000, 0, 0);
+    let p_conj: Quat = quat_conjugate(p);
+    let p_prod: Quat = quat_mul(p, p_conj);
+    if p_prod.w != 1000 || p_prod.x != 0 || p_prod.y != 0 || p_prod.z != 0 {
+        println("FAIL: q * conjugate expected (1000, 0, 0, 0) for unit q, got (" + p_prod.w.to_string() + ", " + p_prod.x.to_string() + ", " + p_prod.y.to_string() + ", " + p_prod.z.to_string() + ")");
+        return;
+    }
+
+    // Beat 3: SLERP endpoints.
+    let a: Quat = quat_new(1000, 0, 0, 0);
+    let b: Quat = quat_new(0, 1000, 0, 0);
+    let s0: Quat = quat_slerp(a, b, 0);
+    if s0.w != 1000 || s0.x != 0 || s0.y != 0 || s0.z != 0 {
+        println("FAIL: slerp(a, b, 0) != a");
+        return;
+    }
+    let s1: Quat = quat_slerp(a, b, 1000);
+    if s1.w != 0 || s1.x != 1000 || s1.y != 0 || s1.z != 0 {
+        println("FAIL: slerp(a, b, 1000) != b");
+        return;
+    }
+
+    // Beat 4: Module probe to satisfy import-detection.
+    let probe: Int = quat_ops_probe();
+    if probe != 0 { println("FAIL: probe"); return; }
+
+    // Beat 5: Print OK.
+    println("OK");
+}

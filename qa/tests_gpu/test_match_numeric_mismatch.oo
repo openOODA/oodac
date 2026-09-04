@@ -1,0 +1,57 @@
+// # Test HIP MATCH Numeric Compare Gate
+//
+// Logline: Asserts MATCH appears only after host numeric compare returns rc equal to 0 on the shipped HIP launch path.
+//
+// Setup: gpu_launch hip:vec_add binds liboo_hip.so. Skip-closed when the DSO is absent. Mismatch and other errors must not contain MATCH.
+//
+// Beats:
+//   1. Invoke gpu_launch with hip:vec_add under GpuCap.
+//   2. If Result is Ok, require MATCH after numeric compare.
+//   3. If Result is Err, require no MATCH and skip-closed only for liboo_hip.so absent.
+
+fn assert_true(cond: Bool, msg: String) {
+    if !cond {
+        println("FAIL: " + msg);
+        process_exit(1);
+    }
+}
+
+fn payload_has_match(s: String) -> Bool {
+    return str_index_of(s, "MATCH") >= 0;
+}
+
+fn is_dso_absent(s: String) -> Bool {
+    return str_index_of(s, "liboo_hip.so absent") >= 0;
+}
+
+fn is_numeric_mismatch(s: String) -> Bool {
+    return str_index_of(s, "numerical mismatch") >= 0;
+}
+
+pub fn run_hip_match_gate(gpu: &GpuCap) {
+    let res: Result[String, String] = gpu_launch(gpu, "hip:vec_add");
+    match res {
+        Ok(v) => {
+            assert_true(payload_has_match(v), "Ok after numeric compare must contain MATCH: " + v);
+            println("  - hip vec_add MATCH after host numeric compare: " + v);
+        }
+        Err(e) => {
+            assert_true(!payload_has_match(e), "Err must not contain MATCH: " + e);
+            if is_dso_absent(e) {
+                println("SKIP: liboo_hip.so absent (skip-closed, compiled)");
+            } else {
+                if is_numeric_mismatch(e) {
+                    println("  - numerical mismatch returned Err without MATCH: " + e);
+                } else {
+                    println("  - hip launch Err without MATCH: " + e);
+                }
+            }
+        }
+    }
+}
+
+pub fn main(gpu: &GpuCap) {
+    println("[HIP.06] Testing MATCH numeric compare gate...");
+    run_hip_match_gate(gpu);
+    println("PASS: MATCH is Ok-only after host numeric compare (rc==0)");
+}

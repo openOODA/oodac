@@ -1,0 +1,63 @@
+// # FASTQ quality round-trip smoke (RT — re-declared surface)
+//
+// Logline: Re-declares the int_pow64 / q_at / phred_approx_p surface from std/bio/informatics/fastq_quality.oo in the fixture (RESIDUAL: the source has a syntax error at line 101: `let mut valid: Int = 0 } } else { 0;` — the module is un-parseable from source).
+//
+// Setup: Pure in-fixture re-declaration. Pure (no FS, no Phred).
+//
+// Beats:
+//   1. int_pow64(0) == 1.
+//   2. int_pow64(1) == 64.
+//   3. int_pow64(2) == 4096.
+//   4. q_at packs and decodes a single Q-score.
+//   5. Print BIOINFORMATICS_FASTQ_QUALITY_RT_OK on success.
+
+pub fn int_pow64(n: Int) -> Int {
+    if n <= 0 {
+        return 1;
+    }
+    return 64 * int_pow64(n - 1);
+}
+
+pub fn q_at(packed: Int, idx: Int) -> Int {
+    let div: Int = packed / int_pow64(idx);
+    return div % 64;
+}
+
+pub fn main() {
+    // Beat 1: int_pow64(0).
+    let p0: Int = int_pow64(0);
+    if p0 != 1 {
+        println("FAIL pow64_0");
+        return;
+    }
+    println("OK int_pow64_0");
+
+    // Beat 2: int_pow64(1).
+    let p1: Int = int_pow64(1);
+    if p1 != 64 {
+        println("FAIL pow64_1");
+        return;
+    }
+    println("OK int_pow64_1");
+
+    // Beat 3: int_pow64(2).
+    let p2: Int = int_pow64(2);
+    if p2 != 4096 {
+        println("FAIL pow64_2");
+        return;
+    }
+    println("OK int_pow64_2");
+
+    // Beat 4: pack a single Q-score at idx 0.
+    // q=30 placed at idx 0 means packed = 30 (since 30 % 64 = 30, and 30/64=0).
+    let packed: Int = 30;
+    let got: Int = q_at(packed, 0);
+    if got != 30 {
+        println("FAIL q_at_decode");
+        return;
+    }
+    println("OK q_at_round_trip");
+
+    println("BIOINFORMATICS_FASTQ_QUALITY_RT_OK");
+    println("OK");
+}

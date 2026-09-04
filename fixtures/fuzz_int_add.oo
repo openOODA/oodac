@@ -1,0 +1,20 @@
+// # Int add nonneg fuzz
+//
+// Logline: Add one to a non-negative Int and keep result >= x.
+//
+// Beats:
+//   1. Keep FUZZ_DOMAIN int and target add_nonneg 0 50.
+//   2. Require x >= 0 and ensure result >= x.
+//   3. Return x + 1.
+
+// FUZZ_DOMAIN: int
+// FUZZ_TARGET: add_nonneg 0 50
+// FUZZ_REQUIRES: add_nonneg x >= 0
+// FUZZ_ENSURES: add_nonneg result >= x
+fn add_nonneg(x: Int) -> Int {
+    requires x >= 0;
+    ensures result >= x;
+    return x + 1;
+}
+pub fn main(sys: &SysCap) {
+}

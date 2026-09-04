@@ -1,0 +1,10 @@
+// # 4-arm Option and Result match cascade
+pub fn main() {
+    let x = Err(42);
+    match x {
+        None => { println(0); },
+        Some(v) => { println(v); },
+        Err(e) => { println(e); },
+        Ok(w) => { println(w); }
+    }
+}

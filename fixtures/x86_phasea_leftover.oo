@@ -1,0 +1,14 @@
+// # Phase A leftover shape (Tier 5 #27)
+//
+// Logline: List[String] program that emit-x86 must refuse with typed ERR, not a canned hello body.
+//
+// Setup: Driven by scripts/x86_no_template_smoke.oo. Not a compile-success fixture.
+//
+// Beats:
+//   1. Declare a List[String] local.
+//   2. Print the list so the leftover is a real unhandled NodeKind, not an empty main.
+
+pub fn main() {
+    let xs: List[String] = list_new();
+    println(xs);
+}

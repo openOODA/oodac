@@ -1,0 +1,33 @@
+// # GPU path A launch
+//
+// Logline: All non-HIP/ROCm paths (noop, cpu:..., ptx:..., spirv:..., metal:..., empty)
+//          fail closed. Only "hip:..." and "rocm:..." reach oo_gpu_hip_try_launch.
+//
+// Beats:
+//   1. gpu_launch "noop" should Err (fail closed).
+//   2. gpu_launch "cpu:add:2:3" should Err (no CPU fallthrough).
+//   3. gpu_launch "ptx:kernel" should Err as device residual.
+
+// M165 GPU Path A: no CPU fallthrough; only hip:/rocm: pass through to the device.
+// main injects long long gpu = oo_cap_grant_gpu();
+// Honesty: no CUDA/device shaders; emit_ptx/emit_spirv stay free-name residual.
+pub fn main(gpu: &GpuCap) {
+    let r0: Result[String, String] = gpu_launch(gpu, "noop");
+    if r0.is_err() {
+        println("noop-err");
+    } else {
+        println("noop-unexpected-ok");
+    }
+    let r1: Result[String, String] = gpu_launch(gpu, "cpu:add:2:3");
+    if r1.is_err() {
+        println("cpu-err");
+    } else {
+        println("cpu-unexpected-ok");
+    }
+    let r2: Result[String, String] = gpu_launch(gpu, "ptx:kernel");
+    if r2.is_err() {
+        println("device-residual-ok");
+    } else {
+        println("device-unexpected-ok");
+    }
+}

@@ -1,0 +1,41 @@
+// # Test for EIf and EMatch expression lowering
+//
+// Logline: Verify correct WebAssembly compilation and execution.
+//
+// Setup: Run with ooda/bin/ooda check or run from qa/.
+//
+// Beats:
+//   1. Import required modules.
+//   2. Execute test assertions.
+//   3. Report pass or fail with exit code.
+import "oodac/emit/wasm/wasm_leb128.oo";
+import "oodac/emit/wasm/wasm_opcodes.oo";
+import "oodac/emit/wasm/wasm_types.oo";
+import "oodac/emit/wasm/wasm_binary_builder.oo";
+import "oodac/emit/wasm/wasm_lower_expr.oo";
+import "oodac/emit/wasm/wasm_lower_stmt.oo";
+import "oodac/emit/wasm/wasm_lower_control.oo";
+import "oodac/emit/wasm/wasm_lower_fn.oo";
+import "oodac/ast/ast.oo";
+pub fn test_eif_in_let(fs: &FsWriteCap) -> List[Int] {
+    // fn test_eif(c: Int) -> Int {
+    //     let x: Int = if c > 0 { 10 } else { 20 };
+    //     return x;
+    // }
+    let if_expr: String = mk_eif(
+        mk_ebinop(">", mk_evar("c"), mk_eint("0")),
+        mk_eint("10"),
+        mk_eint("20")
+    );
+    let s_let: String = mk_slet("x", mk_ty_int(), if_expr);
+    let s_ret: String = mk_sreturn(mk_evar("x"));
+    let body: String = mk_block(s_let + "," + s_ret, mk_sempty());
+    let fn_node: String = mk_fn("test_eif", mk_param("c", mk_ty_int()), mk_ty_int(), "", body);
+    let bin: List[Int] = wasm_compile_ast_module(mk_file(fn_node), "browser", wasm_val_type_i32());
+    let _w: Result[Void, String] = write_file(fs, "/home/jeryd/Projects/openOODA/qa/tests_wasm/test_eif_expr.wasm", bytes_to_str(bin));
+    return bin;
+}
+
+pub fn main(fs: &FsWriteCap) {
+    test_eif_in_let(fs);
+}

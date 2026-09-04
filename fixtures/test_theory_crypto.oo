@@ -1,0 +1,216 @@
+// # Cryptographic Primitives Test Fixture
+//
+// Logline: Self-contained verification of textbook RSA key generation and round-trip, Merkle build/proof/verify, hash chain determinism, and RSA sign+verify.
+//
+// Setup: Pure in-fixture re-declaration of the crypto_core surface. No std import required.
+//
+// Beats:
+//   1. rsa_keygen(61, 53, 17) produces d with (e*d) mod phi == 1.
+//   2. rsa_decrypt(rsa_encrypt(m, n, e), n, d) == m for m in {1, 42, 1234}.
+//   3. merkle_build([1,2,3,4]) produces a 3-level tree with a non-zero root.
+//   4. merkle_verify of a real proof is true; a tampered leaf is false.
+//   5. hash_chain is deterministic and produces the requested length.
+//   6. sign then verify_sig round-trip is true.
+
+type RsaKey = struct {
+    n: Int,
+    e: Int,
+    d: Int
+};
+
+pub fn mod_pow(base: Int, exp: Int, m: Int) -> Int {
+    if m <= 1 { return 0; }
+    if exp < 0 { return 0; }
+    if exp == 0 { return 1 % m; }
+    let mut res: Int = 1 % m;
+    let mut b: Int = base % m;
+    if b < 0 { b = b + m; }
+    let mut e: Int = exp;
+    while e > 0 {
+        if (e & 1) == 1 { res = (res * b) % m; }
+        b = (b * b) % m;
+        e = e >> 1;
+    }
+    return res;
+}
+
+pub fn modular_inverse(a: Int, m: Int) -> Int {
+    if m <= 1 { return 0; }
+    let mut old_r: Int = a;
+    let mut r: Int = m;
+    let mut old_s: Int = 1;
+    let mut s: Int = 0;
+    while r != 0 {
+        let q: Int = old_r / r;
+        let tmp_r: Int = r;
+        r = old_r - q * r;
+        old_r = tmp_r;
+        let tmp_s: Int = s;
+        s = old_s - q * s;
+        old_s = tmp_s;
+    }
+    if old_r != 1 { return 0; }
+    if old_s < 0 { old_s = old_s + m; }
+    return old_s;
+}
+
+pub fn rsa_keygen(p: Int, q: Int, e: Int) -> RsaKey {
+    return RsaKey { n: p * q, e: e, d: modular_inverse(e, (p - 1) * (q - 1)) };
+}
+
+pub fn rsa_encrypt(m: Int, n: Int, e: Int) -> Int {
+    if n <= 1 { return 0; }
+    return mod_pow(m, e, n);
+}
+
+pub fn rsa_decrypt(c: Int, n: Int, d: Int) -> Int {
+    if n <= 1 { return 0; }
+    return mod_pow(c, d, n);
+}
+
+pub fn pair_hash(a: Int, b: Int) -> Int {
+    let big: Int = 100000;
+    if a < b { return a * big + b; }
+    return b * big + a;
+}
+
+pub fn merkle_build(leaves: List[Int]) -> List[List[Int]] {
+    let mut levels: List[List[Int]] = list_new();
+    levels = list_push(levels, leaves);
+    let mut cur: List[Int] = leaves;
+    let mut sz: Int = list_len(cur);
+    while sz > 1 {
+        let mut next: List[Int] = list_new();
+        let mut i: Int = 0;
+        while i + 1 < sz {
+            next = list_push(next, pair_hash(list_get(cur, i), list_get(cur, i + 1)));
+            i = i + 2;
+        }
+        if i < sz { next = list_push(next, list_get(cur, i)); }
+        levels = list_push(levels, next);
+        cur = next;
+        sz = list_len(cur);
+    }
+    return levels;
+}
+
+pub fn merkle_root(tree: List[List[Int]]) -> Int {
+    let n_levels: Int = list_len(tree);
+    if n_levels == 0 { return 0; }
+    let top: List[Int] = list_get(tree, n_levels - 1);
+    if list_len(top) == 0 { return 0; }
+    return list_get(top, 0);
+}
+
+pub fn merkle_proof(tree: List[List[Int]], leaf_idx: Int) -> List[Int] {
+    let mut proof: List[Int] = list_new();
+    let n_levels: Int = list_len(tree);
+    if n_levels <= 1 { return proof; }
+    let mut idx: Int = leaf_idx;
+    let mut level: Int = 0;
+    while level < n_levels - 1 {
+        let cur: List[Int] = list_get(tree, level);
+        let sz: Int = list_len(cur);
+        let mut sib_idx: Int = idx ^ 1;
+        if sib_idx >= sz { sib_idx = idx; }
+        proof = list_push(proof, list_get(cur, sib_idx));
+        idx = idx / 2;
+        level = level + 1;
+    }
+    return proof;
+}
+
+pub fn merkle_verify(proof: List[Int], leaf: Int, root: Int) -> Bool {
+    let mut cur: Int = leaf;
+    let n: Int = list_len(proof);
+    let mut i: Int = 0;
+    while i < n {
+        cur = pair_hash(cur, list_get(proof, i));
+        i = i + 1;
+    }
+    return cur == root;
+}
+
+pub fn chain_hash(x: Int) -> Int {
+    return ((x * 31) + 17) % 1000003;
+}
+
+pub fn hash_chain(seed: Int, n: Int) -> List[Int] {
+    let mut out: List[Int] = list_new();
+    if n <= 0 { return out; }
+    let mut cur: Int = seed;
+    let mut i: Int = 0;
+    while i < n {
+        cur = chain_hash(cur);
+        out = list_push(out, cur);
+        i = i + 1;
+    }
+    return out;
+}
+
+pub fn hmac_like(key: Int, message: Int, n: Int) -> Int {
+    return pair_hash((key ^ n) % 100000, message);
+}
+
+pub fn sign(m: Int, n: Int, d: Int) -> Int {
+    if n <= 1 { return 0; }
+    return mod_pow(m, d, n);
+}
+
+pub fn verify_sig(sig: Int, m: Int, n: Int, e: Int) -> Bool {
+    if n <= 1 { return false; }
+    return mod_pow(sig, e, n) == m;
+}
+
+pub fn list_eq(a: List[Int], b: List[Int]) -> Bool {
+    let na: Int = list_len(a);
+    let nb: Int = list_len(b);
+    if na != nb { return false; }
+    let mut i: Int = 0;
+    while i < na {
+        if list_get(a, i) != list_get(b, i) { return false; }
+        i = i + 1;
+    }
+    return true;
+}
+
+pub fn check(name: String, ok: Bool) -> Int {
+    if ok {
+        println("OK " + name);
+        return 0;
+    }
+    println("FAIL " + name);
+    process_exit(1);
+    return 1;
+}
+
+pub fn main() {
+    let k = rsa_keygen(61, 53, 17);
+    let n: Int = k.n;
+    let e: Int = k.e;
+    let d: Int = k.d;
+    let phi: Int = 60 * 52;
+    let _r0 = check("rsa_keygen_e_d_mod_phi_eq_1", (e * d) % phi == 1);
+    let _r1 = check("rsa_keygen_n_eq_pq", n == 61 * 53);
+    let _r2 = check("rsa_round_trip_m1", rsa_decrypt(rsa_encrypt(1, n, e), n, d) == 1);
+    let _r3 = check("rsa_round_trip_m42", rsa_decrypt(rsa_encrypt(42, n, e), n, d) == 42);
+    let _r4 = check("rsa_round_trip_m1234", rsa_decrypt(rsa_encrypt(1234, n, e), n, d) == 1234);
+    let mut leaves: List[Int] = list_new();
+    leaves = list_push(leaves, 1);
+    leaves = list_push(leaves, 2);
+    leaves = list_push(leaves, 3);
+    leaves = list_push(leaves, 4);
+    let tree: List[List[Int]] = merkle_build(leaves);
+    let root: Int = merkle_root(tree);
+    let _r5 = check("merkle_build_4_leaves_3_levels", list_len(tree) == 3);
+    let _r6 = check("merkle_root_nonzero", root != 0);
+    let proof0: List[Int] = merkle_proof(tree, 0);
+    let _r7 = check("merkle_verify_valid_proof_leaf0", merkle_verify(proof0, 1, root));
+    let _r8 = check("merkle_verify_tampered_leaf_rejected", merkle_verify(proof0, 99, root) == false);
+    let chain_a: List[Int] = hash_chain(42, 8);
+    let chain_b: List[Int] = hash_chain(42, 8);
+    let _r9 = check("hash_chain_deterministic", list_eq(chain_a, chain_b));
+    let _r10 = check("hash_chain_length_8", list_len(chain_a) == 8);
+    let _r11 = check("sign_verify_round_trip", verify_sig(sign(777, n, d), 777, n, e));
+    println("test_theory_crypto: PASSED");
+}

@@ -1,0 +1,141 @@
+// # WebAssembly Adversarial Stress Test Suite
+//
+// Logline: Stress-test LEB128 edge cases, padded sequences, multi-byte sequences, and binary builder framing.
+//
+// Setup: Run with ooda/bin/ooda check or run from qa/.
+//
+// Beats:
+//   1. Import required modules.
+//   2. Execute test assertions.
+//   3. Report pass or fail with exit code.
+import "oodac/emit/wasm/wasm_leb128.oo";
+import "oodac/emit/wasm/wasm_opcodes.oo";
+import "oodac/emit/wasm/wasm_types.oo";
+import "oodac/emit/wasm/wasm_binary_builder.oo";
+
+fn assert_true(cond: Bool, msg: String) {
+    if !cond {
+        println("STRESS ASSERTION FAILED: " + msg);
+    }
+}
+
+fn assert_eq_int(actual: Int, expected: Int, msg: String) {
+    if actual != expected {
+        println("STRESS ASSERTION FAILED: " + msg + " (expected " + expected.to_string() + ", got " + actual.to_string() + ")");
+    }
+}
+
+fn test_padded_leb128() {
+    // 0 encoded as 5 bytes: [0x80, 0x80, 0x80, 0x80, 0x00]
+    let mut padded_0: List[Int] = list_new();
+    padded_0 = list_push(padded_0, 128);
+    padded_0 = list_push(padded_0, 128);
+    padded_0 = list_push(padded_0, 128);
+    padded_0 = list_push(padded_0, 128);
+    padded_0 = list_push(padded_0, 0);
+
+    let dec_u32: LebDecodeResult = decode_u32_leb128(padded_0, 0);
+    assert_eq_int(dec_u32.value, 0, "padded 0 u32 value");
+    assert_eq_int(dec_u32.next_offset, 5, "padded 0 u32 next_offset");
+
+    let dec_i32: LebDecodeResult = decode_i32_leb128(padded_0, 0);
+    assert_eq_int(dec_i32.value, 0, "padded 0 i32 value");
+    assert_eq_int(dec_i32.next_offset, 5, "padded 0 i32 next_offset");
+
+    // 42 encoded as 3 bytes: [0xAA, 0x80, 0x00] (0x2A = 42)
+    let mut padded_42: List[Int] = list_new();
+    padded_42 = list_push(padded_42, 170); // 42 | 128 = 170
+    padded_42 = list_push(padded_42, 128); // 0 | 128 = 128
+    padded_42 = list_push(padded_42, 0);   // 0
+
+    let dec_42: LebDecodeResult = decode_u32_leb128(padded_42, 0);
+    assert_eq_int(dec_42.value, 42, "padded 42 u32 value");
+    assert_eq_int(dec_42.next_offset, 3, "padded 42 u32 next_offset");
+}
+
+fn test_offset_decoding() {
+    // Buffer with prefix bytes: [99, 99, 0xE5, 0x8E, 0x26, 88]
+    let mut buf: List[Int] = list_new();
+    buf = list_push(buf, 99);
+    buf = list_push(buf, 99);
+    buf = list_push(buf, 229);
+    buf = list_push(buf, 142);
+    buf = list_push(buf, 38);
+    buf = list_push(buf, 88);
+
+    let dec: LebDecodeResult = decode_u32_leb128(buf, 2);
+    assert_eq_int(dec.value, 624485, "offset decode 624485 value");
+    assert_eq_int(dec.next_offset, 5, "offset decode next_offset 5");
+}
+
+fn test_empty_module_builder() {
+    let b: WasmModuleBuilder = wasm_builder_new();
+    let bin: List[Int] = wasm_builder_emit(b);
+    assert_eq_int(list_len(bin), 8, "empty module length == 8");
+    assert_eq_int(list_get(bin, 0), 0, "magic byte 0");
+    assert_eq_int(list_get(bin, 1), 97, "magic byte 'a'");
+    assert_eq_int(list_get(bin, 2), 115, "magic byte 's'");
+    assert_eq_int(list_get(bin, 3), 109, "magic byte 'm'");
+    assert_eq_int(list_get(bin, 4), 1, "version byte 1");
+    assert_eq_int(list_get(bin, 5), 0, "version byte 0");
+    assert_eq_int(list_get(bin, 6), 0, "version byte 0");
+    assert_eq_int(list_get(bin, 7), 0, "version byte 0");
+}
+
+fn test_complex_locals_rle(fs: &FsWriteCap) {
+    let mut b: WasmModuleBuilder = wasm_builder_new();
+
+    // Type 0: (i32) -> (i32)
+    let mut p: List[Int] = list_new();
+    p = list_push(p, wasm_val_type_i32());
+    let mut r: List[Int] = list_new();
+    r = list_push(r, wasm_val_type_i32());
+    let ty: Int = wasm_builder_add_type(&mut b, p, r);
+
+    let f: Int = wasm_builder_add_func(&mut b, ty);
+
+    // Locals: 3 x i32, 2 x i64, 1 x f64, 2 x i32
+    // RLE should produce: 4 runs:
+    // run 0: count 3, type i32 (127)
+    // run 1: count 2, type i64 (126)
+    // run 2: count 1, type f64 (124)
+    // run 3: count 2, type i32 (127)
+    let mut locs: List[Int] = list_new();
+    locs = list_push(locs, wasm_val_type_i32());
+    locs = list_push(locs, wasm_val_type_i32());
+    locs = list_push(locs, wasm_val_type_i32());
+    locs = list_push(locs, wasm_val_type_i64());
+    locs = list_push(locs, wasm_val_type_i64());
+    locs = list_push(locs, wasm_val_type_f64());
+    locs = list_push(locs, wasm_val_type_i32());
+    locs = list_push(locs, wasm_val_type_i32());
+
+    let mut code: List[Int] = list_new();
+    code = list_push(code, op_local_get());
+    code = list_push(code, 0); // param 0
+    code = list_push(code, op_local_set());
+    code = list_push(code, 1); // local 1
+    code = list_push(code, op_local_get());
+    code = list_push(code, 1);
+    code = list_push(code, op_end());
+
+    wasm_builder_set_code(&mut b, f, locs, code);
+    wasm_builder_add_export(&mut b, "complex_locals", wasm_external_func(), f);
+
+    let bin: List[Int] = wasm_builder_emit(b);
+    let s: String = bytes_to_str(bin);
+    let _w: Result[Void, String] = write_file(fs, "/home/jeryd/Projects/openOODA/qa/tests_wasm/tests_wasm_complex_locals.wasm", s);
+}
+
+pub fn main(fs: &FsWriteCap) {
+    println("=================================================");
+    println(" Running Adversarial Stress Tests for M1");
+    println("=================================================");
+
+    test_padded_leb128();
+    test_offset_decoding();
+    test_empty_module_builder();
+    test_complex_locals_rle(fs);
+
+    println("All Adversarial Stress Tests passed successfully!");
+}

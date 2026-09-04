@@ -1,0 +1,20 @@
+// # Return an empty list from both arms
+//
+// Logline: A scan helper returns list_new whether the index is past the end or not.
+//
+// Beats:
+//   1. Measure src and compare i0 to its length.
+//   2. Return list_new on the early and fall-through arms.
+//   3. Print the length of that empty list from main.
+
+pub fn try_scan(src: String, i0: Int) -> List[String] {
+    let n = chars_len(src);
+    if i0 >= n {
+        return list_new();
+    }
+    return list_new();
+}
+pub fn main() {
+    let x = try_scan(" ", 0);
+    println(list_len(x));
+}

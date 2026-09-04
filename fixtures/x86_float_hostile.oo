@@ -1,0 +1,7 @@
+// # emit-x86 float const-fold hostile probe
+pub fn main() {
+    let pi: Float = 3.14;
+    let r: Float = 2.0;
+    let area: Float = pi * r * r;
+    println(area);
+}

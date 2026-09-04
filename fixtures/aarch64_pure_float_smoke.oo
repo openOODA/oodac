@@ -1,0 +1,14 @@
+// # Sovereign AArch64 IEEE-754 float smoke
+//
+// Logline: Adds two decimal floats and prints the sum on ARM64.
+//
+// Setup: No imports. Used by --aarch64-elf-pure.
+//
+// Beats:
+//   1. Load 2.5 and 4.5.
+//   2. Add the values.
+//   3. Print the decimal result.
+
+pub fn main() {
+    println(2.5 + 4.5);
+}

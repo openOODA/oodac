@@ -1,0 +1,59 @@
+// # ChaCha20-Poly1305 Smoke Test
+//
+// Logline: Verifies std/crypto/chacha20_poly1305 against the RFC 8439 §2.3.2 published test vector: key 0x00..0x1f, nonce 00 00 00 00 00 00 00 4a 00 00 00 00, counter 1, plaintext "Ladies and Gentlemen..."; the first 16 bytes of the resulting ciphertext must be 6e2e359a2568f98041ba0728dd0d6981.
+//
+// Setup: Imports std/crypto/chacha20_poly1305.oo (pure .oo). Constructs the key and nonce using mut/let (not chained let-bindings which trigger a known list/string aliasing bug).
+//
+// Beats:
+//   1. Build the 32-byte key 0x00..0x1f as a List[Int].
+//   2. Build the 12-byte nonce 00 00 00 00 00 00 00 4a 00 00 00 00 as a List[Int].
+//   3. Build the 114-byte plaintext.
+//   4. Call chacha20_xor, compare first 16 bytes to 6e2e359a2568f98041ba0728dd0d6981.
+//   5. Print CHACHA20_POLY1305_OK on success.
+
+import "std/sec/symmetric/chacha20_poly1305.oo";
+
+pub fn main() {
+    let mut key: List[Int] = list_new();
+    let mut i: Int = 0;
+    while i < 32 {
+        key = list_push(key, i);
+        i = i + 1;
+    }
+    let mut nonce: List[Int] = list_new();
+    let mut j: Int = 0;
+    while j < 12 {
+        if j == 7 {
+            nonce = list_push(nonce, 74);
+        } else {
+            nonce = list_push(nonce, 0);
+        }
+        j = j + 1;
+    }
+    let pt: String = "Ladies and Gentlemen of the class of '99: If I could offer you only one tip for the future, sunscreen would be it.";
+    let mut plain: List[Int] = list_new();
+    let pt_len: Int = pt.len();
+    let mut k: Int = 0;
+    while k < pt_len {
+        plain = list_push(plain, byte_at(pt, k));
+        k = k + 1;
+    }
+    let cipher: List[Int] = chacha20_xor(bytes_to_str(key), bytes_to_str(nonce), 1, plain);
+    let want_hex: String = "6e2e359a2568f98041ba0728dd0d6981";
+    let mut got_hex: String = "";
+    let mut m: Int = 0;
+    while m < 16 {
+        let b: Int = list_get(cipher, m) & 255;
+        let hi: Int = (b >> 4) & 15;
+        let lo: Int = b & 15;
+        let hx: String = "0123456789abcdef";
+        got_hex = got_hex + char_at(hx, hi) + char_at(hx, lo);
+        m = m + 1;
+    }
+    if got_hex != want_hex {
+        println("FAIL: chacha20 first 16 bytes mismatch");
+        println(got_hex);
+        return;
+    }
+    println("CHACHA20_POLY1305_OK");
+}

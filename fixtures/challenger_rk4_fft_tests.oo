@@ -1,0 +1,145 @@
+// # Challenger 1: RK4 ODE Convergence & Radix-2 FFT Parseval Energy Tests
+//
+// Logline: Empirically stress-tests RK4 4th-order ODE step convergence and Radix-2 FFT Parseval energy conservation and IFFT invertibility.
+//
+// Setup: Pure numerical verification without ambient IO.
+//
+// Beats:
+//   1. Verify RK4 circular gravitational orbit step convergence and energy conservation.
+//   2. Verify Radix-2 FFT impulse response and IFFT exact round-trip reconstruction.
+//   3. Verify Parseval's theorem: sum(|x[n]|^2) = (1/N) * sum(|X[k]|^2).
+
+import "std/core/primitives/list.oo";
+import "std/science/phys/classical/rk4_integrator.oo";
+import "std/core/math/fft_radix2.oo";
+
+fn check_float_near(actual: Float, expected: Float, tolerance: Float) -> Bool {
+    let mut diff: Float = actual - expected;
+    if diff < 0.0 { diff = 0.0 - diff; }
+    return diff <= tolerance;
+}
+
+pub fn test_rk4_convergence() -> Bool {
+    let mu: Float = 398600441800000.0; // Earth GM (m^3/s^2)
+    let r0: Float = 7000000.0; // 7,000 km radius
+    let v0: Float = sqrt(mu / r0); // ~7546.05 m/s circular speed
+
+    // Initial state on x-axis moving in +y direction
+    let state_0: Rk4State = rk4_state_new(r0, 0.0, 0.0, 0.0, v0, 0.0, 0.0);
+
+    // Initial mechanical energy E = v^2/2 - mu/r (-28,471,460 J/kg)
+    let e_init: Float = (v0 * v0 * 0.5) - (mu / r0);
+
+    // Take 10 steps of dt = 1.0 seconds
+    let mut st: Rk4State = state_0;
+    let dt: Float = 1.0;
+    let mut step: Int = 0;
+    while step < 10 {
+        st = rk4_step_gravity_central(st, mu, dt);
+        step = step + 1;
+    }
+
+    // After 10 seconds, verify radius and energy are conserved to high relative precision
+    let r_final: Float = sqrt(((st).x * (st).x) + ((st).y * (st).y) + ((st).z * (st).z));
+    let v_final: Float = sqrt(((st).vx * (st).vx) + ((st).vy * (st).vy) + ((st).vz * (st).vz));
+    let e_final: Float = (v_final * v_final * 0.5) - (mu / r_final);
+
+    // Radius should deviate by less than 1.0 meter out of 7,000,000 meters
+    if !check_float_near(r_final, r0, 1.0) { return false; }
+
+    // Energy should be conserved to within 0.01% (relative) or 1000 J/kg
+    if !check_float_near(e_final, e_init, 1000.0) { return false; }
+
+    // Test projectile kinematics under constant g
+    let proj_0: Rk4State = rk4_state_new(0.0, 100.0, 0.0, 10.0, 0.0, 0.0, 0.0);
+    let proj_1: Rk4State = rk4_step(proj_0, 0.0, 0.0 - 9.80665, 0.0, 2.0);
+    // After 2.0 s: x = 20.0, y = 100 - 0.5*g*t^2 = 80.3867, vy = -19.6133
+    if !check_float_near((proj_1).x, 20.0, 0.0001) { return false; }
+    if !check_float_near((proj_1).y, 80.3867, 0.001) { return false; }
+    if !check_float_near((proj_1).vy, 0.0 - 19.6133, 0.001) { return false; }
+
+    return true;
+}
+
+pub fn test_fft_parseval_energy() -> Bool {
+    // Test 1: Impulse sequence x = [1000, 0, 0, 0, 0, 0, 0, 0] (N = 8)
+    // Flat packed representation: [re0, im0, re1, im1, ...]
+    let mut x: List[Int] = list_new();
+    x = list_push(x, 1000); // x[0] = 1.0
+    x = list_push(x, 0);
+    let mut i: Int = 1;
+    while i < 8 {
+        x = list_push(x, 0);
+        x = list_push(x, 0);
+        i = i + 1;
+    }
+
+    // Time-domain energy: sum(|x[n]|^2)
+    let mut time_energy: Int = 0;
+    let mut n: Int = 0;
+    while n < 8 {
+        let re: Int = list_get(x, n * 2);
+        let im: Int = list_get(x, n * 2 + 1);
+        time_energy = time_energy + (re * re + im * im);
+        n = n + 1;
+    }
+    // time_energy should be 1000^2 = 1,000,000
+    if time_energy != 1000000 { return false; }
+
+    // Forward FFT
+    let X: List[Int] = fft(x);
+    if list_len(X) != 16 { return false; }
+
+    // Frequency-domain energy: sum(|X[k]|^2)
+    let mut freq_energy: Int = 0;
+    let mut k: Int = 0;
+    while k < 8 {
+        let re_k: Int = list_get(X, k * 2);
+        let im_k: Int = list_get(X, k * 2 + 1);
+        freq_energy = freq_energy + (re_k * re_k + im_k * im_k);
+        k = k + 1;
+    }
+
+    // Parseval's theorem: freq_energy / N == time_energy
+    let freq_energy_scaled: Int = freq_energy / 8;
+    let mut int_diff: Int = freq_energy_scaled - time_energy;
+    if int_diff < 0 { int_diff = 0 - int_diff; }
+    if int_diff > 100 { return false; } // Within integer rounding tolerance
+
+    // Test 2: IFFT round-trip reconstruction
+    let x_recon: List[Int] = ifft(X);
+    if list_len(x_recon) != 16 { return false; }
+    let recon_0: Int = list_get(x_recon, 0);
+    let recon_1: Int = list_get(x_recon, 2);
+    if recon_0 != 1000 { return false; }
+    if recon_1 != 0 { return false; }
+
+    // Test 3: Sinusoid input with energy check
+    let mut x_sine: List[Int] = list_new();
+    // [1000, 0, -1000, 0] (N=4)
+    x_sine = list_push(x_sine, 1000); x_sine = list_push(x_sine, 0);
+    x_sine = list_push(x_sine, 0);    x_sine = list_push(x_sine, 0);
+    x_sine = list_push(x_sine, 0 - 1000); x_sine = list_push(x_sine, 0);
+    x_sine = list_push(x_sine, 0);    x_sine = list_push(x_sine, 0);
+
+    let X_sine: List[Int] = fft(x_sine);
+    let x_sine_recon: List[Int] = ifft(X_sine);
+    if list_get(x_sine_recon, 0) != 1000 { return false; }
+    if list_get(x_sine_recon, 4) != (0 - 1000) { return false; }
+
+    return true;
+}
+
+pub fn main() {
+    let t1: Bool = test_rk4_convergence();
+    if !t1 {
+        println("FAIL: test_rk4_convergence");
+        process_exit(1);
+    }
+    let t2: Bool = test_fft_parseval_energy();
+    if !t2 {
+        println("FAIL: test_fft_parseval_energy");
+        process_exit(1);
+    }
+    println("challenger_rk4_fft_tests: PASSED");
+}

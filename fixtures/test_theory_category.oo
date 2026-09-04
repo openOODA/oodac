@@ -1,0 +1,213 @@
+// # Category theory: monad laws and functor composition
+//
+// Logline: Standalone proof fixture verifying the two functor laws and the three monad laws for the List endofunctor with String-dispatched operations.
+//
+// Setup: Pure in-fixture re-declaration of the monad/fmap surfaces. No std import required.
+//
+// Beats:
+//   1. Functor identity: fmap(id, xs) == xs.
+//   2. Functor composition: fmap(g, fmap(f, xs)) == fmap(g_of_f, xs).
+//   3. Monad left identity: unit(a) >>= f == unit(f(a)).
+//   4. Monad right identity: xs >>= unit == xs.
+//   5. Monad associativity: (xs >>= f) >>= g == xs >>= (x => f(x) >>= g).
+//   6. Monoid: add and mul pass associativity and identity laws; sum list equals fold.
+
+pub fn fmap_list(xs: List[Int], f: String) -> List[Int] {
+    let n: Int = list_len(xs);
+    let mut out: List[Int] = list_new();
+    let mut i: Int = 0;
+    while i < n {
+        let v: Int = list_get(xs, i);
+        if f == "double" {
+            out = list_push(out, v * 2);
+        } else {
+            if f == "increment" {
+                out = list_push(out, v + 1);
+            } else {
+                out = list_push(out, v);
+            }
+        }
+        i = i + 1;
+    }
+    return out;
+}
+
+pub fn monad_unit(a: Int) -> List[Int] {
+    let mut xs: List[Int] = list_new();
+    xs = list_push(xs, a);
+    return xs;
+}
+
+pub fn monad_apply(op: String, x: Int) -> Int {
+    if op == "add1" {
+        return x + 1;
+    }
+    if op == "double" {
+        return x * 2;
+    }
+    if op == "neg" {
+        return 0 - x;
+    }
+    return x;
+}
+
+pub fn monad_bind(xs: List[Int], op: String) -> List[Int] {
+    let n: Int = list_len(xs);
+    let mut out: List[Int] = list_new();
+    let mut i: Int = 0;
+    while i < n {
+        let v: Int = list_get(xs, i);
+        out = list_push(out, monad_apply(op, v));
+        i = i + 1;
+    }
+    return out;
+}
+
+pub fn list_eq(a: List[Int], b: List[Int]) -> Bool {
+    let na: Int = list_len(a);
+    let nb: Int = list_len(b);
+    if na != nb {
+        return false;
+    }
+    let mut i: Int = 0;
+    while i < na {
+        if list_get(a, i) != list_get(b, i) {
+            return false;
+        }
+        i = i + 1;
+    }
+    return true;
+}
+
+pub fn monoid_combine(op: String, a: Int, b: Int) -> Int {
+    if op == "add" {
+        return a + b;
+    }
+    if op == "mul" {
+        return a * b;
+    }
+    return 0;
+}
+
+pub fn monoid_identity(op: String) -> Int {
+    if op == "add" {
+        return 0;
+    }
+    if op == "mul" {
+        return 1;
+    }
+    return 0 - 1;
+}
+
+pub fn monoid_fold(op: String, xs: List[Int]) -> Int {
+    let n: Int = list_len(xs);
+    if n == 0 {
+        return monoid_identity(op);
+    }
+    let mut acc: Int = list_get(xs, 0);
+    let mut i: Int = 1;
+    while i < n {
+        acc = monoid_combine(op, acc, list_get(xs, i));
+        i = i + 1;
+    }
+    return acc;
+}
+
+pub fn main() {
+    let mut xs: List[Int] = list_new();
+    xs = list_push(xs, 1);
+    xs = list_push(xs, 2);
+    xs = list_push(xs, 3);
+
+    let id_mapped: List[Int] = fmap_list(xs, "id");
+    if list_eq(id_mapped, xs) == false {
+        println("FAIL functor_identity");
+        process_exit(1);
+    }
+    println("OK functor_identity");
+
+    let inner: List[Int] = fmap_list(xs, "increment");
+    let lhs: List[Int] = fmap_list(inner, "double");
+    let mut rhs: List[Int] = list_new();
+    let n_xs: Int = list_len(xs);
+    let mut i_rhs: Int = 0;
+    while i_rhs < n_xs {
+        let v: Int = list_get(xs, i_rhs);
+        rhs = list_push(rhs, (v + 1) * 2);
+        i_rhs = i_rhs + 1;
+    }
+    if list_eq(lhs, rhs) {
+        println("OK functor_composition");
+    } else {
+        println("FAIL functor_composition");
+        process_exit(1);
+    }
+
+    let left_id: List[Int] = monad_bind(monad_unit(5), "add1");
+    let right_id: List[Int] = monad_unit(monad_apply("add1", 5));
+    if list_eq(left_id, right_id) {
+        println("OK monad_left_identity");
+    } else {
+        println("FAIL monad_left_identity");
+        process_exit(1);
+    }
+
+    let mut one: List[Int] = list_new();
+    one = list_push(one, 42);
+    let right_id_test: List[Int] = monad_bind(one, "unit");
+    if list_eq(one, right_id_test) {
+        println("OK monad_right_identity");
+    } else {
+        println("FAIL monad_right_identity");
+        process_exit(1);
+    }
+
+    let mut input: List[Int] = list_new();
+    input = list_push(input, 1);
+    input = list_push(input, 2);
+    let assoc_lhs: List[Int] = monad_bind(monad_bind(input, "add1"), "double");
+    let mut assoc_rhs: List[Int] = list_new();
+    let n: Int = list_len(input);
+    let mut i: Int = 0;
+    while i < n {
+        let v: Int = list_get(input, i);
+        let mut mid: List[Int] = list_new();
+        mid = list_push(mid, monad_apply("add1", v));
+        mid = monad_bind(mid, "double");
+        let m: Int = list_len(mid);
+        let mut j: Int = 0;
+        while j < m {
+            assoc_rhs = list_push(assoc_rhs, list_get(mid, j));
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+    if list_eq(assoc_lhs, assoc_rhs) {
+        println("OK monad_associativity");
+    } else {
+        println("FAIL monad_associativity");
+        process_exit(1);
+    }
+
+    let mut test: List[Int] = list_new();
+    test = list_push(test, 1);
+    test = list_push(test, 2);
+    test = list_push(test, 3);
+    test = list_push(test, 4);
+    let sum: Int = monoid_fold("add", test);
+    if sum == 10 {
+        println("OK monoid_sum_fold");
+    } else {
+        println("FAIL monoid_sum_fold");
+        process_exit(1);
+    }
+    let product: Int = monoid_fold("mul", test);
+    if product == 24 {
+        println("OK monoid_product_fold");
+    } else {
+        println("FAIL monoid_product_fold");
+        process_exit(1);
+    }
+
+    println("test_theory_category: PASSED");
+}

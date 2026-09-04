@@ -1,0 +1,38 @@
+# Token-minimized APIs — product surface (path A)
+
+File: ooda/docs/TOKEN_TOOLING.oot
+
+## Why
+
+Agent sessions die from pure `all.c` (~700KB), full SPRINT, emit dumps, gcc walls.
+SPEC §12 requires outline/reflect/context. **Product CLI is the capability.**
+
+## Product commands (`./bin/ooda`)
+
+| Command | Tokens out | Use |
+|---------|------------|-----|
+| `ooda outline <file>` | ~1% source | public signatures |
+| `ooda reflect <file> [sym]` | tiny JSON | caps + sig |
+| `ooda check <file>` | short OK/ERR | typecheck |
+| `ooda dump tokens\|ast\|check` | token stream | compiler dump |
+
+Residual (fail closed, not product): `context`, `pack`, `digest`, `health`, `err-digest`.
+
+Also: `oodac outline|reflect` on the compiler binary.
+
+Product CLI is `cli/main.oo`. There is no `scripts/ooda_product.sh`. Agents should call
+`./bin/ooda …`, not invent parallel tooling.
+
+## Measured
+
+`c_emit_ty.oo` (11665 bytes) → outline ~154 bytes (~1.3%).
+
+## Residual
+
+- `--json-minimal` diagnostics (SPEC) not fully product
+- Package-distributed outlines (RP-2.2)
+- Full dual-green rebuild of tip after every CLI edit (tip host is m172+)
+
+## See also
+
+`AGENTS.oot` — hard token traps for any agent on this tree.

@@ -1,0 +1,37 @@
+// # ARC concurrent retain/release stress
+//
+// Logline: Loop 1000 retain/release cycles on one OoStr via concat chains to prove no double-free.
+//
+// Setup: Single base OoStr stressed through chained oo_str_concat temporaries; atomic refcount must survive 1000 retain/release pairs.
+//
+// Beats:
+//   1. Bind single base OoStr "arc_base".
+//   2. Loop 1000 times: t1=base+base, t2=t1+base, t3=t2+t1 via concat chain.
+//   3. Verify t3 length 40 and base still valid each iteration; print PASSED.
+
+pub fn main() {
+    let base: String = "arc_base";
+    let mut i: Int = 0;
+    while i < 1000 {
+        let t1: String = base + base;
+        let t2: String = t1 + base;
+        let t3: String = t2 + t1;
+        let tl: Int = chars_len(t3);
+        if tl != 40 {
+            println("FAIL arc_stress t3 len " + tl.to_string());
+            process_exit(1);
+        }
+        if base != "arc_base" {
+            println("FAIL arc_stress base corrupted");
+            process_exit(1);
+        }
+        let chain: String = base + base + base;
+        if chars_len(chain) != 24 {
+            println("FAIL arc_stress chain len");
+            process_exit(1);
+        }
+        i = i + 1;
+    }
+    println(base);
+    println("arc_stress: PASSED");
+}

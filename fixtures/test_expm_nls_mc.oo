@@ -1,0 +1,93 @@
+// # Matrix Exponential Gauss-Newton Monte Carlo Fixture
+//
+// Logline: Checks exp(A), a Gauss-Newton fit of y = a^2 x, and a Weyl integral of x^2.
+//
+// Setup: Isolated emit-c. Run from ooda/.
+//
+// Beats:
+//   1. exp(0) is I and exp of a skew 2 by 2 is a rotation.
+//   2. Gauss-Newton recovers a = 2 on y = 4 x.
+//   3. Monte Carlo error versus 1/3 drops from 16 to 256 samples.
+//   4. Fail closed on empty data and n < 1.
+
+import "std/core/math/linalg/expm.oo";
+import "std/core/math/opt/gauss_newton.oo";
+import "std/core/math/quad/monte_carlo.oo";
+
+fn fail(msg: String) {
+    println("FAIL " + msg);
+    process_exit(1);
+}
+
+fn unwrap_f(r: Result[Float, String], msg: String) -> Float {
+    match r {
+        Ok(v) => { return v; },
+        Err(e) => { fail(msg + ": " + e); return 0.0; }
+    }
+}
+
+fn unwrap_fv(r: Result[List[Float], String], msg: String) -> List[Float] {
+    match r {
+        Ok(v) => { return v; },
+        Err(e) => { fail(msg + ": " + e); return list_new(); }
+    }
+}
+
+fn near(a: Float, b: Float, eps: Float) -> Bool {
+    let mut d: Float = a - b;
+    if d < 0.0 { d = 0.0 - d; }
+    return d <= eps;
+}
+
+pub fn main() {
+    let mut z: List[Float] = list_new();
+    z = list_push(z, 0.0);
+    z = list_push(z, 0.0);
+    z = list_push(z, 0.0);
+    z = list_push(z, 0.0);
+    let ez: List[Float] = unwrap_fv(expm(z, 2), "expm0");
+    if near(list_get(ez, 0), 1.0, 0.000001) == false { fail("I00"); }
+    if near(list_get(ez, 1), 0.0, 0.000001) == false { fail("I01"); }
+    if near(list_get(ez, 2), 0.0, 0.000001) == false { fail("I10"); }
+    if near(list_get(ez, 3), 1.0, 0.000001) == false { fail("I11"); }
+
+    let mut sk: List[Float] = list_new();
+    sk = list_push(sk, 0.0);
+    sk = list_push(sk, 0.0 - 0.5);
+    sk = list_push(sk, 0.5);
+    sk = list_push(sk, 0.0);
+    let er: List[Float] = unwrap_fv(expm(sk, 2), "expm rot");
+    if near(list_get(er, 0), 0.8775825618903728, 0.00001) == false { fail("cos"); }
+    if near(list_get(er, 1), 0.0 - 0.479425538604203, 0.00001) == false { fail("-sin"); }
+    if near(list_get(er, 2), 0.479425538604203, 0.00001) == false { fail("sin"); }
+    if near(list_get(er, 3), 0.8775825618903728, 0.00001) == false { fail("cos2"); }
+    let eb: Result[List[Float], String] = expm(z, 3);
+    if eb.is_ok() { fail("expm size"); }
+
+    let mut xs: List[Float] = list_new();
+    xs = list_push(xs, 1.0);
+    xs = list_push(xs, 2.0);
+    xs = list_push(xs, 3.0);
+    let mut ys: List[Float] = list_new();
+    ys = list_push(ys, 4.0);
+    ys = list_push(ys, 8.0);
+    ys = list_push(ys, 12.0);
+    let a: Float = unwrap_f(gauss_newton_quad(xs, ys, 1.0, 20, 0.000000001), "gn");
+    if near(a, 2.0, 0.000001) == false { fail("gn a"); }
+    let mut empty: List[Float] = list_new();
+    let gb: Result[Float, String] = gauss_newton_quad(empty, empty, 1.0, 5, 0.001);
+    if gb.is_ok() { fail("gn empty"); }
+
+    let m16: Float = unwrap_f(mc_x2_unit(16), "mc16");
+    let m256: Float = unwrap_f(mc_x2_unit(256), "mc256");
+    let third: Float = 1.0 / 3.0;
+    let mut e16: Float = m16 - third;
+    if e16 < 0.0 { e16 = 0.0 - e16; }
+    let mut e256: Float = m256 - third;
+    if e256 < 0.0 { e256 = 0.0 - e256; }
+    if e256 > e16 { fail("mc not dropping"); }
+    if e256 > 0.02 { fail("mc bound"); }
+    let mb: Result[Float, String] = mc_x2_unit(0);
+    if mb.is_ok() { fail("mc n=0"); }
+    println("EXPM_NLS_MC_ALL_PASSED");
+}

@@ -1,0 +1,88 @@
+// # Challenge Math Matrix Linear Solvers
+//
+// Logline: Empirical validation of Gaussian elimination and LU decomposition linear solvers and error guardrails.
+//
+// Setup: Pure math test fixture. Tests matrix_solve.
+//
+// Beats:
+//   1. Validate matrix_solve_gauss on 2x2 and 3x3 known systems.
+//   2. Validate singular matrix fail-closed ERR\tmatrix_solve\tsingular_matrix.
+//   3. Validate empty system ERR\tmatrix_solve\tempty_system.
+//   4. Validate dimension mismatch ERR\tmatrix_solve\tinvalid_dimensions.
+
+import "std/core/primitives/result.oo";
+import "std/core/math/matrix_solve.oo";
+
+fn assert_err(actual: String, expected: String, tag: String) {
+    if actual != expected {
+        println("FAIL " + tag + " expected " + expected + " got " + actual);
+        process_exit(1);
+    }
+}
+
+fn assert_float_close(actual: Float, expected: Float, tol: Float, tag: String) {
+    let mut diff: Float = actual - expected;
+    if diff < 0.0 { diff = 0.0 - diff; }
+    if diff > tol {
+        println("FAIL " + tag + " expected " + expected.to_string() + " got " + actual.to_string());
+        process_exit(1);
+    }
+}
+
+pub fn main() {
+    let probe_val: Int = matrix_solve_probe();
+    if probe_val != 0 {
+        process_exit(1);
+    }
+
+    // 1. Solve 2x2 system:
+    // [ 2  1 ] [ x0 ] = [ 5 ]
+    // [ 1  3 ] [ x1 ] = [ 5 ]
+    // det = 5 != 0 -> x0 = 2, x1 = 1
+    let mut a2: List[Float] = list_new();
+    a2 = list_push(a2, 2.0); a2 = list_push(a2, 1.0);
+    a2 = list_push(a2, 1.0); a2 = list_push(a2, 3.0);
+    let mut b2: List[Float] = list_new();
+    b2 = list_push(b2, 5.0); b2 = list_push(b2, 5.0);
+
+    let res2: Result[List[Float], String] = matrix_solve_gauss(a2, b2, 2);
+    match res2 {
+        Ok(x_raw) => {
+            let x: List[Float] = x_raw;
+            let x0: Float = list_get(x, 0);
+            let x1: Float = list_get(x, 1);
+            assert_float_close(x0, 2.0, 0.0001, "solve 2x2 x0");
+            assert_float_close(x1, 1.0, 0.0001, "solve 2x2 x1");
+        }
+        Err(e) => { println("FAIL solve 2x2 " + e); process_exit(1); }
+    }
+
+    // 2. Singular 2x2 system:
+    // [ 1  2 ]
+    // [ 2  4 ]
+    let mut a_sing: List[Float] = list_new();
+    a_sing = list_push(a_sing, 1.0); a_sing = list_push(a_sing, 2.0);
+    a_sing = list_push(a_sing, 2.0); a_sing = list_push(a_sing, 4.0);
+    let res_sing: Result[List[Float], String] = matrix_solve_gauss(a_sing, b2, 2);
+    match res_sing {
+        Ok(x) => { println("FAIL solve singular accepted"); process_exit(1); }
+        Err(e) => { assert_err(e, "ERR\tmatrix_solve\tsingular_matrix", "solve singular"); }
+    }
+
+    // 3. Empty system: n = 0
+    let empty_list: List[Float] = list_new();
+    let res_empty: Result[List[Float], String] = matrix_solve_gauss(empty_list, empty_list, 0);
+    match res_empty {
+        Ok(x) => { println("FAIL solve empty accepted"); process_exit(1); }
+        Err(e) => { assert_err(e, "ERR\tmatrix_solve\tempty_system", "solve empty"); }
+    }
+
+    // 4. Invalid dimensions:
+    let res_dim: Result[List[Float], String] = matrix_solve_gauss(a2, empty_list, 2);
+    match res_dim {
+        Ok(x) => { println("FAIL solve dim accepted"); process_exit(1); }
+        Err(e) => { assert_err(e, "ERR\tmatrix_solve\tinvalid_dimensions", "solve dim"); }
+    }
+
+    println("challenge_math_solvers: PASSED");
+}

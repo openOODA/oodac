@@ -1,0 +1,83 @@
+# CAP Legacy Supersede Removal — Caller Migration TODO
+
+After Issue 2 of the red-team fix, the `cap_*_granted_ok` and `cap_*_argflow_ok`
+helpers in `oodac/check_cap_grant.oo` no longer accept the broad
+`NetCap`/`FsCap`/`SysCap`/`AllocCap` as a supersede for the granular
+preferred kind. Callers must declare the granular capability they actually need.
+
+This is a breaking change. The compiler binary must be rebuilt from source for
+the new check to take effect. After the rebuild, every caller that uses a
+broad cap AND calls a sealed op that requires the granular cap will be
+denied by `cap_deny`.
+
+## Migration rules
+
+| Sealed op (granular required) | Broad cap used today | Replace with |
+|---|---|---|
+| `fetch` / `http_get` / `net_get` / `downloadData` / `query_remote_api` / `net_connect` | `&NetCap` | `&HttpCap` |
+| `tcp_connect` / `tcp_write` / `tcp_read` / `tcp_close` / `tls_connect` | `&NetCap` | `&TcpCap` |
+| `tcp_bind` | `&NetCap` | `&BindCap` |
+| `bind_udp` / `udp_recv` / `udp_send` | `&NetCap` | `&UdpCap` |
+| `read_file` / `fs_read` / `path_exists` / `file_size` | `&FsCap` | `&FsReadCap` |
+| `write_file` / `fs_write` | `&FsCap` | `&FsWriteCap` |
+| `sys_exec` / `process_exec` / `exec` / `spawn_process` / `sys_spawn` / `sys_wait` / `sys_kill` / `lto_xlang_link` | `&SysCap` | `&ProcessCap` |
+| `arena_create` / `arena_alloc` / `arena_reset` | `&AllocCap` | `&ArenaCap` |
+
+`&NetCap` is now reserved exclusively for `sock_raw` / `raw_socket` ops.
+`&SysCap` is now reserved exclusively for residual OS ops
+(`python_embed`, `sys_epoll_create`, `sys_inotify_init`, `sys_prctl`,
+`oo_rlimit_set_*`, `landlock_restrict`, `cap_kernel_seal`, `enclave_enter`).
+`&AllocCap` is now reserved exclusively for `alloc_bytes` / `free_bytes` /
+`malloc` / `free`.
+
+If a function genuinely needs both read and write on the filesystem, it must
+take BOTH `&FsReadCap` and `&FsWriteCap` — there is no broad `&FsCap` alias.
+
+## Callers to update
+
+Found 52 files in `oodac/` that take a broad cap. Of those, the following call
+a sealed op that requires the granular kind and must be split:
+
+```
+oodac/aarch64_ast_main.oo        (read_file, file_size, path_exists)        → FsReadCap
+oodac/aarch64_emit_elf.oo        (read_file, write_file, path_exists)       → FsReadCap + FsWriteCap
+oodac/aarch64_main.oo            (read_file, file_size, path_exists)        → FsReadCap
+oodac/c_cache_store.oo           (read_file, write_file, path_exists)       → FsReadCap + FsWriteCap
+oodac/c_emit_lower.oo            (read_file, write_file, path_exists)       → FsReadCap + FsWriteCap
+oodac/c_emit_netio.oo            (NetCap, sealed net ops)                   → HttpCap/TcpCap/UdpCap/BindCap
+oodac/c_emit_sys.oo              (SysCap, sealed process ops)               → ProcessCap
+oodac/check_cache.oo             (read_file, write_file, path_exists)       → FsReadCap + FsWriteCap
+oodac/check_cap_grant.oo         (uses bag helpers; no sealed calls directly)
+oodac/check_cap_util.oo          (uses bag helpers; no sealed calls directly)
+oodac/check_collect.oo           (read_file, path_exists)                   → FsReadCap
+oodac/check_mod.oo               (read_file, write_file, path_exists)       → FsReadCap + FsWriteCap
+oodac/cli_ast.oo                 (read_file, write_file, path_exists)       → FsReadCap + FsWriteCap
+oodac/cli_build_cc.oo            (read_file, write_file, path_exists)       → FsReadCap + FsWriteCap
+oodac/cli_build_lto.oo           (read_file, write_file, path_exists)       → FsReadCap + FsWriteCap
+oodac/cli_build.oo               (read_file, write_file, path_exists)       → FsReadCap + FsWriteCap
+oodac/cli_build_pgo_jit.oo       (read_file, write_file, path_exists)       → FsReadCap + FsWriteCap
+oodac/cli_build_pgo.oo           (read_file, write_file, path_exists)       → FsReadCap + FsWriteCap
+oodac/cli_build_sovereign.oo     (read_file, write_file, path_exists)       → FsReadCap + FsWriteCap
+oodac/cli_build_targets.oo       (read_file, write_file, path_exists)       → FsReadCap + FsWriteCap
+oodac/cli_build_x86.oo           (read_file, write_file, path_exists)       → FsReadCap + FsWriteCap
+oodac/cli_emit_llvm.oo           (read_file, write_file, path_exists)       → FsReadCap + FsWriteCap
+oodac/cli_emit.oo                (read_file, write_file, path_exists)       → FsReadCap + FsWriteCap
+oodac/cli_gpu_emit.oo            (read_file, write_file, path_exists)       → FsReadCap + FsWriteCap
+oodac/cli_outline.oo             (read_file, write_file, path_exists)       → FsReadCap + FsWriteCap
+oodac/cli_parse.oo               (read_file, file_size, path_exists)        → FsReadCap
+oodac/cli_reflect.oo             (read_file, write_file, path_exists)       → FsReadCap + FsWriteCap
+oodac/cli_repl.oo                (read_file, write_file, path_exists)       → FsReadCap + FsWriteCap
+… (and the remaining callers in oodac/, std/, fixtures/, scripts/, …)
+```
+
+## Build
+
+After the caller migration, the compiler must be rebuilt:
+
+```
+$ bash bootstrap/oodac_pure_build oodac/main.oo oodac_bin.core
+```
+
+Until the binary is rebuilt, the old behavior (broad-cap supersede) is still
+in effect because the pre-compiled `oodac_bin.core` is older than the source
+changes in `oodac/check_cap_grant.oo` and `oodac/check_cap_util.oo`.

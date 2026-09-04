@@ -1,0 +1,21 @@
+// # Test OO GPU Alloc Authorized Pass
+//
+// Logline: Asserts valid compilation when oo_gpu_alloc receives valid &GpuCap token.
+//
+// Setup: Sealed GPU memory builtin oo_gpu_alloc should pass typecheck when authorized with &GpuCap.
+//
+// Beats:
+//   1. Declare function taking gpu: &GpuCap.
+//   2. Invoke oo_gpu_alloc with gpu token.
+//   3. Assert static typecheck succeeds.
+
+pub fn run_oo_gpu_alloc(gpu: &GpuCap) {
+    let res = oo_gpu_alloc(gpu, 1024);
+    match res {
+        Ok(ptr) => {},
+        Err(e) => {}
+    }
+}
+
+pub fn main() {
+}

@@ -1,0 +1,38 @@
+// # Falcon Parameter Set Distinctness Smoke
+//
+// Logline: Verifies std/crypto/pqc_nist/falcon_params.falcon_params_512 and falcon_params_1024 return distinct parameters (different degree_n and modulus_q).
+//
+// Setup: Imports std/crypto/pqc_nist/falcon_params.oo. Pure, no FS or net. Property test (PROP) that the two standard Falcon parameter sets are distinct.
+//
+// Beats:
+//   1. Build falcon_params_512 and falcon_params_1024.
+//   2. Assert their degree_n fields differ.
+//   3. Print FALCON_PARAMS_PROP_OK on success.
+
+import "std/sec/asymmetric/falcon_params.oo";
+
+pub fn main() {
+    let p512: FalconParams = falcon_params_512();
+    let p1024: FalconParams = falcon_params_1024();
+    let d512: Int = p512.degree_n;
+    let d1024: Int = p1024.degree_n;
+    if d512 == d1024 {
+        println("FAIL degree_n same");
+        return;
+    }
+    let q512: Int = p512.modulus_q;
+    let q1024: Int = p1024.modulus_q;
+    if q512 != q1024 {
+        println("FAIL modulus_q different");
+        return;
+    }
+    if d512 != 512 {
+        println("FAIL d512");
+        return;
+    }
+    if d1024 != 1024 {
+        println("FAIL d1024");
+        return;
+    }
+    println("FALCON_PARAMS_PROP_OK");
+}

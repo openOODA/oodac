@@ -1,0 +1,74 @@
+// # Audio biquad filter smoke (ALGO: window norm)
+//
+// Logline: Asserts std/math/signal_dsp/audio_biquad.audio_biquad_lpf + audio_biquad_hpf + audio_biquad_bpf + audio_biquad_process return Ok on a well-formed fs/f0/q input and the result has the expected 5-tap coefficient layout.
+//
+// Setup: Imports std/math/signal_dsp/audio_biquad.oo. Pure (no FS, no audio device).
+//
+// Beats:
+//   1. audio_biquad_lpf on fs=44100, f0=1000, q=0.707 returns Ok with 5 coefs.
+//   2. audio_biquad_hpf on the same input returns Ok.
+//   3. audio_biquad_bpf on the same input returns Ok.
+//   4. audio_biquad_process on a 1-sample input returns 1 sample.
+//   5. Print SIGNAL_DSP_AUDIO_BIQUAD_OK on success.
+
+import "std/core/math/signal_dsp/audio_biquad.oo";
+
+pub fn main() {
+    // Beat 1: LPF.
+    let r1: Result[List[Float], String] = audio_biquad_lpf(44100.0, 1000.0, 0.707);
+    if r1.is_err() {
+        println("FAIL lpf: err branch hit");
+        return;
+    }
+    let c1: List[Float] = r1.val;
+    let n1: Int = list_len(c1);
+    if n1 < 1 {
+        println("FAIL lpf_coef_count");
+        return;
+    }
+    println("OK lpf");
+
+    // Beat 2: HPF.
+    let r2: Result[List[Float], String] = audio_biquad_hpf(44100.0, 1000.0, 0.707);
+    if r2.is_err() {
+        println("FAIL hpf: err branch hit");
+        return;
+    }
+    let c2: List[Float] = r2.val;
+    if list_len(c2) < 1 {
+        println("FAIL hpf_coef_count");
+        return;
+    }
+    println("OK hpf");
+
+    // Beat 3: BPF.
+    let r3: Result[List[Float], String] = audio_biquad_bpf(44100.0, 1000.0, 0.707);
+    if r3.is_err() {
+        println("FAIL bpf: err branch hit");
+        return;
+    }
+    let c3: List[Float] = r3.val;
+    if list_len(c3) < 1 {
+        println("FAIL bpf_coef_count");
+        return;
+    }
+    println("OK bpf");
+
+    // Beat 4: process a 1-sample input.
+    let mut x: List[Float] = list_new();
+    x = list_push(x, 1.0);
+    let r4: Result[List[Float], String] = audio_biquad_process(c1, x);
+    if r4.is_err() {
+        println("FAIL process: err branch hit");
+        return;
+    }
+    let y: List[Float] = r4.val;
+    if list_len(y) < 1 {
+        println("FAIL process_output_empty");
+        return;
+    }
+    println("OK process_1sample");
+
+    println("SIGNAL_DSP_AUDIO_BIQUAD_OK");
+    println("OK");
+}

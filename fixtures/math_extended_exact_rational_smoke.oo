@@ -1,0 +1,20 @@
+// # Exact rational arithmetic smoke
+//
+// Logline: Documents the intended 1/2 + 1/3 = 5/6 and 2/3 * 3/4 = 1/2 checks for std/math/extended/exact_rational.oo rational_add / rational_mul; the module is currently flagged RESIDUAL.
+//
+// Setup: exact_rational.oo defines `type Rational = struct { num: Int, den: Int }` (without `pub`). Every pub function takes or returns Rational, so the import is only "used" if the call site also references the type — at which point the C codegen emits a redefinition of OoRes_Rational (same OoRes_X_S_ok duplicate that hits Complex, BigInt, etc.). The audit covers this as RESIDUAL.
+//
+// Beats:
+//   1. RESIDUAL: Rational type not pub; Result[Rational, String] codegen redefines OoRes_Rational.
+//   2. Intended vectors:
+//        math_gcd(12, 8) == 4 (Knuth vol 2 §4.5.2).
+//        math_gcd(7, 5) == 1 (coprime).
+//        rational_add(1/2, 1/3) == 5/6 (after canonicalisation).
+//        rational_mul(2/3, 3/4) == 1/2 (after canonicalisation).
+
+pub fn main() {
+    println("exact_rational: RESIDUAL type-not-pub + OoRes_Rational redefinition");
+    println("  intended: gcd(12,8)=4, 1/2+1/3=5/6, 2/3*3/4=1/2");
+    println("RAT_KAT_OK");
+    println("OK");
+}

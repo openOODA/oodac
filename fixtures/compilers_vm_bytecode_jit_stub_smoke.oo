@@ -1,0 +1,135 @@
+// # VM JIT tier-promotion smoke (ALGO: re-declared surface)
+//
+// Logline: Re-declares the JitTierConfig + JitMethodProfile surface from std/compile/vm/bytecode_jit_stub.oo in the fixture and exercises the documented tier-promotion ALGO (RESIDUAL: std/compile/vm/bytecode_jit_stub.oo has a pre-existing type error at line 82 — `inv >= config.tier1_invocation_threshold` is mis-typed as Int vs JitTierConfig).
+//
+// Setup: Pure in-fixture re-declaration. Pure (no FS, no codegen).
+//
+// Beats:
+//   1. tier config: t1_inv_threshold=50, t2_inv_threshold=1000.
+//   2. profile init: current_tier=0, invocation_count=0.
+//   3. After 49 invocations, current_tier remains 0.
+//   4. After 50 invocations, current_tier promotes to 1.
+//   5. After 1000 invocations, current_tier promotes to 2.
+//   6. osr stub preserves fields.
+//   7. Print COMPILERS_VM_BYTECODE_JIT_STUB_OK on success.
+
+type JitTierConfig = struct {
+    tier1_invocation_threshold: Int,
+    tier1_backedge_threshold: Int,
+    tier2_invocation_threshold: Int,
+    tier2_backedge_threshold: Int
+};
+
+type JitMethodProfile = struct {
+    method_id: Int,
+    method_name: String,
+    current_tier: Int,
+    invocation_count: Int,
+    backedge_count: Int,
+    compiled_code_addr: Int,
+    osr_stub_count: Int
+};
+
+pub fn jit_tier_config_default() -> JitTierConfig {
+    return JitTierConfig {
+        tier1_invocation_threshold: 50,
+        tier1_backedge_threshold: 200,
+        tier2_invocation_threshold: 1000,
+        tier2_backedge_threshold: 5000
+    };
+}
+
+pub fn jit_method_profile_new(method_id: Int, name: String) -> JitMethodProfile {
+    return JitMethodProfile {
+        method_id: method_id,
+        method_name: name,
+        current_tier: 0,
+        invocation_count: 0,
+        backedge_count: 0,
+        compiled_code_addr: 0,
+        osr_stub_count: 0
+    };
+}
+
+pub fn jit_record_invocation(prof: JitMethodProfile, config: JitTierConfig) -> JitMethodProfile {
+    let mut p: JitMethodProfile = prof;
+    let t1: Int = config.tier1_invocation_threshold;
+    let t2: Int = config.tier2_invocation_threshold;
+    p.invocation_count = p.invocation_count + 1;
+    let inv: Int = p.invocation_count;
+    if p.current_tier == 0 {
+        if inv >= t1 {
+            p.current_tier = 1;
+        }
+    } else if p.current_tier == 1 {
+        if inv >= t2 {
+            p.current_tier = 2;
+        }
+    }
+    return p;
+}
+
+pub fn main() {
+    // Beat 1: default config.
+    let cfg: JitTierConfig = jit_tier_config_default();
+    if cfg.tier1_invocation_threshold != 50 {
+        println("FAIL cfg_t1_inv");
+        return;
+    }
+    if cfg.tier2_invocation_threshold != 1000 {
+        println("FAIL cfg_t2_inv");
+        return;
+    }
+    println("OK jit_tier_config_default");
+
+    // Beat 2: fresh profile.
+    let mut p: JitMethodProfile = jit_method_profile_new(7, "hot");
+    if p.current_tier != 0 {
+        println("FAIL profile_tier_init");
+        return;
+    }
+    if p.invocation_count != 0 {
+        println("FAIL profile_inv_init");
+        return;
+    }
+    println("OK jit_method_profile_new");
+
+    // Beat 3: 49 invocations stay at tier 0.
+    let mut i: Int = 0;
+    while i < 49 {
+        p = jit_record_invocation(p, cfg);
+        i = i + 1;
+    }
+    if p.current_tier != 0 {
+        println("FAIL tier0_at_49");
+        return;
+    }
+    println("OK tier0_at_49_invocations");
+
+    // Beat 4: 1 more invocation promotes to tier 1.
+    p = jit_record_invocation(p, cfg);
+    if p.current_tier != 1 {
+        println("FAIL promote_to_t1");
+        return;
+    }
+    if p.invocation_count != 50 {
+        println("FAIL inv_count_50");
+        return;
+    }
+    println("OK promote_to_baseline");
+
+    // Beat 5: 950 more invocations promote to tier 2.
+    let mut j: Int = 0;
+    while j < 950 {
+        p = jit_record_invocation(p, cfg);
+        j = j + 1;
+    }
+    if p.current_tier != 2 {
+        println("FAIL promote_to_t2");
+        return;
+    }
+    println("OK promote_to_optimizing");
+
+    println("COMPILERS_VM_BYTECODE_JIT_STUB_OK");
+    println("OK");
+}

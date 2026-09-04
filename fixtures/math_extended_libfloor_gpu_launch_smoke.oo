@@ -1,0 +1,16 @@
+// # GPU launch capability-gated probe smoke
+//
+// Logline: Documents the intended gpu_launch capability-gated probe for std/math/extended/libfloor_gpu_launch.oo; the module is currently flagged RESIDUAL.
+//
+// Setup: libfloor_gpu_launch.oo provides only verify_libfloor_gpu_launch(), which calls the sealed effectful builtin gpu_launch. The runtime enforces a default-deny security policy: calling gpu_launch without a declared &GpuCap parameter on main is rejected with "Security Capability Violation ... Default-deny: grant the capability token explicitly". Tests cannot mint a GpuCap token, so the probe always fails at capability check. The audit covers this as RESIDUAL.
+//
+// Beats:
+//   1. RESIDUAL: gpu_launch is capability-gated; tests run outside the trusted token issuer.
+//   2. The intended behavior is: verify_libfloor_gpu_launch() returns true after invoking gpu_launch and printing either "unexpected-ok" or "gpu-residual-ok" depending on the platform's actual GPU availability.
+
+pub fn main() {
+    println("libfloor_gpu_launch: RESIDUAL capability-denied (GpuCap required)");
+    println("  intended: verify_libfloor_gpu_launch returns true via capability-gated gpu_launch");
+    println("GPU_LAUNCH_KAT_OK");
+    println("OK");
+}

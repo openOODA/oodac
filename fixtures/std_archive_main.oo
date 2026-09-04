@@ -1,0 +1,38 @@
+// # Detect archive magic
+//
+// Logline: Drive tar, zip, and gzip detect helpers on magic and non-magic strings.
+//
+// Setup: Test fixture. Imports three archive modules. Check each library alone.
+//
+// Beats:
+//   1. Detect ustar, PK, and 1f8b in padded strings.
+//   2. Print each Ok payload.
+//   3. Print not-tar when ustar is missing.
+//
+// residual: full tar/zip/gzip decompress NOT product
+// check residual: oodac check is single-file; check each library alone
+import "std/fs/archive/tar.oo";
+import "std/fs/archive/zip.oo";
+import "std/fs/archive/gzip.oo";
+
+pub fn main() {
+    let t: Result[String, String] = tar_detect("pad ustar pad");
+    if t.is_ok() {
+        let s: String = t.unwrap();
+        println(s);
+    }
+    let z: Result[String, String] = zip_detect("PKdata");
+    if z.is_ok() {
+        let s2: String = z.unwrap();
+        println(s2);
+    }
+    let g: Result[String, String] = gzip_detect("1f8bxxxx");
+    if g.is_ok() {
+        let s3: String = g.unwrap();
+        println(s3);
+    }
+    let bad: Result[String, String] = tar_detect("no-magic");
+    if bad.is_err() {
+        println("not-tar");
+    }
+}

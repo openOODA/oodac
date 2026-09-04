@@ -1,0 +1,16 @@
+// # fn ret int
+//
+// Logline: Emit-c pass fixture that returns Int from a non-main helper and prints the result.
+//
+// Beats:
+//   1. add1 returns x + 1.
+//   2. main calls add1(41).
+//   3. println prints the Int.
+
+pub fn add1(x: Int) -> Int {
+    return x + 1;
+}
+
+pub fn main() {
+    println(add1(41));
+}

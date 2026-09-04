@@ -1,0 +1,20 @@
+// # Accept field as Int arg
+//
+// Logline: Passing Point.x into an Int parameter must typecheck.
+//
+// Setup: f takes Int; Point.x is Int.
+//
+// Beats:
+//   1. Build a Point.
+//   2. Call f(p.x).
+//   3. Typecheck must accept the argument.
+
+type Point = struct {
+    x: Int,
+    y: Int,
+};
+pub fn f(a: Int) {}
+pub fn main() {
+    let p = Point { x: 1, y: 2 };
+    f(p.x);
+}

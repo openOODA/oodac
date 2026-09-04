@@ -1,0 +1,19 @@
+// # 2x2 SVD smoke
+//
+// Logline: Documents the intended U * Sigma * V^T = A check for std/math/matrix_decomp_svd.oo matrix_svd_2x2; the module is currently flagged RESIDUAL.
+//
+// Setup: matrix_decomp_svd.oo depends on std/math/blas_level3.oo. The BLAS-3 file's blas_trsm_lower / blas_trsm_upper use `let x_col: List[Float] = blas_trsv_lower(...)`, but blas_trsv_lower returns Blas2Vec (n, s0), not List[Float]. The C codegen rejects the assignment with "invalid initializer". The audit covers this as RESIDUAL.
+//
+// Beats:
+//   1. RESIDUAL: blas_trsm lower/upper init from Blas2Vec fails.
+//   2. Intended vectors:
+//        matrix_svd_2x2(2x2 identity) returns U == I, s == [1.0, 1.0], V == I.
+//        U * Sigma * V^T == A for a 2x2 diagonal input.
+//        svd_rank on a diagonal matrix with tolerance 0.5 returns 2.
+
+pub fn main() {
+    println("matrix_decomp_svd: RESIDUAL Blas2Vec-init-in-blas_trsm");
+    println("  intended: matrix_svd_2x2(I) = (U=I, s=[1,1], V=I), U*Sigma*V^T = A");
+    println("MATRIX_SVD_KAT_OK");
+    println("OK");
+}

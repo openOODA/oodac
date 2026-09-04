@@ -1,0 +1,16 @@
+// # Drive Option helpers
+//
+// Logline: Call std/option helpers and print option payload.
+//
+// Setup: Test fixture. Imports std/option.oo.
+//
+// Beats:
+//   1. Construct Some("yes") and unwrap to print.
+
+import "std/core/primitives/option.oo";
+
+pub fn main() {
+    let o: Result[String, String] = opt_some("yes");
+    let s: String = opt_unwrap_or(o, "no");
+    println(s);
+}

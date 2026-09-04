@@ -1,0 +1,12 @@
+import "std/sec/hash/sha3_ops.oo";
+
+pub fn main() {
+    let sha3_ops_mark: Int = 0;
+    if sha3_ops_mark != 0 { process_exit(1); }
+    let a: String = sha3_checksum("x");
+    let b: String = sha3_checksum("x");
+    if a != b { process_exit(1); }
+    // SHA-3-256("x") is a 64-char hex digest; assert length to catch regressions to a short hash.
+    if a.len() != 64 { process_exit(1); }
+    println("prod_sha3_ops: PASSED");
+}

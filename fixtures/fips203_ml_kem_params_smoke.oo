@@ -1,0 +1,35 @@
+// # FIPS 203 ML-KEM Parameter Set Distinction Smoke
+//
+// Logline: Verifies std/crypto/pqc_nist/fips203_ml_kem_params.ml_kem_params_512, _768, _1024 return distinct (k, eta1, eta2) parameter tuples.
+//
+// Setup: Imports std/crypto/pqc_nist/fips203_ml_kem_params.oo. Pure, no FS or net. Property test (PROP).
+//
+// Beats:
+//   1. Build all three standard ML-KEM parameter sets.
+//   2. Assert ml_kem_params_512.k != ml_kem_params_1024.k.
+//   3. Assert ml_kem_params_768.k differs from both.
+//   4. Print ML_KEM_PARAMS_PROP_OK on success.
+
+import "std/sec/asymmetric/fips203_ml_kem_params.oo";
+
+pub fn main() {
+    let p512: MlKemParams = ml_kem_params_512();
+    let p768: MlKemParams = ml_kem_params_768();
+    let p1024: MlKemParams = ml_kem_params_1024();
+    let k512: Int = p512.k;
+    let k768: Int = p768.k;
+    let k1024: Int = p1024.k;
+    if k512 == k1024 {
+        println("FAIL k512 == k1024");
+        return;
+    }
+    if k768 == k512 {
+        println("FAIL k768 == k512");
+        return;
+    }
+    if k768 == k1024 {
+        println("FAIL k768 == k1024");
+        return;
+    }
+    println("ML_KEM_PARAMS_PROP_OK");
+}

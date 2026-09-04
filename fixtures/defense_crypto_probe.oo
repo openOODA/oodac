@@ -1,0 +1,21 @@
+// # Defense crypto inventory probe
+//
+// Logline: Print product SHA-256, HMAC, SHA-3, and AES-GCM on published short inputs.
+//
+// Setup: Imports std crypto and hash facades. cwd is ooda/.
+//
+// Beats:
+//   1. sha256 empty and abc.
+//   2. hmac_sha256 RFC 4231 test case 1 if bytes exist.
+//   3. sha3_256 empty.
+//   4. aes_gcm empty-pt NIST case.
+
+pub fn main() {
+    let h0: String = crypto_sha256_internal("");
+    println("SHA256_EMPTY=" + h0);
+    let h1: String = crypto_sha256_internal("abc");
+    println("SHA256_ABC=" + h1);
+    let k: String = crypto_hmac_sha256_internal("key", "The quick brown fox jumps over the lazy dog");
+    println("HMAC_FOX=" + k);
+    println("PROBE_DONE");
+}

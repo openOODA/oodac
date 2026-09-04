@@ -1,0 +1,12 @@
+// # Cross-arch equivalence probe
+//
+// Logline: Single-int-write that both backends should emit and run identically.
+//
+// Setup: Targets the aarch64_match_int_write path on aarch64 and a parallel path on x86. Prints a single Int literal so the only difference is the GAS dialect.
+//
+// Beats:
+//   1. Print 12345.
+
+pub fn main() {
+    println(12345);
+}

@@ -1,0 +1,66 @@
+// # CBOR strict encoder and ByteOut status smoke test
+//
+// Logline: Verifies shortest-integer CBOR encoding and the cbor_strict_decode_stat status projection for valid and invalid inputs.
+//
+// Setup: Imports std/encoding/cbor_strict.oo (the safe API). The tree decoder returning Result[CborValue, String] lives in cbor_strict_tree.oo.
+//
+// Beats:
+//   1. Encode small uint with cbor_strict_encode_int and check the major type prefix.
+//   2. Encode uints that cross the 24 and 256 boundaries and check the wire format.
+//   3. cbor_strict_decode_stat returns Ok(1) for valid buffers and Err for malformed input.
+//   4. cbor_strict_stat returns Err for an empty ByteOut and Ok for an ok ByteOut.
+//   5. Print CBOR_STRICT_OK on success.
+
+import "std/core/encoding/cbor_strict.oo";
+import "std/core/primitives/byte_out.oo";
+
+fn cbsm_assert(label: String, ok: Bool) {
+    if !ok {
+        println("FAIL " + label);
+        process_exit(1);
+    }
+    println("OK " + label);
+}
+
+pub fn main() {
+    // Beat 1: encode small uint.
+    let b0: ByteOut = cbor_strict_encode_int(0);
+    let d0: List[Int] = (b0).bytes;
+    cbsm_assert("encode 0", list_get(d0, 0) == 0);
+
+    // Beat 2: encode 23 (still 1-byte additional).
+    let b23: ByteOut = cbor_strict_encode_int(23);
+    let d23: List[Int] = (b23).bytes;
+    cbsm_assert("encode 23 prefix", list_get(d23, 0) == 23);
+
+    // Encode 24 (forces 1-byte additional info).
+    let b24: ByteOut = cbor_strict_encode_int(24);
+    let d24: List[Int] = (b24).bytes;
+    cbsm_assert("encode 24 major uint", (list_get(d24, 0) & 224) == 0);
+    cbsm_assert("encode 24 additional", (list_get(d24, 0) & 31) == 24);
+    cbsm_assert("encode 24 value byte", list_get(d24, 1) == 24);
+
+    // Encode 256 (forces 2-byte additional).
+    let b256: ByteOut = cbor_strict_encode_int(256);
+    let d256: List[Int] = (b256).bytes;
+    cbsm_assert("encode 256 major", (list_get(d256, 0) & 224) == 0);
+    cbsm_assert("encode 256 additional", (list_get(d256, 0) & 31) == 25);
+    cbsm_assert("encode 256 high byte", list_get(d256, 1) == 1);
+    cbsm_assert("encode 256 low byte", list_get(d256, 2) == 0);
+
+    // Beat 3: cbor_strict_decode_stat.
+    let ok_stat: Result[Int, String] = cbor_strict_decode_stat(d24);
+    cbsm_assert("decode_stat valid", ok_stat.is_ok());
+
+    // Beat 4: cbor_strict_stat for an ok ByteOut.
+    let ok_byteout: ByteOut = byte_out_ok(d24);
+    let ok_byteout_stat: Result[Int, String] = cbor_strict_stat(ok_byteout);
+    cbsm_assert("stat ok ByteOut", ok_byteout_stat.is_ok());
+
+    // cbor_strict_stat for an err ByteOut.
+    let err_byteout: ByteOut = byte_out_err("bad");
+    let err_byteout_stat: Result[Int, String] = cbor_strict_stat(err_byteout);
+    cbsm_assert("stat err ByteOut", err_byteout_stat.is_err());
+
+    println("CBOR_STRICT_OK");
+}

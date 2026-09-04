@@ -1,0 +1,213 @@
+// # Adversarial Fail-Closed Stub Execution & Sentinel Probe
+//
+// Logline: Validates that standard library stub modules across aerospace, crypto, databases, archives, compilers, and bioinformatics execute without traps or aborts.
+//
+// Setup: Pure and capability-isolated stub verification harness testing fail-closed Error and sentinel semantics.
+//
+// Beats:
+//   1. Verify astrodynamics and advanced mission benchmark stub lookups and unknown fixture sentinels.
+//   2. Verify attitude kinematics and homomorphic encryption capability-gated stub initializers.
+//   3. Verify graph database fail-closed policy, audit logger, and metric collectors.
+//   4. Verify archive format detectors cleanly return fail-closed Err results for non-matching byte streams.
+//   5. Verify native compiler and bioinformatics hardware stub probes return safe fallbacks without aborting.
+
+import "std/science/phys/relativistic/astro_stubs.oo";
+import "std/science/phys/relativistic/astro_advanced_stubs.oo";
+import "std/app/combat/attitude_stubs.oo";
+import "std/sec/asymmetric/fhe_stubs.oo";
+import "std/app/data/graph/db_graph_stubs.oo";
+import "std/fs/archive/gzip.oo";
+import "std/fs/archive/tar.oo";
+import "std/fs/archive/zip.oo";
+import "std/compile/compilers/compiler_stubs.oo";
+import "std/science/bio/informatics/bio_stubs.oo";
+
+pub fn main() {
+    // -------------------------------------------------------------
+    // Beat 1: Astrodynamics & Space Benchmark Stubs
+    // -------------------------------------------------------------
+    let fix_iss: AstroTestFixture = stub_fixture_get(1);
+    if (fix_iss).id != 1 || (fix_iss).name != "ISS_LEO" {
+        println("FAIL fix_iss");
+        process_exit(1);
+    }
+
+    let fix_geo: AstroTestFixture = stub_fixture_get(2);
+    if (fix_geo).id != 2 || (fix_geo).name != "GEO_STATIONARY" {
+        println("FAIL fix_geo");
+        process_exit(1);
+    }
+
+    // Unknown fixture ID must fail closed with sentinel id=0
+    let fix_unknown: AstroTestFixture = stub_fixture_get(9999);
+    if (fix_unknown).id != 0 || (fix_unknown).name != "UNKNOWN_ORBIT" {
+        println("FAIL fix_unknown sentinel");
+        process_exit(1);
+    }
+
+    // Advanced mission benchmarks
+    let apollo_tli: AstroMissionBenchmark = stub_apollo11_tli_fixture();
+    if (apollo_tli).benchmark_id != 11 || (apollo_tli).target_delta_v_m_s != 3140.0 {
+        println("FAIL apollo_tli");
+        process_exit(1);
+    }
+
+    let apollo_loi: AstroMissionBenchmark = stub_apollo11_loi_fixture();
+    if (apollo_loi).benchmark_id != 12 || (apollo_loi).reference_mass_kg != 32000.0 {
+        println("FAIL apollo_loi");
+        process_exit(1);
+    }
+
+    let artemis: AstroMissionBenchmark = stub_artemis_landing_fixture();
+    if (artemis).benchmark_id != 21 {
+        println("FAIL artemis");
+        process_exit(1);
+    }
+
+    let jwst: AstroMissionBenchmark = stub_jwst_halo_l2_fixture();
+    if (jwst).benchmark_id != 31 {
+        println("FAIL jwst");
+        process_exit(1);
+    }
+
+    let dsoc: AstroMissionBenchmark = stub_dsoc_psyche_fixture();
+    if (dsoc).benchmark_id != 41 {
+        println("FAIL dsoc");
+        process_exit(1);
+    }
+
+    let hall: AstroMissionBenchmark = stub_hall_thruster_fixture();
+    if (hall).benchmark_id != 51 {
+        println("FAIL hall");
+        process_exit(1);
+    }
+
+    // -------------------------------------------------------------
+    // Beat 2: Attitude Kinematics & Homomorphic Encryption Stubs
+    // -------------------------------------------------------------
+    let att_ready: Bool = attitude_module_ready();
+    if !att_ready {
+        println("FAIL attitude_module_ready");
+        process_exit(1);
+    }
+
+    let q_id: QuaternionAttitude = quat_identity();
+    if (q_id).w != 1.0 || (q_id).x != 0.0 {
+        println("FAIL q_id");
+        process_exit(1);
+    }
+
+    let q_quest: QuaternionAttitude = wahba_quest_solver_raw(0, 0, 0, 0);
+    if (q_quest).w != 1.0 {
+        println("FAIL q_quest");
+        process_exit(1);
+    }
+
+    let fhe_probe: Int = fhe_stubs_probe();
+    if fhe_probe != 0 {
+        println("FAIL fhe_probe");
+        process_exit(1);
+    }
+
+    // -------------------------------------------------------------
+    // Beat 3: Graph Database Fail-Closed Policy & Audit
+    // -------------------------------------------------------------
+    let pol_def: GraphSecurityPolicy = graph_security_policy_default();
+    if (pol_def).max_traversal_hops != 15 || !(pol_def).is_active {
+        println("FAIL pol_def");
+        process_exit(1);
+    }
+
+    let pol_str: GraphSecurityPolicy = graph_security_policy_strict();
+    if (pol_str).max_traversal_hops != 5 || !(pol_str).is_active {
+        println("FAIL pol_str");
+        process_exit(1);
+    }
+
+    let fc_flag: Bool = db_graph_fail_closed("CORRUPTED_TRAVERSAL", 500);
+    if fc_flag {
+        println("FAIL db_graph_fail_closed should be false");
+        process_exit(1);
+    }
+
+    let audit_log: GraphAuditLog = db_graph_record_audit("AUDIT_TRAVERSAL", 404, 503, "rejected");
+    if (audit_log).query_id != 404 || (audit_log).status_code != 503 {
+        println("FAIL audit_log");
+        process_exit(1);
+    }
+
+    let tele_metrics: GraphTelemetryMetrics = graph_telemetry_metrics_new();
+    if (tele_metrics).total_queries != 0 || (tele_metrics).cache_hits != 0 {
+        println("FAIL tele_metrics");
+        process_exit(1);
+    }
+
+    // -------------------------------------------------------------
+    // Beat 4: Archive Format Fail-Closed Result[String, String] Errors
+    // -------------------------------------------------------------
+    let gz_res: Result[String, String] = gzip_detect("arbitrary non-gzip text stream");
+    match gz_res {
+        Ok(s) => {
+            println("FAIL gzip_detect should return Err for non-gzip data");
+            process_exit(1);
+        },
+        Err(err_msg) => {
+            if err_msg != "not-gzip" {
+                println("FAIL unexpected gzip err msg: " + err_msg);
+                process_exit(1);
+            }
+        }
+    }
+
+    let tar_res: Result[String, String] = tar_detect("corrupted wire buffer without magic");
+    match tar_res {
+        Ok(s) => {
+            println("FAIL tar_detect should return Err for non-tar data");
+            process_exit(1);
+        },
+        Err(err_msg) => {
+            if err_msg != "not-tar" {
+                println("FAIL unexpected tar err msg: " + err_msg);
+                process_exit(1);
+            }
+        }
+    }
+
+    let zip_res: Result[String, String] = zip_detect("uncompressed random ASCII sequence");
+    match zip_res {
+        Ok(s) => {
+            println("FAIL zip_detect should return Err for non-zip data");
+            process_exit(1);
+        },
+        Err(err_msg) => {
+            if err_msg != "not-zip" {
+                println("FAIL unexpected zip err msg: " + err_msg);
+                process_exit(1);
+            }
+        }
+    }
+
+    // -------------------------------------------------------------
+    // Beat 5: Compiler & Bioinformatics Stubs
+    // -------------------------------------------------------------
+    let host_triple: CompilerTargetTriple = compiler_target_host();
+    if (host_triple).arch != "x86_64" || (host_triple).os != "linux" {
+        println("FAIL host_triple");
+        process_exit(1);
+    }
+
+    let jit_state: CompilerJitState = compiler_jit_state_probe();
+    if (jit_state).is_available || (jit_state).code_size != 0 {
+        println("FAIL jit_state");
+        process_exit(1);
+    }
+
+    let bio_dev: BioHardwareDevice = bio_hardware_device_new(42, "FLO-MIN106");
+    if (bio_dev).device_id != 42 || (bio_dev).is_active || (bio_dev).flowcell_id != "FLO-MIN106" {
+        println("FAIL bio_dev");
+        process_exit(1);
+    }
+
+    println("probe_adversarial_stubs_failclosed: PASSED");
+    process_exit(0);
+}

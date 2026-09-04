@@ -1,0 +1,90 @@
+// # Int Scaled Radix-2 FFT Smoke Test
+//
+// Logline: Verifies the radix-2 Cooley-Tukey FFT/IFFT over Int scaled (1.0 = 1000) complex values for the impulse [1, 0, 0, 0, 0, 0, 0, 0].
+//
+// Setup: Impulse response has uniform frequency spectrum. The IFFT of the spectrum must reproduce the impulse (scaled) within tolerance.
+//
+// Beats:
+//   1. Build an 8-sample impulse as a flat 16-Int list and run fft; assert every bin equals (1000, 0) within tolerance.
+//   2. Run ifft on the spectrum and assert the round-trip recovers the impulse.
+//   3. Print OK on success.
+
+import "std/core/math/fft_radix2.oo";
+import "std/hw/runtime/rt_str_format.oo";
+
+pub fn main() {
+    // Beat 1: Build 8-sample impulse [1, 0, 0, 0, 0, 0, 0, 0] as a flat 16-Int list
+    // (interleaved re, im pairs scaled by 1000).
+    let mut flat: List[Int] = list_new();
+    flat = list_push(flat, 1000);
+    flat = list_push(flat, 0);
+    flat = list_push(flat, 0);
+    flat = list_push(flat, 0);
+    flat = list_push(flat, 0);
+    flat = list_push(flat, 0);
+    flat = list_push(flat, 0);
+    flat = list_push(flat, 0);
+    flat = list_push(flat, 0);
+    flat = list_push(flat, 0);
+    flat = list_push(flat, 0);
+    flat = list_push(flat, 0);
+    flat = list_push(flat, 0);
+    flat = list_push(flat, 0);
+    flat = list_push(flat, 0);
+    flat = list_push(flat, 0);
+
+    let spectrum: List[Int] = fft(flat);
+    if list_len(spectrum) != 16 {
+        println("FAIL: spectrum length != 16");
+        return;
+    }
+    // Every bin should be (1000, 0) for an impulse.
+    let mut i: Int = 0;
+    while i < 8 {
+        let re: Int = list_get(spectrum, i * 2);
+        let im: Int = list_get(spectrum, i * 2 + 1);
+        if int_abs(re - 1000) > 2 {
+            println("FAIL: spectrum[" + i.to_string() + "].re expected 1000 +/-2, got " + re.to_string());
+            return;
+        }
+        if int_abs(im) > 2 {
+            println("FAIL: spectrum[" + i.to_string() + "].im expected 0 +/-2, got " + im.to_string());
+            return;
+        }
+        i = i + 1;
+    }
+
+    // Beat 2: Run ifft on the spectrum and assert round-trip recovers the impulse.
+    let recovered: List[Int] = ifft(spectrum);
+    if list_len(recovered) != 16 {
+        println("FAIL: recovered length != 16");
+        return;
+    }
+    let r0_re: Int = list_get(recovered, 0);
+    let r0_im: Int = list_get(recovered, 1);
+    let r1_re: Int = list_get(recovered, 2);
+    if int_abs(r0_re - 1000) > 2 {
+        println("FAIL: recovered[0].re expected 1000 +/-2, got " + r0_re.to_string());
+        return;
+    }
+    let r0_im_abs: Int = int_abs(r0_im);
+    if r0_im_abs > 2 {
+        println("FAIL: recovered[0].im expected 0 +/-2, got " + r0_im.to_string());
+        return;
+    }
+    if int_abs(r1_re) > 2 {
+        println("FAIL: recovered[1].re expected 0 +/-2, got " + r1_re.to_string());
+        return;
+    }
+
+    // Beat 3: Print OK.
+    println("OK");
+}
+
+fn int_abs(v: Int) -> Int {
+    let mut n: Int = v;
+    if n < 0 {
+        n = 0 - n;
+    }
+    return n;
+}

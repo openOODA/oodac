@@ -1,0 +1,17 @@
+#!/bin/bash
+SCRIPT_PATH=$(readlink -f "${BASH_SOURCE[0]:-$0}" 2>/dev/null || realpath "${BASH_SOURCE[0]:-$0}" 2>/dev/null || echo "${BASH_SOURCE[0]:-$0}")
+DIR=$(cd "$(dirname "$SCRIPT_PATH")" && pwd)
+CORE="$DIR/oodac_bin.core"
+export OODAC_BIN="$SCRIPT_PATH"
+export OODA_COMPILER="$SCRIPT_PATH"
+export OODA_REPO_ROOT="${OODA_REPO_ROOT:-$(cd "$DIR/.." && pwd)}"
+if [[ ! -x "$CORE" ]]; then
+  echo "oodac: missing compiler core at $CORE" >&2
+  exit 127
+fi
+export OODA_FS_READDIR="${OODA_FS_READDIR:-$(cd "$DIR/../.." && pwd)}"
+export OODA_FS_WRITEDIR="${OODA_FS_WRITEDIR:-$(pwd)}"
+if [[ "$1" == "emit-preamble" && -z "$2" ]]; then
+  set -- "$1" "$DIR/../main.oo"
+fi
+exec "$CORE" "$@"

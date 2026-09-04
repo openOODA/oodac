@@ -1,0 +1,98 @@
+// # Eigen and GMRES Fixture
+//
+// Logline: Checks Jacobi V Lambda V^T reconstruction and restarted GMRES on a known sparse system.
+//
+// Setup: Isolated emit-c. Run from ooda/.
+//
+// Beats:
+//   1. Reconstruct a 3 by 3 diagonal and a symmetric tridiagonal matrix.
+//   2. Recover x = (1, 2, 3) from a non-symmetric CSR system.
+//   3. Fail closed on n < 3 for eigen and a bad b length for GMRES.
+
+import "std/core/math/linalg/eigen_sym.oo";
+import "std/core/math/sparse/gmres.oo";
+
+fn fail(msg: String) {
+    println("FAIL " + msg);
+    process_exit(1);
+}
+
+fn unwrap_fv(r: Result[List[Float], String], msg: String) -> List[Float] {
+    match r {
+        Ok(v) => { return v; },
+        Err(e) => { fail(msg + ": " + e); return list_new(); }
+    }
+}
+
+fn near(a: Float, b: Float, eps: Float) -> Bool {
+    let mut d: Float = a - b;
+    if d < 0.0 { d = 0.0 - d; }
+    return d <= eps;
+}
+
+fn push3(a: List[Float], x: Float, y: Float, z: Float) -> List[Float] {
+    let mut o: List[Float] = a;
+    o = list_push(o, x);
+    o = list_push(o, y);
+    o = list_push(o, z);
+    return o;
+}
+
+pub fn main() {
+    let mut d: List[Float] = list_new();
+    d = push3(d, 1.0, 0.0, 0.0);
+    d = push3(d, 0.0, 2.0, 0.0);
+    d = push3(d, 0.0, 0.0, 3.0);
+    let pd: List[Float] = unwrap_fv(eigen_sym_factor(d, 3), "eigen diag");
+    let rd: List[Float] = unwrap_fv(eigen_sym_reconstruct(pd, 3), "eigen rec d");
+    if near(list_get(rd, 0), 1.0, 0.00001) == false { fail("eigen d00"); }
+    if near(list_get(rd, 4), 2.0, 0.00001) == false { fail("eigen d11"); }
+    if near(list_get(rd, 8), 3.0, 0.00001) == false { fail("eigen d22"); }
+
+    let mut a: List[Float] = list_new();
+    a = push3(a, 2.0, 1.0, 0.0);
+    a = push3(a, 1.0, 2.0, 1.0);
+    a = push3(a, 0.0, 1.0, 2.0);
+    let pa: List[Float] = unwrap_fv(eigen_sym_factor(a, 3), "eigen tri");
+    let ra: List[Float] = unwrap_fv(eigen_sym_reconstruct(pa, 3), "eigen rec a");
+    let mut k: Int = 0;
+    while k < 9 {
+        if near(list_get(ra, k), list_get(a, k), 0.0001) == false { fail("eigen rec"); }
+        k = k + 1;
+    }
+    let bad: Result[List[Float], String] = eigen_sym_factor(d, 2);
+    if bad.is_ok() { fail("eigen n<3"); }
+
+    let mut rp: List[Int] = list_new();
+    rp = list_push(rp, 0);
+    rp = list_push(rp, 2);
+    rp = list_push(rp, 5);
+    rp = list_push(rp, 7);
+    let mut ci: List[Int] = list_new();
+    ci = list_push(ci, 0);
+    ci = list_push(ci, 1);
+    ci = list_push(ci, 0);
+    ci = list_push(ci, 1);
+    ci = list_push(ci, 2);
+    ci = list_push(ci, 1);
+    ci = list_push(ci, 2);
+    let mut vs: List[Float] = list_new();
+    vs = list_push(vs, 3.0);
+    vs = list_push(vs, 1.0);
+    vs = list_push(vs, 1.0);
+    vs = list_push(vs, 4.0);
+    vs = list_push(vs, 1.0);
+    vs = list_push(vs, 2.0);
+    vs = list_push(vs, 3.0);
+    let mut b: List[Float] = list_new();
+    b = push3(b, 5.0, 12.0, 13.0);
+    let x: List[Float] = unwrap_fv(gmres_solve(rp, ci, vs, 3, b, 3, 8, 0.000000001), "gmres");
+    if near(list_get(x, 0), 1.0, 0.00001) == false { fail("gmres0"); }
+    if near(list_get(x, 1), 2.0, 0.00001) == false { fail("gmres1"); }
+    if near(list_get(x, 2), 3.0, 0.00001) == false { fail("gmres2"); }
+    let mut shortb: List[Float] = list_new();
+    shortb = list_push(shortb, 1.0);
+    let gb: Result[List[Float], String] = gmres_solve(rp, ci, vs, 3, shortb, 3, 2, 0.001);
+    if gb.is_ok() { fail("gmres bad b"); }
+    println("EIGEN_GMRES_ALL_PASSED");
+}

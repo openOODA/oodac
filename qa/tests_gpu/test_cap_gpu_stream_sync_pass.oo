@@ -1,0 +1,22 @@
+// # Test GPU Stream Sync Authorized Pass
+//
+// Logline: Asserts valid compilation when gpu_stream_sync receives valid &GpuCap token.
+//
+// Setup: Sealed GPU builtin gpu_stream_sync should pass typecheck when authorized with &GpuCap.
+//
+// Beats:
+//   1. Declare function taking gpu: &GpuCap.
+//   2. Invoke gpu_stream_sync with gpu token and stream handle.
+//   3. Assert static typecheck succeeds.
+
+pub fn run_stream_sync(gpu: &GpuCap) {
+    let stream_handle = 0;
+    let res = gpu_stream_sync(gpu, stream_handle);
+    match res {
+        Ok(v) => {},
+        Err(e) => {}
+    }
+}
+
+pub fn main() {
+}

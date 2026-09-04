@@ -1,0 +1,25 @@
+// # Product hex encode prove
+//
+// Logline: Fail-closed emit+gcc+run of std/encoding/hex.oo nibble and encode.
+//
+// Setup: Tree oodac emit-c. Calls ooda/std/encoding/hex.oo. Destub none.
+//
+// Beats:
+//   1. hex_nibble_val("A") is 10.
+//   2. hex_is_valid("00") is true.
+//   3. Exit 1 on any miss. Print prod_hex: PASSED only if all hold.
+
+import "std/core/encoding/hex.oo";
+
+pub fn main() {
+    let n: Int = hex_nibble_val("A");
+    if n != 10 {
+        println("FAIL hex_nibble_val");
+        process_exit(1);
+    }
+    if !hex_is_valid("00") {
+        println("FAIL hex_is_valid");
+        process_exit(1);
+    }
+    println("prod_hex: PASSED");
+}

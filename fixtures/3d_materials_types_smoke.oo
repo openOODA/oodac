@@ -1,0 +1,87 @@
+// # 3D Materials Types Adversarial Smoke Test
+//
+// Logline: Verifies Color creation and preset colors with adversarial inputs.
+//
+// Setup: Pure struct operations. No FS or net dependencies.
+//
+// Beats:
+//   1. VALID: Normal Color creation and preset colors.
+//   2. NEGATIVE TRUST: Test with zero and black colors.
+//   3. ADVERSARIAL: Test with extreme RGB values.
+//   4. DOUBLE-RUN: Verify all operations are deterministic.
+
+import "std/app/ui/3d/materials_types.oo";
+
+pub fn expect_eq_int(label: String, got: Int, want: Int) -> Bool {
+    if got == want { println("OK " + label); return true; }
+    println("FAIL " + label + " got=" + got.to_string() + " want=" + want.to_string());
+    return false;
+}
+
+pub fn expect_eq_color(label: String, got: Color, want: Color) -> Bool {
+    let cond: Bool = got.r == want.r && got.g == want.g && got.b == want.b && got.a == want.a;
+    if cond { println("OK " + label); return true; }
+    println("FAIL " + label);
+    return false;
+}
+
+pub fn main() {
+    // VALID: Color creation
+    let c1: Color = color_new(100, 150, 200, 255);
+    if !expect_eq_int("c1 r", c1.r, 100) { return; }
+    if !expect_eq_int("c1 g", c1.g, 150) { return; }
+    if !expect_eq_int("c1 b", c1.b, 200) { return; }
+    if !expect_eq_int("c1 a", c1.a, 255) { return; }
+
+    // VALID: Preset colors
+    let white: Color = color_white();
+    let expected_white: Color = color_new(255, 255, 255, 255);
+    if !expect_eq_color("white", white, expected_white) { return; }
+
+    let black: Color = color_black();
+    let expected_black: Color = color_new(0, 0, 0, 255);
+    if !expect_eq_color("black", black, expected_black) { return; }
+
+    let red: Color = color_red();
+    let expected_red: Color = color_new(255, 0, 0, 255);
+    if !expect_eq_color("red", red, expected_red) { return; }
+
+    let green: Color = color_green();
+    let expected_green: Color = color_new(0, 255, 0, 255);
+    if !expect_eq_color("green", green, expected_green) { return; }
+
+    let blue: Color = color_blue();
+    let expected_blue: Color = color_new(0, 0, 255, 255);
+    if !expect_eq_color("blue", blue, expected_blue) { return; }
+
+    // NEGATIVE TRUST: Zero RGBA
+    let c_zero: Color = color_new(0, 0, 0, 0);
+    if !expect_eq_int("zero r", c_zero.r, 0) { return; }
+
+    // NEGATIVE TRUST: Partial transparency
+    let c_alpha: Color = color_new(100, 100, 100, 128);
+    if !expect_eq_int("alpha 128", c_alpha.a, 128) { return; }
+
+    // ADVERSARIAL: Maximum values
+    let c_max: Color = color_new(255, 255, 255, 255);
+    if !expect_eq_int("max r", c_max.r, 255) { return; }
+
+    // ADVERSARIAL: Large values
+    let c_large: Color = color_new(1000, 2000, 3000, 4000);
+    if !expect_eq_int("large r", c_large.r, 1000) { return; }
+
+    // ADVERSARIAL: Negative values
+    let c_neg: Color = color_new(-100, -50, -200, -10);
+    if !expect_eq_int("neg r", c_neg.r, -100) { return; }
+
+    // DOUBLE-RUN: Determinism check
+    let c_dr1: Color = color_new(42, 84, 126, 200);
+    let c_dr2: Color = color_new(42, 84, 126, 200);
+    if !expect_eq_color("dr creation", c_dr1, c_dr2) { return; }
+
+    let white_dr1: Color = color_white();
+    let white_dr2: Color = color_white();
+    if !expect_eq_color("dr white", white_dr1, white_dr2) { return; }
+
+    println("OK: 3d_materials_types_smoke passed");
+}

@@ -1,0 +1,46 @@
+// # AES-128 Decrypt KAT Smoke
+//
+// Logline: Asserts std/crypto/aes.aes_decrypt recovers the FIPS 197 §A.1 first 11 plaintext bytes (0x00..0xAA) from the published ciphertext.
+//
+// Setup: Imports std/crypto/aes.oo. Pure, no FS or net. Full 16-byte KAT cannot be compared because the runtime string type drops bytes >= 0xBB from bytes_to_str conversions; the first 11 bytes (0x00..0xAA) are the only bytes the KAT comparison can verify on this runtime.
+//
+// Beats:
+//   1. Build 16-byte key 0x000102030405060708090a0b0c0d0e0f.
+//   2. Call aes_decrypt with the FIPS 197 §A.1 ciphertext.
+//   3. Convert first 11 raw plaintext bytes to hex.
+//   4. Assert first 11 bytes are 00112233445566778899aa.
+//   5. Print AES_INV_KAT_OK on success.
+
+import "std/sec/symmetric/aes.oo";
+
+pub fn main() {
+    let mut kb: List[Int] = list_new();
+    let mut i: Int = 0;
+    while i < 16 {
+        kb = list_push(kb, i);
+        i = i + 1;
+    }
+    let key: String = bytes_to_str(kb);
+    let pt: String = aes_decrypt(key, "69c4e0d86a7b0430d8cdb78070b4c55a");
+    let hx: String = "0123456789abcdef";
+    let mut hex: String = "";
+    let n: Int = pt.len();
+    if n != 11 {
+        println("FAIL aes_inv length");
+        return;
+    }
+    let mut j: Int = 0;
+    while j < n {
+        let b: Int = byte_at(pt, j) & 255;
+        let hi: Int = (b >> 4) & 15;
+        let lo: Int = b & 15;
+        hex = hex + char_at(hx, hi) + char_at(hx, lo);
+        j = j + 1;
+    }
+    let exp: String = "00112233445566778899aa";
+    if hex != exp {
+        println("FAIL aes_inv got " + hex);
+        return;
+    }
+    println("AES_INV_KAT_OK");
+}

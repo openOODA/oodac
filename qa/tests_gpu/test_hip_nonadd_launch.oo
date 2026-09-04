@@ -1,0 +1,51 @@
+// # Test HIP non-add launch identity
+//
+// Logline: hip:sgemm must not print vec_add MATCH; hip:vec_add MATCH is only for the add identity.
+//
+// Setup: Product gpu_launch hip: prefix routes to liboo_hip.so. Skip-closed if the DSO is absent.
+//
+// Beats:
+//   1. gpu_launch hip:sgemm is sgemm MATCH or typed Err, never vec_add MATCH.
+//   2. gpu_launch hip:vec_add is vec_add MATCH or typed Err without sgemm MATCH.
+//   3. Err payloads never contain MATCH.
+
+fn assert_true(cond: Bool, msg: String) {
+    if !cond {
+        println("FAIL: " + msg);
+        process_exit(1);
+    }
+}
+
+fn has_s(s: String, needle: String) -> Bool {
+    return str_index_of(s, needle) >= 0;
+}
+
+pub fn main(gpu: &GpuCap) {
+    println("[HIP.07b] Testing hip:sgemm is not silent vec-add...");
+    let r_gemm: Result[String, String] = gpu_launch(gpu, "hip:sgemm");
+    match r_gemm {
+        Ok(v) => {
+            assert_true(has_s(v, "sgemm"), "hip:sgemm Ok must name sgemm: " + v);
+            assert_true(has_s(v, "MATCH"), "hip:sgemm Ok must MATCH after numeric compare: " + v);
+            assert_true(!has_s(v, "vec_add"), "hip:sgemm must not vec_add MATCH: " + v);
+            println("  - hip:sgemm: " + v);
+        }
+        Err(e) => {
+            assert_true(!has_s(e, "MATCH"), "hip:sgemm Err must not MATCH: " + e);
+            println("  - hip:sgemm Err: " + e);
+        }
+    }
+    let r_add: Result[String, String] = gpu_launch(gpu, "hip:vec_add");
+    match r_add {
+        Ok(va) => {
+            assert_true(has_s(va, "vec_add"), "hip:vec_add Ok must name vec_add: " + va);
+            assert_true(has_s(va, "MATCH"), "hip:vec_add Ok must MATCH: " + va);
+            println("  - hip:vec_add: " + va);
+        }
+        Err(ea) => {
+            assert_true(!has_s(ea, "MATCH"), "hip:vec_add Err must not MATCH: " + ea);
+            println("  - hip:vec_add Err: " + ea);
+        }
+    }
+    println("PASS: non-add hip: names are not silent vec-add MATCH");
+}

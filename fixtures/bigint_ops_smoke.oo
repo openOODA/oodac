@@ -1,0 +1,105 @@
+// # BigInt addition and multiplication smoke
+//
+// Logline: Asserts std/math/bigint_ops.bigint_add and bigint_mul against Knuth vol 2 §4.3.1 test vectors and LAPACK-style residue values.
+//
+// Setup: Imports std/math/bigint.oo and std/math/bigint_str.oo for parsing/printing. The BigInt representation stores base-10 little-endian digit lists, so all sums are verified by reconstructing decimal strings.
+//
+// Beats:
+//   1. 0 + 0 = 0.
+//   2. 1 + 1 = 2.
+//   3. 9 + 1 = 10 (single-digit carry).
+//   4. 99 + 1 = 100 (two-digit carry).
+//   5. (Knuth vector) 12345678901234567890 + 98765432109876543210 = 111111111011111111100.
+//   6. 7 * 6 = 42.
+//   7. 12345 * 6789 = 83810205.
+//   8. -5 + 3 = -2 (signed arithmetic).
+
+import "std/core/math/bigint.oo";
+import "std/core/math/bigint_str.oo";
+import "std/core/math/bigint_ops.oo";
+
+pub fn main() {
+    // Beat 1: 0 + 0 = 0.
+    let z: BigInt = bigint_zero();
+    let z2: BigInt = bigint_add(z, z);
+    if bigint_to_str(z2) != "0" {
+        println("FAIL bigint_add 0+0");
+        return;
+    }
+    println("OK bigint_add 0+0");
+
+    // Beat 2: 1 + 1 = 2.
+    let o: BigInt = bigint_one();
+    let two: BigInt = bigint_add(o, o);
+    if bigint_to_str(two) != "2" {
+        println("FAIL bigint_add 1+1 got " + bigint_to_str(two));
+        return;
+    }
+    println("OK bigint_add 1+1");
+
+    // Beat 3: 9 + 1 = 10.
+    let nine: BigInt = bigint_from_str("9");
+    let ten_in: BigInt = bigint_from_str("1");
+    let ten: BigInt = bigint_add(nine, ten_in);
+    if bigint_to_str(ten) != "10" {
+        println("FAIL bigint_add 9+1 got " + bigint_to_str(ten));
+        return;
+    }
+    println("OK bigint_add 9+1");
+
+    // Beat 4: 99 + 1 = 100.
+    let n99: BigInt = bigint_from_str("99");
+    let o1: BigInt = bigint_from_str("1");
+    let h: BigInt = bigint_add(n99, o1);
+    if bigint_to_str(h) != "100" {
+        println("FAIL bigint_add 99+1 got " + bigint_to_str(h));
+        return;
+    }
+    println("OK bigint_add 99+1");
+
+    // Beat 5: Knuth vector.
+    let a: BigInt = bigint_from_str("12345678901234567890");
+    let b: BigInt = bigint_from_str("98765432109876543210");
+    let s: BigInt = bigint_add(a, b);
+    let s_str: String = bigint_to_str(s);
+    if s_str != "111111111011111111100" {
+        println("FAIL bigint_add Knuth got " + s_str);
+        return;
+    }
+    println("OK bigint_add Knuth");
+
+    // Beat 6: 7 * 6 = 42.
+    let seven: BigInt = bigint_from_str("7");
+    let six: BigInt = bigint_from_str("6");
+    let prod: BigInt = bigint_mul(seven, six);
+    if bigint_to_str(prod) != "42" {
+        println("FAIL bigint_mul 7*6 got " + bigint_to_str(prod));
+        return;
+    }
+    println("OK bigint_mul 7*6");
+
+    // Beat 7: 12345 * 6789 = 83810205.
+    let lhs: BigInt = bigint_from_str("12345");
+    let rhs: BigInt = bigint_from_str("6789");
+    let p: BigInt = bigint_mul(lhs, rhs);
+    let p_str: String = bigint_to_str(p);
+    if p_str != "83810205" {
+        println("FAIL bigint_mul 12345*6789 got " + p_str);
+        return;
+    }
+    println("OK bigint_mul 12345*6789");
+
+    // Beat 8: -5 + 3 = -2.
+    let neg5: BigInt = bigint_from_str("-5");
+    let pos3: BigInt = bigint_from_str("3");
+    let r2: BigInt = bigint_add(neg5, pos3);
+    let r2_str: String = bigint_to_str(r2);
+    if r2_str != "-2" {
+        println("FAIL bigint_add -5+3 got " + r2_str);
+        return;
+    }
+    println("OK bigint_add -5+3");
+
+    println("BIGINT_KAT_OK");
+    println("OK");
+}

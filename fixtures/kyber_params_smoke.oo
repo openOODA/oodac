@@ -1,0 +1,38 @@
+// # Kyber Parameter Set Distinction Smoke
+//
+// Logline: Verifies std/crypto/advanced/kyber_params.kyber_params_512, _768, _1024 return distinct parameter records (different k) for the three security levels.
+//
+// Setup: Imports std/crypto/advanced/kyber_params.oo. Pure, no FS or net. Property test (PROP).
+//
+// Beats:
+//   1. Build kyber_params_512, _768, _1024.
+//   2. Assert their k fields are distinct across the three sets.
+//   3. Print KYBER_PARAMS_PROP_OK on success.
+
+import "std/sec/asymmetric/kyber_params.oo";
+
+pub fn main() {
+    let p512: KyberParams = kyber_params_512();
+    let p768: KyberParams = kyber_params_768();
+    let p1024: KyberParams = kyber_params_1024();
+    let k512: Int = p512.k;
+    let k768: Int = p768.k;
+    let k1024: Int = p1024.k;
+    if k512 == 0 {
+        println("FAIL k512 zero");
+        return;
+    }
+    if k512 == k768 {
+        println("FAIL k512 == k768");
+        return;
+    }
+    if k768 == k1024 {
+        println("FAIL k768 == k1024");
+        return;
+    }
+    if k512 == k1024 {
+        println("FAIL k512 == k1024");
+        return;
+    }
+    println("KYBER_PARAMS_PROP_OK");
+}

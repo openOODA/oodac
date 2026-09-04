@@ -1,0 +1,125 @@
+// # WebAssembly Milestone 2 Control Flow Test Suite
+//
+// Logline: Build, emit, and verify WebAssembly binary modules from AST control flow covering while loops, nested if/else, and match expressions.
+//
+// Setup: Run with ooda/bin/ooda check or run from qa/.
+//
+// Beats:
+//   1. Import required modules.
+//   2. Execute test assertions.
+//   3. Report pass or fail with exit code.
+import "oodac/emit/wasm/wasm_leb128.oo";
+import "oodac/emit/wasm/wasm_opcodes.oo";
+import "oodac/emit/wasm/wasm_types.oo";
+import "oodac/emit/wasm/wasm_binary_builder.oo";
+import "oodac/emit/wasm/wasm_lower_expr.oo";
+import "oodac/emit/wasm/wasm_lower_stmt.oo";
+import "oodac/emit/wasm/wasm_lower_control.oo";
+import "oodac/emit/wasm/wasm_lower_fn.oo";
+import "oodac/ast/ast.oo";
+
+pub fn test_m2_while_gcd_module(fs: &FsWriteCap) -> List[Int] {
+    // fn gcd(a: Int, b: Int) -> Int {
+    //     let mut x: Int = a;
+    //     let mut y: Int = b;
+    //     while y != 0 {
+    //         let t: Int = y;
+    //         y = x % y;
+    //         x = t;
+    //     }
+    //     return x;
+    // }
+    let s1: String = mk_slet_mut("x", mk_ty_int(), mk_evar("a"));
+    let s2: String = mk_slet_mut("y", mk_ty_int(), mk_evar("b"));
+
+    let cond: String = mk_ebinop("!=", mk_evar("y"), mk_eint("0"));
+    let w1: String = mk_slet("t", mk_ty_int(), mk_evar("y"));
+    let w2: String = mk_sassign("y", mk_ebinop("%", mk_evar("x"), mk_evar("y")));
+    let w3: String = mk_sassign("x", mk_evar("t"));
+    let w_body: String = mk_block(w1 + "," + w2 + "," + w3, mk_sempty());
+
+    let s3: String = mk_swhile(cond, w_body);
+    let s4: String = mk_sreturn(mk_evar("x"));
+
+    let body_block: String = mk_block(s1 + "," + s2 + "," + s3 + "," + s4, mk_sempty());
+    let mut params: String = mk_param("a", mk_ty_int());
+    params = params + "," + mk_param("b", mk_ty_int());
+
+    let fn_node: String = mk_fn("gcd", params, mk_ty_int(), "", body_block);
+    let bin: List[Int] = wasm_compile_ast_module(mk_file(fn_node), "browser", wasm_val_type_i32());
+
+    let s: String = bytes_to_str(bin);
+    let _w: Result[Void, String] = write_file(fs, "/home/jeryd/Projects/openOODA/qa/tests_wasm/tests_m2_gcd.wasm", s);
+    return bin;
+}
+
+pub fn test_m2_nested_if_module(fs: &FsWriteCap) -> List[Int] {
+    // fn clamp_sign(x: Int, min_val: Int, max_val: Int) -> Int {
+    //     if x < min_val { return min_val; }
+    //     else {
+    //         if x > max_val { return max_val; }
+    //         else { return x; }
+    //     }
+    // }
+    let inner_if: String = mk_eif(
+        mk_ebinop(">", mk_evar("x"), mk_evar("max_val")),
+        mk_block(mk_sreturn(mk_evar("max_val")), mk_sempty()),
+        mk_block(mk_sreturn(mk_evar("x")), mk_sempty())
+    );
+
+    let outer_if: String = mk_eif(
+        mk_ebinop("<", mk_evar("x"), mk_evar("min_val")),
+        mk_block(mk_sreturn(mk_evar("min_val")), mk_sempty()),
+        inner_if
+    );
+
+    let body_block: String = mk_block(outer_if, mk_sempty());
+    let mut params: String = mk_param("x", mk_ty_int());
+    params = params + "," + mk_param("min_val", mk_ty_int());
+    params = params + "," + mk_param("max_val", mk_ty_int());
+
+    let fn_node: String = mk_fn("clamp_sign", params, mk_ty_int(), "", body_block);
+    let bin: List[Int] = wasm_compile_ast_module(mk_file(fn_node), "browser", wasm_val_type_i32());
+
+    let s: String = bytes_to_str(bin);
+    let _w: Result[Void, String] = write_file(fs, "/home/jeryd/Projects/openOODA/qa/tests_wasm/tests_m2_clamp.wasm", s);
+    return bin;
+}
+
+pub fn test_m2_match_module(fs: &FsWriteCap) -> List[Int] {
+    // fn classify(code: Int) -> Int {
+    //     match code {
+    //         1 => { return 100; },
+    //         2 => { return 200; },
+    //         3 => { return 300; },
+    //         _ => { return -1; }
+    //     }
+    // }
+    let arm1: String = mk_param(mk_eint("1"), mk_block(mk_sreturn(mk_eint("100")), mk_sempty()));
+    let arm2: String = mk_param(mk_eint("2"), mk_block(mk_sreturn(mk_eint("200")), mk_sempty()));
+    let arm3: String = mk_param(mk_eint("3"), mk_block(mk_sreturn(mk_eint("300")), mk_sempty()));
+    let arm4: String = mk_param("_", mk_block(mk_sreturn(mk_eint("-1")), mk_sempty()));
+
+    let arms_str: String = arm1 + "," + arm2 + "," + arm3 + "," + arm4;
+    let match_node: String = mk_ematch(mk_evar("code"), arms_str);
+
+    let body_block: String = mk_block(match_node, mk_sempty());
+    let params: String = mk_param("code", mk_ty_int());
+
+    let fn_node: String = mk_fn("classify", params, mk_ty_int(), "", body_block);
+    let bin: List[Int] = wasm_compile_ast_module(mk_file(fn_node), "browser", wasm_val_type_i32());
+
+    let s: String = bytes_to_str(bin);
+    let _w: Result[Void, String] = write_file(fs, "/home/jeryd/Projects/openOODA/qa/tests_wasm/tests_m2_match.wasm", s);
+    return bin;
+}
+
+pub fn main(fs: &FsWriteCap) {
+    println("=================================================");
+    println(" Running WebAssembly M2 Control Flow Unit Tests");
+    println("=================================================");
+    test_m2_while_gcd_module(fs);
+    test_m2_nested_if_module(fs);
+    test_m2_match_module(fs);
+    println("All WASM M2 Control Flow unit tests emitted successfully!");
+}

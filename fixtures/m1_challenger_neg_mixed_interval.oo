@@ -1,0 +1,23 @@
+// # Negative Test: Unsatisfiable Mixed Interval Product
+//
+// Logline: Fails closed when negative times positive interval is required to be positive.
+//
+// Setup: Pure .oo test for fail-closed SMT refusal on [-5, -2] * [3, 6] > 0.
+//
+// Beats:
+//   1. Function invalid requires x >= -5 && x <= -2.
+//   2. Function invalid requires y >= 3 && y <= 6.
+//   3. Function invalid requires x * y > 0.
+//   4. Compiler refuses with ERR smt unsat requires at 16:5.
+
+pub fn invalid(x: Int, y: Int) -> Int
+    requires x >= -5 && x <= -2
+    requires y >= 3 && y <= 6
+    requires x * y > 0
+{
+    return x * y;
+}
+
+pub fn main() {
+    println(invalid(-3, 4));
+}

@@ -1,0 +1,115 @@
+// # Challenger 1: Lorentz Kinematics & Electromagnetism Empirical Tests
+//
+// Logline: Empirically stress-tests Lorentz gamma limits, speed of light boundaries, rest mass energy, wave impedance, Coulomb force, and Lorentz force.
+//
+// Setup: Pure numerical verification without ambient IO.
+//
+// Beats:
+//   1. Verify Lorentz gamma as beta -> 1.0 and boundary protection for v > c.
+//   2. Verify rest mass E0 = m c^2 and relativistic momentum p = gamma * m * v.
+//   3. Verify vacuum impedance Z0 = 376.73 Ohm.
+//   4. Verify Coulomb electrostatic inverse-square law and Lorentz electric/magnetic force.
+
+import "std/science/phys/classical/constants.oo";
+import "std/science/phys/classical/relativity.oo";
+import "std/science/phys/classical/electromagnetism.oo";
+
+fn check_float_near(actual: Float, expected: Float, tolerance: Float) -> Bool {
+    let mut diff: Float = actual - expected;
+    if diff < 0.0 { diff = 0.0 - diff; }
+    return diff <= tolerance;
+}
+
+pub fn test_lorentz_kinematics() -> Bool {
+    let c: Float = phys_speed_of_light();
+    if c != 299792458.0 { return false; }
+
+    // Test 1: v = 0 -> beta = 0, gamma = 1
+    let beta_zero: Float = rel_beta(0.0);
+    let gamma_zero: Float = rel_gamma(0.0);
+    if !check_float_near(beta_zero, 0.0, 0.000001) { return false; }
+    if !check_float_near(gamma_zero, 1.0, 0.000001) { return false; }
+
+    // Test 2: v = 0.6c -> beta = 0.6, gamma = 1 / sqrt(1 - 0.36) = 1 / 0.8 = 1.25
+    let v_06: Float = 0.6 * c;
+    let gamma_06: Float = rel_gamma(v_06);
+    if !check_float_near(gamma_06, 1.25, 0.00001) { return false; }
+
+    // Test 3: v = 0.8c -> beta = 0.8, gamma = 1 / sqrt(1 - 0.64) = 1 / 0.6 = 1.666667
+    let v_08: Float = 0.8 * c;
+    let gamma_08: Float = rel_gamma(v_08);
+    if !check_float_near(gamma_08, 1.666666667, 0.00001) { return false; }
+
+    // Test 4: beta -> 1.0 (v = 0.99c -> gamma ~ 7.0888)
+    let v_099: Float = 0.99 * c;
+    let gamma_099: Float = rel_gamma(v_099);
+    if !check_float_near(gamma_099, 7.088812, 0.001) { return false; }
+
+    // Test 5: v >= c boundary protection (superluminal protection)
+    let v_super: Float = 2.0 * c;
+    let beta_super: Float = rel_beta(v_super);
+    if beta_super >= 1.0 { return false; }
+    let gamma_super: Float = rel_gamma(v_super);
+    if gamma_super <= 1.0 { return false; } // Gamma must be large finite positive
+
+    // Test 6: Rest mass energy E = m * c^2 for m = 1 kg
+    let e0: Float = rel_rest_energy(1.0);
+    let expected_e0: Float = c * c;
+    if !check_float_near(e0, expected_e0, 1.0) { return false; }
+
+    // Test 7: Momentum p = gamma * m * v at v = 0.6c
+    let p_06: Float = rel_momentum(1.0, v_06);
+    let expected_p: Float = 1.25 * 1.0 * v_06;
+    if !check_float_near(p_06, expected_p, 1.0) { return false; }
+
+    // Test 8: Time dilation and length contraction at 0.6c
+    let t_dilated: Float = rel_time_dilation(10.0, v_06);
+    if !check_float_near(t_dilated, 12.5, 0.0001) { return false; }
+    let l_contracted: Float = rel_length_contraction(100.0, v_06);
+    if !check_float_near(l_contracted, 80.0, 0.0001) { return false; }
+
+    return true;
+}
+
+pub fn test_electromagnetism() -> Bool {
+    // Test 1: Vacuum wave impedance Z0 ~ 376.73 Ohm
+    let z0: Float = em_vacuum_impedance();
+    if !check_float_near(z0, 376.7303, 0.01) { return false; }
+
+    // Test 2: Coulomb Force between two 1 Coulomb charges at 1 meter
+    let f_coulomb: Float = em_coulomb_force(1.0, 1.0, 1.0);
+    // k_e = 1 / (4 * pi * eps0) ~ 8.98755e9 N
+    if !check_float_near(f_coulomb, 8987551787.0, 10000.0) { return false; }
+
+    // Test 3: Coulomb inverse square law: at r = 2m, force should be 1/4th
+    let f_coulomb_2m: Float = em_coulomb_force(1.0, 1.0, 2.0);
+    if !check_float_near(f_coulomb_2m, f_coulomb / 4.0, 100.0) { return false; }
+
+    // Test 4: Coulomb r <= 0 protection
+    let f_zero_r: Float = em_coulomb_force(1.0, 1.0, 0.0);
+    if f_zero_r != 0.0 { return false; }
+
+    // Test 5: Lorentz Electric force F_e = q * E
+    let f_e: Float = em_electric_force(2.5, 100.0);
+    if !check_float_near(f_e, 250.0, 0.0001) { return false; }
+
+    // Test 6: Lorentz Magnetic force F_b = q * v * B
+    let f_b: Float = em_magnetic_force_perp(2.0, 50.0, 3.0);
+    if !check_float_near(f_b, 300.0, 0.0001) { return false; }
+
+    return true;
+}
+
+pub fn main() {
+    let t1: Bool = test_lorentz_kinematics();
+    if !t1 {
+        println("FAIL: test_lorentz_kinematics");
+        process_exit(1);
+    }
+    let t2: Bool = test_electromagnetism();
+    if !t2 {
+        println("FAIL: test_electromagnetism");
+        process_exit(1);
+    }
+    println("challenger_lorentz_em_tests: PASSED");
+}

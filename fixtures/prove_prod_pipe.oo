@@ -1,0 +1,27 @@
+// # Product pipe prove
+//
+// Logline: Fail-closed emit+gcc+run of shipped pipe_write/available.
+//
+// Setup: Product std/io/pipe.oo. Write hi.
+//
+// Beats:
+//   1. After write hi, available is 2.
+//   2. Exit 1 before PASSED on a miss.
+
+import "std/core/io/pipe.oo";
+
+pub fn main() {
+    let p0: Pipe = pipe_new(16);
+    let wr: Result[Pipe, String] = pipe_write(p0, "hi");
+    if wr.is_err() {
+        println("FAIL pipe write");
+        process_exit(1);
+    }
+    let p: Pipe = match wr { Ok(v) => v, Err(_) => p0 };
+    let n: Int = pipe_available(p);
+    if n != 2 {
+        println("FAIL pipe avail");
+        process_exit(1);
+    }
+    println("prod_pipe: PASSED");
+}

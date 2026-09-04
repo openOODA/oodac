@@ -1,0 +1,14 @@
+// # Sovereign ELF64 hello smoke
+//
+// Logline: Print the sovereign hello line from a pure x86-64 image.
+//
+// Setup: No imports. Used by --x86-elf-pure.
+//
+// Beats:
+//   1. Enter main.
+//   2. Print the hello line.
+//   3. Exit.
+
+pub fn main() {
+    println("Hello from sovereign openOODA ELF64!");
+}

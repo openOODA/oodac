@@ -1,0 +1,12 @@
+// # Host matmul string without GPU kernel
+//
+// Logline: Host main prints matmul with no @gpu kernel for emit-hip rejection.
+//
+// Setup: CPU-only source. The word matmul is a string, not a device op.
+//
+// Beats:
+//   1. Skip every @gpu annotation.
+//   2. Print the host string matmul from main.
+//   3. Leave emit-hip to fail closed.
+
+pub fn main() { println("matmul"); }

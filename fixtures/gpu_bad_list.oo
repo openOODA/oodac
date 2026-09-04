@@ -1,0 +1,19 @@
+// # Test Device Invariant Dynamic List Trap
+//
+// Logline: Asserts fail-closed compile-time rejection of dynamic list collections in @gpu kernels.
+//
+// Setup: Device kernel attempts to initialize and push to dynamic List collection.
+//
+// Beats:
+//   1. Define @gpu annotated device function.
+//   2. Attempt invocation of list_new and list_push within kernel body.
+//   3. Assert compiler exits non-zero with dynamic collection forbidden diagnostic.
+
+@gpu
+pub fn k_bad_list(gpu: &GpuCap, n: Int) {
+    let mut items = list_new();
+    items = list_push(items, 42);
+}
+
+pub fn main() {
+}

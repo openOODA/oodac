@@ -1,0 +1,20 @@
+// # Negative Test: Unsatisfiable Square Spec
+//
+// Logline: Fails closed when spec specifies an impossible negative square.
+//
+// Setup: Pure .oo test for fail-closed SMT refusal.
+//
+// Beats:
+//   1. Function invalid specifies a * a < 0.
+//   2. Compiler refuses with ERR smt unsat spec.
+//   3. Process exits with code 1.
+
+pub fn invalid(a: Int) -> Int
+    spec a * a < 0
+{
+    return a;
+}
+
+pub fn main() {
+    println(invalid(5));
+}

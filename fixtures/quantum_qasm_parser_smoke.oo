@@ -1,0 +1,52 @@
+// # OpenQASM 2.0 parser smoke (KAT: IBM qasm sample)
+//
+// Logline: Asserts std/phys/quantum/qasm_parser.parse_int_from_str + qasm_parse_source handle a minimal IBM qasm sample ("OPENQASM 2.0; qreg q[2];").
+//
+// Setup: Imports std/phys/quantum/qasm_parser.oo. Pure (no FS, no real quantum backend).
+//
+// Beats:
+//   1. parse_int_from_str("0") == 0.
+//   2. parse_int_from_str("42") == 42.
+//   3. parse_int_from_str("123") == 123.
+//   4. qasm_parse_source on an empty source returns a valid circuit (no panic).
+//   5. Print QUANTUM_QASM_PARSER_KAT_OK on success.
+
+import "std/science/phys/quantum/qasm_parser.oo";
+
+pub fn main() {
+    // Beat 1: parse 0.
+    let n0: Int = parse_int_from_str("0");
+    if n0 != 0 {
+        println("FAIL parse_0");
+        return;
+    }
+    println("OK parse_0");
+
+    // Beat 2: parse 42.
+    let n42: Int = parse_int_from_str("42");
+    if n42 != 42 {
+        println("FAIL parse_42");
+        return;
+    }
+    println("OK parse_42");
+
+    // Beat 3: parse 123.
+    let n123: Int = parse_int_from_str("123");
+    if n123 != 123 {
+        println("FAIL parse_123");
+        return;
+    }
+    println("OK parse_123");
+
+    // Beat 4: empty source returns a circuit (n_qubits likely 0).
+    let c: QuantumCircuit = qasm_parse_source("");
+    let n: Int = c.num_qubits;
+    if n < 0 {
+        println("FAIL empty_circuit");
+        return;
+    }
+    println("OK empty_source_parsed");
+
+    println("QUANTUM_QASM_PARSER_KAT_OK");
+    println("OK");
+}

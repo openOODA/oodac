@@ -1,0 +1,33 @@
+// # FHE BFV Evaluator Construction Smoke
+//
+// Logline: Verifies std/crypto/fhe_lattices/fhe_bfv_evaluator.bfv_evaluator_new constructs a valid BFV evaluator for the prime q=1000 and plaintext modulus t=2, and that bfv_tensor_round_coeff is deterministic.
+//
+// Setup: Imports std/crypto/fhe_lattices/fhe_bfv_evaluator.oo. Pure, no FS or net. Property test (PROP).
+//
+// Beats:
+//   1. bfv_evaluator_new(1000, 2) returns an evaluator with modulus_q=1000 and plaintext_t=2.
+//   2. bfv_tensor_round_coeff(50, 2, 1000) is deterministic across two calls.
+//   3. Print BFV_EVAL_PROP_OK on success.
+
+import "std/sec/asymmetric/fhe_bfv_evaluator.oo";
+
+pub fn main() {
+    let ev: BfvEvaluator = bfv_evaluator_new(1000, 2);
+    let q: Int = ev.modulus_q;
+    let t: Int = ev.plaintext_t;
+    if q != 1000 {
+        println("FAIL q");
+        return;
+    }
+    if t != 2 {
+        println("FAIL t");
+        return;
+    }
+    let r1: Int = bfv_tensor_round_coeff(50, 2, 1000);
+    let r2: Int = bfv_tensor_round_coeff(50, 2, 1000);
+    if r1 != r2 {
+        println("FAIL tensor non-deterministic");
+        return;
+    }
+    println("BFV_EVAL_PROP_OK");
+}

@@ -1,0 +1,23 @@
+// # Negative Test: Unsatisfiable Triple Multiplication Sign
+//
+// Logline: Fails closed when product of three positive variables is required to be non-positive.
+//
+// Setup: Pure .oo test for fail-closed SMT refusal on triple product sign.
+//
+// Beats:
+//   1. Function invalid requires x >= 1, y >= 1, z >= 1.
+//   2. Function invalid requires x * y * z <= 0.
+//   3. Compiler refuses with ERR smt unsat requires at 16:5.
+
+pub fn invalid(x: Int, y: Int, z: Int) -> Int
+    requires x >= 1
+    requires y >= 1
+    requires z >= 1
+    requires x * y * z <= 0
+{
+    return x * y * z;
+}
+
+pub fn main() {
+    println(invalid(1, 1, 1));
+}

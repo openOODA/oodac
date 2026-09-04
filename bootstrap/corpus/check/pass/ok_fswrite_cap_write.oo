@@ -1,0 +1,13 @@
+// # ok fswrite cap write
+//
+// Logline: Check-pass fixture that grants write_file on a named path through FsWriteCap.
+//
+// Beats:
+//   1. ok takes fs: &FsWriteCap.
+//   2. write_file is called on /tmp/cap_g2_x.
+//   3. Check must accept the granular grant.
+
+pub fn ok(fs: &FsWriteCap) {
+    let w = write_file(fs, "/tmp/cap_g2_x", "hi");
+}
+pub fn main() {}

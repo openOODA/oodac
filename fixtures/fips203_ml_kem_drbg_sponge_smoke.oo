@@ -1,0 +1,46 @@
+// # FIPS 203 ML-KEM Keccak Sponge Determinism Smoke
+//
+// Logline: Verifies std/crypto/pqc_nist/fips203_ml_kem_drbg_sponge.keccak_sponge_new constructs a valid sponge state and keccak_sponge_absorb/squeeze are deterministic across two runs.
+//
+// Setup: Imports std/crypto/pqc_nist/fips203_ml_kem_drbg_sponge.oo. Pure, no FS or net. Property test (PROP) on sponge determinism.
+//
+// Beats:
+//   1. Build a KeccakSponge with rate=136 bytes.
+//   2. Absorb 4 bytes [0xAA, 0xBB, 0xCC, 0xDD] twice.
+//   3. Squeeze 32 bytes twice; assert both outputs are equal and length 32.
+//   4. Print ML_KEM_DRBG_PROP_OK on success.
+
+import "std/sec/asymmetric/fips203_ml_kem_drbg_sponge.oo";
+
+pub fn main() {
+    let mut sp1: KeccakSponge = keccak_sponge_new(136);
+    let mut input: List[Int] = list_new();
+    input = list_push(input, 170);
+    input = list_push(input, 187);
+    input = list_push(input, 204);
+    input = list_push(input, 221);
+    keccak_sponge_absorb(sp1, input);
+    let out1: List[Int] = keccak_sponge_squeeze(sp1, 32);
+    let mut sp2: KeccakSponge = keccak_sponge_new(136);
+    keccak_sponge_absorb(sp2, input);
+    let out2: List[Int] = keccak_sponge_squeeze(sp2, 32);
+    let n1: Int = out1.len();
+    let n2: Int = out2.len();
+    if n1 != 32 {
+        println("FAIL out1 len");
+        return;
+    }
+    if n2 != 32 {
+        println("FAIL out2 len");
+        return;
+    }
+    let mut k: Int = 0;
+    while k < 32 {
+        if list_get(out1, k) != list_get(out2, k) {
+            println("FAIL non-deterministic");
+            return;
+        }
+        k = k + 1;
+    }
+    println("ML_KEM_DRBG_PROP_OK");
+}
