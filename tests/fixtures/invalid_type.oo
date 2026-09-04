@@ -1,0 +1,13 @@
+// # Malformed Type Fixture
+//
+// Logline: Invalid module assigning string literal to typed Int variable.
+//
+// Setup: Typechecking must fail closed with type mismatch error.
+//
+// Beats:
+//   1. Assign incompatible string value to integer binding.
+
+pub fn broken_types() -> Int {
+    let bad_val: Int = "not_an_integer";
+    return bad_val;
+}

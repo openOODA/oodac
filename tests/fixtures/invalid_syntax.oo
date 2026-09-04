@@ -1,0 +1,12 @@
+// # Malformed Syntax Fixture
+//
+// Logline: Invalid module with unbalanced braces and illegal syntax.
+//
+// Setup: Parsing must fail closed with syntax error.
+//
+// Beats:
+//   1. Introduce unclosed token block.
+
+pub fn broken_syntax(x: Int) -> Int {
+    let y = x + (1 * ;
+    return y;

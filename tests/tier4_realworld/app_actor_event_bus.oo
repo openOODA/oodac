@@ -1,0 +1,60 @@
+// # Actor Event Bus Router
+//
+// Logline: Dispatches typed event variants across bounded actor message channels.
+//
+// Setup: Pure compute with exhaustive algebraic pattern matching and Result types.
+//
+// Beats:
+//   1. Declare BusEvent sum type variants.
+//   2. Define BusStats telemetry accumulator struct.
+//   3. Route events with exhaustive match and error handling.
+
+pub type BusEvent = NetEvent | DiskEvent | TickEvent;
+
+pub type BusStats = struct {
+    net_count: Int,
+    disk_count: Int,
+    tick_count: Int
+};
+
+pub fn bus_init_stats() -> BusStats {
+    return BusStats {
+        net_count: 0,
+        disk_count: 0,
+        tick_count: 0
+    };
+}
+
+pub fn bus_dispatch_event(stats: BusStats, ev: BusEvent) -> BusStats {
+    let next_stats = match ev {
+        NetEvent => BusStats {
+            net_count: stats.net_count + 1,
+            disk_count: stats.disk_count,
+            tick_count: stats.tick_count
+        },
+        DiskEvent => BusStats {
+            net_count: stats.net_count,
+            disk_count: stats.disk_count + 1,
+            tick_count: stats.tick_count
+        },
+        TickEvent => BusStats {
+            net_count: stats.net_count,
+            disk_count: stats.disk_count,
+            tick_count: stats.tick_count + 1
+        }
+    };
+    return next_stats;
+}
+
+pub fn bus_process_batch(initial: BusStats, count: Int) -> Result[Int, String] {
+    if count < 0 {
+        return Err("Invalid negative batch count");
+    }
+    let mut s = initial;
+    let mut i = 0;
+    while i < count {
+        s = bus_dispatch_event(s, NetEvent);
+        i = i + 1;
+    }
+    return Ok(s.net_count);
+}

@@ -1,0 +1,50 @@
+// # Cryptographic Merkle Pipeline
+//
+// Logline: Computes Merkle tree block digests and verifies cryptographic proofs.
+//
+// Setup: Pure compute with deterministic ARC memory management.
+//
+// Beats:
+//   1. Declare Merkle node ADT and block header struct.
+//   2. Compute leaf digest from integer payload.
+//   3. Combine branch digests with formal contract.
+//   4. Verify Merkle proof path against root digest.
+
+pub type MerkleNode = Leaf(Int) | Empty;
+
+pub type BlockHeader = struct {
+    index: Int,
+    merkle_root: Int,
+    timestamp: Int
+};
+
+pub fn crypto_hash_leaf(data: Int) -> Int
+requires data >= 0
+ensures result >= data
+spec "Computes non-decreasing cryptographic leaf hash under QF_LIA"
+{
+    return data * 31 + 7;
+}
+
+pub fn crypto_combine_hashes(left: Int, right: Int) -> Int
+requires left >= 0
+ensures result >= left
+spec "Combines left and right branch digests"
+{
+    let combined = left * 13 + right * 7;
+    return combined;
+}
+
+pub fn crypto_verify_proof(leaf: Int, proof_sibling: Int, expected_root: Int) -> Bool {
+    let computed_leaf = crypto_hash_leaf(leaf);
+    let computed_root = crypto_combine_hashes(computed_leaf, proof_sibling);
+    return computed_root == expected_root;
+}
+
+pub fn crypto_create_header(idx: Int, root: Int, ts: Int) -> BlockHeader {
+    return BlockHeader {
+        index: idx,
+        merkle_root: root,
+        timestamp: ts
+    };
+}

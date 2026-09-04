@@ -1,0 +1,14 @@
+// # Valid Capability Borrow Fixture
+//
+// Logline: Valid module exercising capability reference borrowing syntax.
+//
+// Setup: Receives borrowed capability tokens &FsReadCap and &ProcessCap.
+//
+// Beats:
+//   1. Inspect parameters.
+//   2. Return success code 0.
+
+pub fn execute_with_caps(fs: &FsReadCap, proc: &ProcessCap) -> Int {
+    let _active: Bool = true;
+    return 0;
+}

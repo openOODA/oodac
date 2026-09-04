@@ -1,0 +1,20 @@
+// # Valid ADT Pattern Match Fixture
+//
+// Logline: Valid module demonstrating algebraic data types and exhaustive match.
+//
+// Setup: Pure compute.
+//
+// Beats:
+//   1. Declare sum type variants.
+//   2. Match over variants and return evaluated integer tag.
+
+pub type Command = Start | Stop | Pause;
+
+pub fn eval_command(cmd: Command) -> Int {
+    let code = match cmd {
+        Start => 1,
+        Stop => 2,
+        Pause => 3
+    };
+    return code;
+}

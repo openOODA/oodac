@@ -1,0 +1,13 @@
+// # Illegal Struct Trailing Comma Fixture
+//
+// Logline: Violates Pillar 10 and RULES.oot zero struct trailing comma rule.
+//
+// Setup: Parsing must reject trailing comma before struct closing brace.
+//
+// Beats:
+//   1. Declare struct with illegal trailing comma.
+
+pub type User = struct {
+    id: Int,
+    name: String,
+};

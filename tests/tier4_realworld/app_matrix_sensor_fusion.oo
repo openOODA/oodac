@@ -1,0 +1,51 @@
+// # Boyd E-M Sensor Fusion Engine
+//
+// Logline: Processes multi-axis IMU telemetry with deterministic linear arena bounds and formal contracts.
+//
+// Setup: Pure compute adhering to Boyd's E-M optimization metric.
+//
+// Beats:
+//   1. Declare Telemetry3D and FusionState structs with zero trailing commas.
+//   2. Apply Kalman-style complementary filter on telemetry axes.
+//   3. Assert sensor bounds and energy maneuverability invariants.
+
+pub type Telemetry3D = struct {
+    accel_x: Int,
+    accel_y: Int,
+    accel_z: Int
+};
+
+pub type FusionState = struct {
+    filtered_x: Int,
+    filtered_y: Int,
+    confidence: Int
+};
+
+pub fn sensor_filter_axis(prev: Int, curr: Int) -> Int
+requires prev >= 0
+ensures result >= prev
+spec "Applies non-decreasing complementary filter step"
+{
+    let weight_prev = prev * 8;
+    let weight_curr = curr * 2;
+    let filtered = (weight_prev + weight_curr) / 10;
+    return filtered;
+}
+
+pub fn sensor_fuse_step(prev_state: FusionState, telem: Telemetry3D) -> FusionState {
+    let next_x = sensor_filter_axis(prev_state.filtered_x, telem.accel_x);
+    let next_y = sensor_filter_axis(prev_state.filtered_y, telem.accel_y);
+    return FusionState {
+        filtered_x: next_x,
+        filtered_y: next_y,
+        confidence: 95
+    };
+}
+
+pub fn sensor_init_state() -> FusionState {
+    return FusionState {
+        filtered_x: 0,
+        filtered_y: 0,
+        confidence: 100
+    };
+}

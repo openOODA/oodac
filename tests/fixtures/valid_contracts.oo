@@ -1,0 +1,18 @@
+// # Valid Contract Specification Fixture
+//
+// Logline: Valid module declaring formal contract clauses requires and ensures.
+//
+// Setup: Pure compute with input validation.
+//
+// Beats:
+//   1. Validate precondition x >= 0.
+//   2. Compute doubled value.
+//   3. Assert postcondition result >= x.
+
+pub fn safe_double(x: Int) -> Int
+requires x >= 0
+ensures result >= x
+spec "Doubles non-negative integer under QF_LIA contract"
+{
+    return x * 2;
+}

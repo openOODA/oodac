@@ -1,0 +1,8 @@
+// # Malformed Academy Header Inline Beats Fixture
+// Logline: Non-standard single line inline beats header.
+// Setup: Pure compute.
+// Beats: 1. Inline beat one. 2. Inline beat two.
+
+pub fn sample_inline_header() -> Int {
+    return 42;
+}

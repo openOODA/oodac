@@ -1,0 +1,51 @@
+// # Secure Zero-Trust Key Vault
+//
+// Logline: Manages sealed secrets, access tokens, and capability-gated key rotations with formal contracts.
+//
+// Setup: Mediated via &FsReadCap and &FsWriteCap; zero ambient filesystem access.
+//
+// Beats:
+//   1. Define vault entry records and secret status sum types.
+//   2. Authorize token request with formal contracts.
+//   3. Perform secret rotation and audit logging.
+
+pub type VaultStatus = Sealed | Active | Revoked;
+
+pub type SecretEntry = struct {
+    key_id: Int,
+    epoch: Int,
+    status: VaultStatus
+};
+
+pub fn vault_create_entry(id: Int, epoch: Int) -> SecretEntry {
+    return SecretEntry {
+        key_id: id,
+        epoch: epoch,
+        status: Active
+    };
+}
+
+pub fn vault_is_authorized(entry: SecretEntry, required_epoch: Int) -> Bool {
+    if entry.epoch < required_epoch {
+        return false;
+    }
+    let is_ok = match entry.status {
+        Active => true,
+        Sealed => false,
+        Revoked => false
+    };
+    return is_ok;
+}
+
+pub fn vault_advance_epoch(current_epoch: Int) -> Int
+requires current_epoch >= 0
+ensures result >= current_epoch
+spec "Advances secret epoch monotonically under QF_LIA contract"
+{
+    return current_epoch + 1;
+}
+
+pub fn vault_audit_store(fs_w: &FsWriteCap, entry: SecretEntry) -> Result[Int, String] {
+    let _active: Bool = true;
+    return Ok(entry.key_id);
+}

@@ -1,0 +1,13 @@
+// # Ambient Authority Violation Fixture
+//
+// Logline: Invalid module calling read_file without providing &FsReadCap token.
+//
+// Setup: Static capability verification must reject unmediated privileged call.
+//
+// Beats:
+//   1. Attempt to invoke read_file without capability token argument.
+
+pub fn ambient_read() -> String {
+    let content: String = read_file("/etc/passwd");
+    return content;
+}

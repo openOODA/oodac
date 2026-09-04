@@ -1,0 +1,12 @@
+// # Malformed Academy Header Blank Lines Fixture
+
+// Logline: Defective header containing raw un-commented blank line.
+
+// Setup: Pure compute.
+
+// Beats:
+//   1. First beat.
+
+pub fn sample_blank_header() -> Int {
+    return 100;
+}

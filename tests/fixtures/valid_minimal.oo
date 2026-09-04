@@ -1,0 +1,13 @@
+// # Valid Minimal OpenOODA Fixture
+//
+// Logline: Minimal standalone valid module for parser and typechecker baseline.
+//
+// Setup: Pure computation without external dependencies.
+//
+// Beats:
+//   1. Define identity function.
+//   2. Return incremented integer value.
+
+pub fn compute_identity(x: Int) -> Int {
+    return x + 1;
+}
