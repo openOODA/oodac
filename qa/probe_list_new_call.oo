@@ -1,0 +1,17 @@
+// # Probe: list_new at a List[String] call site
+//
+// Logline: list_new() as a List[String] argument must emit OoSList, not OoIList.
+//
+// Setup: No caps. take_s only accepts List[String]. stdout is 0.
+//
+// Beats:
+//   1. Call take_s(list_new()) so the callee formal is the only type witness.
+//   2. Print list_len of that empty string list.
+
+fn take_s(xs: List[String]) -> Int {
+    return list_len(xs);
+}
+
+pub fn main() {
+    println(take_s(list_new()).to_string());
+}

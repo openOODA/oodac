@@ -41,6 +41,7 @@ pub fn c_emit_fn_mode(toks: List[String], pos: Int, n: Int, fn_env: String, mode
     let mut plist = "";
     let mut list_formals: List[String] = list_new();
     let mut first = true;
+    let mut aci = 0;
     // CAP-G3: type-driven main grants encoded as "name=suffix;name=suffix;"
     let mut mcap = "";
     while p < n { let pk: String = c_tokk(toks, p); if pk == "RPAREN" { p = p + 1; break; }
@@ -63,7 +64,7 @@ pub fn c_emit_fn_mode(toks: List[String], pos: Int, n: Int, fn_env: String, mode
                 if orig_was_ptr { env = c_env_put(env, "__ptr__" + pname, "1"); }
                 if tp < n && c_tokk(toks, tp) == "IDENT" {
                     let tn: String = c_tokt(toks, tp);
-                    if tn == "List" { let lk: String = c_peek_list_elem2(toks, tp, n); env = c_env_put(env, pname, lk); }
+                    if tn == "List" { let lk: String = c_peek_list_elem2(toks, tp, n); env = c_env_put(env, pname, lk); out_fn = c_env_put(out_fn, "__argk__" + fn_name + "." + aci.to_string(), lk); }
                     if tn == "String" { env = c_env_put(env, pname, "T"); }
                     if tn == "Float" || tn == "f64" { env = c_env_put(env, pname, "F"); }
                     if tn == "Result" || tn == "Option" {
@@ -94,6 +95,7 @@ pub fn c_emit_fn_mode(toks: List[String], pos: Int, n: Int, fn_env: String, mode
                 env = c_env_put(env, "__list_formal__" + pname, "1");
                 list_formals = list_push(list_formals, pname);
             }
+            aci = aci + 1;
             if first { plist = pty + " " + c_c_ident(pname); first = false; } else { plist = plist + ", " + pty + " " + c_c_ident(pname); }
         } else {
             p = p + 1;

@@ -104,7 +104,7 @@ pub fn c_emit_primary_c(toks: List[String], pos: Int, n: Int, env: String) -> Li
         }
         if p < n && c_tokk(toks, p) == "LPAREN" {
             p = p + 1;
-            let ap: List[String] = c_emit_call_args(toks, p, n, env);
+            let ap: List[String] = c_emit_call_args(toks, p, n, c_env_put(env, "__callee__", t));
             p = parse_int(list_get(ap, 0));
             let args = list_get(ap, 1);
             let a0 = list_get(ap, 2);

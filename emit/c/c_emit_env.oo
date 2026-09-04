@@ -152,6 +152,14 @@ if cv != "" { return cv;
     return c_c_ident(name);
 }
 
+pub fn c_arg_env(env: String, ac: Int) -> String {
+    let callee: String = c_env_get(env, "__callee__");
+    if callee == "" { return env; }
+    let ak: String = c_env_get(env, "__argk__" + callee + "." + ac.to_string());
+    if ak == "" { return env; }
+    return c_env_put(env, "__ann__", ak);
+}
+
 pub fn c_pack_pos_env(p: Int, e: String) -> List[String] {
     let mut o: List[String] = list_new();
     o = list_push(o, p.to_string());

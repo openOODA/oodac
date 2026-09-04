@@ -79,7 +79,7 @@ pub fn c_emit_call_args(toks: List[String], pos: Int, n: Int, env: String) -> Li
                 } else { args = args + ", void";
                 }
             } else {
-                let pru: List[String] = c_emit_expr_c(toks, p, n, env);
+                let pru: List[String] = c_emit_expr_c(toks, p, n, c_arg_env(env, ac));
                 if list_len(pru) < 2 { println("ERR\tc_emit\tcall-arg pack");
                 process_exit(1);
                 }
@@ -98,7 +98,7 @@ pub fn c_emit_call_args(toks: List[String], pos: Int, n: Int, env: String) -> Li
                 }
             }
         } else {
-            let pr: List[String] = c_emit_expr_c(toks, p, n, env);
+            let pr: List[String] = c_emit_expr_c(toks, p, n, c_arg_env(env, ac));
             if list_len(pr) < 2 { println("ERR\tc_emit\tcall-arg pack");
             process_exit(1);
             }
