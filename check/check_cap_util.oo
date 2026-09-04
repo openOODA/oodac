@@ -61,7 +61,7 @@ pub fn is_sealed_fs(name: String) -> Bool {
 // Live-RAM RASP: proc_mem_read is SysCap (real-RAM /proc/self/mem, not TimeCap).
 // No legacy supersede: callers must use the granular preferred kind (ProcessCap). &SysCap does NOT satisfy ProcessCap.
 pub fn sealed_sys_kind_of(name: String) -> String {
-    if name == "sys_exec" || name == "process_exec" { return "ProcessCap";
+    if name == "sys_exec" || name == "process_exec" || name == "sys_exec_wait" { return "ProcessCap";
     }
     if name == "exec" { return "ProcessCap";
     }

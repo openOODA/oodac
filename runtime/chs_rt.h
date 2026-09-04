@@ -77,6 +77,7 @@ int ffi_verify_signature(const char *path);
 
 OoSList oo_sys_args(long long cap);
 OoResS oo_sys_exec(long long cap, int argc, OoStr *argv);
+OoResI oo_sys_exec_wait(long long cap, OoStr prog, OoSList argv);
 OoResS oo_sys_spawn(long long cap, OoStr cmd);
 OoResS oo_sys_wait(long long cap, long long pid);
 OoResS oo_sys_kill(long long cap, long long pid, long long sig);

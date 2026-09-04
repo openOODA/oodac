@@ -62,8 +62,8 @@ pub fn c_mono_emit_unified_tu_sys(fs: &FsWriteCap, sys: &ProcessCap, reg: List[S
     let src: String = c_mono_unit_emit_source(reg);
     let r_w: Result[Void, String] = write_file(fs, out_path, src);
     if r_w.is_err() {
-        let cmd: String = "mkdir -p $(dirname " + shell_sq(out_path) + ") && cat << 'EOF_OO_TYPES' > " + shell_sq(out_path) + "\n" + src + "\nEOF_OO_TYPES\n";
-        let _r: Result[String, String] = sys_exec(sys, "sh", "-c", cmd);
+        println("ERR\temit\twrite unified tu failed");
+        process_exit(1);
     }
 }
 

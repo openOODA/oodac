@@ -5,7 +5,7 @@
 // Setup: C-path only. Dispatch check, build, emit-c, tokens.
 //
 // Beats:
-//   1. Unpack cmd/path/out.
+//   1. Unpack cmd/path/out/backend/json/plain.
 //   2. Dispatch check, build, emit-c family, or tokens.
 //   3. Unknown cmd exits 2.
 
@@ -18,22 +18,21 @@ import "cli/cli_parse.oo";
 import "cli/cli_build.oo";
 import "cli/cli_emit.oo";
 
-pub fn main(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, args: List[String]) {
+pub fn main(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env: &EnvCap, args: List[String]) {
     let a: List[String] = parse_cli_argv(fs_r, fs_w, sys, args);
     let cmd: String = list_get(a, 0);
     let path: String = list_get(a, 1);
     let out_arg: String = list_get(a, 2);
     let backend: String = list_get(a, 3);
     let json_errors: Bool = list_get(a, 4) == "1";
-    let is_dbg: Bool = false;
-    if list_len(a) > 11 { is_dbg = list_get(a, 11) == "1"; }
+    let is_plain: Bool = list_get(a, 5) == "1";
 
     if cmd == "build" {
-        run_build_san(fs_r, fs_w, sys, path, out_arg, backend);
+        run_build_san(fs_r, fs_w, sys, env, path, out_arg, backend);
         return;
     }
     if cmd == "emit-c" || cmd == "emit-protos" || cmd == "emit-bodies" || cmd == "emit-preamble" {
-        run_emit_c_family(fs_r, cmd, path, is_dbg);
+        run_emit_c_family(fs_r, cmd, path, is_plain);
         return;
     }
     if cmd == "check" {

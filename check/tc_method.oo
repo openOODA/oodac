@@ -44,6 +44,8 @@ if pos + 3 >= n { return 0;
             }
             if !matched_rparen { cont = false;
             }
+        } else if p + 2 < n && field_at(list_get(toks, p + 1), 0) == "DOT" && field_at(list_get(toks, p + 2), 0) == "IDENT" {
+            p = p + 2;
         } else {
             cont = false;
         }

@@ -76,7 +76,7 @@ pub fn c_is_res_v_call(name: String) -> Bool {
 }
 
 pub fn c_is_slist_call(name: String) -> Bool {
-    if name == "oo_slist_new" || name == "oo_slist_push" || name == "str_split" { return true;
+    if name == "oo_slist_new" || name == "oo_slist_push" || name == "str_split" || name == "list_slice" || name == "oo_slist_slice" { return true;
     }
     if name == "tokenize_lines" || name == "collect_tokens" || name == "try_scan_ws" || name == "try_scan_string" { return true;
     }

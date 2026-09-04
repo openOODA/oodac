@@ -250,6 +250,48 @@ OoStr oo_slist_get(OoSList l, long long i) {
 
 long long oo_slist_len(OoSList l) { return l.len; }
 
+OoSList oo_slist_slice(OoSList l, long long start, long long end) {
+  OoSList n = oo_slist_new();
+  long long i;
+  if (start < 0) start = 0;
+  if (end > l.len) end = l.len;
+  if (start >= end) return n;
+  for (i = start; i < end; i++) {
+    OoSList next = oo_slist_push(n, l.data[i]);
+    oo_slist_release(n);
+    n = next;
+  }
+  return n;
+}
+
+OoIList oo_ilist_slice(OoIList l, long long start, long long end) {
+  OoIList n = oo_ilist_new();
+  long long i;
+  if (start < 0) start = 0;
+  if (end > l.len) end = l.len;
+  if (start >= end) return n;
+  for (i = start; i < end; i++) {
+    OoIList next = oo_ilist_push(n, l.data[i]);
+    oo_ilist_release(n);
+    n = next;
+  }
+  return n;
+}
+
+OoFList oo_flist_slice(OoFList l, long long start, long long end) {
+  OoFList n = oo_flist_new();
+  long long i;
+  if (start < 0) start = 0;
+  if (end > l.len) end = l.len;
+  if (start >= end) return n;
+  for (i = start; i < end; i++) {
+    OoFList next = oo_flist_push(n, l.data[i]);
+    oo_flist_release(n);
+    n = next;
+  }
+  return n;
+}
+
 int oo_slist_eq(OoSList a, OoSList b) {
   if (a.len != b.len) return 0;
   if (a.data == b.data) return 1;

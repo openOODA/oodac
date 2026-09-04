@@ -93,6 +93,10 @@ pub fn c_emit_ident_stmt(toks: List[String], pos: Int, n: Int, env: String) -> L
         p = c_emit_println(toks, p, n, e);
         return c_pack_pos_env(p, e);
     }
+    if id == "print" {
+        p = c_emit_print_args(toks, p, n, e, false);
+        return c_pack_pos_env(p, e);
+    }
     if id == "assert_eq" || id == "assert_ne" || id == "assert" {
         let mut p1: Int = p + 1;
         if p1 < n && c_tokk(toks, p1) == "BANG" { p1 = p1 + 1; }

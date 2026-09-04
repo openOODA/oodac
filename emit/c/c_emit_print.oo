@@ -16,6 +16,10 @@ import "c_emit_secret.oo";
 import "c_emit_secret_prop.oo";
 
 pub fn c_emit_println(toks: List[String], pos: Int, n: Int, env: String) -> Int {
+    return c_emit_print_args(toks, pos, n, env, true);
+}
+
+pub fn c_emit_print_args(toks: List[String], pos: Int, n: Int, env: String, with_nl: Bool) -> Int {
     let mut p = pos + 1;
     if p < n && c_tokk(toks, p) == "LPAREN" { p = p + 1; }
     let mut cont = true;
@@ -112,7 +116,7 @@ pub fn c_emit_println(toks: List[String], pos: Int, n: Int, env: String) -> Int 
     }
     if p < n && c_tokk(toks, p) == "RPAREN" { p = p + 1; }
     if p < n && c_tokk(toks, p) == "SEMI" { p = p + 1; }
-    println("  oo_println();");
+    if with_nl { println("  oo_println();"); }
     return p;
 }
 

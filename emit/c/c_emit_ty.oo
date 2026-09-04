@@ -56,6 +56,8 @@ if k == "" { k = "I";
 
 // C type for known call results ("" = unknown).
 pub fn c_call_result_ty(name: String) -> String {
+    if name == "sys_exec_wait" || name == "oo_sys_exec_wait" { return "OoResI";
+    }
     if c_is_res_s_call(name) { return "OoResS";
 }
     if c_is_res_v_call(name) {

@@ -2,14 +2,16 @@
 //
 // Logline: Stream C for emit-c, emit-preamble, emit-protos, and emit-bodies.
 //
-// Setup: load_expand and c_emit. One concat emit.
+// Setup: load_expand and c_emit. One concat emit. No env fork.
 //
 // Beats:
 //   1. Map cmd to mode once/preamble/protos/bodies.
 //   2. Load imports, tokenize each file with LINEFILE, stream C.
 
+import "lex/token_fmt.oo";
 import "ast/load_import.oo";
-import "emit/c/ANCHOR.oo";
+import "emit/c/c_emit.oo";
+import "emit/c/c_emit_helpers.oo";
 
 pub fn run_emit_c_family(fs: &FsReadCap, cmd: String, path: String, is_plain: Bool) {
     let mut m: String = "once";

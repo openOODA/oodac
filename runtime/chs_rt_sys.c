@@ -1,5 +1,6 @@
 #include "chs_rt.h"
 #include <errno.h>
+#include <signal.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -82,7 +83,7 @@ int oo_is_policy_path(const char *p) {
  * child process's verdict). Captured output is bounded to OO_SYS_EXEC_MAX_OUT
  * bytes; a child that floods the pipe will see EPIPE on its next write.
  * The returned OoStr is ref-counted so callers can oo_str_release it. */
-#define OO_SYS_EXEC_MAX_OUT (1u << 20)
+#define OO_SYS_EXEC_MAX_OUT (32u << 20)
 
 OoResS oo_sys_exec(long long cap, int argc, OoStr *argv) {
   OoResS r;
@@ -121,25 +122,14 @@ OoResS oo_sys_exec(long long cap, int argc, OoStr *argv) {
     av[i] = ac;
   }
   av[argc] = NULL;
-  /* Allocate the capture buffer through the ref-counted payload allocator
-   * so that oo_str_release / oo_release_OoResS work without UB. */
-  out_buf = oo_str_alloc_payload(OO_SYS_EXEC_MAX_OUT);
-  if (!out_buf) {
-    for (i = 0; i < argc; i++) free(av[i]);
-    free(av); close(pipefd[0]); close(pipefd[1]);
-    return r;
-  }
   pid = fork();
   if (pid < 0) {
     for (i = 0; i < argc; i++) free(av[i]);
     free(av);
-    /* out_buf has an OoStrHeader in front of it; release via oo_str_release. */
-    { OoStr tmp; tmp.data = out_buf; tmp.len = 0; oo_str_release(tmp); }
     close(pipefd[0]); close(pipefd[1]);
     return r;
   }
   if (pid == 0) {
-    /* Child: redirect stdout to the write-end of the pipe, then exec. */
     close(pipefd[0]);
     if (dup2(pipefd[1], STDOUT_FILENO) < 0) _exit(126);
     close(pipefd[1]);
@@ -147,26 +137,129 @@ OoResS oo_sys_exec(long long cap, int argc, OoStr *argv) {
     execvp(av[0], av);
     _exit(127);
   }
-  /* Parent: close the write end so EOF arrives when the child exits. */
   close(pipefd[1]);
-  for (;;) {
-    ssize_t got = read(pipefd[0], out_buf + out_n, OO_SYS_EXEC_MAX_OUT - out_n);
-    if (got <= 0) break;
-    out_n += (size_t)got;
-    if (out_n >= OO_SYS_EXEC_MAX_OUT) break;
-  }
-  close(pipefd[0]);
-  for (i = 0; i < argc; i++) free(av[i]);
-  free(av);
-  if (waitpid(pid, &st, 0) < 0) {
-    OoStr tmp; tmp.data = out_buf; tmp.len = 0; oo_str_release(tmp);
+  {
+    size_t capn = 1u << 20;
+    char *grow = (char *)malloc(capn);
+    if (!grow) {
+      kill(pid, SIGKILL);
+      close(pipefd[0]);
+      for (i = 0; i < argc; i++) free(av[i]);
+      free(av);
+      waitpid(pid, &st, 0);
+      return r;
+    }
+    for (;;) {
+      if (out_n == capn) {
+        size_t ncap;
+        char *nb;
+        if (capn >= OO_SYS_EXEC_MAX_OUT) {
+          kill(pid, SIGKILL);
+          break;
+        }
+        ncap = capn * 2;
+        if (ncap > OO_SYS_EXEC_MAX_OUT) ncap = OO_SYS_EXEC_MAX_OUT;
+        nb = (char *)realloc(grow, ncap);
+        if (!nb) {
+          kill(pid, SIGKILL);
+          break;
+        }
+        grow = nb;
+        capn = ncap;
+      }
+      {
+        ssize_t got = read(pipefd[0], grow + out_n, capn - out_n);
+        if (got <= 0) break;
+        out_n += (size_t)got;
+      }
+    }
+    close(pipefd[0]);
+    for (i = 0; i < argc; i++) free(av[i]);
+    free(av);
+    if (waitpid(pid, &st, 0) < 0) {
+      free(grow);
+      return r;
+    }
+    out_buf = oo_str_alloc_payload(out_n > 0 ? out_n : 1);
+    if (!out_buf) {
+      free(grow);
+      return r;
+    }
+    if (out_n > 0) memcpy(out_buf, grow, out_n);
+    free(grow);
+    if (WIFEXITED(st) && WEXITSTATUS(st) == 0) r.ok = 1;
+    r.val.data = out_buf;
+    r.val.len = (long long)out_n;
     return r;
   }
-  if (WIFEXITED(st) && WEXITSTATUS(st) == 0) {
-    r.ok = 1;
+}
+
+/* Inherit stdio, wait, return the exit code. Distinct from oo_sys_exec (captures stdout, Ok only on 0). */
+OoResI oo_sys_exec_wait(long long cap, OoStr prog, OoSList argv) {
+  OoResI r;
+  char **av;
+  int i, st, argc;
+  long long k;
+  pid_t pid;
+  oo_cap_require_process(cap, "sys_exec_wait");
+  r.ok = 0;
+  r.val = 0;
+  r.err = oo_str_lit("sys_exec_wait failed");
+  if (!prog.data || prog.len <= 0) return r;
+  for (k = 0; k < prog.len; k++) {
+    if (prog.data[k] == '\0') return r;
   }
-  r.val.data = out_buf;
-  r.val.len = (long long)out_n;
+  if (argv.len < 0) return r;
+  if (argv.len > 0 && !argv.data) return r;
+  argc = 1 + (int)argv.len;
+  av = (char **)calloc((size_t)argc + 1, sizeof(char *));
+  if (!av) return r;
+  av[0] = (char *)malloc((size_t)prog.len + 1);
+  if (!av[0]) { free(av); return r; }
+  memcpy(av[0], prog.data, (size_t)prog.len);
+  av[0][prog.len] = '\0';
+  for (i = 0; i < (int)argv.len; i++) {
+    if (!argv.data[i].data || argv.data[i].len <= 0) {
+      for (int j = 0; j <= i; j++) free(av[j]);
+      free(av);
+      return r;
+    }
+    for (k = 0; k < argv.data[i].len; k++) {
+      if (argv.data[i].data[k] == '\0') {
+        for (int j = 0; j <= i; j++) free(av[j]);
+        free(av);
+        return r;
+      }
+    }
+    av[i + 1] = (char *)malloc((size_t)argv.data[i].len + 1);
+    if (!av[i + 1]) {
+      for (int j = 0; j <= i; j++) free(av[j]);
+      free(av);
+      return r;
+    }
+    memcpy(av[i + 1], argv.data[i].data, (size_t)argv.data[i].len);
+    av[i + 1][argv.data[i].len] = '\0';
+  }
+  av[argc] = NULL;
+  pid = fork();
+  if (pid < 0) {
+    for (i = 0; i < argc; i++) free(av[i]);
+    free(av);
+    return r;
+  }
+  if (pid == 0) {
+    oo_child_filter_env();
+    execvp(av[0], av);
+    _exit(127);
+  }
+  for (i = 0; i < argc; i++) free(av[i]);
+  free(av);
+  if (waitpid(pid, &st, 0) < 0) return r;
+  r.ok = 1;
+  r.err = oo_str_lit("");
+  if (WIFEXITED(st)) r.val = (long long)WEXITSTATUS(st);
+  else if (WIFSIGNALED(st)) r.val = 128LL + (long long)WTERMSIG(st);
+  else r.val = 1;
   return r;
 }
 

@@ -2,44 +2,77 @@
 //
 // Logline: emit-c via ProcessCap argv, write C under the jail, gcc argv.
 //
-// Setup: Host binary from the tree. C backend only. No sh -c. No OpenSSL fork.
+// Setup: Host is OODA_COMPILER, else OODAC_BIN, else /proc/self/exe. C backend only. No sh -c.
 //
 // Beats:
 //   1. Refuse non-c backends.
 //   2. mkdir argv; sys_exec host emit-c; write_file the C.
 //   3. One gcc argv with chs_rt.
 
-fn tree_root(fs: &FsReadCap) -> String {
-    if path_exists(fs, "oodac/runtime/chs_rt.c") { return "oodac"; }
-    if path_exists(fs, "runtime/chs_rt.c") { return "."; }
+fn compiler_host(env: &EnvCap) -> String {
+    let oc: Result[String, String] = env_get(env, "OODA_COMPILER");
+    if oc.is_ok() {
+        if oc.val != "" { return oc.val; }
+    }
+    let ob: Result[String, String] = env_get(env, "OODAC_BIN");
+    if ob.is_ok() {
+        if ob.val != "" { return ob.val; }
+    }
+    return "/proc/self/exe";
+}
+
+fn path_parent(p: String) -> String {
+    let n: Int = chars_len(p);
+    let mut i: Int = n;
+    while i > 0 {
+        i = i - 1;
+        if char_at(p, i) == "/" {
+            if i == 0 { return "/"; }
+            return str_slice(p, 0, i);
+        }
+    }
+    return ".";
+}
+
+fn runtime_dir(fs_r: &FsReadCap, host: String) -> String {
+    if path_exists(fs_r, "oodac/runtime/chs_rt.c") { return "oodac/runtime"; }
+    let cand: String = path_parent(path_parent(host)) + "/runtime";
+    if path_exists(fs_r, cand + "/chs_rt.c") { return cand; }
     println("ERR\tbuild\tchs_rt missing");
     process_exit(1);
     return "";
 }
 
-pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, path: String, out_arg: String, backend: String) {
+fn cache_dir(env: &EnvCap) -> String {
+    let wd: Result[String, String] = env_get(env, "OODA_FS_WRITEDIR");
+    if wd.is_ok() {
+        if wd.val != "" { return wd.val + "/.ooda-cache/ooda-tmp"; }
+    }
+    return ".ooda-cache/ooda-tmp";
+}
+
+pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env: &EnvCap, path: String, out_arg: String, backend: String) {
     let mut out: String = path + ".bin";
     if out_arg != "" { out = out_arg; }
     if backend != "" && backend != "c" {
         println("ERR\tbuild\tbackend residual: " + backend);
         process_exit(2);
     }
+    let host: String = compiler_host(env);
+    let rt: String = runtime_dir(fs_r, host);
+    let tmp_dir: String = cache_dir(env);
     let tmp_h: String = crypto_sha256_internal(out + ":" + path);
-    let tmp_c: String = ".ooda-cache/ooda-tmp/all_" + str_slice(tmp_h, 0, 16) + ".c";
-    let mk: Result[String, String] = sys_exec(sys, "mkdir", "-p", ".ooda-cache/ooda-tmp");
+    let tmp_c: String = tmp_dir + "/all_" + str_slice(tmp_h, 0, 16) + ".c";
+    let mk: Result[String, String] = sys_exec(sys, "mkdir", "-p", tmp_dir);
     if mk.is_err() {
         println("ERR\tbuild\tmkdir failed");
-        process_exit(1);
-    }
-    let root: String = tree_root(fs_r);
-    let host: String = root + "/bin/oodac_bin.core";
-    if !path_exists(fs_r, host) {
-        println("ERR\tbuild\tcompiler binary not found");
         process_exit(1);
     }
     let em: Result[String, String] = sys_exec(sys, host, "emit-c", path);
     if !em.is_ok() {
         println("ERR\tbuild\temit-c failed");
+        let emsg: String = em.val;
+        println(emsg);
         process_exit(1);
     }
     let wr: Result[Void, String] = write_file(fs_w, tmp_c, em.val);
@@ -47,7 +80,6 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, path
         println("ERR\tbuild\twrite C failed");
         process_exit(1);
     }
-    let rt: String = root + "/runtime";
     let r: Result[String, String] = sys_exec(sys, "gcc", "-O2", "-I" + rt, rt + "/chs_rt.c", tmp_c, "-frandom-seed=0", "-Wl,--build-id=none", "-lm", "-ldl", "-lpthread", "-o", out);
     if !r.is_ok() {
         println("ERR\tbuild\tgcc failed");

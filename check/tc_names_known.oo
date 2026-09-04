@@ -10,7 +10,7 @@
 //   3. Return false when the name is none of those.
 
 pub fn is_known_name(name: String) -> Bool {
-    if name == "println" || name == "eprintln" || name == "oo_print_str" { return true;
+    if name == "println" || name == "print" || name == "eprintln" || name == "oo_print_str" { return true;
     }
     if name == "assert_eq" { return true;
     }
@@ -32,7 +32,7 @@ pub fn is_known_name(name: String) -> Bool {
     }
     if name == "list_set" { return true;
     }
-    if name == "list_len" { return true;
+    if name == "list_len" || name == "list_slice" { return true;
     }
     if name == "list_new_int" { return true;
     }
@@ -66,7 +66,7 @@ pub fn is_known_name(name: String) -> Bool {
     // are product SECRETSINK aliases. Known so check reaches secret refuse.
     if name == "env_get" || name == "env_set" || name == "setenv" || name == "unsetenv" { return true;
     }
-    if name == "sys_exec" || name == "process_exec" { return true;
+    if name == "sys_exec" || name == "process_exec" || name == "sys_exec_wait" { return true;
     }
     // M12: time / entropy sealed builtins
     if name == "now_ms" { return true;
@@ -127,7 +127,7 @@ pub fn is_known_name(name: String) -> Bool {
         }
     if name == "oo_fs_is_dir" || name == "oo_sys_args" { return true;
     }
-    if name == "oo_str_eq" || name == "match_rparen" || name == "oo_file_size" || name == "oo_read_file" || name == "oo_write_file" || name == "oo_path_exists" || name == "oo_env_get" || name == "oo_sys_exec" { return true;
+    if name == "oo_str_eq" || name == "match_rparen" || name == "oo_file_size" || name == "oo_read_file" || name == "oo_write_file" || name == "oo_path_exists" || name == "oo_env_get" || name == "oo_sys_exec" || name == "oo_sys_exec_wait" { return true;
     }
     if name == "oo_emit_tmp_reset" || name == "oo_emit_tmp_enter" || name == "oo_emit_tmp_leave"
         || name == "oo_emit_tmp_release_print" || name == "oo_emit_tmp_own"

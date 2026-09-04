@@ -10,8 +10,6 @@
 //   3. O(1) in-memory and filesystem cache lookup verifying presence of source and object artifacts.
 //   4. Atomically stores compiled object artifacts into persistent content-addressable storage.
 
-import "types/str_escape.oo";
-
 pub fn c_cache_store_root() -> String {
     return ".ooda-cache/ast_store";
 }
@@ -48,8 +46,11 @@ pub fn c_cache_store_ast(sys: &ProcessCap, ast_hash: String, obj_path: String) -
     if chars_len(ast_hash) == 0 || chars_len(obj_path) == 0 { return false;
 }
     let dest: String = c_cache_store_path(ast_hash);
-    let cmd: String = "mkdir -p $(dirname " + shell_sq(dest) + ") && cp " + shell_sq(obj_path) + " " + shell_sq(dest);
-    let r: Result[String, String] = sys_exec(sys, "sh", "-c", cmd);
+    let prefix: String = str_slice(ast_hash, 0, 2);
+    let dir: String = c_cache_store_root() + "/" + prefix;
+    let mk: Result[String, String] = sys_exec(sys, "mkdir", "-p", dir);
+    if mk.is_err() { return false; }
+    let r: Result[String, String] = sys_exec(sys, "cp", obj_path, dest);
     return r.is_ok();
 }
 
@@ -103,8 +104,10 @@ pub fn c_cache_write_binary_manifest(fs: &FsWriteCap, sys: &ProcessCap, out: Str
     let body: String = out_stamp + "\n" + manifest_hash;
     let r_w: Result[Void, String] = write_file(fs, mfile, body);
     if r_w.is_err() {
-        let cmd: String = "mkdir -p .ooda-cache/manifests && cat << 'EOF_M' > " + shell_sq(mfile) + "\n" + body + "\nEOF_M\n";
-        let _r: Result[String, String] = sys_exec(sys, "sh", "-c", cmd);
+        let mk: Result[String, String] = sys_exec(sys, "mkdir", "-p", ".ooda-cache/manifests");
+        if mk.is_ok() {
+            let _w2: Result[Void, String] = write_file(fs, mfile, body);
+        }
     }
 }
 

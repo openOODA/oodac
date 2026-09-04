@@ -1,200 +1,97 @@
 // # Parse oodac CLI argv
 //
-// Logline: Walks argv for C-backend flags and positionals, then packs slots or exits.
+// Logline: Walk argv for C-backend cmd, path, and out. Residual flags exit.
 //
-// Setup: path_exists, file_size, shell_sq, sys_exec, and process_exit exist; main.oo imports this file and must keep that barrel.
+// Setup: path_exists and file_size on FsReadCap. Usage matches dispatched commands.
 //
 // Beats:
-//   1. Scan flags (backend, json, opt, lto, release, triple, pgo, sanitizers, debug, plain) then cmd, path, and out.
-//   2. Require a readable path under 64KiB or exit.
-//   3. Pack slots: cmd, path, out, backend, json-errors, json, triple, runtime-cap, opt, lto, release, debug, pgo-gen, pgo-use, sanitizers.
-
-fn san_combine(cur: String, add: String) -> String {
-    if cur == "" { return add; }
-    return cur + "," + add;
-}
+//   1. Accept --backend c, --json-errors, --plain, -o. Reject residual flags.
+//   2. Require a readable path under 64KiB.
+//   3. Pack cmd, path, out, backend, json-errors, plain.
 
 pub fn parse_cli_argv(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, args: List[String]) -> List[String] {
-    if list_len(args) < 1 { println("oodac: usage: tokens|check|build|emit-c|emit-protos|emit-bodies|emit-preamble <file>"); process_exit(2); }
+    let usage: String = "oodac: usage: tokens|check|build|emit-c|emit-protos|emit-bodies|emit-preamble <file>";
+    if list_len(args) < 1 {
+        println(usage);
+        process_exit(2);
+    }
     let mut cmd: String = "";
     let mut path: String = "";
     let mut out_arg: String = "";
     let mut backend: String = "c";
     let mut json_errors: Bool = false;
-    let mut is_json: Bool = false;
-    let mut runtime_cap_required: Bool = false;
-    let mut target_triple: String = "";
-    let mut opt_level: String = "";
-    let mut lto: Bool = false;
-    let mut release: Bool = false;
-    let mut is_debug: Bool = false;
-    let mut pgo_gen: Bool = false;
-    let mut pgo_use: String = "";
-    let mut sanitizers: String = "";
-    let mut prefer_llvm: Bool = false;
-    let mut explicit_backend: Bool = false;
+    let mut is_plain: Bool = false;
     let mut npos: Int = 0;
     let mut i: Int = 0;
     while i < list_len(args) {
         let a: String = list_get(args, i);
         if a == "--backend" {
-            if i + 1 >= list_len(args) { println("ERR\tbackend\tmissing value"); process_exit(2); }
-            let bv: String = list_get(args, i + 1);
-            if bv != "c" && bv != "wasm" && bv != "wasm-gc" && bv != "wasm-linear" && bv != "wasm-dual" && bv != "llvm" && bv != "x86" && bv != "bc" && bv != "x86_64-elf" && bv != "aarch64" && bv != "x86-ssa" && bv != "macho" { println("ERR\tbackend\t" + bv + " residual"); process_exit(2); }
-            backend = bv;
-            explicit_backend = true;
-            i = i + 2;
-        } else if a == "--prefer-llvm" {
-            prefer_llvm = true;
-            i = i + 1;
-        } else if a == "--target" {
-            if i + 1 >= list_len(args) { println("ERR\ttarget\tmissing value"); process_exit(2); }
-            let tv: String = list_get(args, i + 1);
-            if tv == "x86_64-elf" || tv == "aarch64" || tv == "macho" || tv == "wasm" || tv == "wasm-gc" || tv == "wasm-linear" || tv == "wasm-dual" || tv == "llvm" || tv == "c" || tv == "x86" { backend = tv; }
-            i = i + 2;
-        } else if chars_len(a) >= 9 && str_slice(a, 0, 9) == "--target=" {
-            let tv: String = str_slice(a, 9, chars_len(a));
-            if tv == "x86_64-elf" || tv == "aarch64" || tv == "macho" || tv == "wasm" || tv == "wasm-gc" || tv == "wasm-linear" || tv == "wasm-dual" || tv == "llvm" || tv == "c" || tv == "x86" { backend = tv; }
-            i = i + 1;
-        }
- else if a == "-O0" || a == "-O1" || a == "-O2" || a == "-O3" || a == "-Oz" || a == "-Ojit" {
-            opt_level = a;
-            i = i + 1;
-        } else if a == "-Ossa" {
-            opt_level = "ssa";
-            i = i + 1;
-        } else if a == "-Odwarf5" {
-            opt_level = "dwarf5";
-            i = i + 1;
-        } else if a == "-Odebug-split" {
-            opt_level = "debug-split";
-            i = i + 1;
-        } else if a == "-Opgo_lto" {
-            opt_level = "pgo_lto";
-            i = i + 1;
-        } else if a == "-Oautovec" {
-            // P4.39: opt-in for aggressive autovectorization on the C backend.
-            // cli_build_targets.oo maps "autovec" -> "-O3 -fvectorize -fslp-vectorize-aggressive".
-            opt_level = "autovec";
-            i = i + 1;
-        } else if a == "--lto" {
-            lto = true;
-            i = i + 1;
-        } else if a == "--release" {
-            release = true;
-            i = i + 1;
-        } else if a == "-fprofile-generate" || a == "--pgo-generate" {
-            pgo_gen = true;
-            i = i + 1;
-        } else if a == "-fprofile-use" || a == "--pgo-use" {
-            if i + 1 < list_len(args) {
-                let pv = list_get(args, i + 1);
-                if str_slice(pv, 0, 1) != "-" {
-                    pgo_use = pv;
-                    i = i + 2;
-                } else {
-                    pgo_use = "default.profdata";
-                    i = i + 1;
-                }
-            } else {
-                pgo_use = "default.profdata";
-                i = i + 1;
+            if i + 1 >= list_len(args) {
+                println("ERR\tbackend\tmissing value");
+                process_exit(2);
             }
-        } else if chars_len(a) >= 15 && str_slice(a, 0, 15) == "-fprofile-use=" {
-            pgo_use = str_slice(a, 15, chars_len(a));
-            i = i + 1;
-        } else if chars_len(a) >= 10 && str_slice(a, 0, 10) == "--pgo-use=" {
-            pgo_use = str_slice(a, 10, chars_len(a));
-            i = i + 1;
-        } else if a == "-fsanitize=address" || a == "--sanitize=address" {
-            sanitizers = san_combine(sanitizers, "address");
-            backend = "llvm";
-            i = i + 1;
-        } else if a == "-fsanitize=thread" || a == "--sanitize=thread" {
-            sanitizers = san_combine(sanitizers, "thread");
-            backend = "llvm";
-            i = i + 1;
-        } else if a == "-fsanitize=undefined" || a == "--sanitize=undefined" {
-            sanitizers = san_combine(sanitizers, "undefined");
-            backend = "llvm";
-            i = i + 1;
-        } else if a == "-fsanitize=fuzzer" || a == "--fuzz" || a == "--sanitize=fuzzer" {
-            sanitizers = san_combine(sanitizers, "fuzzer");
-            backend = "llvm";
-            i = i + 1;
-        } else if chars_len(a) >= 12 && str_slice(a, 0, 12) == "-fsanitize=" {
-            let sv = str_slice(a, 12, chars_len(a));
-            sanitizers = san_combine(sanitizers, sv);
-            backend = "llvm";
-            i = i + 1;
-        } else if chars_len(a) >= 11 && str_slice(a, 0, 11) == "--sanitize=" {
-            let sv = str_slice(a, 11, chars_len(a));
-            sanitizers = san_combine(sanitizers, sv);
-            backend = "llvm";
+            let bv: String = list_get(args, i + 1);
+            if bv != "c" {
+                println("ERR\tbackend\tresidual: " + bv);
+                process_exit(2);
+            }
+            backend = bv;
+            i = i + 2;
+        } else if a == "--json-errors" || a == "-json" || a == "--json" {
+            json_errors = true;
             i = i + 1;
         } else if a == "-g" || a == "--debug" || a == "--plain" {
-            is_debug = true;
+            is_plain = true;
             i = i + 1;
-        } else if a == "--x86-elf-pure" || a == "--aarch64-elf-pure" || a == "--macho-pure" {
-            if a == "--x86-elf-pure" { backend = "x86_64-elf"; }
-            if a == "--aarch64-elf-pure" { backend = "aarch64"; }
-            if a == "--macho-pure" { backend = "macho"; }
-            i = i + 1;
-        } else if a == "--target-triple" || a == "--triple" {
-            if i + 1 >= list_len(args) { println("ERR\ttarget-triple\tmissing value"); process_exit(2); }
-            target_triple = list_get(args, i + 1);
-            i = i + 2;
-        } else if chars_len(a) >= 16 && str_slice(a, 0, 16) == "--target-triple=" {
-            target_triple = str_slice(a, 16, chars_len(a));
-            i = i + 1;
-        } else if chars_len(a) >= 9 && str_slice(a, 0, 9) == "--triple=" {
-            target_triple = str_slice(a, 9, chars_len(a));
-            i = i + 1;
-        } else if a == "--json-errors" || a == "-json" { json_errors = true; i = i + 1; }
-        else if a == "--json" { is_json = true; i = i + 1; }
-        else if a == "--runtime-cap-required" { runtime_cap_required = true; i = i + 1; }
-        else if a == "-o" {
-            if i + 1 >= list_len(args) { println("ERR\t-o\tmissing value"); process_exit(2); }
+        } else if a == "-o" {
+            if i + 1 >= list_len(args) {
+                println("ERR\t-o\tmissing value");
+                process_exit(2);
+            }
             out_arg = list_get(args, i + 1);
             i = i + 2;
         } else if chars_len(a) >= 3 && str_slice(a, 0, 3) == "-o=" {
             out_arg = str_slice(a, 3, chars_len(a));
             i = i + 1;
-        }
-        else {
+        } else if a == "--help" || a == "-h" {
+            println(usage);
+            process_exit(0);
+        } else if chars_len(a) >= 1 && str_slice(a, 0, 1) == "-" {
+            println("ERR\tflag\tresidual: " + a);
+            process_exit(2);
+        } else {
             if npos == 0 { cmd = a; }
             else if npos == 1 { path = a; }
             else if npos == 2 { out_arg = a; }
-            else { println("oodac: too many arguments"); process_exit(2); }
+            else {
+                println("oodac: too many arguments");
+                process_exit(2);
+            }
             npos = npos + 1;
             i = i + 1;
         }
     }
     if cmd == "" {
-        println("oodac: usage: tokens|check|build|emit-c|emit-protos|emit-bodies|emit-preamble <file>");
-        process_exit(2);
-    }
-    if backend != "c" {
-        println("ERR\tbackend\tresidual: " + backend);
+        println(usage);
         process_exit(2);
     }
     if cmd != "tokens" && cmd != "check" && cmd != "build" && cmd != "emit-c" && cmd != "emit-protos" && cmd != "emit-bodies" && cmd != "emit-preamble" {
         println("ERR\tcmd\tresidual: " + cmd);
         process_exit(2);
     }
-    {
-        if path == "" {
-            println("oodac: missing file argument");
-            process_exit(2);
-        }
-        if !path_exists(fs_r, path) {
-            println("ERR\t" + cmd + "\tunreadable file: " + path);
-            process_exit(2);
-        }
-        let fsz: Int = file_size(fs_r, path);
-        if fsz > 65536 { println("ERR\tload\tsource exceeds 64KiB per-file limit"); process_exit(1); }
+    if path == "" {
+        println("oodac: missing file argument");
+        process_exit(2);
     }
-
+    if !path_exists(fs_r, path) {
+        println("ERR\t" + cmd + "\tunreadable file: " + path);
+        process_exit(2);
+    }
+    let fsz: Int = file_size(fs_r, path);
+    if fsz > 65536 {
+        println("ERR\tload\tsource exceeds 64KiB per-file limit");
+        process_exit(1);
+    }
     let mut packed: List[String] = list_new();
     packed = list_push(packed, cmd);
     packed = list_push(packed, path);
@@ -202,28 +99,9 @@ pub fn parse_cli_argv(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, arg
     packed = list_push(packed, backend);
     let mut f_je: String = "0";
     if json_errors { f_je = "1"; }
-    let mut f_js: String = "0";
-    if is_json { f_js = "1"; }
-    let mut f_rc: String = "0";
-    if runtime_cap_required { f_rc = "1"; }
     packed = list_push(packed, f_je);
-    packed = list_push(packed, f_js);
-    packed = list_push(packed, target_triple);
-    packed = list_push(packed, f_rc);
-    packed = list_push(packed, opt_level);
-    let mut f_lto: String = "0";
-    if lto { f_lto = "1"; }
-    let mut f_rel: String = "0";
-    if release { f_rel = "1"; }
-    packed = list_push(packed, f_lto);
-    packed = list_push(packed, f_rel);
-    let mut f_dbg: String = "0";
-    if is_debug { f_dbg = "1"; }
-    packed = list_push(packed, f_dbg);
-    let mut f_pgo: String = "0";
-    if pgo_gen { f_pgo = "1"; }
-    packed = list_push(packed, f_pgo);
-    packed = list_push(packed, pgo_use);
-    packed = list_push(packed, sanitizers);
+    let mut f_pl: String = "0";
+    if is_plain { f_pl = "1"; }
+    packed = list_push(packed, f_pl);
     return packed;
 }

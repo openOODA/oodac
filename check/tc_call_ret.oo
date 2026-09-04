@@ -137,7 +137,7 @@ pub fn typecheck_return_and_assign_calls(toks: List[String]) {
 }
 
 pub fn cap_builtin_ret(name: String) -> String {
-    if name == "env_get" || name == "oo_env_get" || name == "read_file" || name == "oo_read_file" || name == "write_file" || name == "oo_write_file" || name == "fs_read_file" || name == "fs_write_file" || name == "fetch" || name == "sys_exec" || name == "oo_sys_exec" || name == "landlock_restrict" || name == "oo_landlock_restrict" || name == "fs_mkdir" || name == "oo_fs_mkdir" || name == "fs_remove_file" || name == "oo_fs_remove_file" || name == "fs_rmdir" || name == "oo_fs_rmdir" || name == "fs_mkdir_p" || name == "fs_remove_tree" || name == "fs_copy_file" || name == "fs_copy_tree" { return "Result";
+    if name == "env_get" || name == "oo_env_get" || name == "read_file" || name == "oo_read_file" || name == "write_file" || name == "oo_write_file" || name == "fs_read_file" || name == "fs_write_file" || name == "fetch" || name == "sys_exec" || name == "oo_sys_exec" || name == "sys_exec_wait" || name == "oo_sys_exec_wait" || name == "landlock_restrict" || name == "oo_landlock_restrict" || name == "fs_mkdir" || name == "oo_fs_mkdir" || name == "fs_remove_file" || name == "oo_fs_remove_file" || name == "fs_rmdir" || name == "oo_fs_rmdir" || name == "fs_mkdir_p" || name == "fs_remove_tree" || name == "fs_copy_file" || name == "fs_copy_tree" { return "Result";
 }
     if name == "path_exists" || name == "oo_path_exists" || name == "fs_path_exists" || name == "fs_is_dir"
         || name == "oo_fs_is_dir" || name == "cap_attenuate_ok" || name == "oo_cap_attenuate_ok" {

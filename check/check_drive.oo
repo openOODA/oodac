@@ -6,7 +6,7 @@
 //
 // Beats:
 //   1. run_check_from_src runs the core walk and prints OK.
-//   2. run_check_core_binds rejects empty or oversize source, tokenizes once, and walks KW_PUB/KW_FN/KW_TYPE/KW_IMPORT with a hang guard.
+//   2. run_check_core_binds rejects empty or oversize source, tokenizes once, and walks KW_PUB/KW_FN/KW_TYPE/KW_IMPORT. Type-only modules are valid.
 //   3. After the walk it runs secret sinks, typecheck slices, and residual free-name deny.
 //
 import "tc_unused_let.oo";
@@ -59,16 +59,12 @@ pub fn run_check_core_binds_at(sys: &ProcessCap, src: String, extra_binds: Strin
     // I17: tokenize_lines already lex_all + fail-closed (token_fmt.oo).
     // A second lex_all here doubled cost on every np>12 module. Do not re-lex.
     let toks: List[String] = toks_with_src_path(tokenize_lines(src), path);
-    // Must parse as a program (at least one fn or we allow empty items only if type/import)
+    // Type/import-only modules are valid (ANCHOR.oo). A fn is not required.
     let n = list_len(toks);
-    if n <= 1 { println("ERR\tcheck\tno_fn");
-    process_exit(1);
-    }
     // Walk functions and sealed effects
     // F26 DE2 harden: hang guard — ensure while pos < n always advances (no pos++ missing on error paths).
     // Cyclic imports: delegated to load_import.oo / check_collect.oo (set_has(stack) cycle fail-closed); run_check_from_src does not loop.
     let mut pos = 0;
-    let mut saw_fn = false;
     let mut iter = 0;
     while pos < n { iter = iter + 1;
     if iter > n + 100 { println("ERR\tcheck\thang guard exceeded at pos " + pos.to_string());
@@ -87,11 +83,9 @@ pub fn run_check_core_binds_at(sys: &ProcessCap, src: String, extra_binds: Strin
             }
             if is_pub_ty { pos = skip_until_semi(toks, pos);
             } else {
-                saw_fn = true;
                 pos = check_function(toks, pos);
             }
         } else if k == "KW_FN" {
-            saw_fn = true;
             pos = check_function(toks, pos);
         } else if k == "KW_TYPE" || k == "KW_IMPORT" {
             // Skip `type Alias = Base;` / import lines to SEMI (was infinite-walk → no_fn).
@@ -109,9 +103,6 @@ pub fn run_check_core_binds_at(sys: &ProcessCap, src: String, extra_binds: Strin
         if pos == prev_pos { println("ERR\tcheck\tno progress at " + k + " pos " + pos.to_string());
         process_exit(1);
         }
-    }
-    if !saw_fn { println("ERR\tcheck\tno_fn");
-    process_exit(1);
     }
     // HIGH 6.1: SECRET refuse before typecheck so unlowered SECRETSINK
     // names (env_set/setenv/unsetenv) still dual-path refuse (not type-first).

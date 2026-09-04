@@ -1,0 +1,18 @@
+// # Probe: list_slice on List[String]
+//
+// Logline: Slice argv-shaped list from index 1 to len. Print the kept element.
+//
+// Setup: No caps. list_slice is a product builtin.
+//
+// Beats:
+//   1. Push a, b, c.
+//   2. Slice [1, 3) and print the first kept cell. Must be b.
+
+pub fn main() {
+    let mut xs: List[String] = list_new();
+    xs = list_push(xs, "a");
+    xs = list_push(xs, "b");
+    xs = list_push(xs, "c");
+    let rest: List[String] = list_slice(xs, 1, list_len(xs));
+    println(list_get(rest, 0));
+}

@@ -1,0 +1,15 @@
+// # Probe: sys_exec_wait without ProcessCap
+//
+// Logline: Hostile program. oodac check must fail closed with a capability error.
+//
+// Setup: main calls sys_exec_wait with no &ProcessCap. Default-deny.
+//
+// Beats:
+//   1. Call the sealed builtin without a cap token.
+//   2. Compiler must print ERR capability and exit nonzero.
+
+pub fn main() {
+    let args: List[String] = list_new();
+    let r: Result[Int, String] = sys_exec_wait("/bin/true", args);
+    println(r.val.to_string());
+}

@@ -21,6 +21,7 @@ import "c_emit_type_helpers.oo";
 
 
 pub fn c_match_rkind(env: String, scrut: String) -> String {
+    if str_starts_with(scrut, "oo_sys_exec_wait") || str_starts_with(scrut, "sys_exec_wait") { return "RI"; }
     if str_starts_with(scrut, "oo_read_file") || str_starts_with(scrut, "read_file") || str_starts_with(scrut, "oo_sys_exec") || str_starts_with(scrut, "sys_exec") { return "R"; }
     let sty: String = c_env_get(env, "__ty__" + scrut);
     if sty != "" {

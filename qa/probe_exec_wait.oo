@@ -1,0 +1,19 @@
+// # Probe: sys_exec_wait inherits stdio and returns the exit code
+//
+// Logline: ProcessCap exec of /bin/true must Ok(0). No stdout capture.
+//
+// Setup: &ProcessCap. Extra argv is empty. /bin/true exits 0.
+//
+// Beats:
+//   1. sys_exec_wait(proc, "/bin/true", []).
+//   2. Print the exit code. Must be 0.
+
+pub fn main(sys: &ProcessCap) {
+    let args: List[String] = list_new();
+    let r: Result[Int, String] = sys_exec_wait(sys, "/bin/true", args);
+    if !r.is_ok() {
+        println("ERR\texec_wait");
+        process_exit(1);
+    }
+    println(r.val.to_string());
+}

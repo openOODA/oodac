@@ -347,6 +347,7 @@ OoIList oo_ilist_push(OoIList l, long long v);
 long long oo_ilist_get(OoIList l, long long i);
 long long oo_ilist_len(OoIList l);
 OoIList oo_ilist_set(OoIList l, long long i, long long v);
+OoIList oo_ilist_slice(OoIList l, long long start, long long end);
 int oo_ilist_eq(OoIList a, OoIList b);
 
 OoSList oo_slist_new(void);
@@ -355,6 +356,7 @@ OoSList oo_slist_push(OoSList l, OoStr v);
 OoStr oo_slist_get(OoSList l, long long i);
 long long oo_slist_len(OoSList l);
 OoSList oo_slist_set(OoSList l, long long i, OoStr v);
+OoSList oo_slist_slice(OoSList l, long long start, long long end);
 int oo_slist_eq(OoSList a, OoSList b);
 
 OoFList oo_flist_new(void);
@@ -363,6 +365,7 @@ OoFList oo_flist_push(OoFList l, double v);
 double oo_flist_get(OoFList l, long long i);
 long long oo_flist_len(OoFList l);
 OoFList oo_flist_set(OoFList l, long long i, double v);
+OoFList oo_flist_slice(OoFList l, long long start, long long end);
 int oo_flist_eq(OoFList a, OoFList b);
 
 #ifndef OO_RETAIN_OoFList

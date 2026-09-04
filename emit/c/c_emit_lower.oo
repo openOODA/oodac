@@ -109,7 +109,7 @@ pub fn c_emit_primary_c(toks: List[String], pos: Int, n: Int, env: String) -> Li
             let a2g = list_get(ap, 4);
             c_secret_emit_guard(env, t, a0, a1, a2g, args);
             let mut cname: String = c_lower_call_name(t);
-            if t == "list_new" || t == "list_push" || t == "list_get" || t == "list_len" || t == "list_set" {
+            if t == "list_new" || t == "list_push" || t == "list_get" || t == "list_len" || t == "list_set" || t == "list_slice" {
                 cname = c_list_c_name(t, c_infer_list_kind(env, t, a0, a1));
             }
             let mangled: String = c_env_get(env, "__cname__" + t);

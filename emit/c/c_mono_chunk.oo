@@ -134,8 +134,9 @@ pub fn c_mono_emit_all_chunks(fs: &FsWriteCap, sys: &ProcessCap, types: List[Str
     let chk_h: String = crypto_sha256_internal(chunk_src);
     let chunk_file: String = out_dir + "/.pb_types_chunk_" + i.to_string() + "_" + str_slice(chk_h, 0, 16) + ".c";
     let r_w: Result[Void, String] = write_file(fs, chunk_file, chunk_src);
-    if r_w.is_err() { let cmd: String = "mkdir -p $(dirname " + shell_sq(chunk_file) + ") && cat << 'EOF_CHUNK' > " + shell_sq(chunk_file) + "\n" + chunk_src + "\nEOF_CHUNK\n";
-    let _r: Result[String, String] = sys_exec(sys, "sh", "-c", cmd);
+    if r_w.is_err() {
+        println("ERR\temit\twrite chunk failed");
+        process_exit(1);
     }
             out_paths = list_push(out_paths, chunk_file);
         }

@@ -96,11 +96,15 @@ pub fn typecheck_field_binop_uses(toks: List[String]) {
                 if field_chain_end(toks, i) > 0 { left_is_field = true;
                 }
                 if !left_is_field { let lty: String = atom_type_with_env(toks, i, lit_env);
-                if lty != "" { let rend2 = 0 + field_chain_end(toks, i + 2);
+                if lty != "" { let mend: Int = 0 + method_call_end(toks, i + 2);
                 let mut rty2 = "";
-                if rend2 > 0 { rty2 = field_chain_type(toks, i + 2, rend2, lit_env, struct_table);
+                if mend > 0 { rty2 = operand_type_with_env(toks, i + 2, lit_env);
                 } else {
-                            rty2 = field_access_type_at(toks, i + 2, lit_env, struct_table);
+                            let rend2 = 0 + field_chain_end(toks, i + 2);
+                            if rend2 > 0 { rty2 = field_chain_type(toks, i + 2, rend2, lit_env, struct_table);
+                            } else {
+                                rty2 = field_access_type_at(toks, i + 2, lit_env, struct_table);
+                            }
                         }
                         if rty2 != "" {
                             let comb: String = combine_binop_types(opk, lty, rty2);
