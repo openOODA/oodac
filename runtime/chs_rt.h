@@ -199,24 +199,24 @@ long long oo_random(long long cap);
 #endif
 long long oo_alloc_bytes(long long cap, long long n);
 void oo_free_bytes(long long cap, long long p);
-long long oo_alloc(long long size);
-void oo_free(long long ptr);
-void (oo_write_int)(long long ptr, long long offset, long long val);
-long long (oo_read_int)(long long ptr, long long offset);
+long long oo_alloc(long long cap, long long size);
+void oo_free(long long cap, long long ptr);
+void (oo_write_int)(long long cap, long long ptr, long long offset, long long val);
+long long (oo_read_int)(long long cap, long long ptr, long long offset);
 long long heap_alloc_test(void);
 
 #ifndef oo_write_int
-#define OO_WRITE_INT_GET_MACRO(_1, _2, _3, NAME, ...) NAME
-#define oo_write_int_2(p, v) (oo_write_int)((p), 0LL, (v))
-#define oo_write_int_3(p, o, v) (oo_write_int)((p), (o), (v))
-#define oo_write_int(...) OO_WRITE_INT_GET_MACRO(__VA_ARGS__, oo_write_int_3, oo_write_int_2)(__VA_ARGS__)
+#define OO_WRITE_INT_GET_MACRO(_1, _2, _3, _4, NAME, ...) NAME
+#define oo_write_int_3(c, p, v) (oo_write_int)((c), (p), 0LL, (v))
+#define oo_write_int_4(c, p, o, v) (oo_write_int)((c), (p), (o), (v))
+#define oo_write_int(...) OO_WRITE_INT_GET_MACRO(__VA_ARGS__, oo_write_int_4, oo_write_int_3)(__VA_ARGS__)
 #endif
 
 #ifndef oo_read_int
-#define OO_READ_INT_GET_MACRO(_1, _2, NAME, ...) NAME
-#define oo_read_int_1(p) (oo_read_int)((p), 0LL)
-#define oo_read_int_2(p, o) (oo_read_int)((p), (o))
-#define oo_read_int(...) OO_READ_INT_GET_MACRO(__VA_ARGS__, oo_read_int_2, oo_read_int_1)(__VA_ARGS__)
+#define OO_READ_INT_GET_MACRO(_1, _2, _3, NAME, ...) NAME
+#define oo_read_int_2(c, p) (oo_read_int)((c), (p), 0LL)
+#define oo_read_int_3(c, p, o) (oo_read_int)((c), (p), (o))
+#define oo_read_int(...) OO_READ_INT_GET_MACRO(__VA_ARGS__, oo_read_int_3, oo_read_int_2)(__VA_ARGS__)
 #endif
 long long oo_cg_sign(long long cap);
 int oo_cg_verify(long long cap, long long sig);
@@ -238,8 +238,8 @@ OoResS oo_arena_destroy(long long cap, long long id);
 void oo_arena_free(long long cap, long long id);
 long long oo_soa_layout(OoStr name);
 long long oo_dod_layout(long long n);
-long long oo_checkpoint(long long v);
-long long oo_rollback(void);
+long long oo_checkpoint(long long cap, long long v);
+long long oo_rollback(long long cap);
 
 OoResS oo_cap_rpc_send(long long cap, OoStr payload);
 OoResS oo_cap_rpc_recv(long long cap, OoStr sealed);

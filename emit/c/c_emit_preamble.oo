@@ -10,13 +10,8 @@
 //   3. Print Token, assert_eq and assert_ne generics, and a comment that seccomp is not emitted.
 
 pub fn c_emit_preamble() {
-    println("#include <stdio.h>");
-    println("#include <stdlib.h>");
-    println("#include <string.h>");
-    println("#include <stdbool.h>");
-    println("#include <stddef.h>");
-    println("#include <stdint.h>");
-    println("#include <unistd.h>");
+    println("#ifndef OODAR_CRYPTO_INTERNAL\n#define OODAR_CRYPTO_INTERNAL 1\n#endif");
+    println("#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <stdbool.h>\n#include <stddef.h>\n#include <stdint.h>\n#include <unistd.h>");
     println("/* runtime decls (defined in chs_rt.c) */");
     println("typedef struct { uint32_t ref_count; uint32_t flags; } OoListHeader;");
     println("void *oo_list_alloc_payload(size_t elem_size, size_t cap);");
@@ -28,6 +23,9 @@ pub fn c_emit_preamble() {
     println("typedef struct { double *data; long long len; long long cap; } OoFList;");
     println("typedef struct { int ok; OoStr val; } OoResS;");
     println("typedef struct { int ok; OoStr err; } OoResV;");
+    println("#ifndef OO_HAVE_CONTROL_BLOCK\n#define OO_HAVE_CONTROL_BLOCK\ntypedef struct OoControlBlock { uint32_t strong_count; uint32_t weak_count; uint32_t flags; uint32_t epoch; void (*dtor)(void *payload); } OoControlBlock;\ntypedef struct OoWeakRef { void *payload; OoControlBlock *ctrl; } OoWeakRef;\ntypedef OoWeakRef OoWeak;\n#endif");
+    println("static inline void oo_retain_OoWeakRef(OoWeakRef w) { if (w.ctrl) { __atomic_fetch_add(&w.ctrl->weak_count, 1, __ATOMIC_ACQ_REL); } }");
+    println("static inline void oo_release_OoWeakRef(OoWeakRef w) { if (w.ctrl) { uint32_t _wc = __atomic_fetch_sub(&w.ctrl->weak_count, 1, __ATOMIC_ACQ_REL); if (_wc == 1 && __atomic_load_n(&w.ctrl->strong_count, __ATOMIC_ACQUIRE) == 0) { free(w.ctrl); } } }");
     println("typedef struct { int ok; long long val; OoStr err; } OoResI;");
     println("typedef struct { int ok; long long val; long long err; } OoResII;");
     println("typedef struct { int ok; int val; OoStr err; } OoResB;");
@@ -173,9 +171,9 @@ pub fn c_emit_preamble() {
     println("long long oo_now_ms(long long); void oo_sleep_ms(long long,long long);");
     println("long long oo_random(long long); void oo_seed(long long,long long);");
     println("long long oo_alloc_bytes(long long,long long); void oo_free_bytes(long long,long long);");
-    println("long long oo_alloc(long long); void oo_free(long long); void (oo_write_int)(long long,long long,long long); long long (oo_read_int)(long long,long long); long long heap_alloc_test(void);");
-    println("#ifndef oo_write_int\n#define OO_WRITE_INT_GET_MACRO(_1, _2, _3, NAME, ...) NAME\n#define oo_write_int_2(p, v) (oo_write_int)((p), 0LL, (v))\n#define oo_write_int_3(p, o, v) (oo_write_int)((p), (o), (v))\n#define oo_write_int(...) OO_WRITE_INT_GET_MACRO(__VA_ARGS__, oo_write_int_3, oo_write_int_2)(__VA_ARGS__)\n#endif");
-    println("#ifndef oo_read_int\n#define OO_READ_INT_GET_MACRO(_1, _2, NAME, ...) NAME\n#define oo_read_int_1(p) (oo_read_int)((p), 0LL)\n#define oo_read_int_2(p, o) (oo_read_int)((p), (o))\n#define oo_read_int(...) OO_READ_INT_GET_MACRO(__VA_ARGS__, oo_read_int_2, oo_read_int_1)(__VA_ARGS__)\n#endif");
+    println("long long oo_alloc(long long,long long); void oo_free(long long,long long); void (oo_write_int)(long long,long long,long long,long long); long long (oo_read_int)(long long,long long,long long); long long heap_alloc_test(void);");
+    println("#ifndef oo_write_int\n#define OO_WRITE_INT_GET_MACRO(_1, _2, _3, _4, NAME, ...) NAME\n#define oo_write_int_3(c, p, v) (oo_write_int)((c), (p), 0LL, (v))\n#define oo_write_int_4(c, p, o, v) (oo_write_int)((c), (p), (o), (v))\n#define oo_write_int(...) OO_WRITE_INT_GET_MACRO(__VA_ARGS__, oo_write_int_4, oo_write_int_3)(__VA_ARGS__)\n#endif");
+    println("#ifndef oo_read_int\n#define OO_READ_INT_GET_MACRO(_1, _2, _3, NAME, ...) NAME\n#define oo_read_int_2(c, p) (oo_read_int)((c), (p), 0LL)\n#define oo_read_int_3(c, p, o) (oo_read_int)((c), (p), (o))\n#define oo_read_int(...) OO_READ_INT_GET_MACRO(__VA_ARGS__, oo_read_int_3, oo_read_int_2)(__VA_ARGS__)\n#endif");
     println("long long oo_meta_epoch(void);");
     println("long long oo_meta_mix(long long);");
     println("int oo_meta_is_path_a(void);");
@@ -190,7 +188,7 @@ pub fn c_emit_preamble() {
     println("OoResV oo_fs_hardlink(long long,OoStr,OoStr); OoResV oo_fs_symlink(long long,OoStr,OoStr);");
     println("OoResS oo_rlimit_set_mem_mb(long long,long long); OoResS oo_rlimit_set_nofile(long long,long long); OoResS oo_rlimit_set_cpu_sec(long long,long long);");
     println("OoResS oo_arena_create(long long,long long); OoResS oo_arena_alloc(long long,long long,long long); OoResS oo_arena_reset(long long,long long);");
-    println("long long oo_soa_layout(OoStr); long long oo_dod_layout(long long); long long oo_checkpoint(long long); long long oo_rollback(void);");
+    println("long long oo_soa_layout(OoStr); long long oo_dod_layout(long long); long long oo_checkpoint(long long,long long); long long oo_rollback(long long);");
     println("OoResS oo_actor_restart(long long,long long); OoResS oo_otp_supervise(long long,long long);");
     println("OoResS oo_cap_rpc_send(long long,OoStr); OoResS oo_cap_rpc_recv(long long,OoStr);");
     println("OoStr oo_read_stdin(void); OoResS oo_read_stdin_chunk(long long); OoStr oo_file_stamp(OoStr);");

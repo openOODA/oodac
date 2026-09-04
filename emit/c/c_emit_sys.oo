@@ -82,10 +82,16 @@ process_exit(1);
         return "oo_dod_layout(" + args + ")";
     }
     if t == "checkpoint" || t == "oo_checkpoint" {
-        return "oo_checkpoint(" + args + ")";
+        if a1 != "" {
+            return "oo_checkpoint(" + args + ")";
+        }
+        return "oo_checkpoint(oo_cap_grant_arena(), " + args + ")";
     }
     if t == "rollback" || t == "oo_rollback" {
-        return "oo_rollback()";
+        if a0 != "" {
+            return "oo_rollback(" + args + ")";
+        }
+        return "oo_rollback(oo_cap_grant_arena())";
     }
     if t == "otp_supervise" || t == "oo_otp_supervise" {
         if a1 == "" || !c_arg_is_cap_ident(a0) {
