@@ -79,7 +79,7 @@ pub fn run_build_llvm(sys: &ProcessCap, path: String, out: String, is_bc: Bool, 
     if str_index_of(san_str, "fuzzer") >= 0 { san_flags = san_flags + " -fsanitize=fuzzer";
     clang_san = clang_san + "-fsanitize=fuzzer ";
     }
-    let r_emit: Result[String, String] = sys_exec(sys, "sh", "-c", "OODAC_BIN=\"${OODAC_BIN:-${OODA_COMPILER:-$(readlink -f /proc/$PPID/exe)}}\" && $OODAC_BIN emit-llvm" + dbg_flag + tr_flag + san_flags + " " + shell_sq(path) + " > " + shell_sq(tmp_ll));
+    let r_emit: Result[String, String] = sys_exec(sys, "sh", "-c", "OODAC_BIN=\"${OODAC_BIN:-./bin/oodac}\" && $OODAC_BIN emit-llvm" + dbg_flag + tr_flag + san_flags + " " + shell_sq(path) + " > " + shell_sq(tmp_ll));
     if !r_emit.is_ok() { println("ERR\tbuild\temit-llvm failed");
     process_exit(1);
     }
@@ -192,50 +192,4 @@ pub fn run_build_target_shortname(sys: &ProcessCap, path: String, out: String, s
 
 pub fn run_build_llvm_ssa(sys: &ProcessCap, path: String, out: String, is_bc: Bool, opt: String, lto: Bool, release: Bool, is_debug: Bool, target_triple: String, pgo_gen: Bool, pgo_use: String, sanitizers: String) {
     println("# SSA path");
-    run_build_llvm(sys, path, out, is_bc, opt, lto, release, is_debug, target_triple, pgo_gen, pgo_use, sanitizers);
-}
-
-// P4.37: -Opgo opt-in. Full gcc PGO round-trip in one invocation.
-// 1. emit-c <path> > <out>.pgo.tmp.c
-// 2. cd <out>.pgo.work && gcc -O2 -fprofile-generate <tmp.c> runtime/chs_rt.c -o <out>
-// 3. cd <out>.pgo.work && <out>             (collects <out>-<src>.gcda)
-// 4. cd <out>.pgo.work && gcc -O2 -fprofile-use -fprofile-correction ... -o <out>
-// The re-link overwrites the instrumented binary with the optimized one.
-// Gcda file lookup requires cwd at compile time to match cwd at run time, so
-// the work dir is used for both. Source/runtime paths are absolute to keep
-// gcc independent of cwd changes.
-pub fn run_build_pgo(sys: &ProcessCap, path: String, out: String, sanitizers: String) {
-    let tmp_c: String = out + ".pgo.tmp.c";
-    let work: String = out + ".pgo.work";
-    let r_mk: Result[String, String] = sys_exec(sys, "sh", "-c", "rm -rf " + shell_sq(work) + " && mkdir -p " + shell_sq(work));
-    if !r_mk.is_ok() { println("ERR\tbuild\tpgo workdir failed");
-    process_exit(1);
-    }
-    // Use OODAC_BIN's parent directory as the project root. The oodac wrapper
-    let pwd_res = sys_exec(sys, "sh", "-c", "pwd");
-    let oodac_path: String = match pwd_res { Ok(s) => str_trim(s), Err(e) => "." };
-    let rt_path: String = oodac_path + "/runtime/chs_rt.c";
-    let src_path: String = oodac_path + "/" + tmp_c;
-    let r_emit: Result[String, String] = sys_exec(sys, "sh", "-c", "OODAC_BIN=\"${OODAC_BIN:-${OODA_COMPILER:-$(readlink -f /proc/$PPID/exe)}}\" && $OODAC_BIN emit-c " + shell_sq(path) + " > " + shell_sq(tmp_c));
-    if !r_emit.is_ok() { println("ERR\tbuild\tpgo emit-c failed");
-    process_exit(1);
-    }
-    let gen_cmd = "cd " + shell_sq(work) + " && gcc -O2 -fprofile-generate -I" + shell_sq(oodac_path) + " " + shell_sq(src_path) + " " + shell_sq(rt_path) + " -lm -ldl -lpthread -o " + shell_sq(out);
-    let r_gen: Result[String, String] = sys_exec(sys, "sh", "-c", gen_cmd);
-    if !r_gen.is_ok() { println("ERR\tbuild\tpgo instrumented compile failed");
-    process_exit(1);
-    }
-    println("OK\tpgo_gen\t" + out);
-    let run_cmd = "cd " + shell_sq(work) + " && " + shell_sq(out);
-    let r_run: Result[String, String] = sys_exec(sys, "sh", "-c", run_cmd);
-    if !r_run.is_ok() { println("ERR\tbuild\tpgo run failed");
-    process_exit(1);
-    }
-    let use_cmd = "cd " + shell_sq(work) + " && gcc -O2 -fprofile-use -fprofile-correction -I" + shell_sq(oodac_path) + " " + shell_sq(src_path) + " " + shell_sq(rt_path) + " -lm -ldl -lpthread -o " + shell_sq(out);
-    let r_use: Result[String, String] = sys_exec(sys, "sh", "-c", use_cmd);
-    if !r_use.is_ok() { println("ERR\tbuild\tpgo profile-use link failed");
-    process_exit(1);
-    }
-    println("OK\tpgo_use\t" + out);
-    println("OK\tbuild\t" + out);
 }

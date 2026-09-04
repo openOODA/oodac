@@ -58,8 +58,6 @@ import "aarch64_emit_for.oo";
 
 import "aarch64_emit_frame.oo";
 
-import "aarch64_emit_fold.oo";
-
 import "aarch64_emit_heap.oo";
 
 import "aarch64_emit_mut.oo";
@@ -196,7 +194,6 @@ pub fn aarch64_emit_stream(src: String) {
     let opt: List[String] = aarch64_match_opt(src); if list_len(opt) >= 2 { aarch64_emit_opt_program(list_get(opt, 0), list_get(opt, 1)); return; }
     let m_m: List[String] = aarch64_match_multi_main(src); if list_len(m_m) >= 3 { aarch64_emit_multi_main(list_get(m_m, 0), list_get(m_m, 1), list_get(m_m, 2)); return; }
     let ml: List[String] = aarch64_match_mut_local(src); if list_len(ml) >= 2 { aarch64_emit_mut_local(list_get(ml, 0), list_get(ml, 1)); return; }
-    let fold: String = aarch64_fold_hello(src); if chars_len(fold) > 0 { let mut one: List[String] = list_new(); one = list_push(one, fold); aarch64_emit_linux(one); return; }
     let st: List[String] = aarch64_match_struct(src); if list_len(st) >= 1 { aarch64_emit_struct(src); return; }
     let rec: List[String] = aarch64_match_rec(src); if list_len(rec) >= 5 { aarch64_emit_rec(list_get(rec, 0), list_get(rec, 1), list_get(rec, 2), list_get(rec, 3), list_get(rec, 4)); return; }
     let tl: List[String] = aarch64_match_typed_let(src); if list_len(tl) == 2 { aarch64_emit_typed_let(list_get(tl, 0), list_get(tl, 1)); return; }

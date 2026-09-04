@@ -97,7 +97,7 @@ pub fn llvm_jit_engine_eval_source(fs: &FsReadCap, sys: &ProcessCap, src: String
     if wr.is_err() {
         return Err("failed to prepare jit temp source");
     }
-    let host_probe: String = "if [ -x \"$OODAC_BIN\" ]; then :; elif [ -x \"$OODA_COMPILER\" ]; then OODAC_BIN=\"$OODA_COMPILER\"; elif [ -x ./oodac/oodac ]; then OODAC_BIN=./oodac/oodac; elif [ -x ./bin/oodac ]; then OODAC_BIN=./bin/oodac; elif [ -x ./oodac_bin ]; then OODAC_BIN=./oodac_bin; else OODAC_BIN=oodac; fi";
+    let host_probe: String = "export OODAC_BIN=\"${OODAC_BIN:-./bin/oodac}\";";
     let run_cmd: String = "if which lli >/dev/null 2>&1; then $OODAC_BIN emit-llvm " + llvm_jit_engine_sq(tmp_oo) + " 2>" + llvm_jit_engine_sq(tmp_err) + " | lli -load " + llvm_jit_engine_sq(rt_so) + " - > " + llvm_jit_engine_sq(tmp_out) + " 2>>" + llvm_jit_engine_sq(tmp_err) + "; else $OODAC_BIN emit-llvm " + llvm_jit_engine_sq(tmp_oo) + " > " + llvm_jit_engine_sq(tmp_ll) + " 2>" + llvm_jit_engine_sq(tmp_err) + " && clang -Wno-override-module -Iruntime " + llvm_jit_engine_sq(tmp_ll) + " runtime/chs_rt.c -lm -lpthread -ldl -o " + llvm_jit_engine_sq(tmp_bin) + " 2>>" + llvm_jit_engine_sq(tmp_err) + " && " + llvm_jit_engine_sq(tmp_bin) + " > " + llvm_jit_engine_sq(tmp_out) + " 2>>" + llvm_jit_engine_sq(tmp_err) + "; fi";
     let full_cmd: String = host_probe + " && " + run_cmd;
     let r: Result[String, String] = sys_exec(sys, "sh", "-c", full_cmd);

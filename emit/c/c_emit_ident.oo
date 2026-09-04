@@ -12,7 +12,6 @@
 import "c_emit_env.oo";
 import "c_emit_print.oo";
 import "c_emit_secret.oo";
-import "c_emit_secret_alias.oo";
 import "c_emit_secret_prop.oo";
 import "c_emit_arc.oo";
 

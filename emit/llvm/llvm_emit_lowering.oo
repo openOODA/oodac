@@ -1,6 +1,6 @@
-// # Fill LLVM main args from argv / LLVM link shims for CHS runtime names / Nested List[List[Int]] list_set helper in IR / Lower a brace block to LLVM
+// # LLVM IR Block Statement Lowering and Runtime Definitions
 //
-// Logline: After alloca of main's args slot, construct an OoSList from sys_argv[1..argc]. Text of _shim.ll: process_exit, path_exists, file_size, read_file, write_file, sys_exec. Defines oo_ll_I_set in the module so nested list_set clang-links with chs_rt only. Walks statements inside a brace block, keeps the five-slot LLVM env in step, and returns the token after the close plus that env.
+// Logline: Lowers AST brace blocks, builds argv list for main, and defines runtime helper functions in LLVM IR.
 //
 // Setup: Merged cohesive compiler module.
 //

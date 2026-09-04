@@ -14,7 +14,6 @@ import "c_emit_list_ty.oo";
 import "c_emit_ty.oo";
 import "c_emit_ty_ext.oo";
 import "c_emit_ops.oo";
-import "c_emit_secret_alias.oo";
 import "c_emit_secret_prop.oo";
 import "c_emit_secret.oo";
 import "c_emit_temps.oo";

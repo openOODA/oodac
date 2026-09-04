@@ -9,7 +9,7 @@
 //   2. Handled units reach aarch64_compile_to_elf (empty → leftover).
 //   3. GAS dispatch skips aarch64_match_frame_test so println STRING is not omitted.
 
-import "aarch64_leftover_gate.oo";
+import "aarch64_entry_gate.oo";
 
 import "aarch64_emit_diag.oo";
 

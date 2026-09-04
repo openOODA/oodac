@@ -15,8 +15,6 @@ import "c_emit_skip.oo";
 import "c_emit_type_helpers.oo";
 import "c_emit_skip_grant.oo";
 import "c_emit_skip_peek.oo";
-import "c_emit_meta.oo";
-import "c_emit_meta_drive.oo";
 import "c_emit_verify.oo";
 import "c_emit_impl_methods.oo";
 
@@ -59,9 +57,8 @@ if p < n { if c_tokk(toks, p) == "KW_PUB" { p = p + 1;
 
 pub fn c_emit_walk_items(toks: List[String], n: Int, fn_env0: String, mode: String, meta_emit: Bool) -> String {
     let mut pos: Int = 0;
-let mut fn_env: String = fn_env0;
-let mut meta_idx: Int = 0;
-let mut iter: Int = 0;
+    let mut fn_env: String = fn_env0;
+    let mut iter: Int = 0;
 while pos < n { iter = iter + 1;
 if iter > n + 100 { println("ERR\tc_emit\thang guard exceeded at pos " + pos.to_string());
 process_exit(1);
@@ -91,18 +88,11 @@ process_exit(1);
                 let fr: List[String] = c_emit_fn_mode(toks, pos, n, fn_env, mode);
                 pos = parse_int(list_get(fr, 0));
                 fn_env = list_get(fr, 1);
-                if meta_emit {
-                    c_drive_after_fn(meta_idx, c_drive_fn_name_at(toks, prev_pos, n));
-                    meta_idx = meta_idx + 1;
-                }
             }
         } else if k == "KW_FN" {
             let fr: List[String] = c_emit_fn_mode(toks, pos, n, fn_env, mode);
             pos = parse_int(list_get(fr, 0));
             fn_env = list_get(fr, 1);
-            if meta_emit { c_drive_after_fn(meta_idx, c_drive_fn_name_at(toks, prev_pos, n));
-            meta_idx = meta_idx + 1;
-            }
         } else if k == "KW_VERIFY" {
             pos = c_emit_verify_ctor(toks, pos, n, fn_env);
         } else if k == "KW_TYPE" {

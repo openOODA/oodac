@@ -1,6 +1,6 @@
 // # Drive C emission
 //
-// Logline: Tokenize source and emit C preamble, type aliases, and functions, with metamorphic pre-passes.
+// Logline: Tokenize source and emit C preamble, type aliases, and functions.
 //
 // Setup: Source string is expanded and verified before C code generation.
 //
@@ -198,22 +198,6 @@ pub fn c_emit_stream_toks_at_core(src: String, toks: List[String], mode: String,
             pre_pos = pre_pos + 1;
         }
     }
-    // Path-A metamorphic layout: opt-in via path-a marker (see c_emit_meta.oo).
-    // Default OFF so product builds stay layout-stable / reproducible.
-    let mut meta_layout: Bool = false;
-    let mut meta_shuffle: Bool = false;
-    if src.contains("METAMOR" + "PHIC:") {
-        meta_layout = c_parse_metamorphic_path_a(src);
-        meta_shuffle = c_parse_metamorphic_shuffle(src);
-    }
-    let mut meta_emit: Bool = false;
-    if meta_layout && c_meta_layout_emit_decoys(mode) {
-        meta_emit = true;
-    }
-    if meta_emit {
-        c_emit_meta_banner();
-    }
-
     fn_env = c_list_field_env(toks, fn_env);
     fn_env = c_sum_env_from_toks(toks, fn_env);
     if mode == "once" || mode == "once_noarc" {
@@ -224,23 +208,7 @@ pub fn c_emit_stream_toks_at_core(src: String, toks: List[String], mode: String,
             bm = "bodies_noarc";
         }
         fn_env = c_emit_walk_items(toks, n, fn_env, pm, false);
-        if meta_layout {
-            if meta_shuffle {
-                let dr: List[String] = c_emit_meta_drive_shuffle(toks, n, fn_env, bm);
-                fn_env = list_get(dr, 0);
-            } else {
-                fn_env = c_emit_walk_items(toks, n, fn_env, bm, true);
-            }
-        } else {
-            fn_env = c_emit_walk_items(toks, n, fn_env, bm, false);
-        }
-    } else if meta_emit {
-        if meta_shuffle {
-            let dr2: List[String] = c_emit_meta_drive_shuffle(toks, n, fn_env, mode);
-            fn_env = list_get(dr2, 0);
-        } else {
-            fn_env = c_emit_walk_items(toks, n, fn_env, mode, true);
-        }
+        fn_env = c_emit_walk_items(toks, n, fn_env, bm, false);
     } else {
         fn_env = c_emit_walk_items(toks, n, fn_env, mode, false);
     }

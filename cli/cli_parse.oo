@@ -31,7 +31,6 @@ pub fn parse_cli_argv(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, arg
     let mut pgo_gen: Bool = false;
     let mut pgo_use: String = "";
     let mut sanitizers: String = "";
-    let mut x86_elf_pure: Bool = false;
     let mut prefer_llvm: Bool = false;
     let mut explicit_backend: Bool = false;
     let mut npos: Int = 0;
@@ -72,13 +71,6 @@ pub fn parse_cli_argv(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, arg
             i = i + 1;
         } else if a == "-Opgo_lto" {
             opt_level = "pgo_lto";
-            i = i + 1;
-        } else if a == "-Opgo" {
-            // P4.37: -Opgo opt-in. opt_level "pgo" reaches run_build_llvm
-            // in cli_build_targets.oo, where it dispatches to run_build_pgo
-            // (full gcc PGO cycle: emit-c, -fprofile-generate, run, re-link
-            // with -fprofile-use -fprofile-correction).
-            opt_level = "pgo";
             i = i + 1;
         } else if a == "-Oautovec" {
             // P4.39: opt-in for aggressive autovectorization on the C backend.
@@ -144,7 +136,6 @@ pub fn parse_cli_argv(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, arg
             is_debug = true;
             i = i + 1;
         } else if a == "--x86-elf-pure" || a == "--aarch64-elf-pure" || a == "--macho-pure" {
-            x86_elf_pure = true;
             if a == "--x86-elf-pure" { backend = "x86_64-elf"; }
             if a == "--aarch64-elf-pure" { backend = "aarch64"; }
             if a == "--macho-pure" { backend = "macho"; }
@@ -233,15 +224,5 @@ pub fn parse_cli_argv(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, arg
     packed = list_push(packed, f_pgo);
     packed = list_push(packed, pgo_use);
     packed = list_push(packed, sanitizers);
-    let mut f_xep: String = "0";
-    if x86_elf_pure { f_xep = "1"; }
-    packed = list_push(packed, f_xep);
-    // Side-channel: persist the flag to a temp file so run_build_san (which we
-    // cannot change the signature of without touching main.oo) can read it.
-    // The file is cleaned up by cli_build.oo after the build.
-    let _xep_mk: Result[String, String] = sys_exec(sys, "sh", "-c", "mkdir -p .ooda-cache/ooda-tmp");
-    if x86_elf_pure { let _xep_w: Result[Void, String] = write_file(fs_w, ".ooda-cache/ooda-tmp/x86_elf_pure", "1"); } else {
-        let _xep_w: Result[Void, String] = write_file(fs_w, ".ooda-cache/ooda-tmp/x86_elf_pure", "0");
-    }
     return packed;
 }

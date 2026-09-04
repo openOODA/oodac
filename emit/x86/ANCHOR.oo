@@ -31,7 +31,6 @@ import "x86_emit_elf.oo";
 import "x86_emit_float_routine.oo";
 import "x86_emit_secret.oo";
 import "x86_emit_shape_refuse.oo";
-import "x86_emit_shims.oo";
 import "x86_emit_sys.oo";
 import "x86_emit_type_diag.oo";
 import "x86_import_resolve.oo";

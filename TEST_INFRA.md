@@ -164,7 +164,7 @@ The test runner is executed directly via `bash`:
 ```
 
 Key environment variables:
-- `OODA_BIN`: Path to `ooda` compiler CLI driver (defaults to `/home/jeryd/Projects/openOODA/ooda/bin/ooda`).
+- `OODA_BIN`: Path to `oodac` compiler CLI driver (defaults to `/home/jeryd/Projects/openOODA/oodac/bin/oodac`).
 - `OODAC_ROOT`: Path to `oodac` source root (defaults to repository root).
 - `DOUBLE_RUN`: When set to `1`, executes the double-run determinism verification protocol.
 

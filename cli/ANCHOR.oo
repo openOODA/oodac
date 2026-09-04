@@ -22,7 +22,6 @@ import "emit/gpu/ANCHOR.oo";
 import "vm/ANCHOR.oo";
 import "cli_ast.oo";
 import "cli_build.oo";
-import "cli_build_backend_shims.oo";
 import "cli_build_cc.oo";
 import "cli_build_sovereign.oo";
 import "cli_build_targets.oo";

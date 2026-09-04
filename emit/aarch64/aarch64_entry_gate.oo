@@ -1,20 +1,18 @@
-// # Leftover / need-fn-main gate for emit-aarch64 (Phase D)
+// # AArch64 Entry Gate Validation
 //
-// Logline: KW_FN+IDENT main required; leftover println (outside main, or ident not a literal bind) is typed ERR.
+// Logline: KW_FN+IDENT main required; statements outside main are rejected.
 //
-// Setup: tokenize_lines + a64_tok_k/t. fold_hello is a handled greet-concat shape, not leftover.
+// Setup: tokenize_lines and diagnostic formatting capabilities.
 //
 // Beats:
-//   1. No fn main → need fn main with --> / ^.
-//   2. println outside main or println of a non-literal ident → leftover.
-//   3. Empty string means the unit may lower.
+//   1. Verify fn main presence in source.
+//   2. Report errors for statements outside main.
+//   3. Return empty string on valid entry.
 
 
 import "aarch64_emit_const_harvest.oo";
 
 import "aarch64_emit_diag.oo";
-
-import "aarch64_emit_fold.oo";
 
 
 fn a64_td_int(s: String) -> Int {
@@ -61,8 +59,6 @@ while i + 1 < n { if a64_tok_k(toks, i) == "KW_FN" && a64_tok_k(toks, i + 1) == 
 }
 
 pub fn aarch64_leftover_gate_e(src: String, path: String) -> String {
-    if chars_len(aarch64_fold_hello(src)) > 0 { return "";
-    }
     let toks: List[String] = tokenize_lines(src);
     let n: Int = list_len(toks);
     let mut in_main: Bool = false;

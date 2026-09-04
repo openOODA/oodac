@@ -16,7 +16,7 @@ import "llvm_emit_env.oo";
 
 import "llvm_emit_arc.oo";
 
-import "llvm_emit_shims.oo";
+import "llvm_emit_lowering.oo";
 
 import "llvm_emit_stmt.oo";
 

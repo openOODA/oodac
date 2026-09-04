@@ -45,7 +45,7 @@ import "llvm_emit_preamble.oo";
 import "llvm_emit_res_eq.oo";
 import "llvm_emit_result.oo";
 import "llvm_emit_secret_marker.oo";
-import "llvm_emit_shims.oo";
+import "llvm_emit_lowering.oo";
 import "llvm_emit_simd.oo";
 import "llvm_emit_slit.oo";
 import "llvm_emit_sret.oo";

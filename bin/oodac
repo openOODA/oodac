@@ -14,4 +14,7 @@ export OODA_FS_WRITEDIR="${OODA_FS_WRITEDIR:-$(pwd)}"
 if [[ "$1" == "emit-preamble" && -z "$2" ]]; then
   set -- "$1" "$DIR/../main.oo"
 fi
-exec "$CORE" "$@"
+"$CORE" "$@"
+RC=$?
+rm -f "$DIR/../.ooda-cache/ooda-tmp/x86_elf_pure" 2>/dev/null || true
+exit $RC

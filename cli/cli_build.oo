@@ -17,8 +17,6 @@ import "cli_build_sovereign.oo";
 
 import "cli_build_targets.oo";
 
-import "cli_build_backend_shims.oo";
-
 
 
 fn build_shell_sq(s: String) -> String {
@@ -65,15 +63,7 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, path
     }
 
     if is_sovereign_backend(eff_backend) {
-        let xep_path: String = ".ooda-cache/ooda-tmp/x86_elf_pure";
-        let mut x86_elf_pure: Bool = false;
-        let xep_r: Result[String, String] = read_file(fs_r, xep_path);
-        if xep_r.is_ok() {
-            let xep_v: String = match xep_r { Ok(s) => s, Err(_) => "" };
-            if xep_v == "1" { x86_elf_pure = true;
-            }
-        }
-        let sov_ok: Bool = run_build_sovereign(fs_r, fs_w, sys, path, out, eff_backend, x86_elf_pure);
+        let sov_ok: Bool = run_build_sovereign(fs_r, fs_w, sys, path, out, eff_backend);
         if sov_ok { println("OK\tbuild\t" + out);
         return;
         } else {
@@ -83,23 +73,6 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, path
     }
     let mut is_bc = false;
     if backend == "bc" || (chars_len(out) >= 3 && str_slice(out, chars_len(out) - 3, chars_len(out)) == ".bc") { is_bc = true;
-    }
-    if backend == "x86" {
-        run_build_x86(sys, path, out);
-        return;
-    }
-    if backend == "x86-ssa" {
-        run_build_x86_ssa(sys, path, out);
-        return;
-    }
-    if backend == "llvm" && opt == "-Ojit" {
-        run_build_jit(fs_r, sys, path, out);
-        return;
-    }
-    if backend == "llvm" && is_aggrlto_opt(opt) {
-        if run_build_aggrlto(sys, path, out, target_triple) { return;
-        }
-        println("ERR\tbuild\taggrlto pipeline failed, falling back to clang");
     }
     if backend == "llvm" || is_bc { run_build_llvm(sys, path, out, is_bc, opt, lto, release, is_debug, target_triple, pgo_gen, pgo_use, sanitizers);
     return;
@@ -113,9 +86,7 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, path
     i = i + 1;
     }
 
-    let mut host: String = "./bin/oodac";
-    if !path_exists(fs_r, host) { host = "./bin/oodac_bin.core"; }
-    if !path_exists(fs_r, host) { host = "./oodac_bin"; }
+    let host: String = "./bin/oodac";
     let stamp: String = oo_file_stamp(host);
     let stamp_s: String = build_sanitize_stamp(stamp);
     let repro: String = gcc_repro_flags();
@@ -198,9 +169,6 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, path
     }
     if is_autovec_opt(opt) {
         let _e: Result[String, String] = sys_exec(sys, "sh", "-c", "export OODA_AUTOVEC=1");
-    }
-    if is_aggrlto_opt(opt) {
-        let _e: Result[String, String] = sys_exec(sys, "sh", "-c", "export OODA_AGGRLTO=1");
     }
     run_native_cc(fs_r, fs_w, sys, pbs, pre_c, out, repro, quiet, sanitizers);
     c_cache_write_binary_manifest(fs_w, sys, out, manifest_hash);

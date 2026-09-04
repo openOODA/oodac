@@ -14,7 +14,7 @@
 
 import "llvm_emit_preamble.oo";
 
-import "llvm_emit_shims.oo";
+import "llvm_emit_lowering.oo";
 
 import "llvm_emit_ty.oo";
 

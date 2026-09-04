@@ -14,7 +14,8 @@ import "x86_emit_secret.oo";
 
 import "x86_emit_contract.oo";
 
-import "x86_emit_shims.oo";
+import "x86_ssa_compile.oo";
+import "x86_runtime.oo";
 
 import "x86_emit_shape_refuse.oo";
 
@@ -41,13 +42,6 @@ pub fn x86_emit_stream_b(src: String) {
     }
         process_exit(1);
     }
-    let cap_errs: List[String] = x86_emit_cap_test(src);
-    if list_len(cap_errs) > 0 { let mut ci = 0;
-    while ci < list_len(cap_errs) { println(list_get(cap_errs, ci));
-    ci = ci + 1;
-    }
-        process_exit(1);
-    }
     let shape_errs: List[String] = x86_emit_shape_refuse_test(src);
     if list_len(shape_errs) > 0 { let mut si = 0;
     while si < list_len(shape_errs) { println(list_get(shape_errs, si));
@@ -58,15 +52,13 @@ pub fn x86_emit_stream_b(src: String) {
     // Tier 5 #24/#27 Turn 2: single typed-AST dispatch via x86_emit_stream_typed.
     // The 22-arm token matcher ladder and its legacy chain markers are deleted.
     // 24 NodeKinds route via x86_ast_handlers.oo in the typed/SSA path.
-    let typed_r: Result[String, String] = x86_emit_stream_typed_b(src);
-    match typed_r {
-        Ok(typed_s)  => { println(typed_s);
+    let r: X86CompileResult = x86_ssa_compile_program(src);
+    if r.ok {
+        println(r.asm_code + "\n" + x86_runtime_text());
         return;
-        },
-        Err(typed_e) => { println(typed_e);
-        process_exit(1);
-        }
     }
+    println(r.err_msg);
+    process_exit(1);
 }
 
 pub fn x86_emit_stream_c(src: String, path: String) {

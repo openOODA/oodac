@@ -35,14 +35,10 @@ pub fn is_sovereign_backend(backend: String) -> Bool {
     return false;
 }
 
-pub fn run_build_sovereign(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, path: String, out: String, backend: String, x86_elf_pure: Bool) -> Bool {
+pub fn run_build_sovereign(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, path: String, out: String, backend: String) -> Bool {
     let src: String = load_source_with_imports(fs_r, path);
     if backend == "x86_64-elf" {
-        if x86_elf_pure {
-            return sov_x86_elf_pure(fs_w, src, out);
-        }
-        run_build_x86(sys, path, out);
-        return true;
+        return sov_x86_elf_pure(fs_w, src, out);
     }
     if backend == "aarch64" {
         return aarch64_emit_direct_elf_binary_pure(fs_w, src, out);

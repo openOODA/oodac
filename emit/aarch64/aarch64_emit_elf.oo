@@ -11,7 +11,7 @@
 //   4. Pure in-process execution with zero shell or printf dependencies.
 
 import "std/hw/silicon/aarch64_codegen.oo";
-import "aarch64_leftover_gate.oo";
+import "aarch64_entry_gate.oo";
 
 
 pub fn a64_write_elf_bytes_pure(fs: &FsWriteCap, bytes: List[Int], out_path: String) -> Bool {
