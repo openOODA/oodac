@@ -16,3 +16,7 @@ jobs:
           echo "Declared api_surface: $(grep '^api_surface=' VERSION | cut -d= -f2)"
           test "$(grep '^api_surface=' VERSION | cut -d= -f2)" = "12" || (echo "api_surface drift"; exit 1)
           echo "api_surface verified: 12"
+  auto-release:
+    needs: test
+    uses: openOODA/openOODA/.github/workflows/auto-release.yml@v1.0.6
+    secrets: inherit
