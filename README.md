@@ -1,39 +1,50 @@
 <div align="center">
 
-```text
+<pre>
    ____  ____  ___  ____    ___   ___  ____    _
   / __ \/ __ \/ _ \/ __ \  / _ \ / _ \|  _ \  / \
  / /_/ / /_/ /  __/ / / / | | | | | | | | | |/ _ \
- \____/ .___/\___/_/ /_/  | |_| | |_| | |_| / ___ \
-     /_/                   \___/ \___/|____/_/   \_\
-```
+/_____/ .___/\___/_/ /_/  | |_| | |_| | |_| / ___ \
+      /_/                   \___/ \___/|____/_/   \_\
+</pre>
 
-### [openOODA.org](https://openooda.org)
+### openOODA — Sovereign Systems Language for the AI Era
 
-# `oodac` — Sovereign openOODA Compiler Core
+[openooda.org](https://openooda.org)
 
 </div>
 
-The sovereign self-hosting compiler subsystem for the openOODA programming language.
+---
 
-## Architecture & Subsystems
+## This repo: oodac
 
-`oodac` organizes 12 sovereign compiler domain subdirectories behind canonical `ANCHOR.oo` front-door entry gates:
+Sovereign self-hosting compiler (12 public subdirs).
 
-- `lex/` — Lexical analysis, token definitions, and scanner
-- `ast/` — AST parsing, module expansion, and import resolution
-- `check/` — Static semantic analysis, typechecker, and typestate tracking
-- `types/` — Type system primitives, unifications, and lattice definitions
-- `emit/c/` — Pure ISO C emitter with ARC runtime integration
-- `emit/x86/` — Direct x86-64 ELF machine code generation
-- `emit/aarch64/` — Direct AArch64 ELF machine code generation & Mach-O support
-- `emit/wasm/` — WebAssembly (WASM & WasmGC) binary emitter
-- `emit/llvm/` — LLVM IR generator and SSA optimization passes
-- `emit/gpu/` — GPU HIP/ROCm kernel lowering and AI attention emission
-- `vm/` — Bytecode compiler and register VM execution engine
-- `defense/` — RASP tamper defense, cryptographic integrity checks
-- `cli/` — Compiler driver CLI entry points and flags
+## Install
+
+```sh
+curl -fsSL https://openooda.org/install.sh | bash
+```
+
+## Docs
+
+All design, RFCs, practices, and onboarding live in [openOODA/openOODA](https://github.com/openOODA/openOODA) or at [openooda.org](https://openooda.org).
+
+## The 9-Repo Polyrepo
+
+| Layer | Repo | Purpose |
+|-------|------|---------|
+| Strategic | [openOODA/openOODA](https://github.com/openOODA/openOODA) | Governance, RFCs, laws |
+| Operational | [openOODA/cli](https://github.com/openOODA/cli) | `ooda` workflow driver |
+| Operational | [openOODA/lsp](https://github.com/openOODA/lsp) | Language server |
+| Operational | [openOODA/mcp](https://github.com/openOODA/mcp) | MCP server |
+| Operational | [openOODA/opm](https://github.com/openOODA/opm) | Package manager |
+| Tactical | [openOODA/std](https://github.com/openOODA/std) | Standard library |
+| Tactical | [openOODA/oodar](https://github.com/openOODA/oodar) | Runtime substrate |
+| Tactical | [openOODA/oodac](https://github.com/openOODA/oodac) | Compiler |
+| Meta | [openOODA/website](https://github.com/openOODA/website) | Website source |
 
 ## License
 
-openOODA is dual-licensed under Apache License, Version 2.0 or MIT license.
+Dual-licensed under your choice of MIT or Apache 2.0. See [LICENSE](LICENSE)
+for full text and the canonical URLs.
