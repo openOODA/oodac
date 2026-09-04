@@ -21,7 +21,6 @@ import "emit/wasm/ANCHOR.oo";
 import "emit/llvm/ANCHOR.oo";
 import "emit/gpu/ANCHOR.oo";
 import "vm/ANCHOR.oo";
-import "defense/ANCHOR.oo";
 import "cli/ANCHOR.oo";
 // ──▓▓ Sovereign Lattice ── OODAC ANCHOR ──▓▓──
 // :: public: oodac_lex_all, oodac_parse_expr, oodac_parse_stmt, oodac_parse_file ::
