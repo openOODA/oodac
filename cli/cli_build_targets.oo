@@ -12,8 +12,6 @@
 
 
 
-import "cli_build_backend_shims.oo";
-
 import "emit/llvm/llvm_native_bin.oo";
 
 // P4.39: -Oautovec opt-in helpers.
@@ -35,14 +33,6 @@ pub fn autovec_env_prefix(sys: &ProcessCap, opt: String) -> String {
 pub fn run_build_llvm(sys: &ProcessCap, path: String, out: String, is_bc: Bool, opt: String, lto: Bool, release: Bool, is_debug: Bool, target_triple: String, pgo_gen: Bool, pgo_use: String, sanitizers: String) {
     if opt == "ssa" {
         run_build_llvm_ssa(sys, path, out, is_bc, opt, lto, release, is_debug, target_triple, pgo_gen, pgo_use, sanitizers);
-        return;
-    }
-    // P4.37: -Opgo opt-in. Dispatches to the full PGO cycle (emit-c,
-    // instrumented compile+link, run, re-link with -fprofile-use). The
-    // PGO cycle is implemented in run_build_pgo and uses gcc because
-    // clang's PGO path needs llvm-profdata to merge raw profraw.
-    if opt == "pgo" {
-        run_build_pgo(sys, path, out, sanitizers);
         return;
     }
     let tmp_ll = out + ".tmp.ll";

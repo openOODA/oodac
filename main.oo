@@ -21,7 +21,6 @@ import "emit/wasm/ANCHOR.oo";
 import "emit/llvm/ANCHOR.oo";
 import "emit/gpu/ANCHOR.oo";
 import "vm/ANCHOR.oo";
-import "defense/ANCHOR.oo";
 import "cli/ANCHOR.oo";
 pub fn main(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, args: List[String]) {
     let a: List[String] = parse_cli_argv(fs_r, fs_w, sys, args);
