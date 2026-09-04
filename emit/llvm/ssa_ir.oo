@@ -1,7 +1,13 @@
 // # Static Single Assignment (SSA) Intermediate Representation
+//
 // Logline: Canonical SSA data structures defining virtual values, instructions, basic blocks, and functions.
+//
 // Setup: Pure SSA definitions module.
-// Beats: (1) Define SSA opcodes. (2) Define SsaFunction with parallel inst arrays (ops, results, imm, lhs, block). (3) Builder and modification helpers.
+//
+// Beats:
+//   1. Define SSA opcodes.
+//   2. Define SsaFunction with parallel inst arrays (ops, results, imm, lhs, block).
+//   3. Builder and modification helpers.
 
 pub fn ssa_op_add() -> Int { return 1; }
 pub fn ssa_op_sub() -> Int { return 2; }

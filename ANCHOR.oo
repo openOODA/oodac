@@ -11,7 +11,6 @@
 //   4. Boundary: internal refactor of any individual emitter stays local; toolchain imports this single file.
 
 
-import "lex/ANCHOR.oo";
 import "ast/ANCHOR.oo";
 import "check/ANCHOR.oo";
 import "emit/c/ANCHOR.oo";
@@ -27,7 +26,7 @@ import "cli/ANCHOR.oo";
 // :: public: oodac_lex_all, oodac_parse_expr, oodac_parse_stmt, oodac_parse_file ::
 
 pub fn oodac_lex_all(src: String) -> String {
-    return lex_all(src).unwrap_or("");
+    return lex_scan_source(src).unwrap_or("");
 }
 
 pub fn oodac_parse_expr(src: String) -> String {

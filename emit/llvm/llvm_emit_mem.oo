@@ -3,7 +3,11 @@
 // Logline: Emit struct type declarations, GEP offset computations, field accessors, and struct literal allocations.
 //
 // Setup: llvm_ty_map, llvm_gen_reg, and token format tools are in scope.
-// Beats: struct decls, GEP, field get.
+//
+// Beats:
+//   1. Emit struct type declarations.
+//   2. Compute GEP offsets.
+//   3. Access fields and allocate struct literals.
 
 
 import "llvm_emit_ty.oo";

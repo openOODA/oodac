@@ -4,7 +4,10 @@
 //
 // Setup: Import wasm_opcodes.oo, wasm_types.oo, wasm_binary_builder.oo, wasm_lower_expr.oo, ast.oo.
 //
-// Beats: signatures, locals, calls, WASI _start. Fail closed on stub modules.
+// Beats:
+//   1. Lower function declarations, signatures, and parameters.
+//   2. Allocate locals and lower function calls.
+//   3. Emit WASI _start entry point and fail closed on stub modules.
 
 import "wasm_opcodes.oo";
 
@@ -19,8 +22,6 @@ import "wasm_lower_stmt.oo";
 import "wasm_lower_control.oo";
 
 import "wasm_opt_transforms.oo";
-
-
 
 pub fn wasm_lower_fn_def(b: &mut WasmModuleBuilder, env_globals: &mut WasmEnv, fn_node: String, default_int: Int, import_offset: Int) -> Int {
     let args: String = wasm_ast_args(fn_node);

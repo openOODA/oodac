@@ -9,22 +9,12 @@
 //   2. Re-export public GPU driver and shader generator interfaces.
 //   3. Maintain <= 256 lines limit.
 
-import "lex/ANCHOR.oo";
-import "types/ANCHOR.oo";
-import "ast/ANCHOR.oo";
-import "gpu_ast_lower.oo";
-import "gpu_ast_validate.oo";
 import "gpu_driver.oo";
 import "gpu_hip.oo";
-import "gpu_hip_ai.oo";
-import "gpu_hip_cli.oo";
-import "gpu_hip_kernels.oo";
-import "gpu_hip_vec.oo";
 import "gpu_kernel_ir.oo";
 import "gpu_metal.oo";
 import "gpu_ptx.oo";
 import "gpu_spirv.oo";
-import "gpu_spirv_disasm.oo";
 
 // ──▓▓ Public GPU Emitter API ──▓▓──
 

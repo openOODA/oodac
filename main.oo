@@ -4,7 +4,10 @@
 //
 // Setup: Command line arguments and compiler options are parsed for command dispatch.
 //
-// Beats: 1. Unpack cmd/path/out/backend. 2. build/emit/check/run. 3. Unknown cmd exits 2.
+// Beats:
+//   1. Unpack cmd/path/out/backend.
+//   2. Dispatch build, emit, check, or run.
+//   3. Unknown cmd exits 2.
 
 
 import "lex/ANCHOR.oo";

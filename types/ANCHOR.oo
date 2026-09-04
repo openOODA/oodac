@@ -12,7 +12,6 @@
 //   5. ty_mangle.oo — mangle a type into a stable linker symbol.
 //   6. types_core.oo — primitive type constructors and operations.
 
-import "lex/ANCHOR.oo";
 import "ast_type_def.oo";
 import "token_typed.oo";
 import "ty.oo";

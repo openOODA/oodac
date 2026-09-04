@@ -1,14 +1,15 @@
 // # x86_64 SSA Compile Driver — Sovereign Direct
-
+//
 // Logline: Compiles .oo source to SysV AMD64 ELF64 assembly via tokenize, typed AST, SSA lowering, mem2reg, phi resolve, and register-allocated emission.
-
+//
 // Setup: Pure string transform, zero ambient caps. Imports token_fmt, ast_parse, ssa_ir/lower/mem2reg/opt, phi_resolve, ssa_fold_emit, ssa_strlit, ssa_emit. No filesystem or process authority.
-
+//
 // Beats:
 //   1. Lower one SsaFunction with mem2reg and const-fold to AT&T assembly.
 //   2. Compile single-function source via tokenize to SSA.
 //   3. Compile program source via typed main lowering with fail-closed leftover and unhandled-call gates.
 //   4. Expose string helpers for emit-x86 driver.
+//
 
 
 
