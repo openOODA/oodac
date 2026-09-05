@@ -1,0 +1,24 @@
+// # Probe: match Err concat then Ok path
+//
+// Logline: String concat in a match Err return arm must not leave undeclared __tN on the Ok path.
+//
+// Setup: No caps. wrap(Ok("ok")) takes the success arm. stdout is ok.
+//
+// Beats:
+//   1. Err arm returns Err("wrap:" + e) so emit binds a concat temp.
+//   2. Ok path assigns the payload and returns Ok(s).
+//   3. main prints the wrapped Ok string.
+
+fn wrap(r: Result[String, String]) -> Result[String, String] {
+    let s: String = match r {
+        Ok(x) => x,
+        Err(e) => return Err("wrap:" + e);
+    };
+    return Ok(s);
+}
+
+pub fn main() {
+    let r: Result[String, String] = wrap(Ok("ok"));
+    let s: String = match r { Ok(x) => x, Err(_) => "no" };
+    println(s);
+}

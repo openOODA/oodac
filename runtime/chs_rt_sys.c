@@ -132,6 +132,7 @@ OoResS oo_sys_exec(long long cap, int argc, OoStr *argv) {
   if (pid == 0) {
     close(pipefd[0]);
     if (dup2(pipefd[1], STDOUT_FILENO) < 0) _exit(126);
+    if (dup2(pipefd[1], STDERR_FILENO) < 0) _exit(126);
     close(pipefd[1]);
     oo_child_filter_env();
     execvp(av[0], av);

@@ -2,7 +2,7 @@
 //
 // Logline: emit-c via ProcessCap argv, write C under the jail, gcc argv.
 //
-// Setup: Host is OODA_COMPILER, else OODAC_BIN, else /proc/self/exe. C backend only. No sh -c.
+// Setup: Host is OODA_COMPILER or OODAC_BIN only. C backend only. No sh -c.
 //
 // Beats:
 //   1. Refuse non-c backends.
@@ -18,7 +18,9 @@ fn compiler_host(env: &EnvCap) -> String {
     if ob.is_ok() {
         if ob.val != "" { return ob.val; }
     }
-    return "/proc/self/exe";
+    println("ERR\tbuild\tOODA_COMPILER or OODAC_BIN required");
+    process_exit(1);
+    return "";
 }
 
 fn path_parent(p: String) -> String {
@@ -83,6 +85,8 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
     let r: Result[String, String] = sys_exec(sys, "gcc", "-O2", "-I" + rt, rt + "/chs_rt.c", tmp_c, "-frandom-seed=0", "-Wl,--build-id=none", "-lm", "-ldl", "-lpthread", "-o", out);
     if !r.is_ok() {
         println("ERR\tbuild\tgcc failed");
+        let gtxt: String = r.val;
+        println(gtxt);
         process_exit(1);
     }
     println("OK_PURE_NATIVE");

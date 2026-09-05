@@ -296,7 +296,6 @@ static void oo_oodac_env_defaults(void) {
   base = strrchr(exe, '/');
   base = base ? base + 1 : exe;
   if (!strstr(base, "oodac")) return;
-  if (!getenv("OODAC_BIN")) setenv("OODAC_BIN", exe, 0);
   if (!getcwd(cwd, sizeof cwd)) cwd[0] = '\0';
   if (!getenv("OODA_FS_WRITEDIR") || !getenv("OODA_FS_WRITEDIR")[0]) {
     if (cwd[0]) setenv("OODA_FS_WRITEDIR", cwd, 0);

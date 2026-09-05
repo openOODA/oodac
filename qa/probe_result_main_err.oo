@@ -1,0 +1,13 @@
+// # Probe: Result-main Err exit
+//
+// Logline: main returning Err without process_exit must exit 1.
+//
+// Setup: No caps. Result[Int, String] main. No process_exit.
+//
+// Beats:
+//   1. Return Err with a diagnostic string.
+//   2. The C main exit code is 1 from __ret_val.ok.
+
+pub fn main() -> Result[Int, String] {
+    return Err("fail closed");
+}
