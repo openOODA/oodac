@@ -1,0 +1,33 @@
+// # Probe victim: Landlock jail must deny /etc
+//
+// Logline: Product ELF under OODA_FS_READDIR/WRITEDIR must still see a jail path and must not cat /etc/passwd.
+//
+// Setup: ProcessCap + EnvCap + FsReadCap. Constructor applies Landlock from jail env. /usr/bin/cat is allowed; /etc is not.
+//
+// Beats:
+//   1. Jail env is set. path_exists of this file under the read jail succeeds.
+//   2. sys_exec /usr/bin/cat /etc/passwd is Err or has no root:. Landlock, not a missing cat. /etc/os-release often symlinks into /usr.
+
+pub fn main(p: &ProcessCap, env: &EnvCap, fs: &FsReadCap) {
+    let rd: Result[String, String] = env_get(env, "OODA_FS_READDIR");
+    let rdv: String = match rd { Ok(s) => s, Err(_) => "" };
+    let wd: Result[String, String] = env_get(env, "OODA_FS_WRITEDIR");
+    let wdv: String = match wd { Ok(s) => s, Err(_) => "" };
+    if rdv == "" || wdv == "" {
+        println("ERR\tlandlock\tjail env required");
+        process_exit(1);
+    }
+    if !path_exists(fs, "oodac/qa/probe_landlock_outside.oo") {
+        println("ERR\tlandlock\tjail path unreadable");
+        process_exit(1);
+    }
+    let r: Result[String, String] = sys_exec(p, "/usr/bin/cat", "/etc/passwd");
+    if r.is_ok() {
+        let t: String = match r { Ok(s) => s, Err(_) => "" };
+        if str_index_of(t, "root:") >= 0 {
+            println("ERR\tlandlock\t/etc/passwd readable");
+            process_exit(1);
+        }
+    }
+    println("OK");
+}

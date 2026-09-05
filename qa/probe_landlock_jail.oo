@@ -1,0 +1,66 @@
+// # Probe: product ELF with jail env is Landlock-restricted
+//
+// Logline: oodac build of probe_landlock_outside.oo; nm the ctor; run the ELF; it must OK and must not leak /etc/passwd.
+//
+// Setup: ProcessCap + EnvCap + FsReadCap. Host is OODA_COMPILER. Child inherits OODA_FS_READDIR/WRITEDIR.
+//
+// Beats:
+//   1. Jail env is set on this process.
+//   2. build the outside victim; nm requires oo_jail_landlock_ctor.
+//   3. sys_exec the victim prints OK.
+
+pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
+    let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
+    let host: String = match hr { Ok(s) => s, Err(_) => "" };
+    if host == "" {
+        println("ERR\tOODA_COMPILER required");
+        process_exit(1);
+    }
+    let rd: Result[String, String] = env_get(env, "OODA_FS_READDIR");
+    let rdv: String = match rd { Ok(s) => s, Err(_) => "" };
+    let wd: Result[String, String] = env_get(env, "OODA_FS_WRITEDIR");
+    let wdv: String = match wd { Ok(s) => s, Err(_) => "" };
+    if rdv == "" || wdv == "" {
+        println("ERR\tlandlock\tjail env required");
+        process_exit(1);
+    }
+    let elf: String = ".ooda-cache/ooda-tmp/probe_landlock_outside.bin";
+    let br: Result[String, String] = sys_exec(p, host, "build", "oodac/qa/probe_landlock_outside.oo", "-o", elf);
+    if br.is_err() {
+        println("ERR\tbuild landlock victim");
+        let bt: String = br.val;
+        println(bt);
+        process_exit(1);
+    }
+    if !path_exists(fs_r, elf) {
+        println("ERR\tlandlock ELF missing");
+        process_exit(1);
+    }
+    let nr: Result[String, String] = sys_exec(p, "nm", elf);
+    if nr.is_err() {
+        println("ERR\tnm failed");
+        process_exit(1);
+    }
+    let ntxt: String = match nr { Ok(s) => s, Err(_) => "" };
+    if str_index_of(ntxt, "oo_jail_landlock_ctor") < 0 {
+        println("ERR\tmissing oo_jail_landlock_ctor");
+        process_exit(1);
+    }
+    let rr: Result[String, String] = sys_exec(p, elf);
+    if rr.is_err() {
+        println("ERR\tlandlock victim");
+        let et: String = rr.val;
+        println(et);
+        process_exit(1);
+    }
+    let out: String = match rr { Ok(s) => s, Err(_) => "" };
+    if str_index_of(out, "OK") < 0 {
+        println("ERR\tlandlock victim not OK");
+        process_exit(1);
+    }
+    if str_index_of(out, "/etc/passwd readable") >= 0 {
+        println("ERR\tlandlock leak");
+        process_exit(1);
+    }
+    println("OK");
+}

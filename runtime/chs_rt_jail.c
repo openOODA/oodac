@@ -48,6 +48,10 @@ __attribute__((constructor)) static void oo_jail_landlock_ctor(void) {
   r = oo_landlock_restrict(sys, reads, writes);
   if (!r.ok) {
     fprintf(stderr, "ERR\tlandlock\tjail apply failed\n");
+    if (r.val.data && r.val.len > 0) {
+      fwrite(r.val.data, 1, (size_t)r.val.len, stderr);
+      fputc('\n', stderr);
+    }
     _exit(1);
   }
 }
