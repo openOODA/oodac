@@ -6,12 +6,14 @@
 //
 // Beats:
 //   1. Call take_s(list_new()) so the callee formal is the only type witness.
-//   2. Print list_len of that empty string list.
+//   2. Bind let mut xs: List[String] = list_new() as a second typed site.
+//   3. Print the sum of both lengths (0).
 
 fn take_s(xs: List[String]) -> Int {
     return list_len(xs);
 }
 
 pub fn main() {
-    println(take_s(list_new()).to_string());
+    let mut xs: List[String] = list_new();
+    println((take_s(list_new()) + list_len(xs)).to_string());
 }

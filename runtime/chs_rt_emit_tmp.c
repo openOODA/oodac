@@ -54,6 +54,8 @@ void oo_emit_tmp_release_all_print(void) {
     i--;
     printf("  oo_str_release(%s);\n", g_names[i]);
   }
+  /* Return path is done. Sibling C paths must not release arm temps. */
+  g_np = 0;
 }
 
 OoStr oo_emit_tmp_bind(OoStr call) {
