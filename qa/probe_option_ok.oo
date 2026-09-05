@@ -1,0 +1,28 @@
+// # Probe: well-typed Option Some(0), None, and call argument
+//
+// Logline: Option[Int] return Some(0), let Some(0)/None, and takes(Some(0)) must check OK.
+//
+// Setup: No caps. Matching inner Int payload.
+//
+// Beats:
+//   1. check prints OK.
+//   2. This file is the well-typed twin of the Option Some("no") victims.
+
+fn takes(o: Option[Int]) {
+    if o.is_some() {
+        println("t");
+    }
+}
+
+pub fn main() -> Option[Int] {
+    let o: Option[Int] = Some(0);
+    let n: Option[Int] = None;
+    if o.is_some() {
+        println("ok");
+    }
+    if n.is_none() {
+        println("none");
+    }
+    takes(Some(0));
+    return Some(0);
+}

@@ -11,6 +11,7 @@
 
 import "tc_infer.oo";
 import "tc_read_result.oo";
+import "tc_ok_err.oo";
 
 
 pub fn ann_check_return(toks: List[String], i: Int, n: Int, in_fn: Bool, expected_ret: String, lit_env: String, struct_table: String, line: String, col: String) {
@@ -61,33 +62,8 @@ pub fn ann_check_return(toks: List[String], i: Int, n: Int, in_fn: Bool, expecte
                         }
                     }
                 }
-                if rty == "" && ik == "IDENT" && i + 3 < n {
-                    let tag: String = field_at(list_get(toks, i + 1), 3);
-                    if (tag == "Ok" || tag == "Err") && field_at(list_get(toks, i + 2), 0) == "LPAREN" {
-                        let pk: String = field_at(list_get(toks, i + 3), 0);
-                        let mut pty: String = lit_token_type(pk);
-                        if pty == "" && pk == "IDENT" {
-                            let pn: String = field_at(list_get(toks, i + 3), 3);
-                            let cur_fn: String = get_cur_fn_at(toks, i + 1);
-                            if cur_fn != "" {
-                                pty = resolve_type_alias(lit_env, cur_fn + "." + pn);
-                                if pty == cur_fn + "." + pn { pty = ""; }
-                            }
-                            if pty == "" {
-                                pty = resolve_type_alias(lit_env, pn);
-                                if pty == pn { pty = ""; }
-                            }
-                        }
-                        if tag == "Ok" && pty != "" {
-                            rty = "Result[" + pty + ", String]";
-                        }
-                        if tag == "Err" && pty != "" {
-                            let ee: String = tc_result_e(expected_ret);
-                            if ee != "" && !types_compatible(ee, pty) {
-                                tc_err_at(toks, i, "return type Result[_, " + pty + "] does not match declared " + expected_ret);
-                            }
-                        }
-                    }
+                if rty == "" && ik == "IDENT" {
+                    rty = tc_infer_ok_err_ty(toks, i + 1, lit_env, expected_ret, i);
                 }
                 if rty != "" {
                     if !types_compatible(expected_ret, rty) {

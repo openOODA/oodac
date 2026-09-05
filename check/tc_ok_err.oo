@@ -1,13 +1,14 @@
-// # Infer Ok/Err payload types
+// # Infer Ok/Err/Some payload types
 //
-// Logline: Ok(payload) is Result[payload, String]; Err(payload) must match declared E.
+// Logline: Ok(payload) is Result[payload, String]; Some(payload) is Option[payload]; Err must match declared E.
 //
-// Setup: pos is the IDENT Ok or Err. lit_token_type, resolve_type_alias, get_cur_fn_at, types_compatible, tc_result_e, and tc_err_at exist.
+// Setup: pos is the IDENT Ok, Err, or Some. lit_token_type, resolve_type_alias, get_cur_fn_at, types_compatible, tc_result_e, and tc_err_at exist.
 //
 // Beats:
 //   1. Ok with a known payload type returns Result[pty, String].
-//   2. Err with a known payload type fail-closed when declared E does not match.
-//   3. Unknown payload or a non-Ok/Err ident returns empty (no false fail).
+//   2. Some with a known payload type returns Option[pty].
+//   3. Err with a known payload type fail-closed when declared E does not match.
+//   4. Unknown payload or a non-Ok/Err/Some ident returns empty (no false fail).
 
 import "tc_infer.oo";
 import "tc_read_result.oo";
@@ -20,7 +21,7 @@ pub fn tc_infer_ok_err_ty(toks: List[String], pos: Int, lit_env: String, expecte
     if field_at(list_get(toks, pos), 0) != "IDENT" { return "";
     }
     let tag: String = field_at(list_get(toks, pos), 3);
-    if tag != "Ok" && tag != "Err" { return "";
+    if tag != "Ok" && tag != "Err" && tag != "Some" { return "";
     }
     if field_at(list_get(toks, pos + 1), 0) != "LPAREN" { return "";
     }
@@ -42,6 +43,9 @@ pub fn tc_infer_ok_err_ty(toks: List[String], pos: Int, lit_env: String, expecte
     }
     if tag == "Ok" && pty != "" {
         return "Result[" + pty + ", String]";
+    }
+    if tag == "Some" && pty != "" {
+        return "Option[" + pty + "]";
     }
     if tag == "Err" && pty != "" {
         let ee: String = tc_result_e(expected);

@@ -1,0 +1,21 @@
+// # Probe victim: Option[String] callee assigned into Option[Int]
+//
+// Logline: Hostile program. check and build must fail closed. No ELF.
+//
+// Setup: sopt returns Option[String]. let mut o is Option[Int] then assigned sopt().
+//
+// Beats:
+//   1. check exits nonzero with ERR.
+//   2. build exits nonzero, prints ERR, and does not write an ELF.
+
+fn sopt() -> Option[String] {
+    return Some("x");
+}
+
+pub fn main() {
+    let mut o: Option[Int] = Some(0);
+    o = sopt();
+    if o.is_some() {
+        println("no");
+    }
+}

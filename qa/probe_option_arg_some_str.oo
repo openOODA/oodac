@@ -1,0 +1,19 @@
+// # Probe victim: Some(String) passed as Option[Int] argument
+//
+// Logline: Hostile program. oodac check and build must fail closed. No ELF.
+//
+// Setup: takes expects Option[Int]. main calls takes(Some("no")).
+//
+// Beats:
+//   1. check exits nonzero with ERR.
+//   2. build exits nonzero, prints ERR, and does not write an ELF.
+
+fn takes(o: Option[Int]) {
+    if o.is_some() {
+        println("no");
+    }
+}
+
+pub fn main() {
+    takes(Some("no"));
+}

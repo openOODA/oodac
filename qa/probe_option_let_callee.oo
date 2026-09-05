@@ -1,0 +1,20 @@
+// # Probe victim: Option[String] callee bound as Option[Int]
+//
+// Logline: Hostile program. check and build must fail closed. No ELF.
+//
+// Setup: sopt returns Option[String]. let o is Option[Int] from sopt().
+//
+// Beats:
+//   1. check exits nonzero with ERR.
+//   2. build exits nonzero, prints ERR, and does not write an ELF.
+
+fn sopt() -> Option[String] {
+    return Some("x");
+}
+
+pub fn main() {
+    let o: Option[Int] = sopt();
+    if o.is_some() {
+        println("no");
+    }
+}

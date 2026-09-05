@@ -1,0 +1,23 @@
+// # Probe victim: Option[String] callee passed as Option[Int] argument
+//
+// Logline: Hostile program. check and build must fail closed. No ELF.
+//
+// Setup: sopt returns Option[String]. takes expects Option[Int]. main calls takes(sopt()).
+//
+// Beats:
+//   1. check exits nonzero with ERR.
+//   2. build exits nonzero, prints ERR, and does not write an ELF.
+
+fn sopt() -> Option[String] {
+    return Some("x");
+}
+
+fn takes(o: Option[Int]) {
+    if o.is_some() {
+        println("no");
+    }
+}
+
+pub fn main() {
+    takes(sopt());
+}

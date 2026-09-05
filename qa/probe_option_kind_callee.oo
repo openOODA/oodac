@@ -1,0 +1,17 @@
+// # Probe victim: Option[String] callee returned from Option[Int] main
+//
+// Logline: Hostile program. check and build must fail closed. No ELF.
+//
+// Setup: sopt returns Option[String]. main is Option[Int] and returns sopt().
+//
+// Beats:
+//   1. check exits nonzero with ERR.
+//   2. build exits nonzero, prints ERR, and does not write an ELF.
+
+fn sopt() -> Option[String] {
+    return Some("x");
+}
+
+pub fn main() -> Option[Int] {
+    return sopt();
+}

@@ -1,0 +1,54 @@
+// # Probe: Option-kind mismatch at return, let, assign, and call arg cannot ship
+//
+// Logline: oodac check and build of Some(String) and String-Option callee at Option[Int] sites must ERR and leave no ELF.
+//
+// Setup: ProcessCap + EnvCap + FsReadCap. Host is OODA_COMPILER. Out paths under .ooda-cache/ooda-tmp.
+//
+// Beats:
+//   1. check and build of Some("no") victims at return, let, assign, and arg are ERR; ELF absent.
+//   2. check and build of Option[String] callee victims at those same sites are ERR; ELF absent.
+
+fn refuse_kind(p: &ProcessCap, fs_r: &FsReadCap, host: String, src: String, out: String) {
+    let ca: Result[String, String] = sys_exec(p, host, "check", src);
+    if ca.is_ok() {
+        println("ERR\tcheck must fail\t" + src);
+        process_exit(1);
+    }
+    let ct: String = ca.val;
+    if str_index_of(ct, "ERR") < 0 {
+        println("ERR\tcheck silent\t" + src);
+        process_exit(1);
+    }
+    let ba: Result[String, String] = sys_exec(p, host, "build", src, "-o", out);
+    if ba.is_ok() {
+        println("ERR\tbuild must fail\t" + src);
+        process_exit(1);
+    }
+    let bt: String = ba.val;
+    if str_index_of(bt, "ERR") < 0 {
+        println("ERR\tbuild silent\t" + src);
+        process_exit(1);
+    }
+    if path_exists(fs_r, out) {
+        println("ERR\tELF shipped\t" + src);
+        process_exit(1);
+    }
+}
+
+pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
+    let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
+    let host: String = match hr { Ok(s) => s, Err(_) => "" };
+    if host == "" {
+        println("ERR\tOODA_COMPILER required");
+        process_exit(1);
+    }
+    refuse_kind(p, fs_r, host, "oodac/qa/probe_option_kind_some_str.oo", ".ooda-cache/ooda-tmp/probe_option_kind_some_str.bin");
+    refuse_kind(p, fs_r, host, "oodac/qa/probe_option_kind_callee.oo", ".ooda-cache/ooda-tmp/probe_option_kind_callee.bin");
+    refuse_kind(p, fs_r, host, "oodac/qa/probe_option_let_some_str.oo", ".ooda-cache/ooda-tmp/probe_option_let_some_str.bin");
+    refuse_kind(p, fs_r, host, "oodac/qa/probe_option_let_callee.oo", ".ooda-cache/ooda-tmp/probe_option_let_callee.bin");
+    refuse_kind(p, fs_r, host, "oodac/qa/probe_option_assign_some_str.oo", ".ooda-cache/ooda-tmp/probe_option_assign_some_str.bin");
+    refuse_kind(p, fs_r, host, "oodac/qa/probe_option_assign_callee.oo", ".ooda-cache/ooda-tmp/probe_option_assign_callee.bin");
+    refuse_kind(p, fs_r, host, "oodac/qa/probe_option_arg_some_str.oo", ".ooda-cache/ooda-tmp/probe_option_arg_some_str.bin");
+    refuse_kind(p, fs_r, host, "oodac/qa/probe_option_arg_callee.oo", ".ooda-cache/ooda-tmp/probe_option_arg_callee.bin");
+    println("OK");
+}

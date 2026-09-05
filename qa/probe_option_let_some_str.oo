@@ -1,0 +1,16 @@
+// # Probe victim: Some(String) bound as Option[Int]
+//
+// Logline: Hostile program. oodac check and build must fail closed. No ELF.
+//
+// Setup: annotated let of Option[Int] initialized with Some("no").
+//
+// Beats:
+//   1. check exits nonzero with ERR.
+//   2. build exits nonzero, prints ERR, and does not write an ELF.
+
+pub fn main() {
+    let o: Option[Int] = Some("no");
+    if o.is_some() {
+        println("no");
+    }
+}
