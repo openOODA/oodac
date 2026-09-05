@@ -1,0 +1,20 @@
+// # Probe: annotated Result let Ok(0) and Err are well-typed
+//
+// Logline: Result[Int, String] lets of Ok(0) and Err("x") must check OK.
+//
+// Setup: No caps. Matching inner Int payload and String Err payload.
+//
+// Beats:
+//   1. check prints OK.
+//   2. This file is the well-typed twin of probe_result_let_ok_str.oo.
+
+pub fn main() {
+    let r: Result[Int, String] = Ok(0);
+    let e: Result[Int, String] = Err("x");
+    if r.is_ok() {
+        println("ok");
+    }
+    if e.is_err() {
+        println("err");
+    }
+}

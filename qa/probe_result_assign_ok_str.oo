@@ -1,0 +1,17 @@
+// # Probe victim: Ok(String) assigned into Result[Int, String]
+//
+// Logline: Hostile program. oodac check and build must fail closed. No ELF.
+//
+// Setup: let mut r is Result[Int, String] from Ok(0), then assigned Ok("no").
+//
+// Beats:
+//   1. check exits nonzero with ERR.
+//   2. build exits nonzero, prints ERR, and does not write an ELF.
+
+pub fn main() {
+    let mut r: Result[Int, String] = Ok(0);
+    r = Ok("no");
+    if r.is_ok() {
+        println("no");
+    }
+}

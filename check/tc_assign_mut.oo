@@ -12,6 +12,7 @@
 import "tc_infer.oo";
 
 import "tc_read_result.oo";
+import "tc_ok_err.oo";
 
 
 pub fn typecheck_mut_assign_types(toks: List[String]) {
@@ -150,6 +151,12 @@ pub fn typecheck_mut_assign_types(toks: List[String]) {
                                                 rty = got;
                                             }
                                         }
+                                    }
+                                }
+                                if rty == "" {
+                                    let okt: String = tc_infer_ok_err_ty(toks, i + 2, env_rhs, vty, i);
+                                    if okt != "" {
+                                        rty = okt;
                                     }
                                 }
                                 if rty == "ERR_DIV0" {

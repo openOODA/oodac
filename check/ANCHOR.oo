@@ -48,6 +48,7 @@ import "tc_ann.oo";
 import "tc_ann_let.oo";
 import "tc_ann_ops.oo";
 import "tc_ann_return.oo";
+import "tc_ok_err.oo";
 import "tc_assign_immut.oo";
 import "tc_assign_mut.oo";
 import "tc_call_arg_lits.oo";

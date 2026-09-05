@@ -1,0 +1,53 @@
+// # Infer Ok/Err payload types
+//
+// Logline: Ok(payload) is Result[payload, String]; Err(payload) must match declared E.
+//
+// Setup: pos is the IDENT Ok or Err. lit_token_type, resolve_type_alias, get_cur_fn_at, types_compatible, tc_result_e, and tc_err_at exist.
+//
+// Beats:
+//   1. Ok with a known payload type returns Result[pty, String].
+//   2. Err with a known payload type fail-closed when declared E does not match.
+//   3. Unknown payload or a non-Ok/Err ident returns empty (no false fail).
+
+import "tc_infer.oo";
+import "tc_read_result.oo";
+
+
+pub fn tc_infer_ok_err_ty(toks: List[String], pos: Int, lit_env: String, expected: String, err_idx: Int) -> String {
+    let n = list_len(toks);
+    if pos + 2 >= n { return "";
+    }
+    if field_at(list_get(toks, pos), 0) != "IDENT" { return "";
+    }
+    let tag: String = field_at(list_get(toks, pos), 3);
+    if tag != "Ok" && tag != "Err" { return "";
+    }
+    if field_at(list_get(toks, pos + 1), 0) != "LPAREN" { return "";
+    }
+    let pk: String = field_at(list_get(toks, pos + 2), 0);
+    let mut pty: String = lit_token_type(pk);
+    if pty == "" && pk == "IDENT" {
+        let pn: String = field_at(list_get(toks, pos + 2), 3);
+        let cur_fn: String = get_cur_fn_at(toks, pos);
+        if cur_fn != "" {
+            pty = resolve_type_alias(lit_env, cur_fn + "." + pn);
+            if pty == cur_fn + "." + pn { pty = "";
+            }
+        }
+        if pty == "" {
+            pty = resolve_type_alias(lit_env, pn);
+            if pty == pn { pty = "";
+            }
+        }
+    }
+    if tag == "Ok" && pty != "" {
+        return "Result[" + pty + ", String]";
+    }
+    if tag == "Err" && pty != "" {
+        let ee: String = tc_result_e(expected);
+        if ee != "" && !types_compatible(ee, pty) {
+            tc_err_at(toks, err_idx, "type Result[_, " + pty + "] does not match declared " + expected);
+        }
+    }
+    return "";
+}
