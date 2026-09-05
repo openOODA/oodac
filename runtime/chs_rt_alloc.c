@@ -60,9 +60,7 @@ long long oo_cap_grant_alloc(void) {
 void oo_cap_require_alloc(long long got, const char *op) {
   oo_alloc_init();
   if (got != g_tok_alloc) {
-    fprintf(stderr, "ERR\tcap\t%s: missing or forged capability\n",
-            op ? op : "alloc");
-    exit(1);
+    oo_cap_fail(op ? op : "alloc");
   }
 }
 

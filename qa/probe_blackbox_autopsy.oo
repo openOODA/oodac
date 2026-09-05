@@ -1,0 +1,98 @@
+// # Probe: oodac build ELFs link the oodar crash sensor
+//
+// Logline: Product oodac build ELFs nm blackbox symbols, dump SIGSEGV autopsy, and dump CAPABILITY_VIOLATION on a wrong-cap arena_create.
+//
+// Setup: ProcessCap + EnvCap + FsReadCap. Host is OODA_COMPILER. Victims are probe_blackbox_hold.oo and probe_blackbox_capmiss.oo.
+//
+// Beats:
+//   1. oodac build the hold victim to a jail tmp ELF.
+//   2. nm requires blackbox_init, blackbox_dump_autopsy, oo_blackbox_trap_cap.
+//   3. timeout --signal=SEGV 1 the ELF; autopsy.json names SIGSEGV.
+//   4. oodac build the TimeCap-vs-arena victim; running it writes CAPABILITY_VIOLATION.
+
+pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
+    let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
+    let host: String = match hr { Ok(s) => s, Err(_) => "" };
+    if host == "" {
+        println("ERR\tOODA_COMPILER required");
+        process_exit(1);
+    }
+    let hold: String = ".ooda-cache/ooda-tmp/probe_bb_hold.bin";
+    let br: Result[String, String] = sys_exec(p, host, "build", "oodac/qa/probe_blackbox_hold.oo", "-o", hold);
+    if br.is_err() {
+        println("ERR\tbuild hold");
+        let btxt: String = br.val;
+        println(btxt);
+        process_exit(1);
+    }
+    if !path_exists(fs_r, hold) {
+        println("ERR\thold ELF missing");
+        process_exit(1);
+    }
+    let nr: Result[String, String] = sys_exec(p, "nm", hold);
+    if nr.is_err() {
+        println("ERR\tnm failed");
+        process_exit(1);
+    }
+    let ntxt: String = match nr { Ok(s) => s, Err(_) => "" };
+    if str_index_of(ntxt, "blackbox_init") < 0 {
+        println("ERR\tmissing blackbox_init");
+        process_exit(1);
+    }
+    if str_index_of(ntxt, "blackbox_dump_autopsy") < 0 {
+        println("ERR\tmissing blackbox_dump_autopsy");
+        process_exit(1);
+    }
+    if str_index_of(ntxt, "oo_blackbox_trap_cap") < 0 {
+        println("ERR\tmissing oo_blackbox_trap_cap");
+        process_exit(1);
+    }
+    let mut av: List[String] = list_new();
+    av = list_push(av, "--signal=SEGV");
+    av = list_push(av, "1");
+    av = list_push(av, hold);
+    let _tr: Result[Int, String] = sys_exec_wait(p, "timeout", av);
+    if !path_exists(fs_r, ".blackbox/autopsy.json") {
+        println("ERR\tautopsy.json missing");
+        process_exit(1);
+    }
+    let ar: Result[String, String] = read_file(fs_r, ".blackbox/autopsy.json");
+    if ar.is_err() {
+        println("ERR\tautopsy unreadable");
+        process_exit(1);
+    }
+    let aj: String = match ar { Ok(s) => s, Err(_) => "" };
+    if str_index_of(aj, "schema_version") < 0 {
+        println("ERR\tautopsy schema_version");
+        process_exit(1);
+    }
+    if str_index_of(aj, "SIGSEGV") < 0 {
+        println("ERR\tautopsy not SIGSEGV");
+        process_exit(1);
+    }
+    let celf: String = ".ooda-cache/ooda-tmp/probe_bb_capmiss.bin";
+    let cb: Result[String, String] = sys_exec(p, host, "build", "oodac/qa/probe_blackbox_capmiss.oo", "-o", celf);
+    if cb.is_err() {
+        println("ERR\tbuild capmiss");
+        let ctxt: String = cb.val;
+        println(ctxt);
+        process_exit(1);
+    }
+    if !path_exists(fs_r, celf) {
+        println("ERR\tcapmiss ELF missing");
+        process_exit(1);
+    }
+    let empty: List[String] = list_new();
+    let _cr: Result[Int, String] = sys_exec_wait(p, celf, empty);
+    let ar2: Result[String, String] = read_file(fs_r, ".blackbox/autopsy.json");
+    if ar2.is_err() {
+        println("ERR\tcap autopsy unreadable");
+        process_exit(1);
+    }
+    let aj2: String = match ar2 { Ok(s) => s, Err(_) => "" };
+    if str_index_of(aj2, "CAPABILITY_VIOLATION") < 0 {
+        println("ERR\tautopsy not CAPABILITY_VIOLATION");
+        process_exit(1);
+    }
+    println("OK");
+}

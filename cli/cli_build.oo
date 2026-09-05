@@ -7,7 +7,7 @@
 // Beats:
 //   1. Refuse non-c backends.
 //   2. mkdir argv; sys_exec host emit-c; write_file the C.
-//   3. One gcc argv with chs_rt.
+//   3. One gcc argv with chs_rt and oodar blackbox.c. Fail-closed if missing.
 
 fn compiler_host(env: &EnvCap) -> String {
     let oc: Result[String, String] = env_get(env, "OODA_COMPILER");
@@ -45,6 +45,17 @@ fn runtime_dir(fs_r: &FsReadCap, host: String) -> String {
     return "";
 }
 
+fn blackbox_dir(fs_r: &FsReadCap, rt: String) -> String {
+    if path_exists(fs_r, "oodar/core/blackbox/blackbox.c") {
+        return "oodar/core/blackbox";
+    }
+    let cand: String = path_parent(path_parent(rt)) + "/oodar/core/blackbox";
+    if path_exists(fs_r, cand + "/blackbox.c") { return cand; }
+    println("ERR\tbuild\tblackbox.c missing");
+    process_exit(1);
+    return "";
+}
+
 fn cache_dir(env: &EnvCap) -> String {
     let wd: Result[String, String] = env_get(env, "OODA_FS_WRITEDIR");
     if wd.is_ok() {
@@ -62,6 +73,7 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
     }
     let host: String = compiler_host(env);
     let rt: String = runtime_dir(fs_r, host);
+    let bb: String = blackbox_dir(fs_r, rt);
     let tmp_dir: String = cache_dir(env);
     let tmp_h: String = crypto_sha256_internal(out + ":" + path);
     let tmp_c: String = tmp_dir + "/all_" + str_slice(tmp_h, 0, 16) + ".c";
@@ -82,7 +94,7 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
         println("ERR\tbuild\twrite C failed");
         process_exit(1);
     }
-    let r: Result[String, String] = sys_exec(sys, "gcc", "-O2", "-I" + rt, rt + "/chs_rt.c", tmp_c, "-frandom-seed=0", "-Wl,--build-id=none", "-lm", "-ldl", "-lpthread", "-o", out);
+    let r: Result[String, String] = sys_exec(sys, "gcc", "-O2", "-I" + rt, "-I" + bb, rt + "/chs_rt.c", bb + "/blackbox.c", tmp_c, "-frandom-seed=0", "-Wl,--build-id=none", "-lm", "-ldl", "-lpthread", "-o", out);
     if !r.is_ok() {
         println("ERR\tbuild\tgcc failed");
         let gtxt: String = r.val;

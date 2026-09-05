@@ -59,9 +59,7 @@ long long oo_cap_grant_ffi(void) {
 void oo_cap_require_ffi(long long got, const char *op) {
   oo_ffi_init();
   if (got != g_tok_ffi) {
-    fprintf(stderr, "ERR\tcap\t%s: missing or forged capability\n",
-            op ? op : "ffi");
-    exit(1);
+    oo_cap_fail(op ? op : "ffi");
   }
 }
 

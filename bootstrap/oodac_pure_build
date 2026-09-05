@@ -703,7 +703,12 @@ else
   echo "pure_build: OO_HAVE_OPENSSL=0 (TLS residual; no -lssl)"
 fi
 mkdir -p "$(dirname "$OUT")"
-gcc ${OODAC_GCC_OPT:--O2} -I"$ROOT/runtime" "${OO_SSL_CFLAGS[@]}" "$ROOT/runtime/chs_rt.c" "$TMP/all.c" \
+BB="$WS_ROOT/oodar/core/blackbox"
+if [[ ! -f "$BB/blackbox.c" ]]; then
+  echo "ERR_BLACKBOX_MISSING $BB/blackbox.c" >&2
+  exit 1
+fi
+gcc ${OODAC_GCC_OPT:--O2} -I"$ROOT/runtime" -I"$BB" "${OO_SSL_CFLAGS[@]}" "$ROOT/runtime/chs_rt.c" "$BB/blackbox.c" "$TMP/all.c" \
   -frandom-seed=0 -Wl,--build-id=none \
   -lm -ldl -lpthread "${OO_SSL_LIBS[@]}" -o "$OUT"
 chmod +x "$OUT"

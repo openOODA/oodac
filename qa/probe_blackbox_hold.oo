@@ -1,0 +1,13 @@
+// # Probe victim: stay alive so a product ELF can take SIGSEGV
+//
+// Logline: TimeCap sleep so timeout can deliver SIGSEGV to a shipped oodac build ELF.
+//
+// Setup: main takes &TimeCap. sleep_ms 30s. No other I/O.
+//
+// Beats:
+//   1. Grant TimeCap on main.
+//   2. Block in sleep_ms until the driver signals.
+
+pub fn main(t: &TimeCap) {
+    sleep_ms(t, 30000);
+}

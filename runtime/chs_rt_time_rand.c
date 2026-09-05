@@ -65,15 +65,13 @@ long long oo_cap_grant_rand(void) { oo_tr_init(); return g_tok_rand; }
 void oo_cap_require_time(long long got, const char *op) {
   oo_tr_init();
   if (got != g_tok_time) {
-    fprintf(stderr, "ERR\tcap\t%s: missing or forged capability\n", op ? op : "time");
-    exit(1);
+    oo_cap_fail(op ? op : "time");
   }
 }
 void oo_cap_require_rand(long long got, const char *op) {
   oo_tr_init();
   if (got != g_tok_rand) {
-    fprintf(stderr, "ERR\tcap\t%s: missing or forged capability\n", op ? op : "rand");
-    exit(1);
+    oo_cap_fail(op ? op : "rand");
   }
 }
 

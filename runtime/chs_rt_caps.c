@@ -178,11 +178,19 @@ long long oo_cap_grant_compiler_read(void) { oo_caps_init(); return g_tok_compil
 
 int oo_cap_is_arena(long long got) { oo_caps_init(); return got == g_tok_arena; }
 
+void oo_blackbox_trap_cap(const char *cap_name, const char *caller_fn, const char *file, int line);
+
+void oo_cap_fail(const char *op) {
+  const char *name = op ? op : "?";
+  oo_blackbox_trap_cap(name, "oo_cap_require", __FILE__, __LINE__);
+  fprintf(stderr, "ERR\tcap\t%s: missing or forged capability\n", name);
+  exit(1);
+}
+
 void oo_cap_require(long long got, long long want, const char *op) {
   oo_caps_init();
   if (got == 0 || got != want) {
-    fprintf(stderr, "ERR\tcap\t%s: missing or forged capability\n", op ? op : "?");
-    exit(1);
+    oo_cap_fail(op);
   }
 }
 
@@ -207,50 +215,43 @@ void oo_cap_require_compiler_read(long long got, const char *op) { oo_cap_requir
 void oo_cap_require_http(long long got, const char *op) {
   oo_caps_init();
   if (got == 0 || (got != g_tok_http && got != g_tok_net)) {
-    fprintf(stderr, "ERR\tcap\t%s: missing or forged capability\n", op ? op : "http");
-    exit(1);
+    oo_cap_fail(op ? op : "http");
   }
 }
 void oo_cap_require_tcp(long long got, const char *op) {
   oo_caps_init();
   if (got == 0 || (got != g_tok_tcp && got != g_tok_net)) {
-    fprintf(stderr, "ERR\tcap\t%s: missing or forged capability\n", op ? op : "tcp");
-    exit(1);
+    oo_cap_fail(op ? op : "tcp");
   }
 }
 void oo_cap_require_udp(long long got, const char *op) {
   oo_caps_init();
   if (got == 0 || (got != g_tok_udp && got != g_tok_net)) {
-    fprintf(stderr, "ERR\tcap\t%s: missing or forged capability\n", op ? op : "udp");
-    exit(1);
+    oo_cap_fail(op ? op : "udp");
   }
 }
 void oo_cap_require_bind(long long got, const char *op) {
   oo_caps_init();
   if (got == 0 || (got != g_tok_bind && got != g_tok_net)) {
-    fprintf(stderr, "ERR\tcap\t%s: missing or forged capability\n", op ? op : "bind");
-    exit(1);
+    oo_cap_fail(op ? op : "bind");
   }
 }
 void oo_cap_require_fsread(long long got, const char *op) {
   oo_caps_init();
   if (got == 0 || (got != g_tok_fsread && got != g_tok_fs)) {
-    fprintf(stderr, "ERR\tcap\t%s: missing or forged capability\n", op ? op : "fsread");
-    exit(1);
+    oo_cap_fail(op ? op : "fsread");
   }
 }
 void oo_cap_require_fswrite(long long got, const char *op) {
   oo_caps_init();
   if (got == 0 || (got != g_tok_fswrite && got != g_tok_fs)) {
-    fprintf(stderr, "ERR\tcap\t%s: missing or forged capability\n", op ? op : "fswrite");
-    exit(1);
+    oo_cap_fail(op ? op : "fswrite");
   }
 }
 void oo_cap_require_process(long long got, const char *op) {
   oo_caps_init();
   if (got == 0 || (got != g_tok_process && got != g_tok_sys)) {
-    fprintf(stderr, "ERR\tcap\t%s: missing or forged capability\n", op ? op : "process");
-    exit(1);
+    oo_cap_fail(op ? op : "process");
   }
 }
 

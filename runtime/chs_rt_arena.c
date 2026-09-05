@@ -151,8 +151,7 @@ static int ar_alloc_slot(void) {
 
 static void oo_arena_need(long long cap, const char *op) {
   if (oo_cap_is_arena(cap) || oo_cap_is_alloc(cap)) return;
-  fprintf(stderr, "ERR\tcap\t%s: missing or forged capability\n", op ? op : "arena");
-  exit(1);
+  oo_cap_fail(op ? op : "arena");
 }
 
 #define OO_CK_MAX 8

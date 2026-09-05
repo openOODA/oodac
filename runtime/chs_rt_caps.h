@@ -70,6 +70,7 @@ long long oo_cap_grant_thread(void);
 long long oo_cap_grant_gpu(void);
 long long oo_cap_grant_compiler_read(void);
 
+void oo_cap_fail(const char *op);
 void oo_cap_require(long long got, long long want, const char *op);
 void oo_cap_require_fs(long long got, const char *op);
 void oo_cap_require_sys(long long got, const char *op);

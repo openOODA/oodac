@@ -129,9 +129,8 @@ static char g_hr_hash[OO_HR_SLOTS][65];
 static int g_hr_n;
 
 long long oo_hot_reload(OoStr path) {
-  fprintf(stderr, "ERR\tcap\thot_reload: missing or forged capability\n");
   (void)path;
-  exit(1);
+  oo_cap_fail("hot_reload");
   return 0;
 }
 /* 1 = first load or contents changed; 0 = same bytes as last call. */
