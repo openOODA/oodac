@@ -1,0 +1,19 @@
+// # Probe victim: List[String] callee assigned into List[Int]
+//
+// Logline: Hostile program. check and build must fail closed. No ELF.
+//
+// Setup: slist returns List[String]. let mut xs is List[Int] then assigned slist().
+//
+// Beats:
+//   1. check exits nonzero with ERR.
+//   2. build exits nonzero, prints ERR, and does not write an ELF.
+
+fn slist() -> List[String] {
+    return list_new();
+}
+
+pub fn main() {
+    let mut xs: List[Int] = list_new();
+    xs = slist();
+    println(list_len(xs).to_string());
+}

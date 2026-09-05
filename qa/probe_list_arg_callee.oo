@@ -1,0 +1,21 @@
+// # Probe victim: List[String] callee passed as List[Int] argument
+//
+// Logline: Hostile program. check and build must fail closed. No ELF.
+//
+// Setup: slist returns List[String]. takes expects List[Int]. main calls takes(slist()).
+//
+// Beats:
+//   1. check exits nonzero with ERR.
+//   2. build exits nonzero, prints ERR, and does not write an ELF.
+
+fn slist() -> List[String] {
+    return list_new();
+}
+
+fn takes(xs: List[Int]) {
+    println(list_len(xs).to_string());
+}
+
+pub fn main() {
+    takes(slist());
+}

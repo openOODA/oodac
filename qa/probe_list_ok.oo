@@ -1,0 +1,28 @@
+// # Probe: well-typed List[String] list_new and List[Int] callee
+//
+// Logline: list_new at List[String] let and call, and a matching List[Int] callee, must check OK.
+//
+// Setup: No caps. Annotated List[String] sites copy list_new; ilist returns List[Int].
+//
+// Beats:
+//   1. check prints OK.
+//   2. This file is the well-typed twin of the List[String] vs List[Int] victims.
+
+fn ilist() -> List[Int] {
+    return list_new();
+}
+
+fn takes_s(xs: List[String]) {
+    println(list_len(xs).to_string());
+}
+
+fn takes_i(xs: List[Int]) {
+    println(list_len(xs).to_string());
+}
+
+pub fn main() {
+    let mut xs: List[String] = list_new();
+    takes_s(list_new());
+    takes_i(ilist());
+    println(list_len(xs).to_string());
+}

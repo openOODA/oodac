@@ -1,0 +1,18 @@
+// # Probe victim: List[String] callee bound as List[Int]
+//
+// Logline: Hostile program. check and build must fail closed. No ELF.
+//
+// Setup: slist returns List[String]. let xs is List[Int] from slist().
+//
+// Beats:
+//   1. check exits nonzero with ERR.
+//   2. build exits nonzero, prints ERR, and does not write an ELF.
+
+fn slist() -> List[String] {
+    return list_new();
+}
+
+pub fn main() {
+    let xs: List[Int] = slist();
+    println(list_len(xs).to_string());
+}
