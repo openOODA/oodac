@@ -72,6 +72,25 @@ while cont_g { if p >= n { cont_g = false;
     return out;
 }
 
+pub fn tc_result_e(ann: String) -> String {
+    if chars_len(ann) < 9 { return ""; }
+    if str_slice(ann, 0, 7) != "Result[" { return ""; }
+    let inner: String = str_slice(ann, 7, chars_len(ann) - 1);
+    let mut comma_pos: Int = 0 - 1;
+    let mut depth: Int = 0;
+    let mut ci: Int = 0;
+    let in_len: Int = chars_len(inner);
+    while ci < in_len {
+        let ch: String = char_at(inner, ci);
+        if ch == "[" { depth = depth + 1; }
+        else if ch == "]" { depth = depth - 1; }
+        else if ch == "," && depth == 0 { comma_pos = ci; ci = in_len; }
+        ci = ci + 1;
+    }
+    if comma_pos < 0 { return ""; }
+    return str_trim(str_slice(inner, comma_pos + 1, in_len));
+}
+
 pub fn tc_read_result_ann(base: String, toks: List[String], pos: Int) -> String {
     if base != "Result" && base != "Option" && base != "List" { return base;
 }

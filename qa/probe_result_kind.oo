@@ -1,0 +1,51 @@
+// # Probe: Result-kind mismatch at return cannot ship
+//
+// Logline: oodac check and build of Ok(String) and String-Result callee from Result[Int, String] main must ERR and leave no ELF.
+//
+// Setup: ProcessCap + EnvCap + FsReadCap. Host is OODA_COMPILER. Out paths under .ooda-cache/ooda-tmp.
+//
+// Beats:
+//   1. check and build of probe_result_kind_ok_str.oo are ERR; ELF absent.
+//   2. check and build of probe_result_kind_callee.oo are ERR; ELF absent.
+
+pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
+    let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
+    let host: String = match hr { Ok(s) => s, Err(_) => "" };
+    if host == "" {
+        println("ERR\tOODA_COMPILER required");
+        process_exit(1);
+    }
+    let a: String = "oodac/qa/probe_result_kind_ok_str.oo";
+    let oa: String = ".ooda-cache/ooda-tmp/probe_result_kind_ok_str.bin";
+    let ca: Result[String, String] = sys_exec(p, host, "check", a);
+    if ca.is_ok() {
+        println("ERR\tok_str check must fail");
+        process_exit(1);
+    }
+    let ba: Result[String, String] = sys_exec(p, host, "build", a, "-o", oa);
+    if ba.is_ok() {
+        println("ERR\tok_str build must fail");
+        process_exit(1);
+    }
+    if path_exists(fs_r, oa) {
+        println("ERR\tok_str ELF shipped");
+        process_exit(1);
+    }
+    let b: String = "oodac/qa/probe_result_kind_callee.oo";
+    let ob: String = ".ooda-cache/ooda-tmp/probe_result_kind_callee.bin";
+    let cb: Result[String, String] = sys_exec(p, host, "check", b);
+    if cb.is_ok() {
+        println("ERR\tcallee check must fail");
+        process_exit(1);
+    }
+    let bb: Result[String, String] = sys_exec(p, host, "build", b, "-o", ob);
+    if bb.is_ok() {
+        println("ERR\tcallee build must fail");
+        process_exit(1);
+    }
+    if path_exists(fs_r, ob) {
+        println("ERR\tcallee ELF shipped");
+        process_exit(1);
+    }
+    println("OK");
+}

@@ -1,0 +1,13 @@
+// # Probe: Result-main Ok(0) is well-typed
+//
+// Logline: Result[Int, String] main that returns Ok(0) must check OK.
+//
+// Setup: No caps. Matching inner Int payload.
+//
+// Beats:
+//   1. check prints OK.
+//   2. This file is the well-typed twin of probe_result_kind_ok_str.oo.
+
+pub fn main() -> Result[Int, String] {
+    return Ok(0);
+}
