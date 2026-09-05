@@ -1,0 +1,23 @@
+// # Probe victim: Result[String, String] callee passed as Result[Int, String] argument
+//
+// Logline: Hostile program. The cli_init_project shape at a call argument. check and build must fail closed. No ELF.
+//
+// Setup: sres returns Result[String, String]. takes expects Result[Int, String]. main calls takes(sres()).
+//
+// Beats:
+//   1. check exits nonzero with ERR.
+//   2. build exits nonzero, prints ERR, and does not write an ELF.
+
+fn sres() -> Result[String, String] {
+    return Ok("x");
+}
+
+fn takes(r: Result[Int, String]) {
+    if r.is_ok() {
+        println("no");
+    }
+}
+
+pub fn main() {
+    takes(sres());
+}

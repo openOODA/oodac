@@ -1,0 +1,20 @@
+// # Probe: well-typed Result call arguments
+//
+// Logline: takes(Ok(0)) and takes(Err("x")) on Result[Int, String] must check OK.
+//
+// Setup: No caps. Matching inner Int payload and String Err payload.
+//
+// Beats:
+//   1. check prints OK.
+//   2. This file is the well-typed twin of probe_result_arg_ok_str.oo.
+
+fn takes(r: Result[Int, String]) {
+    if r.is_ok() {
+        println("ok");
+    }
+}
+
+pub fn main() {
+    takes(Ok(0));
+    takes(Err("x"));
+}

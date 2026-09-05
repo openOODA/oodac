@@ -1,0 +1,19 @@
+// # Probe victim: Ok(String) passed as Result[Int, String] argument
+//
+// Logline: Hostile program. oodac check and build must fail closed. No ELF.
+//
+// Setup: takes expects Result[Int, String]. main calls takes(Ok("no")).
+//
+// Beats:
+//   1. check exits nonzero with ERR.
+//   2. build exits nonzero, prints ERR, and does not write an ELF.
+
+fn takes(r: Result[Int, String]) {
+    if r.is_ok() {
+        println("no");
+    }
+}
+
+pub fn main() {
+    takes(Ok("no"));
+}

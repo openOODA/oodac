@@ -6,12 +6,13 @@
 //
 // Beats:
 //   1. Skip IDENT LPAREN after DOT or KW_FN; otherwise look up fname in the param-type table (list_push defaults to _,_).
-//   2. Walk args by paren depth; on COMMA or close RPAREN, resolve_arg_type the span.
+//   2. Walk args by paren depth; on COMMA or close RPAREN, resolve_arg_type the span, then Ok/Err.
 //   3. list_push into a List[Int] name rejects String/OoStr; otherwise nth_csv param type must types_compatible or tc_err_at.
 
 import "tc_list_int_name.oo";
 
 import "tc_infer.oo";
+import "tc_ok_err.oo";
 
 
 // Call args: two parameterized Result/Option forms must match T/E. Bare vs
@@ -97,7 +98,7 @@ pub fn typecheck_call_arg_lits(toks: List[String]) {
                                             depth = depth - 1;
                                             if depth == 0 { if p > arg_start { if ret_table == "" { ret_table = build_fn_ret_table(toks);
                                             }
-                                                    let aty = resolve_arg_type(
+                                                    let mut aty: String = resolve_arg_type(
                                                         toks,
                                                         arg_start,
                                                         p,
@@ -106,6 +107,9 @@ pub fn typecheck_call_arg_lits(toks: List[String]) {
                                                         aliases,
                                                         struct_table
                                                     );
+                                                    if aty == "" {
+                                                        aty = tc_infer_ok_err_ty(toks, arg_start, lit_env, nth_csv(types, arg_i), i);
+                                                    }
                                                     if aty != "" {
                                                         if fname == "list_push" && arg_i == 1 {
                                                             let list_var: String = field_at(list_get(toks, arg_start - 2), 3);
@@ -159,7 +163,7 @@ pub fn typecheck_call_arg_lits(toks: List[String]) {
                                         if kk == "COMMA" {
                                             if depth == 1 { if ret_table == "" { ret_table = build_fn_ret_table(toks);
                                             }
-                                                let aty = resolve_arg_type(
+                                                let mut aty: String = resolve_arg_type(
                                                     toks,
                                                     arg_start,
                                                     p,
@@ -168,6 +172,9 @@ pub fn typecheck_call_arg_lits(toks: List[String]) {
                                                     aliases,
                                                     struct_table
                                                 );
+                                                if aty == "" {
+                                                    aty = tc_infer_ok_err_ty(toks, arg_start, lit_env, nth_csv(types, arg_i), i);
+                                                }
                                                 if aty != "" {
                                                     if fname == "list_push" && arg_i == 1 {
                                                         let list_var: String = field_at(list_get(toks, arg_start - 2), 3);
