@@ -25,6 +25,6 @@ pub fn cli_parse_args(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, arg
     return parse_cli_argv(fs_r, fs_w, sys, argv);
 }
 
-pub fn cli_run_emit_c(fs: &FsReadCap, cmd: String, path: String, is_plain: Bool) {
-    run_emit_c_family(fs, cmd, path, is_plain);
+pub fn cli_run_emit_c(fs: &FsReadCap, env: &EnvCap, cmd: String, path: String, is_plain: Bool) {
+    run_emit_c_family(fs, env, cmd, path, is_plain);
 }

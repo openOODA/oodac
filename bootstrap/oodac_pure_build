@@ -315,6 +315,12 @@ for src in "${MODS[@]}"; do
     /usr/bin/grep -E $'^ERR\tc_emit' "$mc" >&2 || true
     exit 1
   fi
+  src_lines=$(wc -l < "$src")
+  mc_bytes=$(wc -c < "$mc")
+  if [[ "$src_lines" -lt 300 && "$mc_bytes" -gt 200000 ]]; then
+    echo "ERR_EMIT_CONCAT_DUMP $src lines=$src_lines bytes=$mc_bytes" >&2
+    exit 1
+  fi
   MCS+=("$mc")
 done
 echo "pure_build: emit_cache skip=$emit_skip of ${#MODS[@]}"
@@ -342,6 +348,11 @@ def consider(name, proto, body):
     text = "".join(body)
     if "{" not in text or "}" not in text:
         return
+    stripped = text.strip()
+    if stripped == "{}" or stripped == "{ }":
+        return
+    if name.startswith("oo_retain_") or name.startswith("oo_release_"):
+        return
     sc = len(text)
     if name not in fn_map:
         fn_order.append(name)
@@ -353,6 +364,8 @@ def oo_fn_name(line):
     return m.group(0) if m else raw.strip()
 
 for mc in mcs:
+    if "ANCHOR_oo" in mc.name:
+        continue
     raw_content = mc.read_text(errors="replace")
     clean_content = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", raw_content)
     clean_content = re.sub(r"\{\s*COMMA\s*,", "{", clean_content)
@@ -518,9 +531,10 @@ for ty, sdef in real_structs.items():
     struct_defs.append(f"#ifndef OO_TY_{ty}\n#define OO_TY_{ty}\n#define OO_TY_RES_{ty}\n{sdef}\n")
     if ty in real_retains:
         struct_defs.append(f"{real_retains[ty]}\n")
-    else:
+    elif f"oo_retain_{ty}" not in preamble_text:
         struct_defs.append(f"#ifndef OO_RETAIN_{ty}\n#define OO_RETAIN_{ty}\nstatic inline void oo_retain_{ty}({ty} v) {{ }}\n#endif\n")
-    struct_defs.append(f"#ifndef OO_RELEASE_{ty}\n#define OO_RELEASE_{ty}\nstatic inline void oo_release_{ty}({ty} v) {{ }}\n#endif\n")
+    if f"oo_release_{ty}" not in preamble_text:
+        struct_defs.append(f"#ifndef OO_RELEASE_{ty}\n#define OO_RELEASE_{ty}\nstatic inline void oo_release_{ty}({ty} v) {{ }}\n#endif\n")
     struct_defs.append(f"#ifndef OO_HAVE_OoRes_{ty}\n#define OO_HAVE_OoRes_{ty}\ntypedef struct OoRes_{ty} {{ int ok; {ty} val; OoStr err; }} OoRes_{ty};\n#endif\n")
     struct_defs.append(f"#ifndef OO_RETAIN_OoRes_{ty}\n#define OO_RETAIN_OoRes_{ty}\nstatic inline void oo_retain_OoRes_{ty}(OoRes_{ty} v) {{ if (v.ok) oo_retain_{ty}(v.val); else oo_str_retain(v.err); }}\n#endif\n")
     struct_defs.append(f"#ifndef OO_RELEASE_OoRes_{ty}\n#define OO_RELEASE_OoRes_{ty}\nstatic inline void oo_release_OoRes_{ty}(OoRes_{ty} v) {{ if (v.ok) oo_release_{ty}(v.val); else oo_str_release(v.err); }}\n#endif\n#endif\n")

@@ -1,25 +1,49 @@
 // # Run the emit-c family
 //
-// Logline: Stream C for emit-c, emit-preamble, emit-protos, and emit-bodies.
+// Logline: Stream C for emit-c. Concat imports for product build. One-TU when OODA_EMIT_NO_CONCAT=1.
 //
-// Setup: load_expand and c_emit. One concat emit. No env fork.
+// Setup: load_expand for concat. One-TU tokenizes only the target file. EnvCap reads the flag.
 //
 // Beats:
 //   1. Map cmd to mode once/preamble/protos/bodies.
-//   2. Load imports, tokenize each file with LINEFILE, stream C.
+//   2. Concat: load imports, tokenize each file, stream C.
+//   3. One-TU: tokenize only `path` so unique_fns never sees an import-graph dump.
 
 import "lex/token_fmt.oo";
 import "ast/load_import.oo";
 import "emit/c/c_emit.oo";
 import "emit/c/c_emit_helpers.oo";
 
-pub fn run_emit_c_family(fs: &FsReadCap, cmd: String, path: String, is_plain: Bool) {
+fn emit_c_no_concat(env: &EnvCap) -> Bool {
+    let r: Result[String, String] = env_get(env, "OODA_EMIT_NO_CONCAT");
+    let v: String = match r { Ok(s) => s, Err(_) => "" };
+    return v == "1";
+}
+
+fn emit_c_one_tu(fs: &FsReadCap, path: String, mode: String, is_plain: Bool) {
+    let pr: Result[String, String] = read_file(fs, path);
+    if pr.is_err() {
+        println("ERR\tload\tunreadable file: " + path);
+        process_exit(1);
+    }
+    let fsx: String = match pr { Ok(s) => s, Err(_) => "" };
+    let mut toks: List[String] = list_new();
+    toks = c_toks_append_file_at(toks, tokenize_lines(fsx), path);
+    toks = c_toks_append_eof(toks);
+    c_emit_stream_toks_at(fsx, toks, mode, path, is_plain);
+}
+
+pub fn run_emit_c_family(fs: &FsReadCap, env: &EnvCap, cmd: String, path: String, is_plain: Bool) {
     let mut m: String = "once";
     if cmd == "emit-preamble" { m = "preamble"; }
     else if cmd == "emit-protos" { m = "protos"; }
     else if cmd == "emit-bodies" { m = "bodies"; }
     if m == "preamble" {
         c_emit_stream_mode("", "preamble");
+        return;
+    }
+    if emit_c_no_concat(env) {
+        emit_c_one_tu(fs, path, m, is_plain);
         return;
     }
     let le: List[String] = load_expand(fs, path, list_new(), list_new());

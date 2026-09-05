@@ -32,7 +32,7 @@ pub fn main(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env: &EnvCap,
         return;
     }
     if cmd == "emit-c" || cmd == "emit-protos" || cmd == "emit-bodies" || cmd == "emit-preamble" {
-        run_emit_c_family(fs_r, cmd, path, is_plain);
+        run_emit_c_family(fs_r, env, cmd, path, is_plain);
         return;
     }
     if cmd == "check" {

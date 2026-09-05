@@ -1,0 +1,40 @@
+// # Probe: one-TU emit-c is not an import-graph dump
+//
+// Logline: emit-c of cli_emit.oo with OODA_EMIT_NO_CONCAT=1 must define run_emit_c_family and must not define c_emit_stream_toks_at.
+//
+// Setup: ProcessCap + EnvCap. Host is OODA_COMPILER. Child inherits OODA_EMIT_NO_CONCAT.
+//
+// Beats:
+//   1. sys_exec host emit-c oodac/cli/cli_emit.oo.
+//   2. Fail if output lacks run_emit_c_family.
+//   3. Fail if output defines c_emit_stream_toks_at (lives in emit/c/c_emit.oo).
+
+pub fn main(p: &ProcessCap, env: &EnvCap) {
+    let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
+    let host: String = match hr { Ok(s) => s, Err(_) => "" };
+    if host == "" {
+        println("ERR\tOODA_COMPILER required");
+        process_exit(1);
+    }
+    let nc: Result[String, String] = env_get(env, "OODA_EMIT_NO_CONCAT");
+    let ncv: String = match nc { Ok(s) => s, Err(_) => "" };
+    if ncv != "1" {
+        println("ERR\tOODA_EMIT_NO_CONCAT=1 required");
+        process_exit(1);
+    }
+    let r: Result[String, String] = sys_exec(p, host, "emit-c", "oodac/cli/cli_emit.oo");
+    if r.is_err() {
+        println("ERR\temit-c failed");
+        process_exit(1);
+    }
+    let c: String = match r { Ok(s) => s, Err(_) => "" };
+    if str_index_of(c, "run_emit_c_family") < 0 {
+        println("ERR\tmissing run_emit_c_family");
+        process_exit(1);
+    }
+    if str_index_of(c, "OO_FN_c_emit_stream_toks_at") >= 0 {
+        println("ERR\tforeign OO_FN_c_emit_stream_toks_at in one-TU dump");
+        process_exit(1);
+    }
+    println("OK");
+}
