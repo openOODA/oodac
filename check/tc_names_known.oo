@@ -156,7 +156,8 @@ pub fn is_known_name(name: String) -> Bool {
         || name == "cap_attenuate" || name == "cap_attenuate_ok"
         || name == "oo_cap_attenuate" || name == "oo_cap_attenuate_ok"
         || name == "oo_cap_kernel_seal" || name == "cap_kernel_seal"
-        || name == "oo_enclave_enter" || name == "enclave_enter" { return true;
+        || name == "oo_enclave_enter" || name == "enclave_enter"
+        || name == "hot_reload" || name == "oo_hot_reload" { return true;
         }
     if name == "macro_expand" || name == "ast_macro" { return true;
     }

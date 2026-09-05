@@ -1,0 +1,14 @@
+// # Probe victim: check-valid runtime cap trap
+//
+// Logline: hot_reload is a product deny stub. check accepts it. The ELF must write CAPABILITY_VIOLATION autopsy.
+//
+// Setup: No extra caps. hot_reload lowers to oo_hot_reload which always oo_cap_fail.
+//
+// Beats:
+//   1. oodac check and build succeed.
+//   2. Running the ELF writes .blackbox/autopsy.json with CAPABILITY_VIOLATION.
+
+pub fn main() {
+    let n: Int = hot_reload("x");
+    println(n.to_string());
+}

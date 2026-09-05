@@ -1,0 +1,20 @@
+// # Probe victim: rvalue & of a call must not emit GNU __auto_type
+//
+// Logline: emit-c of &id(1) must not contain GNU __auto_type.
+//
+// Setup: id returns Int. main takes the address of a call.
+//
+// Beats:
+//   1. emit-c produces C.
+//   2. Output does not contain __auto_type.
+
+fn id(x: Int) -> Int {
+    return x;
+}
+
+pub fn main() {
+    let p: Int = 0;
+    p = 1;
+    let q: Int = id(1);
+    println((&id(1) == &q).to_string());
+}

@@ -70,6 +70,9 @@ process_exit(1);
     if t == "landlock_is_available" || t == "oo_landlock_is_available" {
         return "oo_landlock_is_available()";
     }
+    if t == "hot_reload" || t == "oo_hot_reload" {
+        return "oo_hot_reload(" + args + ")";
+    }
     if t == "arena_create" || t == "oo_arena_create" {
         return "oo_arena_create(" + args + ")";
     }

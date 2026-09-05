@@ -11,8 +11,7 @@
 
 import "lex/token_fmt.oo";
 import "ast/load_import.oo";
-import "emit/c/c_emit.oo";
-import "emit/c/c_emit_helpers.oo";
+import "emit/c/ANCHOR.oo";
 
 fn emit_c_no_concat(env: &EnvCap) -> Bool {
     let r: Result[String, String] = env_get(env, "OODA_EMIT_NO_CONCAT");
@@ -50,6 +49,7 @@ pub fn run_emit_c_family(fs: &FsReadCap, env: &EnvCap, cmd: String, path: String
     let nle: Int = list_len(le);
     let src: String = list_get(le, nle - 1);
     let mut toks: List[String] = list_new();
+    let mut seen: String = "\t";
     let mut i: Int = 0;
     while i < nle - 1 {
         let p: String = list_get(le, i);
@@ -58,6 +58,12 @@ pub fn run_emit_c_family(fs: &FsReadCap, env: &EnvCap, cmd: String, path: String
             i = i + 1;
             continue;
         }
+        let key: String = "\t" + p + "\t";
+        if seen.contains(key) {
+            i = i + 1;
+            continue;
+        }
+        seen = seen + p + "\t";
         let pr: Result[String, String] = read_file(fs, p);
         if pr.is_err() {
             println("ERR\tload\tunreadable file: " + p);

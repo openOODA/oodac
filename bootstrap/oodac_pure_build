@@ -357,6 +357,25 @@ def consider(name, proto, body):
     if name not in fn_map:
         fn_order.append(name)
         fn_map[name] = (proto, body, sc)
+        return
+    old_proto = fn_map[name][0]
+    def _norm(p):
+        p = re.sub(r"\s+", " ", p).strip()
+        def _params(m):
+            inner = m.group(1)
+            parts = []
+            for arg in inner.split(","):
+                arg = arg.strip()
+                if not arg or arg == "void":
+                    parts.append(arg)
+                    continue
+                arg = re.sub(r"\s+[A-Za-z_][A-Za-z0-9_]*\s*$", "", arg)
+                parts.append(arg.strip())
+            return "(" + ", ".join(parts) + ")"
+        return re.sub(r"\((.*)\)", _params, p, count=1)
+    if _norm(old_proto) != _norm(proto):
+        print("ERR_UNIQUE_FNS " + name + " proto mismatch: " + _norm(old_proto) + " vs " + _norm(proto), file=sys.stderr)
+        sys.exit(1)
 
 def oo_fn_name(line):
     raw = line.rstrip().split("OO_FN_", 1)[1]

@@ -1,0 +1,12 @@
+// # Same-name Int foo, no args
+//
+// Logline: First TU of a same-name different-proto pair.
+//
+// Setup: foo() -> Int.
+//
+// Beats:
+//   1. Export foo with zero parameters.
+
+pub fn foo() -> Int {
+    return 1;
+}

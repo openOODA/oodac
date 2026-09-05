@@ -1,13 +1,13 @@
 // # Build a source file to a native C binary
 //
-// Logline: emit-c via ProcessCap argv, write C under the jail, gcc argv.
+// Logline: check then emit-c via ProcessCap argv, write C under the jail, gcc argv.
 //
 // Setup: Host is OODA_COMPILER or OODAC_BIN only. C backend only. No sh -c.
 //
 // Beats:
-//   1. Refuse non-c backends.
-//   2. mkdir argv; sys_exec host emit-c; write_file the C.
-//   3. One gcc argv with chs_rt and oodar blackbox.c. Fail-closed if missing.
+//   1. Refuse non-c backends, -o a directory, and entry files with no main.
+//   2. sys_exec host check; on ERR do not emit or gcc.
+//   3. mkdir; sys_exec host emit-c; gcc with chs_rt and oodar blackbox.c.
 
 fn compiler_host(env: &EnvCap) -> String {
     let oc: Result[String, String] = env_get(env, "OODA_COMPILER");
@@ -56,6 +56,12 @@ fn blackbox_dir(fs_r: &FsReadCap, rt: String) -> String {
     return "";
 }
 
+fn src_has_main(src: String) -> Bool {
+    if str_index_of(src, "fn main(") >= 0 { return true; }
+    if str_index_of(src, "fn main (") >= 0 { return true; }
+    return false;
+}
+
 fn cache_dir(env: &EnvCap) -> String {
     let wd: Result[String, String] = env_get(env, "OODA_FS_WRITEDIR");
     if wd.is_ok() {
@@ -71,6 +77,22 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
         println("ERR\tbuild\tbackend residual: " + backend);
         process_exit(2);
     }
+    if path_exists(fs_r, out) {
+        if path_exists(fs_r, out + "/.") {
+            println("ERR\tbuild\t-o is a directory");
+            process_exit(1);
+        }
+    }
+    let sr: Result[String, String] = read_file(fs_r, path);
+    if sr.is_err() {
+        println("ERR\tbuild\tunreadable file: " + path);
+        process_exit(1);
+    }
+    let src: String = match sr { Ok(s) => s, Err(_) => "" };
+    if !src_has_main(src) {
+        println("ERR\tbuild\tno main");
+        process_exit(1);
+    }
     let host: String = compiler_host(env);
     let rt: String = runtime_dir(fs_r, host);
     let bb: String = blackbox_dir(fs_r, rt);
@@ -80,6 +102,13 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
     let mk: Result[String, String] = sys_exec(sys, "mkdir", "-p", tmp_dir);
     if mk.is_err() {
         println("ERR\tbuild\tmkdir failed");
+        process_exit(1);
+    }
+    let ck: Result[String, String] = sys_exec(sys, host, "check", path);
+    if !ck.is_ok() {
+        println("ERR\tbuild\tcheck failed");
+        let cmsg: String = ck.val;
+        println(cmsg);
         process_exit(1);
     }
     let em: Result[String, String] = sys_exec(sys, host, "emit-c", path);

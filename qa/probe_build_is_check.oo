@@ -1,0 +1,51 @@
+// # Probe: oodac build cannot ship what check refuses
+//
+// Logline: Product oodac build of a check-fail source, a no-main file, and -o a directory must ERR and leave no ELF.
+//
+// Setup: ProcessCap + EnvCap + FsReadCap. Host is OODA_COMPILER. Out paths under .ooda-cache/ooda-tmp.
+//
+// Beats:
+//   1. build probe_blackbox_capmiss.oo is ERR; ELF absent.
+//   2. build probe_no_main.oo is ERR; ELF absent.
+//   3. build hold -o oodac/qa is ERR (directory).
+//   4. --backend llvm on a valid file exits nonzero.
+
+pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
+    let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
+    let host: String = match hr { Ok(s) => s, Err(_) => "" };
+    if host == "" {
+        println("ERR\tOODA_COMPILER required");
+        process_exit(1);
+    }
+    let celf: String = ".ooda-cache/ooda-tmp/probe_capmiss_must_not.bin";
+    let br: Result[String, String] = sys_exec(p, host, "build", "oodac/qa/probe_blackbox_capmiss.oo", "-o", celf);
+    if br.is_ok() {
+        println("ERR\tcapmiss build must fail");
+        process_exit(1);
+    }
+    if path_exists(fs_r, celf) {
+        println("ERR\tcapmiss ELF shipped");
+        process_exit(1);
+    }
+    let nelf: String = ".ooda-cache/ooda-tmp/probe_nomain_must_not.bin";
+    let nr: Result[String, String] = sys_exec(p, host, "build", "oodac/qa/probe_no_main.oo", "-o", nelf);
+    if nr.is_ok() {
+        println("ERR\tno-main build must fail");
+        process_exit(1);
+    }
+    if path_exists(fs_r, nelf) {
+        println("ERR\tno-main ELF shipped");
+        process_exit(1);
+    }
+    let dr: Result[String, String] = sys_exec(p, host, "build", "oodac/qa/probe_blackbox_hold.oo", "-o", "oodac/qa");
+    if dr.is_ok() {
+        println("ERR\t-o dir build must fail");
+        process_exit(1);
+    }
+    let lr: Result[String, String] = sys_exec(p, host, "build", "oodac/qa/probe_build_std_import.oo", "--backend", "llvm");
+    if lr.is_ok() {
+        println("ERR\tbackend llvm must fail");
+        process_exit(1);
+    }
+    println("OK");
+}

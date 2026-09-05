@@ -23,8 +23,6 @@
 #include "chs_rt_netfloor.c"
 #include "chs_rt_tls.c"
 #include "chs_rt_libfloor.c"
-#include "chs_rt_gpu.c"
-#include "chs_rt_gpu_hip.c"
 #include "chs_rt_thread.c"
 #include "chs_rt_channel.c"
 #include "chs_rt_actor.c"
@@ -41,7 +39,7 @@
 #include "chs_rt_rlimit.c"
 #include "chs_rt_landlock.c"
 #include "chs_rt_dns.c"
-#include "chs_rt_vision.c"
+#include "chs_rt_jail.c"
 #include "chs_rt_xlang.c"
 #include "chs_rt_sha3.c"
 #include "chs_rt_aead.c"
@@ -50,6 +48,11 @@
 #include "chs_rt_pq_sig.c"
 #include "chs_rt_metrics.c"
 #include "chs_rt_closure.c"
+long long oo_hot_reload(OoStr path) {
+  (void)path;
+  oo_cap_fail("hot_reload");
+  return 0;
+}
 void oo_reso_i_retain(OoResO_I v) { if (!v.ok) oo_str_retain(v.err); }
 void oo_reso_i_release(OoResO_I v) { if (!v.ok) oo_str_release(v.err); }
 void oo_reso_s_retain(OoResO_S v) { if (v.ok && v.has_val) oo_str_retain(v.val); else if (!v.ok) oo_str_retain(v.err); }

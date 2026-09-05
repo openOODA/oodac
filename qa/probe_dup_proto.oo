@@ -1,0 +1,15 @@
+// # Probe victim: two TUs export foo with different prototypes
+//
+// Logline: Import both dup_proto_a and dup_proto_b. check or build must fail closed. No ELF.
+//
+// Setup: Two imports, one main. foo is defined twice with different arity.
+//
+// Beats:
+//   1. oodac build of this file must ERR and leave no ELF.
+
+import "dup_proto_a.oo";
+import "dup_proto_b.oo";
+
+pub fn main() {
+    println(foo().to_string());
+}

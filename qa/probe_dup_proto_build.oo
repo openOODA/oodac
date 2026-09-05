@@ -1,0 +1,29 @@
+// # Probe: same-name different-proto TUs cannot ship an ELF
+//
+// Logline: oodac build of probe_dup_proto.oo must ERR. The out path must not exist.
+//
+// Setup: ProcessCap + EnvCap + FsReadCap. Host is OODA_COMPILER.
+//
+// Beats:
+//   1. sys_exec host build of the dup-proto victim is Err.
+//   2. path_exists of the out ELF is false.
+
+pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
+    let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
+    let host: String = match hr { Ok(s) => s, Err(_) => "" };
+    if host == "" {
+        println("ERR\tOODA_COMPILER required");
+        process_exit(1);
+    }
+    let out: String = ".ooda-cache/ooda-tmp/probe_dup_proto_must_not.bin";
+    let r: Result[String, String] = sys_exec(p, host, "build", "oodac/qa/probe_dup_proto.oo", "-o", out);
+    if r.is_ok() {
+        println("ERR\tdup-proto build must fail");
+        process_exit(1);
+    }
+    if path_exists(fs_r, out) {
+        println("ERR\tdup-proto ELF shipped");
+        process_exit(1);
+    }
+    println("OK");
+}

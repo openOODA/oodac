@@ -120,22 +120,11 @@ OoResS oo_mutex_unlock(long long cap, long long mid) {
   return r;
 }
 
-/* M165 Path A: HIP/ROCm only; no "noop"/"cpu:" fallbacks. Empty shader or unknown
-   prefix fails closed. */
+/* Default product link has no gpu/vision TUs. gpu_launch is residual. */
 OoResS oo_gpu_launch(long long cap, OoStr shader) {
   OoResS r;
-  const char *p;
-  long long len;
+  (void)shader;
   oo_cap_require_gpu(cap, "gpu_launch");
-  p = shader.data ? shader.data : "";
-  len = shader.len;
-  if (len < 0) len = 0;
-  /* HIP/ROCm: real device path when libamdhip64 is present; else residual. */
-  if ((len >= 4 && strncmp(p, "hip:", 4) == 0) || (len >= 5 && strncmp(p, "rocm:", 5) == 0)) {
-    return oo_gpu_hip_try_launch(cap, shader);
-  }
-  /* Empty shader, "noop", "cpu:", PTX, SPIR-V, Metal, etc. all fail closed. There is
-     no CPU-shaped substitute for a GPU launch. */
   r.ok = 0;
   r.val = oo_str_lit("gpu residual: no device shaders");
   return r;

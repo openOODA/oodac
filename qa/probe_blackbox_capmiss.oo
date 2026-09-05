@@ -1,13 +1,12 @@
-// # Probe victim: wrong cap token must dump autopsy at runtime
+// # Probe victim: TimeCap must not satisfy arena_create
 //
-// Logline: oodac check refuses TimeCap for arena_create. Product build still emits; the ELF must oo_cap_fail and write autopsy.json.
+// Logline: Hostile program. oodac check and oodac build must both fail closed. No ELF.
 //
-// Setup: main takes &TimeCap. arena_create is sealed ArenaCap. Runtime oo_arena_need rejects the time token.
+// Setup: main takes &TimeCap. arena_create is sealed ArenaCap.
 //
 // Beats:
 //   1. check exits nonzero with ERR capability.
-//   2. oodac build still links a native ELF (build does not re-run check).
-//   3. Running that ELF writes .blackbox/autopsy.json with CAPABILITY_VIOLATION.
+//   2. build exits nonzero, prints ERR, and does not write an ELF.
 
 pub fn main(t: &TimeCap) {
     let a: Result[String, String] = arena_create(t, 4096);

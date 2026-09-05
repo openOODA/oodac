@@ -1,0 +1,12 @@
+// # Probe victim: no main
+//
+// Logline: A library fn with no main must not become a native ELF.
+//
+// Setup: No main. Helper only. Check may accept type-only modules.
+//
+// Beats:
+//   1. oodac build of this file must print ERR and leave no ELF.
+
+pub fn helper() -> Int {
+    return 1;
+}

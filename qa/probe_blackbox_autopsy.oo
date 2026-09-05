@@ -1,14 +1,14 @@
 // # Probe: oodac build ELFs link the oodar crash sensor
 //
-// Logline: Product oodac build ELFs nm blackbox symbols, dump SIGSEGV autopsy, and dump CAPABILITY_VIOLATION on a wrong-cap arena_create.
+// Logline: Product oodac build ELFs nm blackbox symbols, dump SIGSEGV autopsy, and dump CAPABILITY_VIOLATION from check-valid hot_reload.
 //
-// Setup: ProcessCap + EnvCap + FsReadCap. Host is OODA_COMPILER. Victims are probe_blackbox_hold.oo and probe_blackbox_capmiss.oo.
+// Setup: ProcessCap + EnvCap + FsReadCap. Host is OODA_COMPILER. Victims are probe_blackbox_hold.oo and probe_blackbox_captrap.oo.
 //
 // Beats:
 //   1. oodac build the hold victim to a jail tmp ELF.
 //   2. nm requires blackbox_init, blackbox_dump_autopsy, oo_blackbox_trap_cap.
 //   3. timeout --signal=SEGV 1 the ELF; autopsy.json names SIGSEGV.
-//   4. oodac build the TimeCap-vs-arena victim; running it writes CAPABILITY_VIOLATION.
+//   4. oodac build check-valid hot_reload; running it writes CAPABILITY_VIOLATION.
 
 pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
     let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
@@ -70,16 +70,16 @@ pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
         println("ERR\tautopsy not SIGSEGV");
         process_exit(1);
     }
-    let celf: String = ".ooda-cache/ooda-tmp/probe_bb_capmiss.bin";
-    let cb: Result[String, String] = sys_exec(p, host, "build", "oodac/qa/probe_blackbox_capmiss.oo", "-o", celf);
+    let celf: String = ".ooda-cache/ooda-tmp/probe_bb_captrap.bin";
+    let cb: Result[String, String] = sys_exec(p, host, "build", "oodac/qa/probe_blackbox_captrap.oo", "-o", celf);
     if cb.is_err() {
-        println("ERR\tbuild capmiss");
+        println("ERR\tbuild captrap");
         let ctxt: String = cb.val;
         println(ctxt);
         process_exit(1);
     }
     if !path_exists(fs_r, celf) {
-        println("ERR\tcapmiss ELF missing");
+        println("ERR\tcaptrap ELF missing");
         process_exit(1);
     }
     let empty: List[String] = list_new();

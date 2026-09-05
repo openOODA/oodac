@@ -1,0 +1,12 @@
+// # Same-name Int foo, one arg
+//
+// Logline: Second TU of a same-name different-proto pair.
+//
+// Setup: foo(Int) -> Int.
+//
+// Beats:
+//   1. Export foo with one Int parameter.
+
+pub fn foo(x: Int) -> Int {
+    return x;
+}

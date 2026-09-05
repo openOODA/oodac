@@ -188,6 +188,7 @@ pub fn c_emit_preamble() {
     println("OoResV oo_fs_hardlink(long long,OoStr,OoStr); OoResV oo_fs_symlink(long long,OoStr,OoStr);");
     println("OoResS oo_rlimit_set_mem_mb(long long,long long); OoResS oo_rlimit_set_nofile(long long,long long); OoResS oo_rlimit_set_cpu_sec(long long,long long);");
     println("OoResS oo_arena_create(long long,long long); OoResS oo_arena_alloc(long long,long long,long long); OoResS oo_arena_reset(long long,long long);");
+    println("long long oo_hot_reload(OoStr);");
     println("long long oo_soa_layout(OoStr); long long oo_dod_layout(long long); long long oo_checkpoint(long long,long long); long long oo_rollback(long long);");
     println("OoResS oo_actor_restart(long long,long long); OoResS oo_otp_supervise(long long,long long);");
     println("OoResS oo_cap_rpc_send(long long,OoStr); OoResS oo_cap_rpc_recv(long long,OoStr);");
