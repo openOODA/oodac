@@ -1,0 +1,58 @@
+// # Probe: cli_emit check does not dump emit/c/ANCHOR
+//
+// Logline: Shipped oodac check of cli_emit.oo is OK without import emit/c/ANCHOR.oo; check of emit/c/ANCHOR.oo is OK with c_emit_stmt defined.
+//
+// Setup: ProcessCap + EnvCap + FsReadCap. Host is OODA_COMPILER.
+//
+// Beats:
+//   1. read_file of oodac/cli/cli_emit.oo has no import "emit/c/ANCHOR.oo".
+//   2. check oodac/cli/cli_emit.oo is OK.
+//   3. check oodac/emit/c/ANCHOR.oo is OK and does not say undefined c_emit_stmt.
+
+pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
+    let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
+    let host: String = match hr { Ok(s) => s, Err(_) => "" };
+    if host == "" {
+        println("ERR\tOODA_COMPILER required");
+        process_exit(1);
+    }
+    let src_r: Result[String, String] = read_file(fs_r, "oodac/cli/cli_emit.oo");
+    if src_r.is_err() {
+        println("ERR\tunreadable cli_emit.oo");
+        process_exit(1);
+    }
+    let src: String = match src_r { Ok(s) => s, Err(_) => "" };
+    if str_index_of(src, "import \"emit/c/ANCHOR.oo\"") >= 0 {
+        println("ERR\tcli_emit dumps emit/c/ANCHOR.oo");
+        process_exit(1);
+    }
+    let ce: Result[String, String] = sys_exec(p, host, "check", "oodac/cli/cli_emit.oo");
+    if ce.is_err() {
+        println("ERR\tcheck cli_emit.oo");
+        let et: String = ce.val;
+        println(et);
+        process_exit(1);
+    }
+    let ct: String = match ce { Ok(s) => s, Err(_) => "" };
+    if str_index_of(ct, "OK") < 0 {
+        println("ERR\tcli_emit check not OK");
+        process_exit(1);
+    }
+    let ae: Result[String, String] = sys_exec(p, host, "check", "oodac/emit/c/ANCHOR.oo");
+    if ae.is_err() {
+        println("ERR\tcheck emit/c/ANCHOR.oo");
+        let at: String = ae.val;
+        println(at);
+        process_exit(1);
+    }
+    let atxt: String = match ae { Ok(s) => s, Err(_) => "" };
+    if str_index_of(atxt, "undefined c_emit_stmt") >= 0 {
+        println("ERR\tundefined c_emit_stmt");
+        process_exit(1);
+    }
+    if str_index_of(atxt, "OK") < 0 {
+        println("ERR\temit ANCHOR check not OK");
+        process_exit(1);
+    }
+    println("OK");
+}

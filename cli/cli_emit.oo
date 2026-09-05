@@ -11,7 +11,7 @@
 
 import "lex/token_fmt.oo";
 import "ast/load_import.oo";
-import "emit/c/ANCHOR.oo";
+import "emit/c/c_emit.oo";
 
 fn emit_c_no_concat(env: &EnvCap) -> Bool {
     let r: Result[String, String] = env_get(env, "OODA_EMIT_NO_CONCAT");

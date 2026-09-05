@@ -13,6 +13,10 @@ import "c_emit_walk.oo";
 import "c_emit_sum.oo";
 import "c_emit_closure.oo";
 import "c_emit_type_helpers.oo";
+import "c_emit_stmt.oo";
+import "c_emit_preamble.oo";
+import "c_emit_secret_check.oo";
+import "c_emit_libfloor.oo";
 
 pub fn c_emit_stream(src: String) {
     c_emit_stream_mode(src, "full");

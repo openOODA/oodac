@@ -11,6 +11,7 @@
 //   4. c_emit_scope_exit pops the top frame; c_emit_all_scope_releases and c_emit_local_releases handle full/body scopes.
 
 import "c_emit_env.oo";
+import "c_emit_arc_kinds.oo";
 
 
 
