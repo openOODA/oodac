@@ -181,16 +181,22 @@ process_exit(1);
 // three helpers are called by c_emit_skip.oo (line 73+) and also
 // re-used by c_emit_result_ty.oo (which imports this file).
 pub fn c_result_c_ty(toks: List[String], pos: Int, n: Int) -> String {
-    if pos >= n { return "OoResS";
-}
+    if pos >= n {
+        println("ERR\temit\tunknown Result type");
+        process_exit(1);
+        return "";
+    }
     let parsed: List[String] = ty_parse_at(toks, pos, n);
     let ty_ast: String = list_get(parsed, 1);
     return ty_to_c_typedef(ty_ast);
 }
 
 pub fn c_option_c_ty(toks: List[String], pos: Int, n: Int) -> String {
-    if pos >= n { return "OoOpt_I";
-}
+    if pos >= n {
+        println("ERR\temit\tunknown Option type");
+        process_exit(1);
+        return "";
+    }
     let parsed: List[String] = ty_parse_at(toks, pos, n);
     let ty_ast: String = list_get(parsed, 1);
     return ty_to_c_typedef(ty_ast);

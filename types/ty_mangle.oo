@@ -119,7 +119,12 @@ pub fn ty_to_c_typedef(ty: String) -> String {
     if tag == "TyResult" {
         let ok: String = ty_arg(ty, 0);
         let err: String = ty_arg(ty, 1);
-        if err == "TyStr" || err == "String" || err == "str" || err == "" {
+        if err == "" {
+            println("ERR\temit\tunknown Result type");
+            process_exit(1);
+            return "";
+        }
+        if err == "TyStr" || err == "String" || err == "str" {
             if ok == "TyStr" || ok == "String" { return "OoResS"; }
             if ok == "TyUnit" || ok == "Void" || ok == "unit" || ok == "void" || ok == "()" { return "OoResV"; }
             if ok == "TyInt" || ok == "Int" { return "OoResI"; }

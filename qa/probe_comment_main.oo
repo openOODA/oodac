@@ -1,0 +1,12 @@
+// # Probe victim: comment is not a main
+//
+// Logline: The only fn main( sequence in this file lives in a comment.
+//
+// Setup: Helper only. No real main item.
+//
+// Beats:
+//   1. oodac build must print ERR no main and leave no ELF.
+
+pub fn helper() -> Int {
+    return 1;
+}

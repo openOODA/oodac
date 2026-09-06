@@ -1,11 +1,11 @@
 // # Type Checking & Verification Subsystem — Module Entry Door
 //
-// Logline: Re-exports bidirectional type checking, typestate verification, SMT contracts, and polyhedral analysis.
+// Logline: Re-exports type checking, typestate, and const-false SMT refuse.
 //
 // Setup: Imports internal check siblings and exposes public verification APIs.
 //
 // Beats:
-//   1. Import type checker, typestate, SMT, and polyhedral analysis siblings.
+//   1. Import type checker, typestate, and SMT const-false refuse siblings.
 //   2. Re-export public verification and typechecking interfaces.
 //   3. Preserve capability passing and zero ambient authority.
 

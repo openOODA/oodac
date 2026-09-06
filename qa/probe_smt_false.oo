@@ -1,0 +1,15 @@
+// # Probe victim: const-false requires must not check
+//
+// Logline: requires 1 == 0 is unsat and must fail closed.
+//
+// Setup: Well-typed Int main except the contract.
+//
+// Beats:
+//   1. check and build must ERR.
+//   2. No ELF.
+
+pub fn main() -> Int
+    requires 1 == 0
+{
+    return 0;
+}

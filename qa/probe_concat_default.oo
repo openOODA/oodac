@@ -1,0 +1,31 @@
+// # Probe: emit-c default is one-TU
+//
+// Logline: emit-c of probe_concat_entry.oo without concat opt-in must not dump the sibling marker.
+//
+// Setup: ProcessCap + EnvCap. Host is OODA_COMPILER. Concat env unset.
+//
+// Beats:
+//   1. emit-c of the entry is Ok.
+//   2. Output has no concat_sib_secret_token_zz.
+
+pub fn main(p: &ProcessCap, env: &EnvCap) {
+    let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
+    let host: String = match hr { Ok(s) => s, Err(_) => "" };
+    if host == "" {
+        println("ERR\tOODA_COMPILER required");
+        process_exit(1);
+    }
+    let r: Result[String, String] = sys_exec(p, host, "emit-c", "oodac/qa/probe_concat_entry.oo");
+    if r.is_err() {
+        println("ERR\temit-c concat entry");
+        let et: String = r.val;
+        println(et);
+        process_exit(1);
+    }
+    let txt: String = match r { Ok(s) => s, Err(_) => "" };
+    if str_index_of(txt, "concat_sib_secret_token_zz") >= 0 {
+        println("ERR\tconcat dump of sibling");
+        process_exit(1);
+    }
+    println("OK");
+}

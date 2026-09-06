@@ -1,0 +1,36 @@
+// # Probe: comment-only fn main( cannot ship
+//
+// Logline: oodac build of probe_comment_main.oo prints no main, leaves no ELF.
+//
+// Setup: ProcessCap + EnvCap + FsReadCap. Host is OODA_COMPILER.
+//
+// Beats:
+//   1. build is nonzero and text contains no main.
+//   2. ELF path does not exist.
+
+pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
+    let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
+    let host: String = match hr { Ok(s) => s, Err(_) => "" };
+    if host == "" {
+        println("ERR\tOODA_COMPILER required");
+        process_exit(1);
+    }
+    let src: String = "oodac/qa/probe_comment_main.oo";
+    let out: String = ".ooda-cache/ooda-tmp/probe_comment_main.bin";
+    let br: Result[String, String] = sys_exec(p, host, "build", src, "-o", out);
+    if br.is_ok() {
+        println("ERR\tcomment main must fail");
+        process_exit(1);
+    }
+    let bt: String = br.val;
+    if str_index_of(bt, "no main") < 0 {
+        println("ERR\tmissing no main");
+        println(bt);
+        process_exit(1);
+    }
+    if path_exists(fs_r, out) {
+        println("ERR\tELF shipped");
+        process_exit(1);
+    }
+    println("OK");
+}
