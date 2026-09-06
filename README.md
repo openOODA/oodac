@@ -18,7 +18,8 @@
 
 ## This repo: oodac
 
-Sovereign self-hosting compiler (12 public subdirs).
+Sovereign self-hosting compiler. Root `ANCHOR.oo` re-exports six
+surfaces: `lex`, `ast`, `check`, `types`, `emit/c`, and `cli`.
 
 ## Install
 

@@ -11,7 +11,7 @@
 //   3. silent-miscompile-prevention.oot — emit safety.
 //   4. x86-codegen-style.oot — x86 emit style.
 //   5. TOKEN_OPT.oot / TOKEN_TOOLING.oot — token surface.
-//   6. CAP_LEGACY_SUPERSEDE_REMOVAL_TODO.oot — leftover.
+//   6. CAP_LEGACY_SUPERSEDE_REMOVAL_TODO.oot — granular cap rules.
 
 import "CAP_BOUNDARY.oot";
 import "silent-miscompile-prevention.oot";

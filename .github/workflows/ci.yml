@@ -9,18 +9,78 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          path: oodac
+      - uses: actions/checkout@v4
+        with:
+          repository: openOODA/oodar
+          path: oodar
       - name: Count ANCHOR imports
         run: |
-          n=$(grep -c '^import "' ANCHOR.oo)
+          n=$(grep -c '^import "' oodac/ANCHOR.oo)
           echo "ANCHOR imports: $n"
-          test "$n" = "12"
+          test "$n" = "6"
+      - name: Unique C bar
+        env:
+          OODA_COMPILER: ${{ github.workspace }}/oodac/bin/oodac
+          OODAC_BIN: ${{ github.workspace }}/oodac/bin/oodac
+          OODA_FS_READDIR: ${{ github.workspace }}
+          OODA_FS_WRITEDIR: ${{ github.workspace }}
+        run: |
+          set -eu
+          HOST="$OODA_COMPILER"
+          chmod +x oodac/bin/oodac_bin.core
+          test -x "$HOST"
+          mkdir -p .ooda-cache/ooda-tmp
+          echo "=== help 1 ==="
+          "$HOST" --help
+          echo "=== help 2 ==="
+          "$HOST" --help
+          echo "=== backend llvm residual ==="
+          set +e
+          "$HOST" build oodac/qa/probe_list_ok.oo --backend llvm
+          llvm_rc=$?
+          set -e
+          echo "llvm_rc=$llvm_rc"
+          test "$llvm_rc" -eq 2
+          echo "=== cap sealed ==="
+          set +e
+          "$HOST" check oodac/qa/probe_cap_sealed.oo
+          cap_rc=$?
+          set -e
+          echo "cap_rc=$cap_rc"
+          test "$cap_rc" -ne 0
+          echo "=== well-typed twins ==="
+          "$HOST" check oodac/qa/probe_list_ok.oo
+          "$HOST" check oodac/qa/probe_option_ok.oo
+          "$HOST" check oodac/qa/probe_result_main_ok.oo
+          echo "=== list kind driver ==="
+          "$HOST" build oodac/qa/probe_list_kind.oo -o .ooda-cache/ooda-tmp/ci_list_kind.bin
+          .ooda-cache/ooda-tmp/ci_list_kind.bin
+          echo "=== option kind driver ==="
+          "$HOST" build oodac/qa/probe_option_kind.oo -o .ooda-cache/ooda-tmp/ci_option_kind.bin
+          .ooda-cache/ooda-tmp/ci_option_kind.bin
+          echo "=== result kind driver ==="
+          "$HOST" build oodac/qa/probe_result_kind.oo -o .ooda-cache/ooda-tmp/ci_result_kind.bin
+          .ooda-cache/ooda-tmp/ci_result_kind.bin
+          echo "=== build is check ==="
+          "$HOST" build oodac/qa/probe_build_is_check.oo -o .ooda-cache/ooda-tmp/ci_build_is_check.bin
+          .ooda-cache/ooda-tmp/ci_build_is_check.bin
+          echo "=== landlock jail ==="
+          "$HOST" build oodac/qa/probe_landlock_jail.oo -o .ooda-cache/ooda-tmp/ci_landlock_jail.bin
+          .ooda-cache/ooda-tmp/ci_landlock_jail.bin
+          echo "UNIQUE_C_BAR_OK"
       - name: Compiler core is ELF
         run: |
-          test -x bin/oodac_bin.core
-          file bin/oodac_bin.core | grep -q 'ELF 64-bit'
+          test -x oodac/bin/oodac_bin.core
+          file oodac/bin/oodac_bin.core | grep -q 'ELF 64-bit'
   auto-release:
     needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     uses: openOODA/openOODA/.github/workflows/auto-release.yml@v1.0.6
     secrets: inherit
