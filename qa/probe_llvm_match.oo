@@ -1,0 +1,22 @@
+// # Probe: llvm match Option and Result[Int, String]
+//
+// Logline: match Some(3) and Ok(2) print 3 then 2. None and Err arms are typed.
+//
+// Setup: No caps. Option[Int] and Result[Int, String] scrutinees.
+//
+// Beats:
+//   1. Some binds Int. None arm is Int 0.
+//   2. Ok binds Int. Err arm is Int 0.
+
+fn ri() -> Result[Int, String] {
+    return Ok(2);
+}
+
+pub fn main() {
+    let o: Option[Int] = Some(3);
+    let a: Int = match o { Some(x) => x, None => 0 };
+    println(a.to_string());
+    let r: Result[Int, String] = ri();
+    let b: Int = match r { Ok(y) => y, Err(_) => 0 };
+    println(b.to_string());
+}

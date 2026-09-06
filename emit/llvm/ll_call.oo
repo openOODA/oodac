@@ -11,6 +11,7 @@
 
 import "ll_tok.oo";
 import "ll_ty.oo";
+import "types/types_core.oo";
 
 pub fn ll_print_val(kind: String, ssa: Int, ptr: String, ssa0: Int) -> Int {
     if kind == "str" {
@@ -36,10 +37,66 @@ pub fn ll_print_val(kind: String, ssa: Int, ptr: String, ssa0: Int) -> Int {
     return ssa0;
 }
 
+pub fn ll_str_gep(toks: List[String], pos: Int, ssa0: Int) -> String {
+    let tx: String = ll_t(toks, pos);
+    let ln: Int = chars_len(tx) + 1;
+    let n: Int = ssa0 + 1;
+    println("  " + ll_ssa(n) + " = getelementptr [" + ln.to_string() + " x i8], ptr @.s" + pos.to_string() + ", i64 0, i64 0");
+    let n2: Int = n + 1;
+    println("  " + ll_ssa(n2) + " = call { ptr, i64 } @oo_str_lit(ptr " + ll_ssa(n) + ")");
+    return ll_pack(pos + 1, n2, "str", "");
+}
+
+pub fn ll_load_ident(name: String, env: String, ssa0: Int) -> String {
+    let k: String = type_env_get(env, name);
+    if k == "" {
+        println("ERR\tllvm\tundefined " + name);
+        process_exit(1);
+    }
+    let mut ptr: String = ll_var(name);
+    let loc: String = type_env_get(env, "__l__" + name);
+    if loc != "" { ptr = loc; }
+    if ll_is_agg(k) {
+        return ll_pack(0, ssa0, k, ptr);
+    }
+    let n: Int = ssa0 + 1;
+    println("  " + ll_ssa(n) + " = load " + ll_ir_val(k) + ", ptr " + ptr);
+    return ll_pack(0, n, k, "");
+}
+
+pub fn ll_match_tag(sk: String, ptr: String, ssa0: Int) -> Int {
+    let s: Int = ssa0 + 1;
+    println("  " + ll_ssa(s) + " = getelementptr " + ll_ir_alloc(sk) + ", ptr " + ptr + ", i32 0, i32 0");
+    let s2: Int = s + 1;
+    println("  " + ll_ssa(s2) + " = load i32, ptr " + ll_ssa(s));
+    let s3: Int = s2 + 1;
+    println("  " + ll_ssa(s3) + " = icmp ne i32 " + ll_ssa(s2) + ", 0");
+    return s3;
+}
+
+pub fn ll_match_bind(sk: String, ptr: String, bn: String, ok: Int, id: Int, ssa0: Int) -> String {
+    let mut bk: String = "str";
+    let mut fi: String = "1";
+    if sk == "opti" { bk = "i64"; }
+    if sk == "resi" && ok == 1 { bk = "i64"; }
+    if sk == "resi" && ok == 0 { bk = "str"; fi = "2"; }
+    if bn == "_" || (sk == "opti" && ok == 0) {
+        return ll_pack(0, ssa0, bk, "");
+    }
+    let locn: String = "%v_" + bn + "_" + id.to_string();
+    println("  " + locn + " = alloca " + ll_ir_alloc(bk) + ", align 8");
+    let s: Int = ssa0 + 1;
+    println("  " + ll_ssa(s) + " = getelementptr " + ll_ir_alloc(sk) + ", ptr " + ptr + ", i32 0, i32 " + fi);
+    let s2: Int = s + 1;
+    println("  " + ll_ssa(s2) + " = load " + ll_ir_val(bk) + ", ptr " + ll_ssa(s));
+    println("  store " + ll_ir_val(bk) + " " + ll_ssa(s2) + ", ptr " + locn);
+    return ll_pack(0, s2, bk, locn);
+}
+
 pub fn ll_apply_binop(op: String, lhs: String, rhs: String) -> String {
     let lk: String = ll_pk(lhs);
     let rk: String = ll_pk(rhs);
-    let s0: Int = ll_pssa(rhs);
+    let s0: Int = ll_hw(ll_pssa(lhs), ll_pssa(rhs));
     if op == "PLUS" && lk == "str" && rk == "str" {
         let la: String = ll_as_val(lhs, s0);
         let ra: String = ll_as_val(rhs, ll_pssa(la));
@@ -69,13 +126,6 @@ pub fn ll_apply_binop(op: String, lhs: String, rhs: String) -> String {
             println("  " + ll_ssa(s3) + " = icmp eq i32 " + ll_ssa(s2) + ", 0");
         }
         return ll_pack(ll_ppos(rhs), s3, "i1", "");
-    }
-    if op == "OROR" || op == "ANDAND" {
-        let s: Int = s0 + 1;
-        let mut ins: String = "or";
-        if op == "ANDAND" { ins = "and"; }
-        println("  " + ll_ssa(s) + " = " + ins + " i1 " + ll_ssa(ll_pssa(lhs)) + ", " + ll_ssa(ll_pssa(rhs)));
-        return ll_pack(ll_ppos(rhs), s, "i1", "");
     }
     let mut pred: String = "eq";
     if op == "NEQ" { pred = "ne"; }
@@ -134,6 +184,31 @@ pub fn ll_method(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, env:
     println("ERR\tllvm\tunsupported method " + m);
     process_exit(1);
     return ll_pack(0, ssa0, "i64", "");
+}
+
+pub fn ll_ret_resi(v: String, ssa0: Int) -> Int {
+    let mut s: Int = ssa0 + 1;
+    println("  " + ll_ssa(s) + " = getelementptr %OoResI, ptr %ret, i32 0, i32 0");
+    if ll_pk(v) == "i64" {
+        println("  store i32 1, ptr " + ll_ssa(s));
+        s = s + 1;
+        println("  " + ll_ssa(s) + " = getelementptr %OoResI, ptr %ret, i32 0, i32 1");
+        println("  store i64 " + ll_ssa(ll_pssa(v)) + ", ptr " + ll_ssa(s));
+        s = s + 1;
+        println("  " + ll_ssa(s) + " = getelementptr %OoResI, ptr %ret, i32 0, i32 2");
+        println("  store { ptr, i64 } { ptr null, i64 0 }, ptr " + ll_ssa(s));
+    } else {
+        println("  store i32 0, ptr " + ll_ssa(s));
+        s = s + 1;
+        println("  " + ll_ssa(s) + " = getelementptr %OoResI, ptr %ret, i32 0, i32 1");
+        println("  store i64 0, ptr " + ll_ssa(s));
+        let av: String = ll_as_val(v, s);
+        s = ll_pssa(av) + 1;
+        println("  " + ll_ssa(s) + " = getelementptr %OoResI, ptr %ret, i32 0, i32 2");
+        println("  store { ptr, i64 } " + ll_ssa(ll_pssa(av)) + ", ptr " + ll_ssa(s));
+    }
+    println("  ret void");
+    return s;
 }
 
 pub fn ll_ctor(name: String, arg: String, ssa0: Int) -> String {

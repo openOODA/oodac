@@ -1,0 +1,24 @@
+// # Probe: llvm && || short-circuit
+//
+// Logline: false && boom and true || boom must not evaluate boom.
+//
+// Setup: No caps. boom prints a marker. Product llvm stdout is sc.
+//
+// Beats:
+//   1. false && boom() does not print boom.
+//   2. true || boom() does not print boom.
+//   3. The taken || arm prints sc.
+
+fn boom() -> Bool {
+    println("boom");
+    return true;
+}
+
+pub fn main() {
+    if false && boom() {
+        println("and");
+    }
+    if true || boom() {
+        println("sc");
+    }
+}

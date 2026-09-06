@@ -108,6 +108,11 @@ pub fn ll_tmpa(n: Int) -> String {
     return "%a" + n.to_string();
 }
 
+pub fn ll_hw(a: Int, b: Int) -> Int {
+    if a > b { return a; }
+    return b;
+}
+
 pub fn ll_pterm(r: String) -> Int {
     if field_at(r, 4) == "1" { return 1; }
     return 0;

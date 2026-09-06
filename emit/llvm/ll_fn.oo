@@ -84,11 +84,7 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String) -> Int {
                 form = form + pn + ":" + k;
                 if name != "main" {
                     if plist != "" { plist = plist + ", "; }
-                    if ll_is_agg(k) {
-                        plist = plist + "ptr byval(" + ll_ir_alloc(k) + ") align 8 %p_" + pn;
-                    } else {
-                        plist = plist + ll_ir_alloc(k) + " %p_" + pn;
-                    }
+                    plist = plist + ll_pass(k) + " %p_" + pn;
                 }
                 p = ll_skip_type(toks, p, n);
             }
@@ -131,7 +127,7 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String) -> Int {
         println("  call void @oo_slist_new(ptr sret(%OoSList) align 8 %v_args)");
         env = type_env_put(env, "args", "slist");
         let mut mrk: String = "i32";
-        if rk == "resi" { mrk = "resi"; }
+        if rk == "resi" { mrk = "resim"; }
         let mb: String = ll_emit_stmts(toks, p, n, mrk, env, 10);
         if ll_pterm(mb) == 0 { println("  ret i32 0"); }
         println("}");
@@ -151,6 +147,7 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String) -> Int {
     let mut fi: Int = 0;
     let fnn: Int = chars_len(form);
     let mut start: Int = 0;
+    let mut ssa: Int = 1;
     while fi <= fnn {
         if fi == fnn || char_at(form, fi) == "\t" {
             if fi > start {
@@ -159,19 +156,19 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String) -> Int {
                 let pn: String = str_slice(pair, 0, col);
                 let k: String = str_slice(pair, col + 1, chars_len(pair));
                 println("  " + ll_var(pn) + " = alloca " + ll_ir_alloc(k) + ", align 8");
-                if ll_is_agg(k) {
-                    let t: Int = 400 + fi;
-                    println("  " + ll_ssa(t) + " = load " + ll_ir_val(k) + ", ptr %p_" + pn);
-                    println("  store " + ll_ir_val(k) + " " + ll_ssa(t) + ", ptr " + ll_var(pn));
+                if ll_is_mem(k) {
+                    ssa = ssa + 1;
+                    println("  " + ll_ssa(ssa) + " = load " + ll_ir_val(k) + ", ptr %p_" + pn);
+                    println("  store " + ll_ir_val(k) + " " + ll_ssa(ssa) + ", ptr " + ll_var(pn));
                 } else {
-                    println("  store " + ll_ir_alloc(k) + " %p_" + pn + ", ptr " + ll_var(pn));
+                    println("  store " + ll_ir_val(k) + " %p_" + pn + ", ptr " + ll_var(pn));
                 }
             }
             start = fi + 1;
         }
         fi = fi + 1;
     }
-    let fb: String = ll_emit_stmts(toks, p, n, rk, env, 20);
+    let fb: String = ll_emit_stmts(toks, p, n, rk, env, ssa + 1);
     if ll_pterm(fb) == 0 {
         if rk == "void" || ll_is_mem(rk) { println("  ret void"); }
         else { println("  unreachable"); }

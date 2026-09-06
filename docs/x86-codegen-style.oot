@@ -6,7 +6,7 @@ Product oodac emits C99 and gcc. That C path is the reference, not a forever ban
 
 The C reference gate is: four product mains `check`, product `build` of ooda/lsp/mcp, and the unique_fns host rebuild of `oodac/main.oo` (`OK_PURE_MULTI`, `PURE_SKIP_CHECK` unset). Concat of `oodac/main.oo` as the only compiler ELF is a fail.
 
-`--backend llvm` lives in `emit/llvm/` and consumes the same typed artifact C uses. Shared type names live in `types/`. If C and llvm disagree, llvm is wrong. Residual wasm/x86 stay exit 2.
+`--backend llvm` lives in `emit/llvm/` and consumes the same typed artifact C uses. Shared type names live in `types/`. If C and llvm disagree, llvm is wrong. Residual wasm/x86 stay exit 2. Kind drivers stay C; llvm tests victims including landlock run, short-circuit, and Option/Result match.
 
 Do not restore `x86_emit_*.oo` as product. Do not put GNU statement-expr or `__typeof__` in C lowering.
 

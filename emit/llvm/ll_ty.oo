@@ -91,3 +91,10 @@ pub fn ll_is_mem(kind: String) -> Bool {
     if kind == "opti" { return true; }
     return false;
 }
+
+pub fn ll_pass(kind: String) -> String {
+    if ll_is_mem(kind) {
+        return "ptr byval(" + ll_ir_alloc(kind) + ") align 8";
+    }
+    return ll_ir_val(kind);
+}
