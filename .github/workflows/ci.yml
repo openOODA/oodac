@@ -88,6 +88,9 @@ jobs:
           .ooda-cache/ooda-tmp/ci_art_mut.bin
           "$HOST" build oodac/qa/probe_checkfail_no_artifact.oo -o .ooda-cache/ooda-tmp/ci_art_fail.bin
           .ooda-cache/ooda-tmp/ci_art_fail.bin
+          echo "=== four product mains ==="
+          "$HOST" build oodac/qa/probe_four_mains.oo -o .ooda-cache/ooda-tmp/ci_four.bin
+          .ooda-cache/ooda-tmp/ci_four.bin
           echo "UNIQUE_C_BAR_OK"
       - name: Compiler core is ELF
         run: |

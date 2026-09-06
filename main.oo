@@ -27,7 +27,7 @@ pub fn main(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env: &EnvCap,
     let json_errors: Bool = list_get(a, 4) == "1";
     let is_plain: Bool = list_get(a, 5) == "1";
     let concat: Bool = list_get(a, 6) == "1";
-    let art_path: String = "";
+    let mut art_path: String = "";
     if list_len(a) > 7 {
         art_path = list_get(a, 7);
     }

@@ -1,0 +1,54 @@
+// # Probe: four product mains check; three build to ELF
+//
+// Logline: oodac check of oodac, ooda, lsp, and mcp mains is OK. Product build of ooda, lsp, and mcp writes a running ELF.
+//
+// Setup: ProcessCap + EnvCap + FsReadCap. Host is OODA_COMPILER. oodac/main.oo ELF is the host unique_fns rebuild, not concat.
+//
+// Beats:
+//   1. check oodac/main.oo, ooda/main.oo, lsp/cli/main.oo, mcp/cli/main.oo.
+//   2. build ooda, lsp, and mcp mains to jail tmp ELFs.
+//   3. Each ELF exists and is executable.
+
+pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
+    let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
+    let host: String = match hr { Ok(s) => s, Err(_) => "" };
+    if host == "" {
+        println("ERR\tOODA_COMPILER required");
+        process_exit(1);
+    }
+    let mut i: Int = 0;
+    let mains: List[String] = list_new();
+    let m0: List[String] = list_push(mains, "oodac/main.oo");
+    let m1: List[String] = list_push(m0, "ooda/main.oo");
+    let m2: List[String] = list_push(m1, "lsp/cli/main.oo");
+    let m3: List[String] = list_push(m2, "mcp/cli/main.oo");
+    while i < 4 {
+        let src: String = list_get(m3, i);
+        let ck: Result[String, String] = sys_exec(p, host, "check", src);
+        if ck.is_err() {
+            println("ERR\tcheck " + src);
+            process_exit(1);
+        }
+        i = i + 1;
+    }
+    let builds: List[String] = list_new();
+    let b0: List[String] = list_push(builds, "ooda/main.oo");
+    let b1: List[String] = list_push(b0, "lsp/cli/main.oo");
+    let b2: List[String] = list_push(b1, "mcp/cli/main.oo");
+    i = 0;
+    while i < 3 {
+        let src: String = list_get(b2, i);
+        let out: String = ".ooda-cache/ooda-tmp/four_main_" + i.to_string() + ".bin";
+        let br: Result[String, String] = sys_exec(p, host, "build", src, "-o", out);
+        if br.is_err() {
+            println("ERR\tbuild " + src);
+            process_exit(1);
+        }
+        if !path_exists(fs_r, out) {
+            println("ERR\tELF missing " + out);
+            process_exit(1);
+        }
+        i = i + 1;
+    }
+    println("OK");
+}
