@@ -1,0 +1,49 @@
+// # Persist the typed artifact after a passing check
+//
+// Logline: Write tokens plus env plus caps under .ooda-cache so emit-c does not re-lex.
+//
+// Setup: FsWriteCap. mkdir via ProcessCap. Decode refuses a bad magic.
+//
+// Beats:
+//   1. Scan caps and env from toks.
+//   2. Encode OODAART1 text.
+//   3. write_file the cache path. Missing write is ERR.
+
+import "types/typed_artifact.oo";
+import "types/artifact_scan.oo";
+import "lex/token_fmt.oo";
+
+pub fn artifact_ensure_dir(sys: &ProcessCap) {
+    let _: Result[String, String] = sys_exec(sys, "mkdir", "-p", ".ooda-cache/ooda-tmp");
+}
+
+pub fn artifact_write_toks(fs_w: &FsWriteCap, sys: &ProcessCap, path: String, src: String, toks: List[String]) -> String {
+    artifact_ensure_dir(sys);
+    let caps: String = artifact_scan_caps(toks);
+    let env: String = artifact_scan_env(toks);
+    let art: TypedArtifact = artifact_new(path, src, caps, env, toks);
+    let dest: String = artifact_cache_path(art.sha);
+    let body: String = artifact_encode(art);
+    let wr: Result[Void, String] = write_file(fs_w, dest, body);
+    if wr.is_err() {
+        println("ERR\tartifact\twrite failed");
+        process_exit(1);
+    }
+    return dest;
+}
+
+pub fn artifact_remove_toks(sys: &ProcessCap, path: String, src: String) {
+    let sha: String = artifact_sha(path, src);
+    let dest: String = artifact_cache_path(sha);
+    let _: Result[String, String] = sys_exec(sys, "rm", "-f", dest);
+}
+
+pub fn artifact_refresh(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, path: String) {
+    let sr: Result[String, String] = read_file(fs_r, path);
+    if sr.is_err() { return; }
+    let src: String = match sr { Ok(s) => s, Err(_) => "" };
+    let dest: String = artifact_cache_path(artifact_sha(path, src));
+    if path_exists(fs_r, dest) { return; }
+    let toks: List[String] = tokenize_lines(src);
+    let _: String = artifact_write_toks(fs_w, sys, path, src, toks);
+}

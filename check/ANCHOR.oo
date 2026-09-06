@@ -17,6 +17,7 @@ import "check_caps.oo";
 import "check_collect.oo";
 import "check_drive.oo";
 import "check_hash.oo";
+import "check_artifact.oo";
 import "check_mod.oo";
 import "check_residual.oo";
 import "check_scan.oo";

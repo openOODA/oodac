@@ -1,10 +1,24 @@
 // # Compiler Backend Registry
 //
-// Logline: Re-export the C backend.
+// Logline: Same typed artifact in. C out today. A later backend does not import emit/c lowering.
 //
-// Setup: The C backend is the only product emit path.
+// Setup: C is the reference backend. Residual names exit 2. Shared type names live in types/.
 //
 // Beats:
-//   1. Import emit/c. Other backends are not part of this surface.
+//   1. Import emit/c as the only live backend.
+//   2. emit_backend consumes toks from the artifact. It does not lex.
+//   3. Unknown backend names fail closed.
 
 import "c/ANCHOR.oo";
+
+pub fn emit_backend(backend: String, src: String, toks: List[String], mode: String, path: String, is_plain: Bool) {
+    if backend != "c" {
+        println("ERR\temit\tresidual: " + backend);
+        process_exit(2);
+    }
+    if list_len(toks) < 1 {
+        println("ERR\temit\tempty artifact");
+        process_exit(1);
+    }
+    c_emit_stream_toks_at(src, toks, mode, path, is_plain);
+}

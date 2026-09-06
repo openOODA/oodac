@@ -68,7 +68,7 @@ process_exit(1);
         let k: String = c_tokk(toks, pos);
         if k == "EOF" {
             pos = n;
-        } else if k == "LINEFILE" {
+        } else if k == "LINEFILE" || k == "SRC_PATH" {
             let fp: String = c_tokt(toks, pos);
             if fp != "" {
                 let target: String = c_env_get(fn_env, "__target__");

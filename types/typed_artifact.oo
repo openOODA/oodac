@@ -1,0 +1,124 @@
+// # Typed compile artifact
+//
+// Logline: Tokens, type env, cap set, and source coords for one file. Check writes it. Emit consumes it.
+//
+// Setup: TSV token rows. SHA is content_hash of path plus source. No second lex.
+//
+// Beats:
+//   1. Pack path, sha, caps, env, and token rows.
+//   2. Encode and decode a text form for the cache.
+//   3. Cache path is .ooda-cache/ooda-tmp/art_<sha>.art.
+
+pub type TypedArtifact = struct {
+    path: String,
+    sha: String,
+    caps: String,
+    env: String,
+    toks: List[String]
+};
+
+pub fn artifact_sha(path: String, src: String) -> String {
+    let digest: String = crypto_sha256_internal(path + "\n" + src);
+    if chars_len(digest) >= 16 {
+        return str_slice(digest, 0, 16);
+    }
+    if chars_len(digest) > 0 {
+        return digest;
+    }
+    return "empty000";
+}
+
+pub fn artifact_cache_path(sha: String) -> String {
+    return ".ooda-cache/ooda-tmp/art_" + sha + ".art";
+}
+
+pub fn artifact_new(path: String, src: String, caps: String, env: String, toks: List[String]) -> TypedArtifact {
+    return TypedArtifact {
+        path: path,
+        sha: artifact_sha(path, src),
+        caps: caps,
+        env: env,
+        toks: toks
+    };
+}
+
+pub fn artifact_encode(art: TypedArtifact) -> String {
+    let mut out: String = "OODAART1\n";
+    out = out + art.path + "\n";
+    out = out + art.sha + "\n";
+    out = out + art.caps + "\n";
+    out = out + art.env + "\n";
+    out = out + "--\n";
+    let n: Int = list_len(art.toks);
+    let mut i: Int = 0;
+    while i < n {
+        out = out + list_get(art.toks, i) + "\n";
+        i = i + 1;
+    }
+    return out;
+}
+
+fn art_line_end(s: String, start: Int) -> Int {
+    let n: Int = chars_len(s);
+    let mut i: Int = start;
+    while i < n {
+        if char_at(s, i) == "\n" { return i; }
+        i = i + 1;
+    }
+    return n;
+}
+
+pub fn artifact_decode(text: String) -> TypedArtifact {
+    let n: Int = chars_len(text);
+    let mut i: Int = 0;
+    let mut field: Int = 0;
+    let mut path: String = "";
+    let mut sha: String = "";
+    let mut caps: String = "";
+    let mut env: String = "";
+    let mut toks: List[String] = list_new();
+    let mut in_toks: Bool = false;
+    while i < n {
+        let e: Int = art_line_end(text, i);
+        let line: String = str_slice(text, i, e);
+        if in_toks {
+            if chars_len(line) > 0 {
+                toks = list_push(toks, line);
+            }
+        } else if field == 0 {
+            if line != "OODAART1" {
+                println("ERR\tartifact\tbad magic");
+                process_exit(1);
+            }
+            field = 1;
+        } else if field == 1 {
+            path = line;
+            field = 2;
+        } else if field == 2 {
+            sha = line;
+            field = 3;
+        } else if field == 3 {
+            caps = line;
+            field = 4;
+        } else if field == 4 {
+            env = line;
+            field = 5;
+        } else if field == 5 {
+            if line != "--" {
+                println("ERR\tartifact\tbad sep");
+                process_exit(1);
+            }
+            in_toks = true;
+        }
+        if e >= n {
+            i = n;
+        } else {
+            i = e + 1;
+        }
+    }
+    if !in_toks {
+        println("ERR\tartifact\ttruncated");
+        process_exit(1);
+    }
+    return TypedArtifact { path: path, sha: sha, caps: caps, env: env, toks: toks };
+}

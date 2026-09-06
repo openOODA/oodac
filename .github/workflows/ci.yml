@@ -81,6 +81,13 @@ jobs:
           echo "=== std import ==="
           "$HOST" build oodac/qa/probe_std_import_run.oo -o .ooda-cache/ooda-tmp/ci_std_import.bin
           .ooda-cache/ooda-tmp/ci_std_import.bin
+          echo "=== tokenize-once artifact ==="
+          "$HOST" build oodac/qa/probe_tokenize_once.oo -o .ooda-cache/ooda-tmp/ci_tok_once.bin
+          .ooda-cache/ooda-tmp/ci_tok_once.bin
+          "$HOST" build oodac/qa/probe_artifact_mutate.oo -o .ooda-cache/ooda-tmp/ci_art_mut.bin
+          .ooda-cache/ooda-tmp/ci_art_mut.bin
+          "$HOST" build oodac/qa/probe_checkfail_no_artifact.oo -o .ooda-cache/ooda-tmp/ci_art_fail.bin
+          .ooda-cache/ooda-tmp/ci_art_fail.bin
           echo "UNIQUE_C_BAR_OK"
       - name: Compiler core is ELF
         run: |
