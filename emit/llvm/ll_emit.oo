@@ -81,6 +81,19 @@ fn ll_reachable(toks: List[String], sigs: String) -> String {
     return set;
 }
 
+fn ll_emit_fn_strings(toks: List[String], pos: Int, n: Int) {
+    let end: Int = ll_skip_fn(toks, pos, n);
+    let mut i: Int = pos;
+    while i < end {
+        if ll_k(toks, i) == "STRING" {
+            let tx: String = ll_t(toks, i);
+            let ln: Int = chars_len(tx) + 1;
+            println("@.s" + i.to_string() + " = private unnamed_addr constant [" + ln.to_string() + " x i8] c\"" + ll_c_esc(tx) + "\\00\"");
+        }
+        i = i + 1;
+    }
+}
+
 pub fn ll_emit_stream_toks(toks: List[String]) {
     if list_len(toks) < 1 {
         println("ERR\tllvm\tempty artifact");
@@ -102,6 +115,7 @@ pub fn ll_emit_stream_toks(toks: List[String]) {
         } else if k == "KW_PUB" || k == "KW_FN" {
             let nm: String = ll_fn_name_at(toks, pos, n);
             if ll_in_set(keep, nm) {
+                ll_emit_fn_strings(toks, pos, n);
                 pos = ll_emit_fn(toks, pos, n, sigs);
             } else {
                 pos = ll_skip_fn(toks, pos, n);

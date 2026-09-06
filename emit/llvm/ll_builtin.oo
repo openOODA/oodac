@@ -46,6 +46,46 @@ pub fn ll_builtin(name: String, args: List[String], ssa0: Int, expect: String) -
         }
         return ll_pack(0, s, "i64", "");
     }
+    if name == "list_get" && na >= 2 {
+        let a0: String = ll_ensure_ptr(ll_arg(args, 0), ssa0);
+        let ix: String = ll_arg(args, 1);
+        let s: Int = ll_pssa(a0) + 1;
+        if ll_pk(a0) == "ilist" {
+            println("  " + ll_ssa(s) + " = call i64 @oo_ilist_get(ptr byval(%OoIList) align 8 " + ll_pptr(a0) + ", i64 " + ll_ssa(ll_pssa(ix)) + ")");
+            return ll_pack(0, s, "i64", "");
+        }
+        println("  " + ll_ssa(s) + " = call { ptr, i64 } @oo_slist_get(ptr byval(%OoSList) align 8 " + ll_pptr(a0) + ", i64 " + ll_ssa(ll_pssa(ix)) + ")");
+        return ll_pack(0, s, "str", "");
+    }
+    if name == "list_push" && na >= 2 {
+        let a0: String = ll_ensure_ptr(ll_arg(args, 0), ssa0);
+        let s: Int = ll_pssa(a0);
+        let out: String = ll_tmpa(s + 1);
+        s = s + 1;
+        println("  " + out + " = alloca " + ll_ir_alloc(ll_pk(a0)) + ", align 8");
+        if ll_pk(a0) == "ilist" {
+            println("  call void @oo_ilist_push(ptr sret(%OoIList) align 8 " + out + ", ptr byval(%OoIList) align 8 " + ll_pptr(a0) + ", i64 " + ll_ssa(ll_pssa(ll_arg(args, 1))) + ")");
+            return ll_pack(0, s, "ilist", out);
+        }
+        let a1: String = ll_as_val(ll_arg(args, 1), s);
+        s = ll_pssa(a1);
+        println("  call void @oo_slist_push(ptr sret(%OoSList) align 8 " + out + ", ptr byval(%OoSList) align 8 " + ll_pptr(a0) + ", { ptr, i64 } " + ll_ssa(s) + ")");
+        return ll_pack(0, s, "slist", out);
+    }
+    if name == "list_slice" && na >= 3 {
+        let a0: String = ll_ensure_ptr(ll_arg(args, 0), ssa0);
+        let s: Int = ll_pssa(a0) + 1;
+        let out: String = ll_tmpa(s);
+        println("  " + out + " = alloca " + ll_ir_alloc(ll_pk(a0)) + ", align 8");
+        let a: String = ll_ssa(ll_pssa(ll_arg(args, 1)));
+        let b: String = ll_ssa(ll_pssa(ll_arg(args, 2)));
+        if ll_pk(a0) == "ilist" {
+            println("  call void @oo_ilist_slice(ptr sret(%OoIList) align 8 " + out + ", ptr byval(%OoIList) align 8 " + ll_pptr(a0) + ", i64 " + a + ", i64 " + b + ")");
+            return ll_pack(0, s, "ilist", out);
+        }
+        println("  call void @oo_slist_slice(ptr sret(%OoSList) align 8 " + out + ", ptr byval(%OoSList) align 8 " + ll_pptr(a0) + ", i64 " + a + ", i64 " + b + ")");
+        return ll_pack(0, s, "slist", out);
+    }
     if name == "chars_len" && na >= 1 {
         let a0: String = ll_as_val(ll_arg(args, 0), ssa0);
         let s: Int = ll_pssa(a0) + 1;

@@ -47,6 +47,10 @@ pub fn ll_cap_grant(ty: String) -> String {
     if ty == "EnvCap" { return "env"; }
     if ty == "FsReadCap" { return "fsread"; }
     if ty == "FsWriteCap" { return "fswrite"; }
+    if ty == "BindCap" { return "bind"; }
+    if ty == "SysCap" { return "sys"; }
+    if ty == "TimeCap" { return "time"; }
+    if ty == "AllocCap" { return "alloc"; }
     return "";
 }
 

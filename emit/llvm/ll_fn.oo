@@ -107,6 +107,7 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String) -> Int {
     p = p + 1;
     if name == "main" {
         println("define i32 @main(i32 %argc, ptr %argv) {");
+        println("entry:");
         let mut i: Int = 0;
         let cn: Int = chars_len(caps);
         while i < cn {
@@ -125,6 +126,22 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String) -> Int {
         }
         println("  %v_args = alloca %OoSList, align 8");
         println("  call void @oo_slist_new(ptr sret(%OoSList) align 8 %v_args)");
+        println("  br label %args0");
+        println("args0:");
+        println("  %ai = phi i32 [ 1, %entry ], [ %ai2, %args1 ]");
+        println("  %acmp = icmp slt i32 %ai, %argc");
+        println("  br i1 %acmp, label %args1, label %args2");
+        println("args1:");
+        println("  %ap = getelementptr ptr, ptr %argv, i32 %ai");
+        println("  %astr = load ptr, ptr %ap");
+        println("  %alit = call { ptr, i64 } @oo_str_lit(ptr %astr)");
+        println("  %anew = alloca %OoSList, align 8");
+        println("  call void @oo_slist_push(ptr sret(%OoSList) align 8 %anew, ptr byval(%OoSList) align 8 %v_args, { ptr, i64 } %alit)");
+        println("  %acpy = load %OoSList, ptr %anew");
+        println("  store %OoSList %acpy, ptr %v_args");
+        println("  %ai2 = add i32 %ai, 1");
+        println("  br label %args0");
+        println("args2:");
         env = type_env_put(env, "args", "slist");
         let mut mrk: String = "i32";
         if rk == "resi" { mrk = "resim"; }
