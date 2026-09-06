@@ -13,6 +13,7 @@ import "ll_ty.oo";
 import "types/types_core.oo";
 import "ll_call.oo";
 import "ll_builtin.oo";
+import "ll_ctor.oo";
 pub fn ll_expr(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> String {
     return ll_binop(toks, pos, n, ssa0, env);
 }
@@ -146,7 +147,7 @@ fn ll_primary(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> S
             return ll_call_at(toks, pos, n, ssa0, env);
         }
         if nm == "None" {
-            let c: String = ll_ctor("None", ll_pack(pos, ssa0, "i64", ""), ssa0);
+            let c: String = ll_ctor("None", ll_pack(pos, ssa0, "i64", ""), ssa0, type_env_get(env, "__e__"));
             return ll_pack(pos + 1, ll_pssa(c), ll_pk(c), ll_pptr(c));
         }
         let ld: String = ll_load_ident(nm, env, ssa0);

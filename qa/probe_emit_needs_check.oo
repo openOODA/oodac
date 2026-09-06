@@ -1,0 +1,30 @@
+// # Probe: emit-c without check refuses
+//
+// Logline: emit-c of a well-typed file with no artifact must ERR and not emit C.
+//
+// Setup: ProcessCap + EnvCap. Host is OODA_COMPILER. Victim is probe_list_ok.oo.
+//
+// Beats:
+//   1. Remove any cached artifact for the victim.
+//   2. emit-c without check exits nonzero.
+//   3. Output does not contain oo_slist_new.
+
+pub fn main(p: &ProcessCap, env: &EnvCap) {
+    let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
+    let host: String = match hr { Ok(s) => s, Err(_) => "" };
+    if host == "" {
+        println("ERR\tOODA_COMPILER required");
+        process_exit(1);
+    }
+    let _: Result[String, String] = sys_exec(p, "rm", "-f", ".ooda-cache/ooda-tmp/art_*.art");
+    let em: Result[String, String] = sys_exec(p, host, "emit-c", "oodac/qa/probe_list_ok.oo");
+    if em.is_ok() {
+        println("ERR\temit without check must fail");
+        process_exit(1);
+    }
+    if str_index_of(em.val, "oo_slist_new") >= 0 {
+        println("ERR\temit leaked C without check");
+        process_exit(1);
+    }
+    println("OK");
+}

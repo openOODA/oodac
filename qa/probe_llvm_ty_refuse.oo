@@ -1,0 +1,34 @@
+// # Probe: llvm unknown-type victim is refused
+//
+// Logline: check of probe_llvm_unknown_ty.oo is OK. emit-llvm of it must ERR.
+//
+// Setup: ProcessCap + EnvCap. Host is OODA_COMPILER.
+//
+// Beats:
+//   1. check the victim.
+//   2. emit-llvm --concat the victim exits nonzero.
+//   3. Message contains unknown type.
+
+pub fn main(p: &ProcessCap, env: &EnvCap) {
+    let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
+    let host: String = match hr { Ok(s) => s, Err(_) => "" };
+    if host == "" {
+        println("ERR\tOODA_COMPILER required");
+        process_exit(1);
+    }
+    let ck: Result[String, String] = sys_exec(p, host, "check", "oodac/qa/probe_llvm_unknown_ty.oo");
+    if ck.is_err() {
+        println("ERR\tcheck victim");
+        process_exit(1);
+    }
+    let em: Result[String, String] = sys_exec(p, host, "emit-llvm", "--concat", "oodac/qa/probe_llvm_unknown_ty.oo");
+    if em.is_ok() {
+        println("ERR\tllvm must refuse Float");
+        process_exit(1);
+    }
+    if str_index_of(em.val, "unknown type") < 0 && str_index_of(em.val, "ERR\tllvm") < 0 {
+        println("ERR\tmissing llvm type refuse");
+        process_exit(1);
+    }
+    println("OK");
+}

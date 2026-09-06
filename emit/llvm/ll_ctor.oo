@@ -1,0 +1,142 @@
+// # LLVM Ok/Err/Some/None constructors
+//
+// Logline: Wrap payload into Option/Result aggregates. Refuse unknown kinds.
+//
+// Setup: expect is __e__ from let or return. Aggregates live in allocas.
+//
+// Beats:
+//   1. None requires opti or opts.
+//   2. Some/Ok/Err wrap Int or String payloads only.
+//   3. Result return copies a wrapped resi; bare i64 is ERR.
+
+import "ll_tok.oo";
+import "ll_ty.oo";
+
+pub fn ll_ret_resi(v: String, ssa0: Int) -> Int {
+    if ll_pk(v) != "resi" {
+        println("ERR\tllvm\tResult return must be Ok or Err");
+        process_exit(1);
+    }
+    let p: String = ll_ensure_ptr(v, ssa0);
+    let s: Int = ll_pssa(p) + 1;
+    println("  " + ll_ssa(s) + " = load %OoResI, ptr " + ll_pptr(p));
+    println("  store %OoResI " + ll_ssa(s) + ", ptr %ret");
+    println("  ret void");
+    return s;
+}
+
+pub fn ll_ret_resim(v: String, ssa0: Int) -> Int {
+    if ll_pk(v) != "resi" {
+        println("ERR\tllvm\tResult main must return Ok or Err");
+        process_exit(1);
+    }
+    let p: String = ll_ensure_ptr(v, ssa0);
+    let s: Int = ll_pssa(p) + 1;
+    println("  " + ll_ssa(s) + " = getelementptr %OoResI, ptr " + ll_pptr(p) + ", i32 0, i32 0");
+    let s2: Int = s + 1;
+    println("  " + ll_ssa(s2) + " = load i32, ptr " + ll_ssa(s));
+    let s3: Int = s2 + 1;
+    println("  " + ll_ssa(s3) + " = icmp eq i32 " + ll_ssa(s2) + ", 0");
+    let s4: Int = s3 + 1;
+    println("  " + ll_ssa(s4) + " = zext i1 " + ll_ssa(s3) + " to i32");
+    println("  ret i32 " + ll_ssa(s4));
+    return s4;
+}
+
+pub fn ll_ctor(name: String, arg: String, ssa0: Int, expect: String) -> String {
+    if name == "None" {
+        if expect != "opti" && expect != "opts" {
+            println("ERR\tllvm\tNone type");
+            process_exit(1);
+        }
+        let a: String = ll_tmpa(ssa0 + 1);
+        let s: Int = ssa0 + 1;
+        println("  " + a + " = alloca " + ll_ir_alloc(expect) + ", align 8");
+        if expect == "opts" {
+            println("  store %OoOptS { i32 0, { ptr, i64 } { ptr null, i64 0 } }, ptr " + a);
+        } else {
+            println("  store %OoOptI { i32 0, i64 0 }, ptr " + a);
+        }
+        return ll_pack(0, s, expect, a);
+    }
+    if name == "Some" { return ll_ctor_some(arg, ssa0, expect); }
+    if name == "Ok" { return ll_ctor_ok(arg, ssa0, expect); }
+    if name == "Err" { return ll_ctor_err(arg, ssa0, expect); }
+    println("ERR\tllvm\tctor " + name);
+    process_exit(1);
+    return arg;
+}
+
+fn ll_ctor_some(arg: String, ssa0: Int, expect: String) -> String {
+    if ll_pk(arg) == "i64" && (expect == "opti" || expect == "") {
+        let a: String = ll_tmpa(ssa0 + 1);
+        let s: Int = ssa0 + 1;
+        println("  " + a + " = alloca %OoOptI, align 8");
+        let s2: Int = s + 1;
+        println("  " + ll_ssa(s2) + " = insertvalue %OoOptI { i32 1, i64 0 }, i64 " + ll_ssa(ll_pssa(arg)) + ", 1");
+        println("  store %OoOptI " + ll_ssa(s2) + ", ptr " + a);
+        return ll_pack(0, s2, "opti", a);
+    }
+    if ll_pk(arg) == "str" && (expect == "opts" || expect == "") {
+        let av: String = ll_as_val(arg, ssa0);
+        let a: String = ll_tmpa(ll_pssa(av) + 1);
+        let s: Int = ll_pssa(av) + 1;
+        println("  " + a + " = alloca %OoOptS, align 8");
+        let s2: Int = s + 1;
+        println("  " + ll_ssa(s2) + " = insertvalue %OoOptS { i32 1, { ptr, i64 } { ptr null, i64 0 } }, { ptr, i64 } " + ll_ssa(ll_pssa(av)) + ", 1");
+        println("  store %OoOptS " + ll_ssa(s2) + ", ptr " + a);
+        return ll_pack(0, s2, "opts", a);
+    }
+    println("ERR\tllvm\tSome kind");
+    process_exit(1);
+    return arg;
+}
+
+fn ll_ctor_ok(arg: String, ssa0: Int, expect: String) -> String {
+    if ll_pk(arg) == "i64" && (expect == "resi" || expect == "resim" || expect == "") {
+        let a: String = ll_tmpa(ssa0 + 1);
+        let s: Int = ssa0 + 1;
+        println("  " + a + " = alloca %OoResI, align 8");
+        let s2: Int = s + 1;
+        println("  " + ll_ssa(s2) + " = insertvalue %OoResI { i32 1, i64 0, { ptr, i64 } { ptr null, i64 0 } }, i64 " + ll_ssa(ll_pssa(arg)) + ", 1");
+        println("  store %OoResI " + ll_ssa(s2) + ", ptr " + a);
+        return ll_pack(0, s2, "resi", a);
+    }
+    if ll_pk(arg) == "str" && (expect == "ress" || expect == "") {
+        let av: String = ll_as_val(arg, ssa0);
+        let a: String = ll_tmpa(ll_pssa(av) + 1);
+        let s: Int = ll_pssa(av) + 1;
+        println("  " + a + " = alloca %OoResS, align 8");
+        let s2: Int = s + 1;
+        println("  " + ll_ssa(s2) + " = insertvalue %OoResS { i32 1, { ptr, i64 } { ptr null, i64 0 } }, { ptr, i64 } " + ll_ssa(ll_pssa(av)) + ", 1");
+        println("  store %OoResS " + ll_ssa(s2) + ", ptr " + a);
+        return ll_pack(0, s2, "ress", a);
+    }
+    println("ERR\tllvm\tOk kind");
+    process_exit(1);
+    return arg;
+}
+
+fn ll_ctor_err(arg: String, ssa0: Int, expect: String) -> String {
+    if ll_pk(arg) != "str" {
+        println("ERR\tllvm\tErr kind");
+        process_exit(1);
+    }
+    let av: String = ll_as_val(arg, ssa0);
+    if expect == "ress" {
+        let a: String = ll_tmpa(ll_pssa(av) + 1);
+        let s: Int = ll_pssa(av) + 1;
+        println("  " + a + " = alloca %OoResS, align 8");
+        let s2: Int = s + 1;
+        println("  " + ll_ssa(s2) + " = insertvalue %OoResS { i32 0, { ptr, i64 } { ptr null, i64 0 } }, { ptr, i64 } " + ll_ssa(ll_pssa(av)) + ", 1");
+        println("  store %OoResS " + ll_ssa(s2) + ", ptr " + a);
+        return ll_pack(0, s2, "ress", a);
+    }
+    let a: String = ll_tmpa(ll_pssa(av) + 1);
+    let s: Int = ll_pssa(av) + 1;
+    println("  " + a + " = alloca %OoResI, align 8");
+    let s2: Int = s + 1;
+    println("  " + ll_ssa(s2) + " = insertvalue %OoResI { i32 0, i64 0, { ptr, i64 } { ptr null, i64 0 } }, { ptr, i64 } " + ll_ssa(ll_pssa(av)) + ", 2");
+    println("  store %OoResI " + ll_ssa(s2) + ", ptr " + a);
+    return ll_pack(0, s2, "resi", a);
+}

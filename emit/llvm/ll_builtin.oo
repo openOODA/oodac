@@ -12,6 +12,7 @@
 import "ll_tok.oo";
 import "ll_ty.oo";
 import "ll_call.oo";
+import "ll_ctor.oo";
 
 pub fn ll_arg(args: List[String], i: Int) -> String {
     return list_get(args, i);
@@ -147,7 +148,7 @@ pub fn ll_builtin(name: String, args: List[String], ssa0: Int, expect: String) -
     if name == "Some" || name == "None" || name == "Ok" || name == "Err" {
         let mut dummy: String = ll_pack(0, ssa0, "i64", "");
         if na >= 1 { dummy = ll_arg(args, 0); }
-        return ll_ctor(name, dummy, ssa0);
+        return ll_ctor(name, dummy, ssa0, expect);
     }
     return "";
 }

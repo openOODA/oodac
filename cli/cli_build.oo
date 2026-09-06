@@ -2,14 +2,15 @@
 //
 // Logline: check then emit-c via ProcessCap argv, write C under the jail, gcc argv.
 //
-// Setup: Host is OODA_COMPILER or OODAC_BIN only. C backend only. No sh -c.
+// Setup: Host is OODA_COMPILER or OODAC_BIN only. Links oodar.c. No sh -c.
 //
 // Beats:
-//   1. Refuse non-c backends, compiler-main concat, -o a directory, and no main.
+//   1. Refuse residual backends, compiler-main concat, -o a directory, and no main.
 //   2. sys_exec host check; on ERR do not emit or gcc.
-//   3. mkdir; sys_exec host emit-c; gcc -g0 -fno-ident with chs_rt and blackbox.c.
+//   3. mkdir; emit-c or emit-llvm; gcc/clang oodar.c plus host_rt.
 
 import "lex/token_fmt.oo";
+import "cli_oodar.oo";
 
 fn compiler_host(env: &EnvCap) -> String {
     let oc: Result[String, String] = env_get(env, "OODA_COMPILER");
@@ -21,39 +22,6 @@ fn compiler_host(env: &EnvCap) -> String {
         if ob.val != "" { return ob.val; }
     }
     println("ERR\tbuild\tOODA_COMPILER or OODAC_BIN required");
-    process_exit(1);
-    return "";
-}
-
-fn path_parent(p: String) -> String {
-    let n: Int = chars_len(p);
-    let mut i: Int = n;
-    while i > 0 {
-        i = i - 1;
-        if char_at(p, i) == "/" {
-            if i == 0 { return "/"; }
-            return str_slice(p, 0, i);
-        }
-    }
-    return ".";
-}
-
-fn runtime_dir(fs_r: &FsReadCap, host: String) -> String {
-    if path_exists(fs_r, "oodac/runtime/chs_rt.c") { return "oodac/runtime"; }
-    let cand: String = path_parent(path_parent(host)) + "/runtime";
-    if path_exists(fs_r, cand + "/chs_rt.c") { return cand; }
-    println("ERR\tbuild\tchs_rt missing");
-    process_exit(1);
-    return "";
-}
-
-fn blackbox_dir(fs_r: &FsReadCap, rt: String) -> String {
-    if path_exists(fs_r, "oodar/core/blackbox/blackbox.c") {
-        return "oodar/core/blackbox";
-    }
-    let cand: String = path_parent(path_parent(rt)) + "/oodar/core/blackbox";
-    if path_exists(fs_r, cand + "/blackbox.c") { return cand; }
-    println("ERR\tbuild\tblackbox.c missing");
     process_exit(1);
     return "";
 }
@@ -124,13 +92,12 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
         process_exit(1);
     }
     let host: String = compiler_host(env);
-    let rt: String = runtime_dir(fs_r, host);
-    let bb: String = blackbox_dir(fs_r, rt);
+    let od: String = oodar_root(fs_r, host);
     let tmp_dir: String = cache_dir(env);
     let tmp_h: String = crypto_sha256_internal(path);
     let tmp_c: String = tmp_dir + "/all_" + str_slice(tmp_h, 0, 16) + ".c";
     let tmp_ll: String = tmp_dir + "/all_" + str_slice(tmp_h, 0, 16) + ".ll";
-    let mk: Result[String, String] = sys_exec(sys, "mkdir", "-p", tmp_dir);
+    let mk: Result[String, String] = sys_exec(sys, "/usr/bin/mkdir", "-p", tmp_dir);
     if mk.is_err() {
         println("ERR\tbuild\tmkdir failed");
         process_exit(1);
@@ -142,6 +109,7 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
         println(cmsg);
         process_exit(1);
     }
+    let hr: String = write_host_rt(fs_w, tmp_dir);
     if backend == "llvm" {
         let em: Result[String, String] = sys_exec(sys, host, "emit-llvm", "--concat", path);
         if !em.is_ok() {
@@ -155,7 +123,15 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
             println("ERR\tbuild\twrite LLVM IR failed");
             process_exit(1);
         }
-        let r: Result[String, String] = sys_exec(sys, "clang", "--no-default-config", "-O2", "-g0", "-fno-ident", "-Wno-override-module", "-I" + rt, "-I" + bb, rt + "/chs_rt.c", bb + "/blackbox.c", tmp_ll, "-frandom-seed=0", "-Wl,--build-id=none", "-Wl,--strip-debug", "-lm", "-ldl", "-lpthread", "-o", out);
+        let obj: String = tmp_dir + "/oodar.o";
+        let co: Result[String, String] = sys_exec(sys, "/usr/bin/gcc", "-c", "-O2", "-g0", "-fno-ident", "-Doo_file_stamp=oo_file_stamp_oodar", "-I" + od, od + "/oodar.c", "-o", obj);
+        if !co.is_ok() {
+            println("ERR\tbuild\toodar.o failed");
+            let ct: String = co.val;
+            println(ct);
+            process_exit(1);
+        }
+        let r: Result[String, String] = sys_exec(sys, "/usr/bin/clang", "--no-default-config", "-O2", "-g0", "-fno-ident", "-Wno-override-module", "-I" + od, obj, hr, tmp_ll, "-frandom-seed=0", "-Wl,--build-id=none", "-Wl,--strip-debug", "-lm", "-ldl", "-lpthread", "-o", out);
         if !r.is_ok() {
             println("ERR\tbuild\tclang llvm failed");
             let gtxt: String = r.val;
@@ -175,7 +151,15 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
             println("ERR\tbuild\twrite C failed");
             process_exit(1);
         }
-        let r: Result[String, String] = sys_exec(sys, "gcc", "-O2", "-g0", "-fno-ident", "-I" + rt, "-I" + bb, rt + "/chs_rt.c", bb + "/blackbox.c", tmp_c, "-frandom-seed=0", "-Wl,--build-id=none", "-Wl,--strip-debug", "-lm", "-ldl", "-lpthread", "-o", out);
+        let obj: String = tmp_dir + "/oodar.o";
+        let co: Result[String, String] = sys_exec(sys, "/usr/bin/gcc", "-c", "-O2", "-g0", "-fno-ident", "-Doo_file_stamp=oo_file_stamp_oodar", "-I" + od, od + "/oodar.c", "-o", obj);
+        if !co.is_ok() {
+            println("ERR\tbuild\toodar.o failed");
+            let ct: String = co.val;
+            println(ct);
+            process_exit(1);
+        }
+        let r: Result[String, String] = sys_exec(sys, "/usr/bin/gcc", "-O2", "-g0", "-fno-ident", "-I" + od, obj, hr, tmp_c, "-frandom-seed=0", "-Wl,--build-id=none", "-Wl,--strip-debug", "-lm", "-ldl", "-lpthread", "-o", out);
         if !r.is_ok() {
             println("ERR\tbuild\tgcc failed");
             let gtxt: String = r.val;

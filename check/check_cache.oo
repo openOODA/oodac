@@ -26,7 +26,7 @@ pub fn check_cache_ensure(fs: &FsReadCap, sys: &ProcessCap) {
     if path_exists(fs, root) {
         return;
     }
-    let r = sys_exec(sys, "mkdir", "-p", root);
+    let r = sys_exec(sys, "/usr/bin/mkdir", "-p", root);
     if r.is_err() {
         return;
     }
@@ -57,7 +57,7 @@ pub fn check_cache_put(fs: &FsWriteCap, sys: &ProcessCap, key: String) {
     }
     let p: String = check_cache_path(key);
     let root: String = check_cache_root();
-    let r = sys_exec(sys, "mkdir", "-p", root);
+    let r = sys_exec(sys, "/usr/bin/mkdir", "-p", root);
     if r.is_err() {
         return;
     }
@@ -74,7 +74,7 @@ pub fn check_cache_put_body(fs: &FsWriteCap, sys: &ProcessCap, key: String, body
     }
     let p: String = check_cache_path(key);
     let root: String = check_cache_root();
-    let r = sys_exec(sys, "mkdir", "-p", root);
+    let r = sys_exec(sys, "/usr/bin/mkdir", "-p", root);
     if r.is_err() {
         return;
     }

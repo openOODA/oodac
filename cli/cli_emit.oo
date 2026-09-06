@@ -36,11 +36,17 @@ fn emit_load_art(fs: &FsReadCap, dest: String) -> TypedArtifact {
 
 fn emit_toks_for_file(fs: &FsReadCap, path: String, src: String) -> List[String] {
     let auto: String = artifact_cache_path(artifact_sha(path, src));
-    if path_exists(fs, auto) {
-        let art: TypedArtifact = emit_load_art(fs, auto);
-        return art.toks;
+    if !path_exists(fs, auto) {
+        println("ERR\temit\tno artifact; run check first");
+        process_exit(1);
     }
-    return tokenize_lines(src);
+    let art: TypedArtifact = emit_load_art(fs, auto);
+    let want: String = artifact_sha(path, src);
+    if !(art.sha == want) {
+        println("ERR\temit\tartifact sha mismatch");
+        process_exit(1);
+    }
+    return art.toks;
 }
 
 fn emit_c_one_tu(fs: &FsReadCap, path: String, mode: String, is_plain: Bool, art_path: String) {

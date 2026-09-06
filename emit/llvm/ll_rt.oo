@@ -2,7 +2,7 @@
 //
 // Logline: Print x86_64 SysV declares for oo_* matching clang sret/byval for lists and {ptr,i64} for OoStr.
 //
-// Setup: Product links chs_rt.c and blackbox.c. No emit/c import.
+// Setup: Product links oodar.c and host_rt. No emit/c import.
 //
 // Beats:
 //   1. Module datalayout and aggregate types.
@@ -42,6 +42,7 @@ pub fn ll_rt_header(toks: List[String]) {
     println("%OoResI = type { i32, i64, %OoStr }");
     println("%OoResS = type { i32, %OoStr }");
     println("%OoOptI = type { i32, i64 }");
+    println("%OoOptS = type { i32, %OoStr }");
     println("declare void @oo_slist_new(ptr sret(%OoSList) align 8)");
     println("declare i64 @oo_slist_len(ptr byval(%OoSList) align 8)");
     println("declare void @oo_ilist_new(ptr sret(%OoIList) align 8)");

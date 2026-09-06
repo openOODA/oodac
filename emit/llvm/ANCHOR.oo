@@ -2,7 +2,7 @@
 //
 // Logline: Lower artifact tokens to LLVM IR. Does not import emit/c lowering.
 //
-// Setup: types/ and lex only. clang compiles the .ll with chs_rt.
+// Setup: types/ and lex only. clang compiles the .ll with oodar.c.
 //
 // Beats:
 //   1. Re-export ll_emit_stream_toks.

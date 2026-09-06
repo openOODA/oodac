@@ -1,13 +1,13 @@
 // # Modular cached check driver
 //
-// Logline: Checks a path per module or as one cached tree and prints OK, skipping unchanged sources via .ooda-cache/check.
+// Logline: Checks every module on the import graph and prints OK. Cache never skips typecheck.
 //
 // Setup: Needs FsReadCap, FsWriteCap, and ProcessCap; collect_module_paths, scan_fn_names, run_check_core_binds, oo_file_stamp, and the check_cache_* helpers are in scope.
 //
 // Beats:
-//   1. A g_ listing whose path stamps still match prints OK without collect or typecheck.
-//   2. More than one module: scan names once, then check only stamp-plus-binds misses.
-//   3. One module: load the import tree, hit the content-hash cache, or run_check_core, put the tree key, and print OK.
+//   1. Collect the import graph.
+//   2. Typecheck every module and write a per-file artifact.
+//   3. Persist the graph listing after a real check.
 //   Isolated TUs (not main.oo) seed extra_binds from sibling ANCHOR.oo.
 //   Entry (last path) keeps import lines so unused-import can see KW_IMPORT.
 //
@@ -114,20 +114,15 @@ fn check_modules(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, paths: L
         i = i + 1;
     }
     let binds: String = names_to_depth0_binds(names);
-    let bh: String = content_hash(binds);
     i = 0;
-    while i < np { let pth2: String = list_get(paths, i);
-    let stamp: String = oo_file_stamp(pth2);
-    let mk: String = check_cache_mod_key(content_hash(stamp + bh));
-    if !check_cache_hit(fs_r, mk) { let raw2: String = list_get(raws, i);
-    let mut body: String = raw2;
-    if i + 1 < np { body = strip_import_lines(raw2);
-    }
-            if chars_len(body) > 0 {
-                let toks: List[String] = run_check_core_binds_path(sys, body, binds, pth2);
-                let _: String = artifact_write_toks(fs_w, sys, pth2, raw2, toks);
-                check_cache_put(fs_w, sys, mk);
-            }
+    while i < np {
+        let pth2: String = list_get(paths, i);
+        let raw2: String = list_get(raws, i);
+        let mut body: String = raw2;
+        if i + 1 < np { body = strip_import_lines(raw2); }
+        if chars_len(body) > 0 {
+            let toks: List[String] = run_check_core_binds_path(sys, body, binds, pth2);
+            let _: String = artifact_write_toks(fs_w, sys, pth2, raw2, toks);
         }
         i = i + 1;
     }
@@ -135,38 +130,10 @@ fn check_modules(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, paths: L
 
 pub fn run_check_path(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, path: String) {
     check_cache_ensure(fs_r, sys);
-    let listing: String = check_cache_read(fs_r, check_cache_graph_key(path));
-    if check_listing_fresh(listing) {
-        artifact_refresh(fs_r, fs_w, sys, path);
-        println("OK");
-        return;
-    }
     let paths: List[String] = collect_module_paths(fs_r, path);
     let extra: String = anchor_extra_names(fs_r, path);
-    let np = list_len(paths);
     let roll: String = check_paths_listing(paths);
-    if np > 1 { let tk: String = check_cache_tree_key(content_hash("dw1\n" + roll));
-    if !check_cache_hit(fs_r, tk) { check_modules(fs_r, fs_w, sys, paths, extra);
-    }
-        persist_graph(fs_w, sys, path, roll);
-        println("OK");
-        return;
-    }
-    let src: String = load_source_with_imports(fs_r, path);
-    if count_lines(src) > 256 { println("ERR\tcheck\toversized " + path + " " + count_lines(src).to_string() + " > 256");
-    process_exit(1);
-    }
-    let h: String = content_hash(src);
-    let tk2: String = check_cache_tree_key(h);
-    if check_cache_hit(fs_r, tk2) {
-        artifact_refresh(fs_r, fs_w, sys, path);
-        persist_graph(fs_w, sys, path, roll);
-        println("OK");
-        return;
-    }
-    let toks: List[String] = run_check_core_binds_path(sys, src, names_to_depth0_binds(extra), path);
-    let _: String = artifact_write_toks(fs_w, sys, path, src, toks);
-    check_cache_put(fs_w, sys, tk2);
+    check_modules(fs_r, fs_w, sys, paths, extra);
     persist_graph(fs_w, sys, path, roll);
     println("OK");
 }

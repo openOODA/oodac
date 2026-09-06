@@ -33,7 +33,8 @@ pub fn ll_print_val(kind: String, ssa: Int, ptr: String, ssa0: Int) -> Int {
         println("  " + ll_ssa(n2) + " = call { ptr, i64 } @oo_int_to_str(i64 " + ll_ssa(ssa) + ")");
         return ll_print_val("str", n2, "", n2);
     }
-    println("  call void @oo_println()");
+    println("ERR\tllvm\tprint kind " + kind);
+    process_exit(1);
     return ssa0;
 }
 
@@ -78,9 +79,10 @@ pub fn ll_match_bind(sk: String, ptr: String, bn: String, ok: Int, id: Int, ssa0
     let mut bk: String = "str";
     let mut fi: String = "1";
     if sk == "opti" { bk = "i64"; }
+    if sk == "opts" { bk = "str"; }
     if sk == "resi" && ok == 1 { bk = "i64"; }
     if sk == "resi" && ok == 0 { bk = "str"; fi = "2"; }
-    if bn == "_" || (sk == "opti" && ok == 0) {
+    if bn == "_" || ((sk == "opti" || sk == "opts") && ok == 0) {
         return ll_pack(0, ssa0, bk, "");
     }
     let locn: String = "%v_" + bn + "_" + id.to_string();
@@ -139,22 +141,6 @@ pub fn ll_apply_binop(op: String, lhs: String, rhs: String) -> String {
     return ll_pack(ll_ppos(rhs), s, "i1", "");
 }
 
-pub fn ll_ensure_ptr(v: String, ssa0: Int) -> String {
-    if ll_pptr(v) != "" { return ll_pack(ll_ppos(v), ssa0, ll_pk(v), ll_pptr(v)); }
-    let a: String = ll_tmpa(ssa0 + 1);
-    let s: Int = ssa0 + 1;
-    println("  " + a + " = alloca " + ll_ir_alloc(ll_pk(v)) + ", align 8");
-    println("  store " + ll_ir_val(ll_pk(v)) + " " + ll_ssa(ll_pssa(v)) + ", ptr " + a);
-    return ll_pack(ll_ppos(v), s, ll_pk(v), a);
-}
-
-pub fn ll_as_val(v: String, ssa0: Int) -> String {
-    let p: String = ll_ensure_ptr(v, ssa0);
-    let s: Int = ll_pssa(p) + 1;
-    println("  " + ll_ssa(s) + " = load " + ll_ir_val(ll_pk(v)) + ", ptr " + ll_pptr(p));
-    return ll_pack(ll_ppos(v), s, ll_pk(v), "");
-}
-
 pub fn ll_method(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, env: String) -> String {
     if m == "to_string" {
         if kind == "str" { return ll_pack(0, ssa, "str", ptr); }
@@ -184,57 +170,4 @@ pub fn ll_method(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, env:
     println("ERR\tllvm\tunsupported method " + m);
     process_exit(1);
     return ll_pack(0, ssa0, "i64", "");
-}
-
-pub fn ll_ret_resi(v: String, ssa0: Int) -> Int {
-    let mut s: Int = ssa0 + 1;
-    println("  " + ll_ssa(s) + " = getelementptr %OoResI, ptr %ret, i32 0, i32 0");
-    if ll_pk(v) == "i64" {
-        println("  store i32 1, ptr " + ll_ssa(s));
-        s = s + 1;
-        println("  " + ll_ssa(s) + " = getelementptr %OoResI, ptr %ret, i32 0, i32 1");
-        println("  store i64 " + ll_ssa(ll_pssa(v)) + ", ptr " + ll_ssa(s));
-        s = s + 1;
-        println("  " + ll_ssa(s) + " = getelementptr %OoResI, ptr %ret, i32 0, i32 2");
-        println("  store { ptr, i64 } { ptr null, i64 0 }, ptr " + ll_ssa(s));
-    } else {
-        println("  store i32 0, ptr " + ll_ssa(s));
-        s = s + 1;
-        println("  " + ll_ssa(s) + " = getelementptr %OoResI, ptr %ret, i32 0, i32 1");
-        println("  store i64 0, ptr " + ll_ssa(s));
-        let av: String = ll_as_val(v, s);
-        s = ll_pssa(av) + 1;
-        println("  " + ll_ssa(s) + " = getelementptr %OoResI, ptr %ret, i32 0, i32 2");
-        println("  store { ptr, i64 } " + ll_ssa(ll_pssa(av)) + ", ptr " + ll_ssa(s));
-    }
-    println("  ret void");
-    return s;
-}
-
-pub fn ll_ctor(name: String, arg: String, ssa0: Int) -> String {
-    if name == "None" {
-        let a: String = ll_tmpa(ssa0 + 1);
-        let s: Int = ssa0 + 1;
-        println("  " + a + " = alloca %OoOptI, align 8");
-        println("  store %OoOptI { i32 0, i64 0 }, ptr " + a);
-        return ll_pack(0, s, "opti", a);
-    }
-    if name == "Some" {
-        let a: String = ll_tmpa(ssa0 + 1);
-        let s: Int = ssa0 + 1;
-        println("  " + a + " = alloca %OoOptI, align 8");
-        let s2: Int = s + 1;
-        println("  " + ll_ssa(s2) + " = insertvalue %OoOptI { i32 1, i64 0 }, i64 " + ll_ssa(ll_pssa(arg)) + ", 1");
-        println("  store %OoOptI " + ll_ssa(s2) + ", ptr " + a);
-        return ll_pack(0, s2, "opti", a);
-    }
-    if name == "Ok" {
-        return arg;
-    }
-    if name == "Err" {
-        return arg;
-    }
-    println("ERR\tllvm\tctor " + name);
-    process_exit(1);
-    return arg;
 }

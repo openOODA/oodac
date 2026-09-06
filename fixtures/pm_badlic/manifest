@@ -1,6 +1,0 @@
-name=badlic
-version=1.0.0
-deps=
-caps=FsRead
-payload=badlic.oo
-license=Proprietary

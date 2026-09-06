@@ -107,7 +107,7 @@ import "types/token_search.oo";
 // ──▓▓ Public Type Checking & Verification API ──▓▓──
 
 pub fn types_check_caps(toks: List[String], pos0: Int) -> Int {
-    return check_caps(toks, pos0);
+    return check_function(toks, pos0);
 }
 
 pub fn types_check_types(src: String) -> String {

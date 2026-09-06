@@ -13,6 +13,7 @@ import "ll_tok.oo";
 import "ll_ty.oo";
 import "ll_expr.oo";
 import "ll_call.oo";
+import "ll_ctor.oo";
 import "types/types_core.oo";
 
 fn ll_store(name: String, kind: String, v: String, ssa0: Int) -> Int {
@@ -124,8 +125,7 @@ pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String, env
             ssa = ll_pssa(v);
             if p < n && ll_k(toks, p) == "SEMI" { p = p + 1; }
             if ret_kind == "resim" {
-                if ll_pk(v) == "i64" { println("  ret i32 0"); }
-                else { println("  ret i32 1"); }
+                ssa = ll_ret_resim(v, ssa);
             } else if ret_kind == "resi" {
                 ssa = ll_ret_resi(v, ssa);
             } else if ret_kind == "void" {
