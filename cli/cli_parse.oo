@@ -5,9 +5,9 @@
 // Setup: path_exists and file_size on FsReadCap. Usage matches dispatched commands.
 //
 // Beats:
-//   1. Accept --backend c, --json-errors, --plain, -o. Reject residual flags.
+//   1. Accept --backend c, --json-errors, --plain, --concat, -o. Reject residual flags.
 //   2. Require a readable path under 64KiB.
-//   3. Pack cmd, path, out, backend, json-errors, plain.
+//   3. Pack cmd, path, out, backend, json-errors, plain, concat.
 
 pub fn parse_cli_argv(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, args: List[String]) -> List[String] {
     let usage: String = "oodac: usage: tokens|check|build|emit-c|emit-protos|emit-bodies|emit-preamble <file>";
@@ -21,6 +21,7 @@ pub fn parse_cli_argv(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, arg
     let mut backend: String = "c";
     let mut json_errors: Bool = false;
     let mut is_plain: Bool = false;
+    let mut concat: Bool = false;
     let mut npos: Int = 0;
     let mut i: Int = 0;
     while i < list_len(args) {
@@ -42,6 +43,9 @@ pub fn parse_cli_argv(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, arg
             i = i + 1;
         } else if a == "-g" || a == "--debug" || a == "--plain" {
             is_plain = true;
+            i = i + 1;
+        } else if a == "--concat" {
+            concat = true;
             i = i + 1;
         } else if a == "-o" {
             if i + 1 >= list_len(args) {
@@ -103,5 +107,8 @@ pub fn parse_cli_argv(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, arg
     let mut f_pl: String = "0";
     if is_plain { f_pl = "1"; }
     packed = list_push(packed, f_pl);
+    let mut f_cat: String = "0";
+    if concat { f_cat = "1"; }
+    packed = list_push(packed, f_cat);
     return packed;
 }

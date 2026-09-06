@@ -127,7 +127,7 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
         println(cmsg);
         process_exit(1);
     }
-    let em: Result[String, String] = sys_exec(sys, host, "emit-c", path);
+    let em: Result[String, String] = sys_exec(sys, host, "emit-c", "--concat", path);
     if !em.is_ok() {
         println("ERR\tbuild\temit-c failed");
         let emsg: String = em.val;

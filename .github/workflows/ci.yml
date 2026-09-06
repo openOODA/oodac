@@ -20,6 +20,10 @@ jobs:
         with:
           repository: openOODA/oodar
           path: oodar
+      - uses: actions/checkout@v4
+        with:
+          repository: openOODA/std
+          path: std
       - name: Count ANCHOR imports
         run: |
           n=$(grep -c '^import "' oodac/ANCHOR.oo)
@@ -74,6 +78,9 @@ jobs:
           echo "=== landlock jail ==="
           "$HOST" build oodac/qa/probe_landlock_jail.oo -o .ooda-cache/ooda-tmp/ci_landlock_jail.bin
           .ooda-cache/ooda-tmp/ci_landlock_jail.bin
+          echo "=== std import ==="
+          "$HOST" build oodac/qa/probe_std_import_run.oo -o .ooda-cache/ooda-tmp/ci_std_import.bin
+          .ooda-cache/ooda-tmp/ci_std_import.bin
           echo "UNIQUE_C_BAR_OK"
       - name: Compiler core is ELF
         run: |

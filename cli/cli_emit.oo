@@ -32,7 +32,7 @@ fn emit_c_one_tu(fs: &FsReadCap, path: String, mode: String, is_plain: Bool) {
     c_emit_stream_toks_at(fsx, toks, mode, path, is_plain);
 }
 
-pub fn run_emit_c_family(fs: &FsReadCap, env: &EnvCap, cmd: String, path: String, is_plain: Bool) {
+pub fn run_emit_c_family(fs: &FsReadCap, env: &EnvCap, cmd: String, path: String, is_plain: Bool, concat: Bool) {
     let mut m: String = "once";
     if cmd == "emit-preamble" { m = "preamble"; }
     else if cmd == "emit-protos" { m = "protos"; }
@@ -41,7 +41,7 @@ pub fn run_emit_c_family(fs: &FsReadCap, env: &EnvCap, cmd: String, path: String
         c_emit_stream_mode("", "preamble");
         return;
     }
-    if !emit_c_concat(env) {
+    if !concat && !emit_c_concat(env) {
         emit_c_one_tu(fs, path, m, is_plain);
         return;
     }

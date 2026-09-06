@@ -1,8 +1,8 @@
 // # Probe: one-TU emit-c is not an import-graph dump
 //
-// Logline: emit-c of cli_emit.oo with OODA_EMIT_NO_CONCAT=1 must define run_emit_c_family and must not define c_emit_stream_toks_at.
+// Logline: Naked emit-c of cli_emit.oo is one-TU: defines run_emit_c_family, not c_emit_stream_toks_at.
 //
-// Setup: ProcessCap + EnvCap. Host is OODA_COMPILER. Child inherits OODA_EMIT_NO_CONCAT.
+// Setup: ProcessCap + EnvCap. Host is OODA_COMPILER. Concat opt-in unset.
 //
 // Beats:
 //   1. sys_exec host emit-c oodac/cli/cli_emit.oo.
@@ -14,12 +14,6 @@ pub fn main(p: &ProcessCap, env: &EnvCap) {
     let host: String = match hr { Ok(s) => s, Err(_) => "" };
     if host == "" {
         println("ERR\tOODA_COMPILER required");
-        process_exit(1);
-    }
-    let nc: Result[String, String] = env_get(env, "OODA_EMIT_NO_CONCAT");
-    let ncv: String = match nc { Ok(s) => s, Err(_) => "" };
-    if ncv != "1" {
-        println("ERR\tOODA_EMIT_NO_CONCAT=1 required");
         process_exit(1);
     }
     let r: Result[String, String] = sys_exec(p, host, "emit-c", "oodac/cli/cli_emit.oo");

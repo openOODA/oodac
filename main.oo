@@ -26,13 +26,14 @@ pub fn main(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env: &EnvCap,
     let backend: String = list_get(a, 3);
     let json_errors: Bool = list_get(a, 4) == "1";
     let is_plain: Bool = list_get(a, 5) == "1";
+    let concat: Bool = list_get(a, 6) == "1";
 
     if cmd == "build" {
         run_build_san(fs_r, fs_w, sys, env, path, out_arg, backend);
         return;
     }
     if cmd == "emit-c" || cmd == "emit-protos" || cmd == "emit-bodies" || cmd == "emit-preamble" {
-        run_emit_c_family(fs_r, env, cmd, path, is_plain);
+        run_emit_c_family(fs_r, env, cmd, path, is_plain, concat);
         return;
     }
     if cmd == "check" {
