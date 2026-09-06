@@ -1,12 +1,13 @@
-# C-path only — not a product backend
+# Attach contract — new ISA is not a copy of emit/c
 
-Logline: x86 codegen style is historical. Product oodac emits C99 and gcc. This file is not a how-to for a second ISA.
+File: oodac/docs/x86-codegen-style.oot
 
-Setup: Stay on C until `oodac build` cannot ship what `oodac check` refuses and the four product mains double-run.
+Product oodac emits C99 and gcc. That C path is the reference, not a forever ban on other ISAs.
 
-Beats:
-  1. No `--backend x86` success path.
-  2. New lowering belongs in `emit/c/`.
-  3. GNU statement-expr and hardcoded defaults are silent-wrong; refuse them.
+The C reference gate is: four product mains `check`, product `build` of ooda/lsp/mcp, and the unique_fns host rebuild of `oodac/main.oo` (`OK_PURE_MULTI`, `PURE_SKIP_CHECK` unset). Concat of `oodac/main.oo` as the only compiler ELF is a fail.
 
-Status: not a product backend. C path only.
+A later `--backend` (llvm or wasm) is a new directory `emit/<name>/` that consumes the same typed artifact C uses. Shared type names (`OoResI`, list kinds, cap tokens) live in `types/`. If C and the new backend disagree, the new backend is wrong until a hostile probe that C already passes says otherwise.
+
+Do not restore `x86_emit_*.oo` or `cli_emit_llvm.oo` as product. Do not put GNU statement-expr or `__typeof__` in C lowering.
+
+Status: C is the reference. A second consumer of the typed artifact may attach.

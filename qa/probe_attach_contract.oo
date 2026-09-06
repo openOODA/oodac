@@ -1,0 +1,55 @@
+// # Probe: attach-contract docs and residual backend
+//
+// Logline: Docs name the typed artifact and C as reference. emit/ANCHOR has emit_backend. --backend llvm still exits 2.
+//
+// Setup: ProcessCap + EnvCap + FsReadCap. Host is OODA_COMPILER.
+//
+// Beats:
+//   1. Both attach docs contain typed artifact and reference.
+//   2. emit/ANCHOR.oo defines emit_backend.
+//   3. build --backend llvm of a well-typed file exits 2.
+
+pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
+    let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
+    let host: String = match hr { Ok(s) => s, Err(_) => "" };
+    if host == "" {
+        println("ERR\tOODA_COMPILER required");
+        process_exit(1);
+    }
+    let d1r: Result[String, String] = read_file(fs_r, "oodac/docs/silent-miscompile-prevention.oot");
+    let d2r: Result[String, String] = read_file(fs_r, "oodac/docs/x86-codegen-style.oot");
+    if d1r.is_err() || d2r.is_err() {
+        println("ERR\tunreadable attach docs");
+        process_exit(1);
+    }
+    let d1: String = match d1r { Ok(s) => s, Err(_) => "" };
+    let d2: String = match d2r { Ok(s) => s, Err(_) => "" };
+    if str_index_of(d1, "typed artifact") < 0 || str_index_of(d2, "typed artifact") < 0 {
+        println("ERR\tdocs missing typed artifact");
+        process_exit(1);
+    }
+    if str_index_of(d1, "reference") < 0 || str_index_of(d2, "reference") < 0 {
+        println("ERR\tdocs missing C reference");
+        process_exit(1);
+    }
+    if str_index_of(d1, "emit/<name>/") < 0 && str_index_of(d2, "emit/<name>/") < 0 {
+        println("ERR\tdocs missing emit/<name>/ attach dir");
+        process_exit(1);
+    }
+    let ar: Result[String, String] = read_file(fs_r, "oodac/emit/ANCHOR.oo");
+    if ar.is_err() {
+        println("ERR\tunreadable emit/ANCHOR.oo");
+        process_exit(1);
+    }
+    let a: String = match ar { Ok(s) => s, Err(_) => "" };
+    if str_index_of(a, "emit_backend") < 0 {
+        println("ERR\temit/ANCHOR missing emit_backend");
+        process_exit(1);
+    }
+    let lr: Result[String, String] = sys_exec(p, host, "build", "oodac/qa/probe_list_ok.oo", "--backend", "llvm");
+    if lr.is_ok() {
+        println("ERR\tbackend llvm must stay residual");
+        process_exit(1);
+    }
+    println("OK");
+}

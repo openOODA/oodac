@@ -91,6 +91,9 @@ jobs:
           echo "=== four product mains ==="
           "$HOST" build oodac/qa/probe_four_mains.oo -o .ooda-cache/ooda-tmp/ci_four.bin
           .ooda-cache/ooda-tmp/ci_four.bin
+          echo "=== attach contract ==="
+          "$HOST" build oodac/qa/probe_attach_contract.oo -o .ooda-cache/ooda-tmp/ci_attach.bin
+          .ooda-cache/ooda-tmp/ci_attach.bin
           echo "UNIQUE_C_BAR_OK"
       - name: Compiler core is ELF
         run: |
