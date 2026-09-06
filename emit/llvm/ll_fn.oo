@@ -1,0 +1,91 @@
+// # LLVM function emit
+//
+// Logline: Emit main and named fns from tokens. Cap formals become oo_cap_grant_* in main.
+//
+// Setup: ll_skip_fn, ll_ty_at, ll_emit_stmts. Main is i32 (argc, argv).
+//
+// Beats:
+//   1. Parse name, params, optional arrow type.
+//   2. main grants caps and allocas args list.
+//   3. Body via ll_emit_stmts. Unreachable ret i32 0.
+
+import "ll_tok.oo";
+import "ll_ty.oo";
+import "ll_stmt.oo";
+import "ll_expr.oo";
+
+pub fn ll_fn_name_at(toks: List[String], pos: Int, n: Int) -> String {
+    let mut p: Int = pos;
+    if p < n && ll_k(toks, p) == "KW_PUB" { p = p + 1; }
+    if p < n && ll_k(toks, p) == "KW_FN" { p = p + 1; }
+    if p < n && ll_k(toks, p) == "IDENT" { return ll_t(toks, p); }
+    return "";
+}
+
+pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int) -> Int {
+    let mut p: Int = pos;
+    if ll_k(toks, p) == "KW_PUB" { p = p + 1; }
+    if ll_k(toks, p) != "KW_FN" { return ll_skip_fn(toks, pos, n); }
+    p = p + 1;
+    let name: String = ll_t(toks, p);
+    p = p + 1;
+    if p < n && ll_k(toks, p) == "LPAREN" { p = p + 1; }
+    let mut caps: String = "";
+    while p < n && ll_k(toks, p) != "RPAREN" {
+        if ll_k(toks, p) == "COMMA" { p = p + 1; continue; }
+        if ll_k(toks, p) == "IDENT" {
+            let pn: String = ll_t(toks, p);
+            p = p + 1;
+            if p < n && ll_k(toks, p) == "COLON" {
+                p = p + 1;
+                let cn: String = ll_peek_cap_name(toks, p, n);
+                let g: String = ll_cap_grant(cn);
+                if g != "" { caps = caps + pn + "=" + g + ";"; }
+                p = ll_skip_type(toks, p, n);
+            }
+        } else {
+            p = p + 1;
+        }
+    }
+    if p < n && ll_k(toks, p) == "RPAREN" { p = p + 1; }
+    let mut rk: String = "i32";
+    if p < n && ll_k(toks, p) == "ARROW" {
+        p = p + 1;
+        rk = ll_ty_at(toks, p, n);
+        p = ll_skip_type(toks, p, n);
+    }
+    while p < n && ll_k(toks, p) != "LBRACE" {
+        if ll_k(toks, p) == "SEMI" { return p + 1; }
+        p = p + 1;
+    }
+    if p >= n { return p; }
+    p = p + 1;
+    if name == "main" {
+        println("define i32 @main(i32 %argc, ptr %argv) {");
+        let mut i: Int = 0;
+        let cn: Int = chars_len(caps);
+        while i < cn {
+            if char_at(caps, i) == "=" {
+                let mut s: Int = i;
+                while s > 0 && char_at(caps, s - 1) != ";" { s = s - 1; }
+                let nm: String = str_slice(caps, s, i);
+                let mut e: Int = i + 1;
+                while e < cn && char_at(caps, e) != ";" { e = e + 1; }
+                let suf: String = str_slice(caps, i + 1, e);
+                println("  " + ll_var(nm) + " = call i64 @oo_cap_grant_" + suf + "()");
+            }
+            i = i + 1;
+        }
+        println("  %v_args = alloca %OoSList, align 8");
+        println("  call void @oo_slist_new(ptr sret(%OoSList) align 8 %v_args)");
+        let _: Int = ll_emit_stmts(toks, p, n, rk);
+        println("  ret i32 0");
+        println("}");
+    } else {
+        println("define void @" + name + "() {");
+        let _: Int = ll_emit_stmts(toks, p, n, rk);
+        println("  ret void");
+        println("}");
+    }
+    return ll_skip_fn(toks, pos, n);
+}

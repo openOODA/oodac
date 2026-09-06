@@ -1,0 +1,59 @@
+// # LLVM token row helpers
+//
+// Logline: Kind and text from TSV rows. Skip types, braces, and SRC_PATH. No emit/c import.
+//
+// Setup: field_at from lex. skip_balanced from types/token_search.
+//
+// Beats:
+//   1. ll_k and ll_t read kind and text.
+//   2. ll_skip_type walks IDENT List[T] AMP types.
+//   3. ll_skip_item advances one top-level item.
+
+import "lex/token_fmt.oo";
+import "types/token_search.oo";
+
+pub fn ll_k(toks: List[String], i: Int) -> String {
+    if i < 0 || i >= list_len(toks) { return ""; }
+    return field_at(list_get(toks, i), 0);
+}
+
+pub fn ll_t(toks: List[String], i: Int) -> String {
+    if i < 0 || i >= list_len(toks) { return ""; }
+    return field_at(list_get(toks, i), 3);
+}
+
+pub fn ll_skip_type(toks: List[String], pos: Int, n: Int) -> Int {
+    let mut p: Int = pos;
+    if p < n && ll_k(toks, p) == "AMP" { p = p + 1; }
+    if p < n && ll_k(toks, p) == "KW_MUT" { p = p + 1; }
+    if p >= n { return p; }
+    if ll_k(toks, p) != "IDENT" { return p; }
+    p = p + 1;
+    if p < n && ll_k(toks, p) == "LBRACKET" {
+        let mut d: Int = 1;
+        p = p + 1;
+        while p < n && d > 0 {
+            let k: String = ll_k(toks, p);
+            if k == "LBRACKET" { d = d + 1; }
+            if k == "RBRACKET" { d = d - 1; }
+            p = p + 1;
+        }
+    }
+    return p;
+}
+
+pub fn ll_skip_fn(toks: List[String], pos: Int, n: Int) -> Int {
+    let mut p: Int = pos;
+    if ll_k(toks, p) == "KW_PUB" { p = p + 1; }
+    if ll_k(toks, p) != "KW_FN" { return p + 1; }
+    p = p + 1;
+    if p < n && ll_k(toks, p) == "IDENT" { p = p + 1; }
+    while p < n && ll_k(toks, p) != "LBRACE" {
+        if ll_k(toks, p) == "SEMI" { return p + 1; }
+        p = p + 1;
+    }
+    if p < n && ll_k(toks, p) == "LBRACE" {
+        return skip_balanced(toks, p);
+    }
+    return p;
+}

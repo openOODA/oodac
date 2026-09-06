@@ -1,0 +1,41 @@
+// # LLVM stream from a typed token artifact
+//
+// Logline: Print runtime header then emit each fn. SRC_PATH and type/import rows skip.
+//
+// Setup: Product path is artifact toks. No second lex here. No emit/c import.
+//
+// Beats:
+//   1. ll_rt_header.
+//   2. Walk KW_FN / KW_PUB fn items.
+//   3. Unknown top-level kinds fail closed except skippable rows.
+
+import "ll_tok.oo";
+import "ll_rt.oo";
+import "ll_fn.oo";
+import "types/token_search.oo";
+
+pub fn ll_emit_stream_toks(toks: List[String]) {
+    if list_len(toks) < 1 {
+        println("ERR\tllvm\tempty artifact");
+        process_exit(1);
+    }
+    ll_rt_header();
+    let n: Int = list_len(toks);
+    let mut pos: Int = 0;
+    while pos < n {
+        let k: String = ll_k(toks, pos);
+        if k == "EOF" {
+            pos = n;
+        } else if k == "SRC_PATH" || k == "LINEFILE" {
+            pos = pos + 1;
+        } else if k == "KW_IMPORT" || k == "KW_TYPE" {
+            pos = skip_until_semi(toks, pos);
+        } else if k == "KW_PUB" || k == "KW_FN" {
+            pos = ll_emit_fn(toks, pos, n);
+        } else if k == "IDENT" && (ll_t(toks, pos) == "trait" || ll_t(toks, pos) == "impl") {
+            pos = skip_trait_or_impl(toks, pos);
+        } else {
+            pos = pos + 1;
+        }
+    }
+}

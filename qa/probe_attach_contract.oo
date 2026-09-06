@@ -46,9 +46,9 @@ pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
         println("ERR\temit/ANCHOR missing emit_backend");
         process_exit(1);
     }
-    let lr: Result[String, String] = sys_exec(p, host, "build", "oodac/qa/probe_list_ok.oo", "--backend", "llvm");
+    let lr: Result[String, String] = sys_exec(p, host, "build", "oodac/qa/probe_list_ok.oo", "--backend", "wasm");
     if lr.is_ok() {
-        println("ERR\tbackend llvm must stay residual");
+        println("ERR\tbackend wasm must stay residual");
         process_exit(1);
     }
     println("OK");

@@ -1,0 +1,50 @@
+// # LLVM type names from Ooda tokens
+//
+// Logline: Map IDENT types at a token index to slist, ilist, str, i64, bool, resi, cap.
+//
+// Setup: ll_k/ll_t. Shared names stay conceptual with types/; no emit/c import.
+//
+// Beats:
+//   1. List[String] is slist. List[Int] is ilist.
+//   2. Result[Int, String] is resi. Option[Int] is opti.
+//   3. Cap tokens are i64.
+
+import "ll_tok.oo";
+
+pub fn ll_ty_at(toks: List[String], pos: Int, n: Int) -> String {
+    let mut p: Int = pos;
+    if p < n && ll_k(toks, p) == "AMP" { p = p + 1; }
+    if p >= n || ll_k(toks, p) != "IDENT" { return "i64"; }
+    let t: String = ll_t(toks, p);
+    if t == "Int" || t == "i64" { return "i64"; }
+    if t == "Bool" { return "i1"; }
+    if t == "String" { return "str"; }
+    if t == "ProcessCap" || t == "EnvCap" || t == "FsReadCap" || t == "FsWriteCap" { return "i64"; }
+    if t == "SysCap" || t == "AllocCap" || t == "TimeCap" || t == "BindCap" { return "i64"; }
+    if t == "List" {
+        if p + 2 < n && ll_k(toks, p + 1) == "LBRACKET" && ll_k(toks, p + 2) == "IDENT" {
+            let e: String = ll_t(toks, p + 2);
+            if e == "String" { return "slist"; }
+            if e == "Int" { return "ilist"; }
+        }
+        return "ilist";
+    }
+    if t == "Result" { return "resi"; }
+    if t == "Option" { return "opti"; }
+    return "i64";
+}
+
+pub fn ll_cap_grant(ty: String) -> String {
+    if ty == "ProcessCap" { return "process"; }
+    if ty == "EnvCap" { return "env"; }
+    if ty == "FsReadCap" { return "fsread"; }
+    if ty == "FsWriteCap" { return "fswrite"; }
+    return "";
+}
+
+pub fn ll_peek_cap_name(toks: List[String], pos: Int, n: Int) -> String {
+    let mut p: Int = pos;
+    if p < n && ll_k(toks, p) == "AMP" { p = p + 1; }
+    if p < n && ll_k(toks, p) == "IDENT" { return ll_t(toks, p); }
+    return "";
+}

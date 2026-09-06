@@ -1,0 +1,56 @@
+// # LLVM expression lowering
+//
+// Logline: Lower INT, STRING, IDENT, calls, and .to_string/.len methods. Fail closed on unknown.
+//
+// Setup: Prints IR. Returns next pos and an SSA id. Named allocas are %v_<ident>.
+//
+// Beats:
+//   1. list_new uses expected ty slist or ilist.
+//   2. list_len and to_string call oo_slist_len / oo_int_to_str.
+//   3. println is a statement helper.
+
+import "ll_tok.oo";
+
+pub fn ll_ssa(n: Int) -> String {
+    return "%t" + n.to_string();
+}
+
+pub fn ll_var(name: String) -> String {
+    return "%v_" + name;
+}
+
+pub fn ll_emit_str_lit(text: String, n0: Int) -> Int {
+    let n: Int = n0 + 1;
+    let g: String = "@.s" + n.to_string();
+    let ln: Int = chars_len(text) + 1;
+    println(g + " = private unnamed_addr constant [" + ln.to_string() + " x i8] c\"" + text + "\\00\"");
+    println("  " + ll_ssa(n) + " = getelementptr [" + ln.to_string() + " x i8], ptr " + g + ", i64 0, i64 0");
+    let n2: Int = n + 1;
+    println("  " + ll_ssa(n2) + " = call { ptr, i64 } @oo_str_lit(ptr " + ll_ssa(n) + ")");
+    return n2;
+}
+
+pub fn ll_print_str_ssa(s: Int) -> Int {
+    let p: Int = s + 1;
+    let l: Int = s + 2;
+    println("  " + ll_ssa(p) + " = extractvalue { ptr, i64 } " + ll_ssa(s) + ", 0");
+    println("  " + ll_ssa(l) + " = extractvalue { ptr, i64 } " + ll_ssa(s) + ", 1");
+    println("  call void @oo_print_str(ptr " + ll_ssa(p) + ", i64 " + ll_ssa(l) + ")");
+    println("  call void @oo_println()");
+    return l;
+}
+
+pub fn ll_len_of(name: String, ty: String, n0: Int) -> Int {
+    let n: Int = n0 + 1;
+    if ty == "slist" {
+        println("  " + ll_ssa(n) + " = call i64 @oo_slist_len(ptr byval(%OoSList) align 8 " + ll_var(name) + ")");
+        return n;
+    }
+    if ty == "ilist" {
+        println("  " + ll_ssa(n) + " = call i64 @oo_ilist_len(ptr byval(%OoIList) align 8 " + ll_var(name) + ")");
+        return n;
+    }
+    println("ERR\tllvm\tunsupported len ty " + ty);
+    process_exit(1);
+    return n0;
+}

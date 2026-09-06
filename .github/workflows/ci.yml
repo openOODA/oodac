@@ -45,13 +45,13 @@ jobs:
           "$HOST" --help
           echo "=== help 2 ==="
           "$HOST" --help
-          echo "=== backend llvm residual ==="
+          echo "=== backend wasm residual ==="
           set +e
-          "$HOST" build oodac/qa/probe_list_ok.oo --backend llvm
-          llvm_rc=$?
+          "$HOST" build oodac/qa/probe_list_ok.oo --backend wasm
+          wasm_rc=$?
           set -e
-          echo "llvm_rc=$llvm_rc"
-          test "$llvm_rc" -eq 2
+          echo "wasm_rc=$wasm_rc"
+          test "$wasm_rc" -eq 2
           echo "=== cap sealed ==="
           set +e
           "$HOST" check oodac/qa/probe_cap_sealed.oo
@@ -94,6 +94,11 @@ jobs:
           echo "=== attach contract ==="
           "$HOST" build oodac/qa/probe_attach_contract.oo -o .ooda-cache/ooda-tmp/ci_attach.bin
           .ooda-cache/ooda-tmp/ci_attach.bin
+          echo "=== llvm backend ==="
+          if command -v clang >/dev/null 2>&1; then
+            "$HOST" build oodac/qa/probe_llvm_bar.oo -o .ooda-cache/ooda-tmp/ci_llvm.bin
+            .ooda-cache/ooda-tmp/ci_llvm.bin
+          fi
           echo "UNIQUE_C_BAR_OK"
       - name: Compiler core is ELF
         run: |

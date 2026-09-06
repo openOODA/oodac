@@ -10,15 +10,21 @@
 //   3. Unknown backend names fail closed.
 
 import "c/ANCHOR.oo";
+import "llvm/ANCHOR.oo";
 
 pub fn emit_backend(backend: String, src: String, toks: List[String], mode: String, path: String, is_plain: Bool) {
-    if backend != "c" {
-        println("ERR\temit\tresidual: " + backend);
-        process_exit(2);
-    }
     if list_len(toks) < 1 {
         println("ERR\temit\tempty artifact");
         process_exit(1);
     }
-    c_emit_stream_toks_at(src, toks, mode, path, is_plain);
+    if backend == "c" {
+        c_emit_stream_toks_at(src, toks, mode, path, is_plain);
+        return;
+    }
+    if backend == "llvm" {
+        ll_emit_stream_toks(toks);
+        return;
+    }
+    println("ERR\temit\tresidual: " + backend);
+    process_exit(2);
 }

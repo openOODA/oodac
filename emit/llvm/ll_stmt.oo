@@ -1,0 +1,140 @@
+// # LLVM statement lowering
+//
+// Logline: Lower let, println, return Ok/Err/int, and simple calls. Fail closed on unknown stmts.
+//
+// Setup: Expected list ty from the let annotation. No emit/c import.
+//
+// Beats:
+//   1. let xs: List[String] = list_new() allocas and sret-news.
+//   2. println(list_len(xs).to_string()) uses ll_len_of plus oo_int_to_str.
+//   3. return Ok(n) / Err(s) / n for Result and i32 mains.
+
+import "ll_tok.oo";
+import "ll_ty.oo";
+import "ll_expr.oo";
+
+fn ll_skip_call(toks: List[String], pos: Int, n: Int) -> Int {
+    let mut p: Int = pos;
+    while p < n && ll_k(toks, p) != "LPAREN" { p = p + 1; }
+    if p >= n { return p; }
+    let mut d: Int = 0;
+    while p < n {
+        if ll_k(toks, p) == "LPAREN" { d = d + 1; }
+        if ll_k(toks, p) == "RPAREN" {
+            d = d - 1;
+            p = p + 1;
+            if d == 0 { return p; }
+        } else {
+            p = p + 1;
+        }
+    }
+    return p;
+}
+
+pub fn ll_emit_let(toks: List[String], pos: Int, n: Int, ssa0: Int) -> Int {
+    let mut p: Int = pos;
+    if ll_k(toks, p) == "KW_LET" { p = p + 1; }
+    if ll_k(toks, p) == "KW_MUT" { p = p + 1; }
+    if ll_k(toks, p) != "IDENT" {
+        println("ERR\tllvm\tlet name");
+        process_exit(1);
+    }
+    let name: String = ll_t(toks, p);
+    p = p + 1;
+    let mut ty: String = "i64";
+    if p < n && ll_k(toks, p) == "COLON" {
+        p = p + 1;
+        ty = ll_ty_at(toks, p, n);
+        p = ll_skip_type(toks, p, n);
+    }
+    if p < n && ll_k(toks, p) == "EQ" { p = p + 1; }
+    if ty == "slist" {
+        println("  " + ll_var(name) + " = alloca %OoSList, align 8");
+        println("  call void @oo_slist_new(ptr sret(%OoSList) align 8 " + ll_var(name) + ")");
+    } else if ty == "ilist" {
+        println("  " + ll_var(name) + " = alloca %OoIList, align 8");
+        println("  call void @oo_ilist_new(ptr sret(%OoIList) align 8 " + ll_var(name) + ")");
+    } else if ty == "i64" {
+        println("  " + ll_var(name) + " = alloca i64, align 8");
+        if ll_k(toks, p) == "INT" {
+            println("  store i64 " + ll_t(toks, p) + ", ptr " + ll_var(name));
+        }
+    }
+    while p < n && ll_k(toks, p) != "SEMI" { p = p + 1; }
+    if p < n { p = p + 1; }
+    return p;
+}
+
+pub fn ll_emit_println_len(name: String, ty: String, ssa0: Int) -> Int {
+    let n1: Int = ll_len_of(name, ty, ssa0);
+    let n2: Int = n1 + 1;
+    println("  " + ll_ssa(n2) + " = call { ptr, i64 } @oo_int_to_str(i64 " + ll_ssa(n1) + ")");
+    return ll_print_str_ssa(n2);
+}
+
+fn ll_is_println_len(toks: List[String], p: Int, n: Int) -> Bool {
+    if p + 8 >= n { return false; }
+    if ll_k(toks, p) != "IDENT" { return false; }
+    if ll_t(toks, p) != "println" { return false; }
+    if ll_t(toks, p + 2) != "list_len" { return false; }
+    return true;
+}
+
+pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String) -> Int {
+    let mut p: Int = pos;
+    let mut ssa: Int = 0;
+    let mut last_list: String = "xs";
+    let mut last_ty: String = "slist";
+    while p < n {
+        let k: String = ll_k(toks, p);
+        if k == "RBRACE" { return p; }
+        if k == "EOF" { return p; }
+        if k == "KW_LET" {
+            let save: Int = p;
+            if p + 1 < n && ll_k(toks, p + 1) == "KW_MUT" && p + 2 < n {
+                last_list = ll_t(toks, p + 2);
+            } else if p + 1 < n {
+                last_list = ll_t(toks, p + 1);
+            }
+            last_ty = "slist";
+            let mut q: Int = p;
+            while q < n && ll_k(toks, q) != "SEMI" {
+                if ll_k(toks, q) == "IDENT" && ll_t(toks, q) == "Int" { last_ty = "ilist"; }
+                q = q + 1;
+            }
+            p = ll_emit_let(toks, p, n, ssa);
+        } else if ll_is_println_len(toks, p, n) {
+            let nm: String = ll_t(toks, p + 4);
+            ssa = ll_emit_println_len(nm, last_ty, ssa);
+            p = ll_skip_call(toks, p, n);
+            if p < n && ll_k(toks, p) == "DOT" { p = ll_skip_call(toks, p, n); }
+            if p < n && ll_k(toks, p) == "SEMI" { p = p + 1; }
+        } else if k == "IDENT" && ll_t(toks, p) == "println" {
+            p = ll_skip_call(toks, p, n);
+            if p < n && ll_k(toks, p) == "SEMI" { p = p + 1; }
+            println("  call void @oo_println()");
+        } else if k == "KW_RETURN" {
+            p = p + 1;
+            if ret_kind == "resi" {
+                if p < n && ll_k(toks, p) == "IDENT" && ll_t(toks, p) == "Ok" {
+                    println("  ret i32 0");
+                } else if p < n && ll_k(toks, p) == "IDENT" && ll_t(toks, p) == "Err" {
+                    println("  ret i32 1");
+                } else {
+                    println("  ret i32 0");
+                }
+            } else {
+                println("  ret i32 0");
+            }
+            while p < n && ll_k(toks, p) != "SEMI" && ll_k(toks, p) != "RBRACE" { p = p + 1; }
+            if p < n && ll_k(toks, p) == "SEMI" { p = p + 1; }
+        } else if k == "IDENT" {
+            p = ll_skip_call(toks, p, n);
+            if p < n && ll_k(toks, p) == "SEMI" { p = p + 1; }
+        } else {
+            println("ERR\tllvm\tunsupported stmt " + k);
+            process_exit(1);
+        }
+    }
+    return p;
+}

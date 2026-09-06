@@ -1,0 +1,82 @@
+// # Run emit-llvm from artifact or tokenize-once
+//
+// Logline: Same concat/one-TU rules as emit-c. Feeds toks to emit/llvm. No emit/c import.
+//
+// Setup: Artifact cache from check. load_expand for concat.
+//
+// Beats:
+//   1. --concat or OODA_EMIT_CONCAT=1 walks imports.
+//   2. Else one-TU toks.
+//   3. ll_emit_stream_toks prints IR.
+
+import "lex/token_fmt.oo";
+import "ast/load_import.oo";
+import "types/typed_artifact.oo";
+import "emit/llvm/ANCHOR.oo";
+
+fn ll_concat(env: &EnvCap) -> Bool {
+    let r: Result[String, String] = env_get(env, "OODA_EMIT_CONCAT");
+    let v: String = match r { Ok(s) => s, Err(_) => "" };
+    return v == "1";
+}
+
+fn ll_load_art(fs: &FsReadCap, dest: String) -> TypedArtifact {
+    if !path_exists(fs, dest) {
+        println("ERR\tllvm\tno artifact");
+        process_exit(1);
+    }
+    let rr: Result[String, String] = read_file(fs, dest);
+    if rr.is_err() {
+        println("ERR\tllvm\tartifact unreadable");
+        process_exit(1);
+    }
+    let body: String = match rr { Ok(s) => s, Err(_) => "" };
+    return artifact_decode(body);
+}
+
+fn ll_toks_file(fs: &FsReadCap, path: String, src: String) -> List[String] {
+    let auto: String = artifact_cache_path(artifact_sha(path, src));
+    if path_exists(fs, auto) {
+        let art: TypedArtifact = ll_load_art(fs, auto);
+        return art.toks;
+    }
+    return tokenize_lines(src);
+}
+
+pub fn run_emit_llvm(fs: &FsReadCap, env: &EnvCap, path: String, concat: Bool) {
+    if !concat && !ll_concat(env) {
+        let pr: Result[String, String] = read_file(fs, path);
+        if pr.is_err() {
+            println("ERR\tload\tunreadable file: " + path);
+            process_exit(1);
+        }
+        let src: String = match pr { Ok(s) => s, Err(_) => "" };
+        ll_emit_stream_toks(ll_toks_file(fs, path, src));
+        return;
+    }
+    let le: List[String] = load_expand(fs, path, list_new(), list_new());
+    let nle: Int = list_len(le);
+    let mut toks: List[String] = list_new();
+    let mut i: Int = 0;
+    while i < nle - 1 {
+        let p: String = list_get(le, i);
+        let pr: Result[String, String] = read_file(fs, p);
+        if pr.is_err() {
+            println("ERR\tload\tunreadable file: " + p);
+            process_exit(1);
+        }
+        let fsx: String = match pr { Ok(s) => s, Err(_) => "" };
+        let part: List[String] = ll_toks_file(fs, p, fsx);
+        let pn: Int = list_len(part);
+        let mut j: Int = 0;
+        while j < pn {
+            let row: String = list_get(part, j);
+            if field_at(row, 0) != "EOF" {
+                toks = list_push(toks, row);
+            }
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+    ll_emit_stream_toks(toks);
+}

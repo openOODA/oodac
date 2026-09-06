@@ -8,7 +8,7 @@
 //   1. build probe_blackbox_capmiss.oo is ERR; ELF absent.
 //   2. build probe_no_main.oo is ERR; ELF absent.
 //   3. build hold -o oodac/qa is ERR (directory).
-//   4. --backend llvm on a valid file exits nonzero.
+//   4. --backend wasm on a valid file exits nonzero.
 
 pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
     let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
@@ -42,9 +42,9 @@ pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
         println("ERR\t-o dir build must fail");
         process_exit(1);
     }
-    let lr: Result[String, String] = sys_exec(p, host, "build", "oodac/qa/probe_build_std_import.oo", "--backend", "llvm");
+    let lr: Result[String, String] = sys_exec(p, host, "build", "oodac/qa/probe_build_std_import.oo", "--backend", "wasm");
     if lr.is_ok() {
-        println("ERR\tbackend llvm must fail");
+        println("ERR\tbackend wasm must fail");
         process_exit(1);
     }
     println("OK");

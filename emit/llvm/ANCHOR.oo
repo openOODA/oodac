@@ -1,0 +1,15 @@
+// # LLVM backend — typed artifact consumer
+//
+// Logline: Lower artifact tokens to LLVM IR. Does not import emit/c lowering.
+//
+// Setup: types/ and lex only. clang compiles the .ll with chs_rt.
+//
+// Beats:
+//   1. Re-export ll_emit_stream_toks.
+//   2. Fail closed on empty toks.
+
+import "ll_emit.oo";
+
+pub fn emit_llvm_toks(toks: List[String]) {
+    ll_emit_stream_toks(toks);
+}
