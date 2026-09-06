@@ -6,7 +6,7 @@ C remains the reference ISA. `oodac check` is the front door of `oodac build`. A
 
 A new `--backend` is allowed only as a second consumer of the typed artifact (tokens + type env + cap set + source coords) that check writes. That backend lives in `emit/<name>/`. It imports `types/` and the artifact. It does not import `emit/c/` lowering.
 
-`--backend llvm` is a product arm: `emit/llvm/` consumes the typed artifact and clang links chs_rt. Residual names (wasm, x86) exit 2. `x86_emit_*.oo` under fixtures is not product.
+`--backend llvm` is residual (exit 2) until it runs the unique C bar without pattern matching. `emit/llvm/` stays on disk as the attach dir. Residual names (llvm, wasm, x86) exit 2. `x86_emit_*.oo` under fixtures is not product.
 
 C lowering must fail closed rather than emit a lying ELF. GNU statement-expr, `__typeof__`, and hardcoded Result defaults are silent-wrong. The unique C bar is the hostile probe a new backend must also pass: cap-sealed, List/Option/Result kinds, landlock, std-import, tokenize-once artifact mutate, four product mains.
 

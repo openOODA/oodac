@@ -1,0 +1,35 @@
+// # Probe: product build of oodac/main.oo is not concat
+//
+// Logline: oodac build of oodac/main.oo must ERR unique_fns and leave no ELF.
+//
+// Setup: ProcessCap + EnvCap + FsReadCap. Host is OODA_COMPILER.
+//
+// Beats:
+//   1. build oodac/main.oo is Err.
+//   2. The -o ELF is absent.
+//   3. The error names unique_fns.
+
+pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
+    let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
+    let host: String = match hr { Ok(s) => s, Err(_) => "" };
+    if host == "" {
+        println("ERR\tOODA_COMPILER required");
+        process_exit(1);
+    }
+    let out: String = ".ooda-cache/ooda-tmp/compiler_concat.bin";
+    let br: Result[String, String] = sys_exec(p, host, "build", "oodac/main.oo", "-o", out);
+    if br.is_ok() {
+        println("ERR\tconcat compiler ELF shipped");
+        process_exit(1);
+    }
+    if path_exists(fs_r, out) {
+        println("ERR\tcompiler concat ELF exists");
+        process_exit(1);
+    }
+    let txt: String = br.val;
+    if str_index_of(txt, "unique_fns") < 0 {
+        println("ERR\tmissing unique_fns refuse");
+        process_exit(1);
+    }
+    println("OK");
+}

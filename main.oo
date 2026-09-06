@@ -17,7 +17,6 @@ import "emit/c/ANCHOR.oo";
 import "cli/cli_parse.oo";
 import "cli/cli_build.oo";
 import "cli/cli_emit.oo";
-import "cli/cli_emit_llvm.oo";
 
 pub fn main(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env: &EnvCap, args: List[String]) {
     let a: List[String] = parse_cli_argv(fs_r, fs_w, sys, args);
@@ -35,10 +34,6 @@ pub fn main(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env: &EnvCap,
 
     if cmd == "build" {
         run_build_san(fs_r, fs_w, sys, env, path, out_arg, backend);
-        return;
-    }
-    if cmd == "emit-llvm" {
-        run_emit_llvm(fs_r, env, path, concat);
         return;
     }
     if cmd == "emit-c" || cmd == "emit-protos" || cmd == "emit-bodies" || cmd == "emit-preamble" {

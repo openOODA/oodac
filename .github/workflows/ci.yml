@@ -52,6 +52,13 @@ jobs:
           set -e
           echo "wasm_rc=$wasm_rc"
           test "$wasm_rc" -eq 2
+          echo "=== backend llvm residual ==="
+          set +e
+          "$HOST" build oodac/qa/probe_list_ok.oo --backend llvm
+          llvm_rc=$?
+          set -e
+          echo "llvm_rc=$llvm_rc"
+          test "$llvm_rc" -eq 2
           echo "=== cap sealed ==="
           set +e
           "$HOST" check oodac/qa/probe_cap_sealed.oo
@@ -94,11 +101,18 @@ jobs:
           echo "=== attach contract ==="
           "$HOST" build oodac/qa/probe_attach_contract.oo -o .ooda-cache/ooda-tmp/ci_attach.bin
           .ooda-cache/ooda-tmp/ci_attach.bin
-          echo "=== llvm backend ==="
-          if command -v clang >/dev/null 2>&1; then
-            "$HOST" build oodac/qa/probe_llvm_bar.oo -o .ooda-cache/ooda-tmp/ci_llvm.bin
-            .ooda-cache/ooda-tmp/ci_llvm.bin
-          fi
+          echo "=== llvm residual ==="
+          "$HOST" build oodac/qa/probe_llvm_bar.oo -o .ooda-cache/ooda-tmp/ci_llvm.bin
+          .ooda-cache/ooda-tmp/ci_llvm.bin
+          echo "=== compiler not concat ==="
+          "$HOST" build oodac/qa/probe_compiler_not_concat.oo -o .ooda-cache/ooda-tmp/ci_nocat.bin
+          .ooda-cache/ooda-tmp/ci_nocat.bin
+          echo "=== elf hash ==="
+          "$HOST" build oodac/qa/probe_elf_hash.oo -o .ooda-cache/ooda-tmp/ci_elfhash.bin
+          .ooda-cache/ooda-tmp/ci_elfhash.bin
+          echo "=== isolated check ==="
+          "$HOST" build oodac/qa/probe_isolated_check.oo -o .ooda-cache/ooda-tmp/ci_iso.bin
+          .ooda-cache/ooda-tmp/ci_iso.bin
           echo "UNIQUE_C_BAR_OK"
       - name: Compiler core is ELF
         run: |

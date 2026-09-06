@@ -1,0 +1,33 @@
+// # Probe: isolated check of compiler TUs uses sibling ANCHOR
+//
+// Logline: oodac check of check_drive.oo and check_mod.oo is OK without checking main.oo.
+//
+// Setup: ProcessCap + EnvCap. Host is OODA_COMPILER.
+//
+// Beats:
+//   1. check oodac/check/check_drive.oo prints OK.
+//   2. check oodac/check/check_mod.oo prints OK.
+
+pub fn main(p: &ProcessCap, env: &EnvCap) {
+    let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
+    let host: String = match hr { Ok(s) => s, Err(_) => "" };
+    if host == "" {
+        println("ERR\tOODA_COMPILER required");
+        process_exit(1);
+    }
+    let d: Result[String, String] = sys_exec(p, host, "check", "oodac/check/check_drive.oo");
+    if d.is_err() {
+        println("ERR\tisolated check_drive");
+        let dt: String = d.val;
+        println(dt);
+        process_exit(1);
+    }
+    let m: Result[String, String] = sys_exec(p, host, "check", "oodac/check/check_mod.oo");
+    if m.is_err() {
+        println("ERR\tisolated check_mod");
+        let mt: String = m.val;
+        println(mt);
+        process_exit(1);
+    }
+    println("OK");
+}

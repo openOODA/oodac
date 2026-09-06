@@ -1,14 +1,13 @@
-// # Probe: llvm backend unique bar slice
+// # Probe: llvm backend is residual
 //
-// Logline: build --backend llvm of well-typed list/result mains runs. Kind-mismatch callees still ERR with no ELF. wasm residual.
+// Logline: build --backend llvm of a well-typed file exits 2 and writes no ELF. wasm residual.
 //
-// Setup: ProcessCap + EnvCap + FsReadCap. Host is OODA_COMPILER. clang must exist.
+// Setup: ProcessCap + EnvCap + FsReadCap. Host is OODA_COMPILER.
 //
 // Beats:
-//   1. llvm build of probe_artifact_list.oo runs and prints 0.
-//   2. llvm build of probe_result_main_ok.oo exits 0; Err main exits 1.
-//   3. llvm build of a List kind-mismatch callee is ERR and leaves no ELF.
-//   4. --backend wasm still exits 2.
+//   1. build --backend llvm of probe_list_ok.oo exits 2.
+//   2. That -o path is absent.
+//   3. --backend wasm still exits 2.
 
 pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
     let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
@@ -17,54 +16,14 @@ pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
         println("ERR\tOODA_COMPILER required");
         process_exit(1);
     }
-    let out: String = ".ooda-cache/ooda-tmp/llvm_list.bin";
-    let br: Result[String, String] = sys_exec(p, host, "build", "--backend", "llvm", "oodac/qa/probe_artifact_list.oo", "-o", out);
-    if br.is_err() {
-        println("ERR\tllvm build list");
-        let bt: String = br.val;
-        println(bt);
+    let out: String = ".ooda-cache/ooda-tmp/llvm_residual.bin";
+    let br: Result[String, String] = sys_exec(p, host, "build", "--backend", "llvm", "oodac/qa/probe_list_ok.oo", "-o", out);
+    if br.is_ok() {
+        println("ERR\tbackend llvm must stay residual");
         process_exit(1);
     }
-    let rr: Result[String, String] = sys_exec(p, out);
-    if rr.is_err() {
-        println("ERR\tllvm list run");
-        process_exit(1);
-    }
-    let txt: String = match rr { Ok(s) => s, Err(_) => "" };
-    if str_index_of(txt, "0") < 0 {
-        println("ERR\tllvm list stdout " + txt);
-        process_exit(1);
-    }
-    let okp: String = ".ooda-cache/ooda-tmp/llvm_ok.bin";
-    let okr: Result[String, String] = sys_exec(p, host, "build", "--backend", "llvm", "oodac/qa/probe_result_main_ok.oo", "-o", okp);
-    if okr.is_err() {
-        println("ERR\tllvm result ok build");
-        process_exit(1);
-    }
-    let oke: Result[String, String] = sys_exec(p, okp);
-    if oke.is_err() {
-        println("ERR\tllvm result ok run");
-        process_exit(1);
-    }
-    let erp: String = ".ooda-cache/ooda-tmp/llvm_err.bin";
-    let errb: Result[String, String] = sys_exec(p, host, "build", "--backend", "llvm", "oodac/qa/probe_result_main_err.oo", "-o", erp);
-    if errb.is_err() {
-        println("ERR\tllvm result err build");
-        process_exit(1);
-    }
-    let erre: Result[String, String] = sys_exec(p, erp);
-    if erre.is_ok() {
-        println("ERR\tllvm Err main must exit 1");
-        process_exit(1);
-    }
-    let bad: String = ".ooda-cache/ooda-tmp/llvm_kind.bin";
-    let kb: Result[String, String] = sys_exec(p, host, "build", "--backend", "llvm", "oodac/qa/probe_list_kind_callee.oo", "-o", bad);
-    if kb.is_ok() {
-        println("ERR\tllvm kind callee must fail");
-        process_exit(1);
-    }
-    if path_exists(fs_r, bad) {
-        println("ERR\tllvm kind ELF shipped");
+    if path_exists(fs_r, out) {
+        println("ERR\tllvm residual shipped ELF");
         process_exit(1);
     }
     let wr: Result[String, String] = sys_exec(p, host, "build", "oodac/qa/probe_list_ok.oo", "--backend", "wasm");

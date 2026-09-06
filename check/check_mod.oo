@@ -8,6 +8,7 @@
 //   1. A g_ listing whose path stamps still match prints OK without collect or typecheck.
 //   2. More than one module: scan names once, then check only stamp-plus-binds misses.
 //   3. One module: load the import tree, hit the content-hash cache, or run_check_core, put the tree key, and print OK.
+//   Isolated TUs (not main.oo) seed extra_binds from sibling ANCHOR.oo.
 //   Entry (last path) keeps import lines so unused-import can see KW_IMPORT.
 //
 // residual: RAM-cold typecheck stays ~523s; disk-warm new-process uses g_ stamp snapshot.
@@ -16,6 +17,59 @@ import "check_cache.oo";
 import "check_artifact.oo";
 import "ast/load_import.oo";
 
+
+fn sibling_anchor(path: String) -> String {
+    let n: Int = chars_len(path);
+    let mut i: Int = n;
+    while i > 0 {
+        i = i - 1;
+        if char_at(path, i) == "/" {
+            return str_slice(path, 0, i + 1) + "ANCHOR.oo";
+        }
+    }
+    return "ANCHOR.oo";
+}
+
+fn path_is_main_oo(path: String) -> Bool {
+    let n: Int = chars_len(path);
+    if n >= 7 {
+        if str_slice(path, n - 7, n) == "main.oo" {
+            return true;
+        }
+    }
+    return path == "main.oo";
+}
+
+fn scan_graph_names(fs_r: &FsReadCap, paths: List[String]) -> String {
+    let np: Int = list_len(paths);
+    let mut names: String = "\t";
+    let mut i: Int = 0;
+    while i < np {
+        let pth: String = list_get(paths, i);
+        let rr: Result[String, String] = read_file(fs_r, pth);
+        if !rr.is_err() {
+            let raw: String = match rr { Ok(s) => s, Err(_) => "" };
+            names = names + scan_fn_names(raw);
+        }
+        i = i + 1;
+    }
+    return names;
+}
+
+fn anchor_extra_names(fs_r: &FsReadCap, path: String) -> String {
+    if path_is_main_oo(path) {
+        return "\t";
+    }
+    let anc: String = sibling_anchor(path);
+    if anc == path {
+        return "\t";
+    }
+    if !path_exists(fs_r, anc) {
+        return "\t";
+    }
+    let ap: List[String] = collect_module_paths(fs_r, anc);
+    return scan_graph_names(fs_r, ap);
+}
 
 fn persist_graph(fs: &FsWriteCap, sys: &ProcessCap, root: String, listing: String) {
     let tk: String = check_cache_tree_key(content_hash("dw1\n" + listing));
@@ -39,9 +93,9 @@ fn count_lines(s: String) -> Int {
     return c;
 }
 
-fn check_modules(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, paths: List[String]) {
+fn check_modules(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, paths: List[String], extra_names: String) {
     let np = list_len(paths);
-    let mut names = "\t";
+    let mut names = extra_names;
     let mut raws: List[String] = list_new();
     let mut i = 0;
     while i < np { let pth: String = list_get(paths, i);
@@ -88,10 +142,11 @@ pub fn run_check_path(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, pat
         return;
     }
     let paths: List[String] = collect_module_paths(fs_r, path);
+    let extra: String = anchor_extra_names(fs_r, path);
     let np = list_len(paths);
     let roll: String = check_paths_listing(paths);
     if np > 1 { let tk: String = check_cache_tree_key(content_hash("dw1\n" + roll));
-    if !check_cache_hit(fs_r, tk) { check_modules(fs_r, fs_w, sys, paths);
+    if !check_cache_hit(fs_r, tk) { check_modules(fs_r, fs_w, sys, paths, extra);
     }
         persist_graph(fs_w, sys, path, roll);
         println("OK");
@@ -109,7 +164,7 @@ pub fn run_check_path(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, pat
         println("OK");
         return;
     }
-    let toks: List[String] = run_check_core_binds_path(sys, src, "\t", path);
+    let toks: List[String] = run_check_core_binds_path(sys, src, names_to_depth0_binds(extra), path);
     let _: String = artifact_write_toks(fs_w, sys, path, src, toks);
     check_cache_put(fs_w, sys, tk2);
     persist_graph(fs_w, sys, path, roll);

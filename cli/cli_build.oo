@@ -5,9 +5,9 @@
 // Setup: Host is OODA_COMPILER or OODAC_BIN only. C backend only. No sh -c.
 //
 // Beats:
-//   1. Refuse non-c backends, -o a directory, and entry files with no main.
+//   1. Refuse non-c backends, compiler-main concat, -o a directory, and no main.
 //   2. sys_exec host check; on ERR do not emit or gcc.
-//   3. mkdir; sys_exec host emit-c; gcc with chs_rt and oodar blackbox.c.
+//   3. mkdir; sys_exec host emit-c; gcc -g0 -fno-ident with chs_rt and blackbox.c.
 
 import "lex/token_fmt.oo";
 
@@ -78,6 +78,16 @@ fn src_has_main(src: String) -> Bool {
     return false;
 }
 
+fn path_is_compiler_main(path: String) -> Bool {
+    let n: Int = chars_len(path);
+    if n >= 13 {
+        if str_slice(path, n - 13, n) == "oodac/main.oo" {
+            return true;
+        }
+    }
+    return path == "oodac/main.oo";
+}
+
 fn cache_dir(env: &EnvCap) -> String {
     let wd: Result[String, String] = env_get(env, "OODA_FS_WRITEDIR");
     if wd.is_ok() {
@@ -89,9 +99,13 @@ fn cache_dir(env: &EnvCap) -> String {
 pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env: &EnvCap, path: String, out_arg: String, backend: String) {
     let mut out: String = path + ".bin";
     if out_arg != "" { out = out_arg; }
-    if backend != "" && backend != "c" && backend != "llvm" {
+    if backend != "" && backend != "c" {
         println("ERR\tbuild\tbackend residual: " + backend);
         process_exit(2);
+    }
+    if path_is_compiler_main(path) {
+        println("ERR\tbuild\tcompiler rebuild is unique_fns");
+        process_exit(1);
     }
     if path_exists(fs_r, out) {
         if path_exists(fs_r, out + "/.") {
@@ -113,9 +127,8 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
     let rt: String = runtime_dir(fs_r, host);
     let bb: String = blackbox_dir(fs_r, rt);
     let tmp_dir: String = cache_dir(env);
-    let tmp_h: String = crypto_sha256_internal(out + ":" + path);
+    let tmp_h: String = crypto_sha256_internal(path);
     let tmp_c: String = tmp_dir + "/all_" + str_slice(tmp_h, 0, 16) + ".c";
-    let tmp_ll: String = tmp_dir + "/all_" + str_slice(tmp_h, 0, 16) + ".ll";
     let mk: Result[String, String] = sys_exec(sys, "mkdir", "-p", tmp_dir);
     if mk.is_err() {
         println("ERR\tbuild\tmkdir failed");
@@ -128,46 +141,24 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
         println(cmsg);
         process_exit(1);
     }
-    if backend == "llvm" {
-        let em: Result[String, String] = sys_exec(sys, host, "emit-llvm", "--concat", path);
-        if !em.is_ok() {
-            println("ERR\tbuild\temit-llvm failed");
-            let emsg: String = em.val;
-            println(emsg);
-            process_exit(1);
-        }
-        let wr: Result[Void, String] = write_file(fs_w, tmp_ll, em.val);
-        if wr.is_err() {
-            println("ERR\tbuild\twrite LLVM IR failed");
-            process_exit(1);
-        }
-        let r: Result[String, String] = sys_exec(sys, "clang", "--no-default-config", "-O2", "-Wno-override-module", "-I" + rt, "-I" + bb, rt + "/chs_rt.c", bb + "/blackbox.c", tmp_ll, "-frandom-seed=0", "-Wl,--build-id=none", "-lm", "-ldl", "-lpthread", "-o", out);
-        if !r.is_ok() {
-            println("ERR\tbuild\tclang llvm failed");
-            let gtxt: String = r.val;
-            println(gtxt);
-            process_exit(1);
-        }
-    } else {
-        let em: Result[String, String] = sys_exec(sys, host, "emit-c", "--concat", path);
-        if !em.is_ok() {
-            println("ERR\tbuild\temit-c failed");
-            let emsg: String = em.val;
-            println(emsg);
-            process_exit(1);
-        }
-        let wr: Result[Void, String] = write_file(fs_w, tmp_c, em.val);
-        if wr.is_err() {
-            println("ERR\tbuild\twrite C failed");
-            process_exit(1);
-        }
-        let r: Result[String, String] = sys_exec(sys, "gcc", "-O2", "-I" + rt, "-I" + bb, rt + "/chs_rt.c", bb + "/blackbox.c", tmp_c, "-frandom-seed=0", "-Wl,--build-id=none", "-lm", "-ldl", "-lpthread", "-o", out);
-        if !r.is_ok() {
-            println("ERR\tbuild\tgcc failed");
-            let gtxt: String = r.val;
-            println(gtxt);
-            process_exit(1);
-        }
+    let em: Result[String, String] = sys_exec(sys, host, "emit-c", "--concat", path);
+    if !em.is_ok() {
+        println("ERR\tbuild\temit-c failed");
+        let emsg: String = em.val;
+        println(emsg);
+        process_exit(1);
+    }
+    let wr: Result[Void, String] = write_file(fs_w, tmp_c, em.val);
+    if wr.is_err() {
+        println("ERR\tbuild\twrite C failed");
+        process_exit(1);
+    }
+    let r: Result[String, String] = sys_exec(sys, "gcc", "-O2", "-g0", "-fno-ident", "-I" + rt, "-I" + bb, rt + "/chs_rt.c", bb + "/blackbox.c", tmp_c, "-frandom-seed=0", "-Wl,--build-id=none", "-Wl,--strip-debug", "-lm", "-ldl", "-lpthread", "-o", out);
+    if !r.is_ok() {
+        println("ERR\tbuild\tgcc failed");
+        let gtxt: String = r.val;
+        println(gtxt);
+        process_exit(1);
     }
     println("OK_PURE_NATIVE");
     println("OK\tbuild\t" + out);

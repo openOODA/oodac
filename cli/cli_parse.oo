@@ -10,7 +10,7 @@
 //   3. Pack cmd, path, out, backend, json-errors, plain, concat, artifact.
 
 pub fn parse_cli_argv(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, args: List[String]) -> List[String] {
-    let usage: String = "oodac: usage: tokens|check|build|emit-c|emit-llvm|emit-protos|emit-bodies|emit-preamble <file>";
+    let usage: String = "oodac: usage: tokens|check|build|emit-c|emit-protos|emit-bodies|emit-preamble <file>";
     if list_len(args) < 1 {
         println(usage);
         process_exit(2);
@@ -33,7 +33,7 @@ pub fn parse_cli_argv(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, arg
                 process_exit(2);
             }
             let bv: String = list_get(args, i + 1);
-            if bv != "c" && bv != "llvm" {
+            if bv != "c" {
                 println("ERR\tbackend\tresidual: " + bv);
                 process_exit(2);
             }
@@ -87,7 +87,7 @@ pub fn parse_cli_argv(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, arg
         println(usage);
         process_exit(2);
     }
-    if cmd != "tokens" && cmd != "check" && cmd != "build" && cmd != "emit-c" && cmd != "emit-llvm" && cmd != "emit-protos" && cmd != "emit-bodies" && cmd != "emit-preamble" {
+    if cmd != "tokens" && cmd != "check" && cmd != "build" && cmd != "emit-c" && cmd != "emit-protos" && cmd != "emit-bodies" && cmd != "emit-preamble" {
         println("ERR\tcmd\tresidual: " + cmd);
         process_exit(2);
     }
