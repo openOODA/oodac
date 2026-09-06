@@ -1,12 +1,12 @@
 // # LLVM type names from Ooda tokens
 //
-// Logline: Map IDENT types at a token index to slist, ilist, str, i64, bool, resi, cap.
+// Logline: Map IDENT types at a token index to slist, ilist, str, i64, i1, resi, opti, ress.
 //
 // Setup: ll_k/ll_t. Shared names stay conceptual with types/; no emit/c import.
 //
 // Beats:
 //   1. List[String] is slist. List[Int] is ilist.
-//   2. Result[Int, String] is resi. Option[Int] is opti.
+//   2. Result[Int, String] is resi. Result[String, String] is ress. Option[Int] is opti.
 //   3. Cap tokens are i64.
 
 import "ll_tok.oo";
@@ -19,6 +19,7 @@ pub fn ll_ty_at(toks: List[String], pos: Int, n: Int) -> String {
     if t == "Int" || t == "i64" { return "i64"; }
     if t == "Bool" { return "i1"; }
     if t == "String" { return "str"; }
+    if t == "Void" { return "void"; }
     if t == "ProcessCap" || t == "EnvCap" || t == "FsReadCap" || t == "FsWriteCap" { return "i64"; }
     if t == "SysCap" || t == "AllocCap" || t == "TimeCap" || t == "BindCap" { return "i64"; }
     if t == "List" {
@@ -29,7 +30,14 @@ pub fn ll_ty_at(toks: List[String], pos: Int, n: Int) -> String {
         }
         return "ilist";
     }
-    if t == "Result" { return "resi"; }
+    if t == "Result" {
+        if p + 2 < n && ll_k(toks, p + 2) == "IDENT" {
+            let e: String = ll_t(toks, p + 2);
+            if e == "String" { return "ress"; }
+            if e == "Int" { return "resi"; }
+        }
+        return "resi";
+    }
     if t == "Option" { return "opti"; }
     return "i64";
 }
@@ -47,4 +55,39 @@ pub fn ll_peek_cap_name(toks: List[String], pos: Int, n: Int) -> String {
     if p < n && ll_k(toks, p) == "AMP" { p = p + 1; }
     if p < n && ll_k(toks, p) == "IDENT" { return ll_t(toks, p); }
     return "";
+}
+
+pub fn ll_ir_alloc(kind: String) -> String {
+    if kind == "slist" { return "%OoSList"; }
+    if kind == "ilist" { return "%OoIList"; }
+    if kind == "str" { return "%OoStr"; }
+    if kind == "opti" { return "%OoOptI"; }
+    if kind == "ress" { return "%OoResS"; }
+    if kind == "resi" { return "%OoResI"; }
+    if kind == "i1" { return "i1"; }
+    return "i64";
+}
+
+pub fn ll_ir_val(kind: String) -> String {
+    if kind == "str" { return "{ ptr, i64 }"; }
+    return ll_ir_alloc(kind);
+}
+
+pub fn ll_is_agg(kind: String) -> Bool {
+    if kind == "slist" { return true; }
+    if kind == "ilist" { return true; }
+    if kind == "str" { return true; }
+    if kind == "opti" { return true; }
+    if kind == "ress" { return true; }
+    if kind == "resi" { return true; }
+    return false;
+}
+
+pub fn ll_is_mem(kind: String) -> Bool {
+    if kind == "slist" { return true; }
+    if kind == "ilist" { return true; }
+    if kind == "ress" { return true; }
+    if kind == "resi" { return true; }
+    if kind == "opti" { return true; }
+    return false;
 }

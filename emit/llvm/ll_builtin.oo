@@ -1,0 +1,185 @@
+// # LLVM builtin and user-call dispatch
+//
+// Logline: list_new, list_len, str ops, env_get, path_exists, sys_exec, process_exit, user calls.
+//
+// Setup: Args are packed expr results. Aggregates use sret/byval. No emit/c import.
+//
+// Beats:
+//   1. list_new honors __e__ expect slist vs ilist.
+//   2. sys_exec packs OoStr argv. env_get returns ress.
+//   3. User calls read kinds>ret sigs.
+
+import "ll_tok.oo";
+import "ll_ty.oo";
+import "ll_call.oo";
+
+pub fn ll_arg(args: List[String], i: Int) -> String {
+    return list_get(args, i);
+}
+
+pub fn ll_list_new(expect: String, ssa0: Int) -> String {
+    let mut k: String = "slist";
+    if expect == "ilist" { k = "ilist"; }
+    let a: String = ll_tmpa(ssa0 + 1);
+    println("  " + a + " = alloca " + ll_ir_alloc(k) + ", align 8");
+    if k == "ilist" {
+        println("  call void @oo_ilist_new(ptr sret(%OoIList) align 8 " + a + ")");
+    } else {
+        println("  call void @oo_slist_new(ptr sret(%OoSList) align 8 " + a + ")");
+    }
+    return ll_pack(0, ssa0 + 1, k, a);
+}
+
+pub fn ll_builtin(name: String, args: List[String], ssa0: Int, expect: String) -> String {
+    if name == "list_new" {
+        return ll_list_new(expect, ssa0);
+    }
+    let na: Int = list_len(args);
+    if name == "list_len" && na >= 1 {
+        let a0: String = ll_ensure_ptr(ll_arg(args, 0), ssa0);
+        let k: String = ll_pk(a0);
+        let s: Int = ll_pssa(a0) + 1;
+        if k == "ilist" {
+            println("  " + ll_ssa(s) + " = call i64 @oo_ilist_len(ptr byval(%OoIList) align 8 " + ll_pptr(a0) + ")");
+        } else {
+            println("  " + ll_ssa(s) + " = call i64 @oo_slist_len(ptr byval(%OoSList) align 8 " + ll_pptr(a0) + ")");
+        }
+        return ll_pack(0, s, "i64", "");
+    }
+    if name == "chars_len" && na >= 1 {
+        let a0: String = ll_as_val(ll_arg(args, 0), ssa0);
+        let s: Int = ll_pssa(a0) + 1;
+        println("  " + ll_ssa(s) + " = call i64 @oo_chars_len({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ")");
+        return ll_pack(0, s, "i64", "");
+    }
+    if name == "char_at" && na >= 2 {
+        let a0: String = ll_as_val(ll_arg(args, 0), ssa0);
+        let s: Int = ll_pssa(a0) + 1;
+        println("  " + ll_ssa(s) + " = call { ptr, i64 } @oo_char_at({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ", i64 " + ll_ssa(ll_pssa(ll_arg(args, 1))) + ")");
+        return ll_pack(0, s, "str", "");
+    }
+    if name == "str_ends_with" && na >= 2 {
+        let a0: String = ll_as_val(ll_arg(args, 0), ssa0);
+        let a1: String = ll_as_val(ll_arg(args, 1), ll_pssa(a0));
+        let s: Int = ll_pssa(a1) + 1;
+        println("  " + ll_ssa(s) + " = call i32 @oo_str_ends_with({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ")");
+        let s2: Int = s + 1;
+        println("  " + ll_ssa(s2) + " = icmp ne i32 " + ll_ssa(s) + ", 0");
+        return ll_pack(0, s2, "i1", "");
+    }
+    if name == "str_slice" && na >= 3 {
+        let a0: String = ll_as_val(ll_arg(args, 0), ssa0);
+        let s: Int = ll_pssa(a0) + 1;
+        println("  " + ll_ssa(s) + " = call { ptr, i64 } @oo_str_slice({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ", i64 " + ll_ssa(ll_pssa(ll_arg(args, 1))) + ", i64 " + ll_ssa(ll_pssa(ll_arg(args, 2))) + ")");
+        return ll_pack(0, s, "str", "");
+    }
+    if name == "str_index_of" && na >= 2 {
+        let a0: String = ll_as_val(ll_arg(args, 0), ssa0);
+        let a1: String = ll_as_val(ll_arg(args, 1), ll_pssa(a0));
+        let s: Int = ll_pssa(a1) + 1;
+        println("  " + ll_ssa(s) + " = call i64 @oo_str_index_of({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ")");
+        return ll_pack(0, s, "i64", "");
+    }
+    if name == "path_exists" && na >= 2 {
+        let a1: String = ll_as_val(ll_arg(args, 1), ssa0);
+        let s: Int = ll_pssa(a1) + 1;
+        println("  " + ll_ssa(s) + " = call i32 @oo_path_exists(i64 " + ll_ssa(ll_pssa(ll_arg(args, 0))) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ")");
+        let s2: Int = s + 1;
+        println("  " + ll_ssa(s2) + " = icmp ne i32 " + ll_ssa(s) + ", 0");
+        return ll_pack(0, s2, "i1", "");
+    }
+    if name == "process_exit" && na >= 1 {
+        println("  call void @oo_process_exit(i64 " + ll_ssa(ll_pssa(ll_arg(args, 0))) + ")");
+        println("  unreachable");
+        return ll_pack(0, ssa0, "noret", "");
+    }
+    if name == "env_get" && na >= 2 {
+        let a1: String = ll_as_val(ll_arg(args, 1), ssa0);
+        let a: String = ll_tmpa(ll_pssa(a1) + 1);
+        let s: Int = ll_pssa(a1) + 1;
+        println("  " + a + " = alloca %OoResS, align 8");
+        println("  call void @oo_env_get(ptr sret(%OoResS) align 8 " + a + ", i64 " + ll_ssa(ll_pssa(ll_arg(args, 0))) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ")");
+        return ll_pack(0, s, "ress", a);
+    }
+    if name == "sys_exec" && na >= 2 {
+        return ll_sys_exec(args, ssa0);
+    }
+    if name == "Some" || name == "None" || name == "Ok" || name == "Err" {
+        let mut dummy: String = ll_pack(0, ssa0, "i64", "");
+        if na >= 1 { dummy = ll_arg(args, 0); }
+        return ll_ctor(name, dummy, ssa0);
+    }
+    return "";
+}
+
+fn ll_sys_exec(args: List[String], ssa0: Int) -> String {
+    let na: Int = list_len(args);
+    let argc: Int = na - 1;
+    let mut s: Int = ssa0;
+    let av: String = ll_tmpa(s + 1);
+    s = s + 1;
+    println("  " + av + " = alloca [" + argc.to_string() + " x %OoStr], align 8");
+    let mut i: Int = 1;
+    while i < na {
+        let a: String = ll_ensure_ptr(ll_arg(args, i), s);
+        s = ll_pssa(a);
+        let sl: Int = s + 1;
+        println("  " + ll_ssa(sl) + " = load { ptr, i64 }, ptr " + ll_pptr(a));
+        let gp: Int = sl + 1;
+        println("  " + ll_ssa(gp) + " = getelementptr [" + argc.to_string() + " x %OoStr], ptr " + av + ", i64 0, i64 " + (i - 1).to_string());
+        println("  store { ptr, i64 } " + ll_ssa(sl) + ", ptr " + ll_ssa(gp));
+        s = gp;
+        i = i + 1;
+    }
+    let res: String = ll_tmpa(s + 1);
+    s = s + 1;
+    println("  " + res + " = alloca %OoResS, align 8");
+    let base: Int = s + 1;
+    println("  " + ll_ssa(base) + " = getelementptr [" + argc.to_string() + " x %OoStr], ptr " + av + ", i64 0, i64 0");
+    println("  call void @oo_sys_exec(ptr sret(%OoResS) align 8 " + res + ", i64 " + ll_ssa(ll_pssa(ll_arg(args, 0))) + ", i32 " + argc.to_string() + ", ptr " + ll_ssa(base) + ")");
+    return ll_pack(0, base, "ress", res);
+}
+
+pub fn ll_user_call(name: String, sig: String, args: List[String], ssa0: Int) -> String {
+    let gt: Int = str_index_of(sig, ">");
+    if gt < 0 {
+        println("ERR\tllvm\tbad sig " + name);
+        process_exit(1);
+    }
+    let ret: String = str_slice(sig, gt + 1, chars_len(sig));
+    let na: Int = list_len(args);
+    let mut call: String = "";
+    let mut i: Int = 0;
+    let mut s: Int = ssa0;
+    while i < na {
+        let a: String = ll_arg(args, i);
+        if ll_is_agg(ll_pk(a)) {
+            let ap: String = ll_ensure_ptr(a, s);
+            s = ll_pssa(ap);
+            if call != "" { call = call + ", "; }
+            call = call + "ptr byval(" + ll_ir_alloc(ll_pk(ap)) + ") align 8 " + ll_pptr(ap);
+        } else {
+            if call != "" { call = call + ", "; }
+            call = call + ll_ir_alloc(ll_pk(a)) + " " + ll_ssa(ll_pssa(a));
+        }
+        i = i + 1;
+    }
+    if ret == "void" || ret == "" {
+        println("  call void @" + name + "(" + call + ")");
+        return ll_pack(0, s, "void", "");
+    }
+    if ll_is_mem(ret) {
+        let a: String = ll_tmpa(s + 1);
+        s = s + 1;
+        println("  " + a + " = alloca " + ll_ir_alloc(ret) + ", align 8");
+        if call != "" {
+            println("  call void @" + name + "(ptr sret(" + ll_ir_alloc(ret) + ") align 8 " + a + ", " + call + ")");
+        } else {
+            println("  call void @" + name + "(ptr sret(" + ll_ir_alloc(ret) + ") align 8 " + a + ")");
+        }
+        return ll_pack(0, s, ret, a);
+    }
+    let s2: Int = s + 1;
+    println("  " + ll_ssa(s2) + " = call " + ll_ir_val(ret) + " @" + name + "(" + call + ")");
+    return ll_pack(0, s2, ret, "");
+}

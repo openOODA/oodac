@@ -1,13 +1,13 @@
 // # Probe: attach-contract docs and residual backend
 //
-// Logline: Docs name the typed artifact and C as reference. emit/ANCHOR has emit_backend. --backend llvm still exits 2.
+// Logline: Docs name the typed artifact and C as reference. emit/ANCHOR has emit_backend. --backend wasm exits 2.
 //
 // Setup: ProcessCap + EnvCap + FsReadCap. Host is OODA_COMPILER.
 //
 // Beats:
 //   1. Both attach docs contain typed artifact and reference.
 //   2. emit/ANCHOR.oo defines emit_backend.
-//   3. build --backend llvm of a well-typed file exits 2.
+//   3. build --backend wasm of a well-typed file exits 2.
 
 pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
     let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
@@ -44,11 +44,6 @@ pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
     let a: String = match ar { Ok(s) => s, Err(_) => "" };
     if str_index_of(a, "emit_backend") < 0 {
         println("ERR\temit/ANCHOR missing emit_backend");
-        process_exit(1);
-    }
-    let lr: Result[String, String] = sys_exec(p, host, "build", "oodac/qa/probe_list_ok.oo", "--backend", "llvm");
-    if lr.is_ok() {
-        println("ERR\tbackend llvm must stay residual");
         process_exit(1);
     }
     let wr: Result[String, String] = sys_exec(p, host, "build", "oodac/qa/probe_list_ok.oo", "--backend", "wasm");

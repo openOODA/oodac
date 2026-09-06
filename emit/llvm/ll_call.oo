@@ -1,0 +1,165 @@
+// # LLVM method, ctor, and binop lowering
+//
+// Logline: Methods on allocas. Binops on SSA. Some/None/Ok/Err constructors.
+//
+// Setup: Does not import ll_expr. Aggregates use sret/byval.
+//
+// Beats:
+//   1. String concat and eq. Integer icmp including GTE/LTE.
+//   2. is_some/is_ok load field 0. to_string uses oo_int_to_str.
+//   3. Option Some/None as %OoOptI.
+
+import "ll_tok.oo";
+import "ll_ty.oo";
+
+pub fn ll_print_val(kind: String, ssa: Int, ptr: String, ssa0: Int) -> Int {
+    if kind == "str" {
+        let mut s: Int = ssa;
+        if ptr != "" {
+            s = ssa0 + 1;
+            println("  " + ll_ssa(s) + " = load { ptr, i64 }, ptr " + ptr);
+        }
+        let p: Int = s + 1;
+        let l: Int = s + 2;
+        println("  " + ll_ssa(p) + " = extractvalue { ptr, i64 } " + ll_ssa(s) + ", 0");
+        println("  " + ll_ssa(l) + " = extractvalue { ptr, i64 } " + ll_ssa(s) + ", 1");
+        println("  call void @oo_print_str(ptr " + ll_ssa(p) + ", i64 " + ll_ssa(l) + ")");
+        println("  call void @oo_println()");
+        return l;
+    }
+    if kind == "i64" {
+        let n2: Int = ssa0 + 1;
+        println("  " + ll_ssa(n2) + " = call { ptr, i64 } @oo_int_to_str(i64 " + ll_ssa(ssa) + ")");
+        return ll_print_val("str", n2, "", n2);
+    }
+    println("  call void @oo_println()");
+    return ssa0;
+}
+
+pub fn ll_apply_binop(op: String, lhs: String, rhs: String) -> String {
+    let lk: String = ll_pk(lhs);
+    let rk: String = ll_pk(rhs);
+    let s0: Int = ll_pssa(rhs);
+    if op == "PLUS" && lk == "str" && rk == "str" {
+        let la: String = ll_as_val(lhs, s0);
+        let ra: String = ll_as_val(rhs, ll_pssa(la));
+        let s2: Int = ll_pssa(ra) + 1;
+        println("  " + ll_ssa(s2) + " = call { ptr, i64 } @oo_str_concat({ ptr, i64 } " + ll_ssa(ll_pssa(la)) + ", { ptr, i64 } " + ll_ssa(ll_pssa(ra)) + ")");
+        return ll_pack(ll_ppos(rhs), s2, "str", "");
+    }
+    if op == "PLUS" {
+        let s: Int = s0 + 1;
+        println("  " + ll_ssa(s) + " = add i64 " + ll_ssa(ll_pssa(lhs)) + ", " + ll_ssa(ll_pssa(rhs)));
+        return ll_pack(ll_ppos(rhs), s, "i64", "");
+    }
+    if op == "MINUS" {
+        let s: Int = s0 + 1;
+        println("  " + ll_ssa(s) + " = sub i64 " + ll_ssa(ll_pssa(lhs)) + ", " + ll_ssa(ll_pssa(rhs)));
+        return ll_pack(ll_ppos(rhs), s, "i64", "");
+    }
+    if (op == "EQEQ" || op == "NEQ") && lk == "str" {
+        let la: String = ll_as_val(lhs, s0);
+        let ra: String = ll_as_val(rhs, ll_pssa(la));
+        let s2: Int = ll_pssa(ra) + 1;
+        println("  " + ll_ssa(s2) + " = call i32 @oo_str_eq({ ptr, i64 } " + ll_ssa(ll_pssa(la)) + ", { ptr, i64 } " + ll_ssa(ll_pssa(ra)) + ")");
+        let s3: Int = s2 + 1;
+        if op == "EQEQ" {
+            println("  " + ll_ssa(s3) + " = icmp ne i32 " + ll_ssa(s2) + ", 0");
+        } else {
+            println("  " + ll_ssa(s3) + " = icmp eq i32 " + ll_ssa(s2) + ", 0");
+        }
+        return ll_pack(ll_ppos(rhs), s3, "i1", "");
+    }
+    if op == "OROR" || op == "ANDAND" {
+        let s: Int = s0 + 1;
+        let mut ins: String = "or";
+        if op == "ANDAND" { ins = "and"; }
+        println("  " + ll_ssa(s) + " = " + ins + " i1 " + ll_ssa(ll_pssa(lhs)) + ", " + ll_ssa(ll_pssa(rhs)));
+        return ll_pack(ll_ppos(rhs), s, "i1", "");
+    }
+    let mut pred: String = "eq";
+    if op == "NEQ" { pred = "ne"; }
+    if op == "LT" { pred = "slt"; }
+    if op == "GT" { pred = "sgt"; }
+    if op == "LTE" { pred = "sle"; }
+    if op == "GTE" { pred = "sge"; }
+    if op == "EQEQ" { pred = "eq"; }
+    let s: Int = s0 + 1;
+    println("  " + ll_ssa(s) + " = icmp " + pred + " i64 " + ll_ssa(ll_pssa(lhs)) + ", " + ll_ssa(ll_pssa(rhs)));
+    return ll_pack(ll_ppos(rhs), s, "i1", "");
+}
+
+pub fn ll_ensure_ptr(v: String, ssa0: Int) -> String {
+    if ll_pptr(v) != "" { return ll_pack(ll_ppos(v), ssa0, ll_pk(v), ll_pptr(v)); }
+    let a: String = ll_tmpa(ssa0 + 1);
+    let s: Int = ssa0 + 1;
+    println("  " + a + " = alloca " + ll_ir_alloc(ll_pk(v)) + ", align 8");
+    println("  store " + ll_ir_val(ll_pk(v)) + " " + ll_ssa(ll_pssa(v)) + ", ptr " + a);
+    return ll_pack(ll_ppos(v), s, ll_pk(v), a);
+}
+
+pub fn ll_as_val(v: String, ssa0: Int) -> String {
+    let p: String = ll_ensure_ptr(v, ssa0);
+    let s: Int = ll_pssa(p) + 1;
+    println("  " + ll_ssa(s) + " = load " + ll_ir_val(ll_pk(v)) + ", ptr " + ll_pptr(p));
+    return ll_pack(ll_ppos(v), s, ll_pk(v), "");
+}
+
+pub fn ll_method(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, env: String) -> String {
+    if m == "to_string" {
+        if kind == "str" { return ll_pack(0, ssa, "str", ptr); }
+        let s: Int = ssa0 + 1;
+        println("  " + ll_ssa(s) + " = call { ptr, i64 } @oo_int_to_str(i64 " + ll_ssa(ssa) + ")");
+        return ll_pack(0, s, "str", "");
+    }
+    if m == "is_some" || m == "is_ok" {
+        let p: String = ptr;
+        let s: Int = ssa0 + 1;
+        println("  " + ll_ssa(s) + " = getelementptr " + ll_ir_alloc(kind) + ", ptr " + p + ", i32 0, i32 0");
+        let s2: Int = s + 1;
+        println("  " + ll_ssa(s2) + " = load i32, ptr " + ll_ssa(s));
+        let s3: Int = s2 + 1;
+        println("  " + ll_ssa(s3) + " = icmp ne i32 " + ll_ssa(s2) + ", 0");
+        return ll_pack(0, s3, "i1", "");
+    }
+    if m == "is_none" || m == "is_err" {
+        let s: Int = ssa0 + 1;
+        println("  " + ll_ssa(s) + " = getelementptr " + ll_ir_alloc(kind) + ", ptr " + ptr + ", i32 0, i32 0");
+        let s2: Int = s + 1;
+        println("  " + ll_ssa(s2) + " = load i32, ptr " + ll_ssa(s));
+        let s3: Int = s2 + 1;
+        println("  " + ll_ssa(s3) + " = icmp eq i32 " + ll_ssa(s2) + ", 0");
+        return ll_pack(0, s3, "i1", "");
+    }
+    println("ERR\tllvm\tunsupported method " + m);
+    process_exit(1);
+    return ll_pack(0, ssa0, "i64", "");
+}
+
+pub fn ll_ctor(name: String, arg: String, ssa0: Int) -> String {
+    if name == "None" {
+        let a: String = ll_tmpa(ssa0 + 1);
+        let s: Int = ssa0 + 1;
+        println("  " + a + " = alloca %OoOptI, align 8");
+        println("  store %OoOptI { i32 0, i64 0 }, ptr " + a);
+        return ll_pack(0, s, "opti", a);
+    }
+    if name == "Some" {
+        let a: String = ll_tmpa(ssa0 + 1);
+        let s: Int = ssa0 + 1;
+        println("  " + a + " = alloca %OoOptI, align 8");
+        let s2: Int = s + 1;
+        println("  " + ll_ssa(s2) + " = insertvalue %OoOptI { i32 1, i64 0 }, i64 " + ll_ssa(ll_pssa(arg)) + ", 1");
+        println("  store %OoOptI " + ll_ssa(s2) + ", ptr " + a);
+        return ll_pack(0, s2, "opti", a);
+    }
+    if name == "Ok" {
+        return arg;
+    }
+    if name == "Err" {
+        return arg;
+    }
+    println("ERR\tllvm\tctor " + name);
+    process_exit(1);
+    return arg;
+}
