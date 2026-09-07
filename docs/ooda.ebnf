@@ -40,9 +40,10 @@ PrimitiveType     ::= "Int" | "Float" | "f64" | "String" | "Bool" | "Void" ;
 CustomType        ::= Identifier ;
 OptionType        ::= "Option" [ "[" Type "]" ] ;
 ResultType        ::= "Result" "[" Type "," Type "]" ;
-CapabilityType    ::= "NetCap" | "FsCap" | "FsReadCap" | "FsWriteCap" | "EnvCap" | "SysCap"
-                    | "HttpCap" | "TcpCap" | "UdpCap" | "BindCap" | "TimeCap" | "RandCap"
-                    | "AllocCap" | "ProcessCap" ;
+CapabilityType    ::= "FsReadCap" | "FsWriteCap" | "FsCap" | "NetCap" | "TcpCap"
+                    | "UdpCap" | "BindCap" | "SysCap" | "ProcessCap" | "EnvCap"
+                    | "TimeCap" | "RandCap" | "AllocCap" | "ArenaCap" | "ThreadCap"
+                    | "GpuCap" | "FfiCap" | "SignCap" | "MetricsCap" | "CompilerReadCap" ;
 
 (* ------------------------------------------------------------------- *)
 (* Statements & Control Flow                                           *)

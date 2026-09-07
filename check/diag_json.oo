@@ -2,14 +2,15 @@
 //
 // Logline: Escapes diagnostic text, maps ERR kinds to stable codes, and reprints a check run as a JSON array.
 //
-// Setup: FsCap and SysCap are required. --json-errors arms the runtime printer and checks in-process.
+// Setup: FsReadCap, FsWriteCap, ProcessCap, EnvCap. --json-errors re-invokes check and prints JSON.
 //
 // Beats:
 //   1. Escape backslash, quote, newline, and tab; map kind to E_* and attach a token-cheap fix_hint.
 //   2. Pack one object with code, line, col, msg, path, and fix_hint; E_CAP and E_TC add extra kind fields.
-//   3. run_check_json_errors arms the printer, runs check in this process, and prints JSON. No capture .sh.
+//   3. run_check_json_errors re-invokes host check (no --json-errors), prints JSON, exits 1 on fail.
 
 import "types/str_escape.oo";
+import "diag_json_parse.oo";
 
 
 pub fn diag_json_escape(s: String) -> String {
@@ -132,6 +133,26 @@ pub fn diag_emit_load_err(path: String, msg: String) {
 }
 
 
-// OPEN-8: in-process check. Run check with in-memory JSON diagnostics.
-pub fn run_check_json_errors(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, path: String) {
+// Re-invoke `check` without --json-errors (no recurse). Print JSON. Exit 1 on check fail.
+pub fn run_check_json_errors(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env: &EnvCap, path: String) {
+    let oc: Result[String, String] = env_get(env, "OODA_COMPILER");
+    let mut host: String = "";
+    if oc.is_ok() { host = oc.val; }
+    if host == "" {
+        let ob: Result[String, String] = env_get(env, "OODAC_BIN");
+        if ob.is_ok() { host = ob.val; }
+    }
+    if host == "" {
+        println("ERR\tjson\tOODA_COMPILER or OODAC_BIN required");
+        process_exit(1);
+    }
+    if !path_exists(fs_r, path) {
+        println("ERR\tjson\tmissing " + path);
+        process_exit(1);
+    }
+    let r: Result[String, String] = sys_exec(sys, host, "check", path);
+    let out: String = match r { Ok(s) => s, Err(e) => e };
+    println(diag_check_output_to_json(out, path));
+    if r.is_ok() { return; }
+    process_exit(1);
 }

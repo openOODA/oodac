@@ -1,8 +1,8 @@
 // # Dispatch oodac commands
 //
-// Logline: Parse argv and run check, build, emit-c, or tokens on the C backend.
+// Logline: Parse argv and run check, build, emit-c, emit-llvm, or tokens.
 //
-// Setup: Dispatch check, build, emit-c, emit-llvm, and tokens. C is the reference ISA.
+// Setup: Dispatch check, build, emit-c, emit-llvm, and tokens. C is the reference ISA; llvm is the default build.
 //
 // Beats:
 //   1. Unpack cmd/path/out/backend/json/plain.
@@ -46,7 +46,7 @@ pub fn main(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env: &EnvCap,
         return;
     }
     if cmd == "check" {
-        if json_errors { run_check_json_errors(fs_r, fs_w, sys, path); return; }
+        if json_errors { run_check_json_errors(fs_r, fs_w, sys, env, path); return; }
         run_check_path(fs_r, fs_w, sys, path);
         return;
     }

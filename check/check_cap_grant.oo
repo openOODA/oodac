@@ -58,8 +58,8 @@ pub fn cap_deny(fname: String, op: String, kind: String, line: String, col: Stri
 }
 
 // CAP-G1: soft-granular net preferred kinds (granular only; no broad NetCap supersede).
-// No legacy supersede: callers must use the granular preferred kind (HttpCap, TcpCap, UdpCap, BindCap).
-// &NetCap is reserved for sock_raw / raw_socket — it does not satisfy HttpCap / TcpCap / UdpCap / BindCap.
+// No legacy supersede: callers must use the granular preferred kind (TcpCap, UdpCap, BindCap).
+// &NetCap is reserved for sock_raw / raw_socket — it does not satisfy TcpCap / UdpCap / BindCap.
 pub fn is_soft_net_kind(kind: String) -> Bool {
     if kind == "TcpCap" { return true;
     }
@@ -71,8 +71,8 @@ pub fn is_soft_net_kind(kind: String) -> Bool {
 }
 
 // CAP-G1 bag: exact preferred kind only. No legacy supersede.
-// Replaces inverted "any granular satisfies NetCap" (HttpCap must not authorize tcp_bind).
-// Callers must declare the exact granular &HttpCap / &TcpCap / &UdpCap / &BindCap; &NetCap does NOT satisfy these.
+// Replaces inverted "any granular satisfies NetCap" (TcpCap must not authorize tcp_bind).
+// Callers must declare the exact granular &TcpCap / &UdpCap / &BindCap; &NetCap does NOT satisfy these.
 pub fn cap_net_granted_ok(preferred: String, granted_bag: String) -> Bool {
     if preferred == "" { return false;
     }
@@ -82,7 +82,7 @@ pub fn cap_net_granted_ok(preferred: String, granted_bag: String) -> Bool {
 }
 
 // CAP-G1 arg-flow names bag: exact preferred:id only. No legacy supersede.
-// Callers must pass the matching granular cap (e.g. &HttpCap); &NetCap does NOT satisfy.
+// Callers must pass the matching granular cap (e.g. &TcpCap); &NetCap does NOT satisfy.
 pub fn cap_net_argflow_ok(preferred: String, cap_id: String, names_bag: String) -> Bool {
     if preferred == "" { return false;
     }

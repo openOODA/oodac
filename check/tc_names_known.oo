@@ -91,7 +91,7 @@ pub fn is_known_name(name: String) -> Bool {
     }
     if name == "heap_alloc_test" || name == "oo_alloc" || name == "oo_free" || name == "oo_write_int" || name == "oo_read_int" { return true;
     }
-    if is_sealed_gpu(name) || is_sealed_alloc(name) || is_sealed_ffi(name) || name == "UnsafeFFICap" || is_residual_forbidden(name) { return true;
+    if is_sealed_gpu(name) || is_sealed_alloc(name) || is_sealed_ffi(name) || is_residual_forbidden(name) { return true;
     }
     if name == "to_string" || name == "len" || name == "ord" || name == "bit_xor" || name == "index_get" || name == "meta_epoch" || name == "meta_mix" || name == "meta_is_path_a" || name == "meta_decoy_touch" { return true;
     }

@@ -1,6 +1,6 @@
 // # no cap chs build
 //
-// Logline: Check-fail fixture that calls chs_build without an UnsafeFFICap token.
+// Logline: Check-fail fixture that calls chs_build without an FfiCap token.
 //
 // Beats:
 //   1. rogue takes no capability params.

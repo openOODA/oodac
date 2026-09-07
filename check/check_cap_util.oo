@@ -5,7 +5,7 @@
 // Setup: check_cap_grant.oo is imported; no legacy supersede — callers must use the granular preferred kind; alias walk depth is 32.
 //
 // Beats:
-//   1. sealed_net_kind_of, sealed_fs_kind_of, and sealed_sys_kind_of return Http/Tcp/Udp/Bind/Net, FsRead/FsWrite, or Process/Sys kinds.
+//   1. sealed_net_kind_of, sealed_fs_kind_of, and sealed_sys_kind_of return Tcp/Udp/Bind/Net, FsRead/FsWrite, or Process/Sys kinds.
 //   2. is_sealed_* predicates cover env, time, rand, arena, alloc, ffi, thread, and gpu names.
 //   3. sealed_kind_of picks the first matching kind; c_arg_cap_type_resolved follows __alias__ up to depth 32.
 
@@ -14,14 +14,12 @@ import "check_cap_grant.oo";
 
 
 // CAP-G1 Path-A: preferred Cap kind for sealed net op (not always NetCap).
-// HttpCap: fetch/http_get/net_get/downloadData/query_remote_api/net_connect
-// TcpCap:  tcp_connect/tcp_write/tcp_read/tcp_close/tcp_accept
-// TlsCap:  tls_connect (attenuated child of TcpCap via oo_cap_attenuate_v2 Rule 2)
+// TcpCap:  fetch/http_get/net_get/downloadData/query_remote_api/net_connect/tls_connect
+//          plus tcp_connect/tcp_write/tcp_read/tcp_close/tcp_accept
 // BindCap: tcp_bind
 // UdpCap:  bind_udp/udp_recv/udp_send
 // NetCap:  sock_raw/raw_socket only (no soft granular)
-// No legacy supersede: callers must use the granular preferred kind (HttpCap/TcpCap/TlsCap/UdpCap/BindCap). &NetCap does NOT satisfy these.
-// TlsCap attenuation: &TlsCap is HMAC-derived from &TcpCap (parent_hmac||parent_rights||child_rights). TcpCap subsumes TlsCap is false; TlsCap is distinct child.
+// No legacy supersede: callers must use TcpCap/UdpCap/BindCap. &NetCap does NOT satisfy these.
 pub fn sealed_net_kind_of(name: String) -> String {
     if name == "fetch" || name == "http_get" || name == "net_get" || name == "downloadData" || name == "query_remote_api" || name == "net_connect" { return "TcpCap";
 }
@@ -144,15 +142,13 @@ pub fn is_sealed_alloc(name: String) -> Bool {
     return name == "alloc_bytes" || name == "free_bytes" || name == "malloc" || name == "free" || name == "realloc" || name == "f32x8_load_aligned" || name == "f32x8_store_aligned" || name == "f64x4_load_aligned" || name == "f64x4_store_aligned";
 }
 
-// M152 Cap vs FFI path A: raw dlopen / host-FFI free names need &UnsafeFFICap
+// M152 Cap vs FFI path A: raw dlopen / host-FFI free names need &FfiCap
 pub fn is_sealed_ffi(name: String) -> Bool {
     return name == "dlopen" || name == "dlsym" || name == "dlclose" || name == "chs_build" || name == "host_ast_dump" || name == "host_check" || name == "host_token_dump" || name == "host_free" || name == "ooda_host_ast_dump" || name == "ooda_host_check" || name == "ooda_host_token_dump" || name == "ooda_host_chs_build" || name == "ooda_host_free" || name == "import_c" || name == "oo_import_c" || name == "ffi_gen" || name == "oo_ffi_gen";
 }
 
-// Cap type names accepted after COLON+AMP in param lists
-// M174 / Round 2.12: HitlCap + AuditCap first-class.
-// V2 granular 2026-08-12: accept all CAPS.oot 27 caps (CAP-G1 needs Http/Tcp/Udp/Bind).
-// Phase2-A: CompilerReadCap for LSP symbol table (minimal narrow, no supersede).
+// Cap type names accepted after COLON+AMP in param lists.
+// 20 language tokens plus 6 future hardware names. No HttpCap/TlsCap/Hitl extras.
 pub fn is_cap_type(t: String) -> Bool {
     return t == "NetCap" || t == "FsCap" || t == "FsReadCap" || t == "FsWriteCap" || t == "GpuCap" || t == "ThreadCap" || t == "SysCap" || t == "EnvCap" || t == "TimeCap" || t == "RandCap" || t == "AllocCap" || t == "ArenaCap" || t == "FfiCap" || t == "SignCap" || t == "TcpCap" || t == "UdpCap" || t == "BindCap" || t == "ProcessCap" || t == "AudioCap" || t == "CameraCap" || t == "UsbCap" || t == "HidCap" || t == "WindowCap" || t == "FrameCap" || t == "CompilerReadCap" || t == "MetricsCap";
 }
@@ -176,7 +172,7 @@ if kind != "" { return kind;
 }
 
 // Sealed free-call name → preferred Cap kind, or "" if not sealed.
-// CAP-G1: net → HttpCap/TcpCap/UdpCap/BindCap/NetCap (sealed_net_kind_of).
+// CAP-G1: net → TcpCap/UdpCap/BindCap/NetCap (sealed_net_kind_of).
 // CAP-G2: fs  → FsReadCap/FsWriteCap (sealed_fs_kind_of).
 // CAP-G4: sys → ProcessCap for exec/spawn/wait/kill; SysCap for residual OS.
 // check_caps: exact preferred kind only — no legacy supersede; callers must declare the granular cap.

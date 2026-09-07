@@ -5,7 +5,7 @@
 // Setup: Requires FsWriteCap, ProcessCap, EnvCap via sys_exec host. Host is OODA_COMPILER. All denies must fail closed.
 //
 // Beats:
-//   1. Fail-closed cap sealed: HttpCap taxis not NetCap, FsRead not FsWrite.
+//   1. Fail-closed cap sealed: TcpCap taxis not NetCap, FsRead not FsWrite.
 //   2. Fail-closed SECRET sink refuse and SMT const-false / unproven deny.
 //   3. Verify unique_fns refuse on compiler main and blackbox symbols present.
 //   4. Print PASS_LATTICE_AUDIT only when all gates hold.
@@ -18,7 +18,10 @@ pub fn main(fs_w: &FsWriteCap, p: &ProcessCap, env: &EnvCap, args: List[String])
         let ob: Result[String, String] = env_get(env, "OODAC_BIN");
         if ob.is_ok() { host = ob.val; }
     }
-    if host == "" { host = "/home/jeryd/.openooda/bin/oodac"; }
+    if host == "" {
+        println("ERR\tOODA_COMPILER or OODAC_BIN required");
+        process_exit(1);
+    }
     let cr: Result[String, String] = sys_exec(p, host, "check", "oodac/qa/probe_cap_sealed.oo");
     if cr.is_ok() {
         println("FAIL cap sealed should deny");

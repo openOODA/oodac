@@ -1,6 +1,6 @@
 // # no cap dlopen
 //
-// Logline: Check-fail fixture that calls dlopen without an UnsafeFFICap token.
+// Logline: Check-fail fixture that calls dlopen without an FfiCap token.
 //
 // Beats:
 //   1. rogue takes no capability params.

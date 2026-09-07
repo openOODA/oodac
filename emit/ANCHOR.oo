@@ -5,7 +5,7 @@
 // Setup: C is the reference backend. Residual names exit 2. Shared type names live in types/.
 //
 // Beats:
-//   1. Import emit/c as the only live backend.
+//   1. Import emit/c (reference) and emit/llvm (second consumer).
 //   2. emit_backend consumes toks from the artifact. It does not lex.
 //   3. Unknown backend names fail closed.
 

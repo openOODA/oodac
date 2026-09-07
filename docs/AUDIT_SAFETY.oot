@@ -11,10 +11,10 @@ best without copying their debt. No downgrades.
 20 language caps subset of 26 substrate caps. 20 = oodac type-checked via
 sealed_kind_of. 26 = oodar cap_table.json / sec/cap/caps.h (6 future
 AUDIO/CAMERA/USB/HID/WINDOW/FRAME). FsReadCap/FsWriteCap split is
-product; no FsCap supersede. HttpCap/TcpCap/UdpCap/BindCap split is
+product; no FsCap supersede. TcpCap/UdpCap/BindCap split is
 product; no NetCap supersede. ProcessCap vs SysCap split is product.
 ArenaCap vs AllocCap split is product. EnvCap/TimeCap/RandCap/FfiCap
-remain single-kind. HitlCap/AuditCap/SignCap/MetricsCap first-class.
+remain single-kind. SignCap/MetricsCap first-class. HttpCap/TlsCap/HitlCap/AuditCap are not language tokens.
 
 File[Opened] typestate: // TYPESTATE: File Unopened Opened Closed +
 // TYPESTATE fn open: Unopened -> Opened etc. Walk is ts_walk_program

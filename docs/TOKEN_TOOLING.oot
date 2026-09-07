@@ -1,6 +1,6 @@
 # Token-minimized APIs — product surface (path A)
 
-File: ooda/docs/TOKEN_TOOLING.oot
+File: oodac/docs/TOKEN_TOOLING.oot
 
 ## Why
 
@@ -29,7 +29,7 @@ Product CLI is `cli/main.oo`. There is no `scripts/ooda_product.sh`. Agents shou
 
 ## Residual
 
-- `--json-minimal` diagnostics (SPEC) not fully product
+- `--json-errors` re-invokes `oodac check` and prints a JSON array; `--json-minimal` is residual
 - Package-distributed outlines (RP-2.2)
 - Full dual-green rebuild of tip after every CLI edit (tip host is m172+)
 

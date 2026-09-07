@@ -1,6 +1,6 @@
 // # no cap host ast dump
 //
-// Logline: Check-fail fixture that calls host_ast_dump without an UnsafeFFICap token.
+// Logline: Check-fail fixture that calls host_ast_dump without an FfiCap token.
 //
 // Beats:
 //   1. rogue takes no capability params.

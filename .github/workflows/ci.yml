@@ -68,13 +68,22 @@ jobs:
           "$HOST" --help
           echo "=== help 2 ==="
           "$HOST" --help
-          echo "=== backend wasm residual ==="
+          echo "=== backend residuals ==="
           set +e
           "$HOST" build oodac/qa/probe_list_ok.oo --backend wasm
           wasm_rc=$?
+          "$HOST" build oodac/qa/probe_list_ok.oo --backend x86
+          x86_rc=$?
+          "$HOST" build oodac/qa/probe_list_ok.oo --backend aarch64
+          a64_rc=$?
+          "$HOST" build oodac/qa/probe_list_ok.oo --backend romc
+          rom_rc=$?
           set -e
-          echo "wasm_rc=$wasm_rc"
+          echo "wasm_rc=$wasm_rc x86_rc=$x86_rc a64_rc=$a64_rc rom_rc=$rom_rc"
           test "$wasm_rc" -eq 2
+          test "$x86_rc" -eq 2
+          test "$a64_rc" -eq 2
+          test "$rom_rc" -eq 2
           echo "=== cap sealed ==="
           set +e
           "$HOST" check oodac/qa/probe_cap_sealed.oo
