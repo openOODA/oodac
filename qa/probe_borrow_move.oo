@@ -1,0 +1,17 @@
+// # Probe victim: use after move must not check
+//
+// Logline: let t = s moves String s; a later use of s is ERR move.
+//
+// Setup: No caps. Managed String is moved by ident rebind.
+//
+// Beats:
+//   1. Bind s: String from a literal.
+//   2. Rebind t = s.
+//   3. Use s after the move.
+
+pub fn main() {
+    let s: String = "moved";
+    let t: String = s;
+    println(t);
+    println(s);
+}

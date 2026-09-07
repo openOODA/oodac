@@ -118,15 +118,17 @@ pub fn ty_assignable(to: String, from: String) -> Bool {
     if (to == "TyF32x8" && from == "f32x8") || (to == "f32x8" && from == "TyF32x8") { return true; }
     if (to == "TyF64x4" && from == "f64x4") || (to == "f64x4" && from == "TyF64x4") { return true; }
     if (to == "TyFloat") && (from == "TyInt") { return true; }
-    return match ty_tag(from) {
-        "TyRef" => ty_assignable(to, ty_arg(from, 0)),
-        "TyRefMut" => ty_assignable(to, ty_arg(from, 0)),
-        "TyList" => if ty_tag(to) == "TyList" { ty_assignable(ty_arg(to, 0), ty_arg(from, 0)) } else { false },
-        "TyResult" => ty_assignable(to, ty_arg(from, 0)),
-        "TyOption" => ty_assignable(to, ty_arg(from, 0)),
-        "TyBox" => ty_assignable(to, ty_arg(from, 0)),
-        _ => false,
-    };
+    let tag: String = ty_tag(from);
+    if tag == "TyRef" { return ty_assignable(to, ty_arg(from, 0)); }
+    if tag == "TyRefMut" { return ty_assignable(to, ty_arg(from, 0)); }
+    if tag == "TyList" {
+        if ty_tag(to) == "TyList" { return ty_assignable(ty_arg(to, 0), ty_arg(from, 0)); }
+        return false;
+    }
+    if tag == "TyResult" { return ty_assignable(to, ty_arg(from, 0)); }
+    if tag == "TyOption" { return ty_assignable(to, ty_arg(from, 0)); }
+    if tag == "TyBox" { return ty_assignable(to, ty_arg(from, 0)); }
+    return false;
 }
 
 // Produce a C cast if coercion is needed; else return val unchanged. Replaces c_emit_call_ty.oo:5-101 hand-coded if-lists.
@@ -140,72 +142,7 @@ pub fn ty_coerce(val: String, from: String, to: String) -> String {
     return val;
 }
 
-// Map an oo type to its C type representation. Enum-like: exhaustive match on primitives then tag dispatch.
-pub fn ty_to_c(ty: String) -> String {
-    return match ty {
-        "TyInt" => "long long",
-        "Int" => "long long",
-        "i64" => "long long",
-        "isize" => "long long",
-        "TyFloat" => "double",
-        "Float" => "double",
-        "f64" => "double",
-        "TyBool" => "int",
-        "Bool" => "int",
-        "TyStr" => "OoStr",
-        "String" => "OoStr",
-        "str" => "OoStr",
-        "TyUnit" => "void",
-        "Void" => "void",
-        "void" => "void",
-        "unit" => "void",
-        "TyF32x8" => "f32x8",
-        "f32x8" => "f32x8",
-        "TyF64x4" => "f64x4",
-        "f64x4" => "f64x4",
-        _ => {
-            let tag: String = ty_tag(ty);
-            return match tag {
-                "TyName" => ty_arg(ty, 0),
-                "TyCap" => "long long",
-                "TyRef" => ty_to_c(ty_arg(ty, 0)) + "*",
-                "TyRefMut" => ty_to_c(ty_arg(ty, 0)) + "*",
-                "TyList" => {
-                    let elem: String = ty_arg(ty, 0);
-                    if elem == "TyInt" || elem == "Int" { return "OoIList"; }
-                    if elem == "TyStr" || elem == "String" { return "OoSList"; }
-                    if elem == "TyFloat" || elem == "Float" || elem == "f64" { return "OoFList"; }
-                    if elem == "TyList(TyInt)" { return "OoLL_I"; }
-                    if elem == "TyList(TyStr)" { return "OoLL_S"; }
-                    if elem == "TyList(TyFloat)" { return "OoLL_F"; }
-                    return "OoL_" + elem;
-                },
-                "TyOption" => {
-                    let elem: String = ty_arg(ty, 0);
-                    if elem == "TyInt" || elem == "Int" { return "OoOpt_I"; }
-                    if elem == "TyStr" || elem == "String" { return "OoOpt_S"; }
-                    return "OoOpt_" + elem;
-                },
-                "TyResult" => {
-                    let ok: String = ty_arg(ty, 0);
-                    let err: String = ty_arg(ty, 1);
-                    if ok == "TyStr" && (err == "TyStr" || err == "String" || err == "str") { return "OoResS"; }
-                    if ok == "TyUnit" && (err == "TyStr" || err == "String" || err == "str") { return "OoResV"; }
-                    if ok == "TyInt" && (err == "TyStr" || err == "String" || err == "str") { return "OoResI"; }
-                    if ok == "TyInt" && (err == "TyInt" || err == "Int") { return "OoResII"; }
-                    if ok == "TyBool" && (err == "TyStr" || err == "String" || err == "str") { return "OoResB"; }
-                    if ok == "TyFloat" && (err == "TyStr" || err == "String" || err == "str") { return "OoResF"; }
-                    if ok == "TyList(TyInt)" && (err == "TyStr" || err == "String" || err == "str") { return "OoResLI"; }
-                    if ok == "TyList(TyStr)" && (err == "TyStr" || err == "String" || err == "str") { return "OoResLS"; }
-                    if ok == "TyList(TyFloat)" && (err == "TyStr" || err == "String" || err == "str") { return "OoResLF"; }
-                    if err == "TyStr" || err == "String" || err == "str" { return "OoRes_" + ok; }
-                    return "OoRes2_" + ok + "_" + err;
-                },
-                _ => "long long",
-            };
-        },
-    };
-}
+// Map an oo type to its C type representation. Body is ty_c.oo (C unique_fns cannot emit string match).
 
 // Infer the type of a literal token: "true"/"false"→TyBool, quoted→TyStr, contains "."→TyFloat, else TyInt.
 pub fn ty_infer_lit(lit: String) -> String {

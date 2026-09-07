@@ -10,11 +10,11 @@ pub type FrameTable = struct {
     levels: List[Int], parents: List[Int], frame_vars: List[String], active_frame: Int
 };
 pub fn c_is_managed_type(c_ty: String) -> Bool {
-    if c_ty == "" || c_ty == "long long" || c_ty == "int" || c_ty == "double" || c_ty == "void" || c_ty == "float" || c_ty == "bool" { return false; }
     if c_ty == "OoStr" || c_ty == "OoSList" || c_ty == "OoIList" || c_ty == "OoFList" || c_ty == "T" || c_ty == "S" || c_ty == "LI" || c_ty == "LF" || c_ty == "R" || c_ty == "RI" || c_ty == "RLI" || c_ty == "RLS" || c_ty == "RLF" || c_ty == "V" || c_ty == "RB" || c_ty == "RF" { return true; }
-    let n: Int = chars_len(c_ty);
-    if n >= 3 && (str_slice(c_ty, 0, 3) == "LL_" || str_slice(c_ty, 0, 4) == "OoL_" || str_slice(c_ty, 0, 4) == "LLL_" || str_slice(c_ty, 0, 5) == "LLLL" || str_slice(c_ty, 0, 6) == "OoLLL_" || str_slice(c_ty, 0, 6) == "OoOpt_" || str_slice(c_ty, 0, 6) == "OoRes_" || str_slice(c_ty, 0, 7) == "OoRes2" || str_slice(c_ty, 0, 7) == "OoLLLL") { return true; }
-    return byte_at(c_ty, 0) >= 65 && byte_at(c_ty, 0) <= 90;
+    if c_ty == "String" || c_ty == "List" || c_ty == "Option" || c_ty == "Result" || c_ty == "Box" || c_ty == "TyStr" || c_ty == "TyList" || c_ty == "TyOption" || c_ty == "TyResult" || c_ty == "TyBox" { return true; }
+    if c_ty == "OoL_S" || c_ty == "OoL_I" || c_ty == "OoL_F" || c_ty == "OoOpt_I" || c_ty == "OoOpt_S" || c_ty == "OoOpt_F" || c_ty == "OoOpt_B" { return true; }
+    if c_ty == "OoResS" || c_ty == "OoResI" || c_ty == "OoResV" || c_ty == "OoResB" || c_ty == "OoResF" || c_ty == "OoResLI" || c_ty == "OoResLS" || c_ty == "OoResLF" { return true; }
+    return false;
 }
 fn sv_pack(name: String, ty_ast: String, c_ty: String, flags: Int, borrow_root: String) -> SymVar {
     let res: SymVar = SymVar { name: name, ty_ast: ty_ast, c_ty: c_ty, flags: flags, borrow_root: borrow_root };

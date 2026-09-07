@@ -98,6 +98,9 @@ jobs:
           set -e
           echo "cap_rc=$cap_rc"
           test "$cap_rc" -ne 0
+          echo "=== borrowck ==="
+          "$HOST" build oodac/qa/probe_borrow_kind.oo -o .ooda-cache/ooda-tmp/ci_borrow.bin
+          .ooda-cache/ooda-tmp/ci_borrow.bin
           echo "=== well-typed twins ==="
           "$HOST" check oodac/qa/probe_list_ok.oo
           "$HOST" check oodac/qa/probe_option_ok.oo

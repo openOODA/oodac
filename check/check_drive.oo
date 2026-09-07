@@ -12,6 +12,7 @@
 import "tc_unused_let.oo";
 import "tc_unused_import.oo";
 import "check_secret.oo";
+import "check_borrow.oo";
 
 
 // OPEN-12: np>1 checks each file body with import lines kept as blanks so LINE:COL is per source file.
@@ -112,6 +113,7 @@ pub fn run_check_core_binds_at(sys: &ProcessCap, src: String, extra_binds: Strin
     typecheck_ann_and_return_lits(toks);
     // R1 expand: undefined variables (bound = fn params + let names + fn names + builtins).
     typecheck_undefined_vars_ext(toks, extra_binds);
+    check_borrow(toks);
     typecheck_unused_lets(toks);
     typecheck_unused_imports(toks);
     // R1 expand: call arity vs declared params; assign to immutable let.

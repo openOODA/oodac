@@ -15,6 +15,7 @@
 //   8. types_core.oo — primitive type constructors and operations.
 
 import "ty.oo";
+import "ty_c.oo";
 import "ty_kind.oo";
 import "ty_parse.oo";
 import "ty_mangle.oo";

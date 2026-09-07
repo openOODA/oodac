@@ -7,7 +7,7 @@
 // Beats:
 //   1. Import emit/c (reference) and emit/llvm (second consumer).
 //   2. emit_backend consumes toks from the artifact. It does not lex.
-//   3. Unknown backend names fail closed.
+//   3. Unknown backend names fail closed. Product emit-c and emit-llvm call this.
 
 import "c/ANCHOR.oo";
 import "llvm/ANCHOR.oo";

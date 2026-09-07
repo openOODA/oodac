@@ -14,6 +14,7 @@ import "ast/ANCHOR.oo";
 import "check/ANCHOR.oo";
 import "types/ANCHOR.oo";
 import "emit/c/ANCHOR.oo";
+import "emit/ANCHOR.oo";
 import "cli/cli_parse.oo";
 import "cli/cli_build.oo";
 import "cli/cli_emit.oo";

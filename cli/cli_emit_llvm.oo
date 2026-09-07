@@ -7,12 +7,12 @@
 // Beats:
 //   1. --concat or OODA_EMIT_CONCAT=1 walks imports.
 //   2. Else one-TU toks.
-//   3. emit_backend("llvm") prints IR.
+//   3. ll_emit_stream_toks prints IR.
 
 import "lex/token_fmt.oo";
 import "check/check_collect.oo";
 import "types/typed_artifact.oo";
-import "emit/ANCHOR.oo";
+import "emit/llvm/ANCHOR.oo";
 
 fn ll_concat(env: &EnvCap) -> Bool {
     let r: Result[String, String] = env_get(env, "OODA_EMIT_CONCAT");
@@ -57,7 +57,7 @@ pub fn run_emit_llvm(fs: &FsReadCap, env: &EnvCap, path: String, concat: Bool) {
             process_exit(1);
         }
         let src: String = match pr { Ok(s) => s, Err(_) => "" };
-        emit_backend("llvm", src, ll_toks_file(fs, path, src), "once", path, false);
+        ll_emit_stream_toks(ll_toks_file(fs, path, src));
         return;
     }
     let paths: List[String] = collect_module_paths(fs, path);
@@ -89,5 +89,5 @@ pub fn run_emit_llvm(fs: &FsReadCap, env: &EnvCap, path: String, concat: Bool) {
         }
         i = i + 1;
     }
-    emit_backend("llvm", "", toks, "once", "", false);
+    ll_emit_stream_toks(toks);
 }

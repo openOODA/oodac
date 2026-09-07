@@ -1,0 +1,181 @@
+// # Borrow and move check
+//
+// Logline: Fail-closed use-after-move and conflicting & / &mut on the check path.
+//
+// Setup: Token rows are kind, line, col, text. Int/Float/Bool/caps copy. String/List/Option/Result/Box move.
+//
+// Beats:
+//   1. Classify managed types by exact names, not prefixes.
+//   2. let y = x moves a managed x; a later IDENT x is ERR move.
+//   3. Two &mut of one root, or & plus &mut, is ERR borrow. Two shared & are OK.
+
+import "lex/token_fmt.oo";
+import "lex/token_parse_int.oo";
+
+fn bk(toks: List[String], i: Int) -> String {
+    if i >= list_len(toks) { return ""; }
+    return field_at(list_get(toks, i), 0);
+}
+fn bt(toks: List[String], i: Int) -> String {
+    if i >= list_len(toks) { return ""; }
+    return field_at(list_get(toks, i), 3);
+}
+fn bag_has(bag: String, name: String) -> Bool {
+    if name == "" { return false; }
+    return str_index_of(bag, "\t" + name + "\t") >= 0;
+}
+fn bag_add(bag: String, name: String) -> String {
+    if name == "" || bag_has(bag, name) { return bag; }
+    return bag + name + "\t";
+}
+
+pub fn borrow_is_managed(ty: String) -> Bool {
+    if ty == "String" || ty == "TyStr" || ty == "OoStr" { return true; }
+    if ty == "List" || ty == "TyList" || ty == "OoSList" || ty == "OoIList" || ty == "OoFList" { return true; }
+    if ty == "Option" || ty == "TyOption" { return true; }
+    if ty == "Result" || ty == "TyResult" { return true; }
+    if ty == "Box" || ty == "TyBox" { return true; }
+    return false;
+}
+
+fn borrow_skip_type(toks: List[String], i0: Int, n: Int) -> Int {
+    let mut i: Int = i0;
+    if i < n && bk(toks, i) == "AMP" { i = i + 1; }
+    if i < n && bk(toks, i) == "KW_MUT" { i = i + 1; }
+    if i < n && bk(toks, i) == "IDENT" { i = i + 1; }
+    while i < n && (bk(toks, i) == "LBRACKET" || bk(toks, i) == "LT") {
+        i = i + 1;
+        while i < n && bk(toks, i) != "RBRACKET" && bk(toks, i) != "GT" && bk(toks, i) != "SEMI" {
+            i = i + 1;
+        }
+        if i < n { i = i + 1; }
+    }
+    return i;
+}
+
+fn borrow_die_move(name: String, line: String) {
+    println("ERR\tmove\tuse after move " + name + " at " + line);
+    process_exit(1);
+}
+fn borrow_die_alias(name: String, line: String) {
+    println("ERR\tborrow\tmut alias " + name + " at " + line);
+    process_exit(1);
+}
+
+fn borrow_walk_let(toks: List[String], i0: Int, n: Int, moved0: String, shr0: String, mutb0: String, owned0: String) -> List[String] {
+    let mut moved: String = moved0;
+    let mut shr: String = shr0;
+    let mut mutb: String = mutb0;
+    let mut owned: String = owned0;
+    let mut p: Int = i0 + 1;
+    if p < n && bk(toks, p) == "KW_MUT" { p = p + 1; }
+    if p >= n || bk(toks, p) != "IDENT" {
+        let mut r: List[String] = list_new();
+        r = list_push(r, p.to_string());
+        r = list_push(r, moved); r = list_push(r, shr); r = list_push(r, mutb); r = list_push(r, owned);
+        return r;
+    }
+    let vname: String = bt(toks, p);
+    let line: String = field_at(list_get(toks, p), 1);
+    p = p + 1;
+    let mut ty: String = "";
+    if p < n && bk(toks, p) == "COLON" {
+        p = p + 1;
+        let mut tp: Int = p;
+        if tp < n && bk(toks, tp) == "AMP" { tp = tp + 1; }
+        if tp < n && bk(toks, tp) == "KW_MUT" { tp = tp + 1; }
+        if tp < n && bk(toks, tp) == "IDENT" { ty = bt(toks, tp); }
+        p = borrow_skip_type(toks, p, n);
+    }
+    if p < n && bk(toks, p) == "EQ" {
+        p = p + 1;
+        if p < n && bk(toks, p) == "AMP" {
+            p = p + 1;
+            let mut is_mut: Bool = false;
+            if p < n && bk(toks, p) == "KW_MUT" { is_mut = true; p = p + 1; }
+            if p < n && bk(toks, p) == "IDENT" {
+                let root: String = bt(toks, p);
+                if bag_has(moved, root) { borrow_die_move(root, line); }
+                if is_mut {
+                    if bag_has(shr, root) || bag_has(mutb, root) { borrow_die_alias(root, line); }
+                    mutb = bag_add(mutb, root);
+                } else {
+                    if bag_has(mutb, root) { borrow_die_alias(root, line); }
+                    shr = bag_add(shr, root);
+                }
+                p = p + 1;
+            }
+        } else if p < n && bk(toks, p) == "IDENT" {
+            let src: String = bt(toks, p);
+            let nxt: String = bk(toks, p + 1);
+            if nxt != "LPAREN" && nxt != "DOT" && nxt != "COLON" {
+                if bag_has(moved, src) { borrow_die_move(src, line); }
+                if bag_has(owned, src) || borrow_is_managed(ty) {
+                    moved = bag_add(moved, src);
+                    owned = bag_add(owned, vname);
+                }
+            }
+            p = p + 1;
+        } else if p < n && bk(toks, p) == "STRING" {
+            owned = bag_add(owned, vname);
+            p = p + 1;
+        }
+    }
+    if borrow_is_managed(ty) { owned = bag_add(owned, vname); }
+    while p < n && bk(toks, p) != "SEMI" { p = p + 1; }
+    if p < n { p = p + 1; }
+    let mut out: List[String] = list_new();
+    out = list_push(out, p.to_string());
+    out = list_push(out, moved); out = list_push(out, shr); out = list_push(out, mutb); out = list_push(out, owned);
+    return out;
+}
+
+fn borrow_walk_fn(toks: List[String], i0: Int, n: Int) -> Int {
+    let mut i: Int = i0;
+    if bk(toks, i) == "KW_PUB" { i = i + 1; }
+    if i < n && bk(toks, i) == "KW_FN" { i = i + 1; }
+    if i < n && bk(toks, i) == "IDENT" { i = i + 1; }
+    while i < n && bk(toks, i) != "LBRACE" && bk(toks, i) != "EOF" { i = i + 1; }
+    if i >= n || bk(toks, i) != "LBRACE" { return i + 1; }
+    let mut depth: Int = 1;
+    i = i + 1;
+    let mut moved: String = "\t";
+    let mut shr: String = "\t";
+    let mut mutb: String = "\t";
+    let mut owned: String = "\t";
+    while i < n && depth > 0 {
+        let k: String = bk(toks, i);
+        if k == "LBRACE" { depth = depth + 1; i = i + 1; }
+        else if k == "RBRACE" { depth = depth - 1; i = i + 1; }
+        else if k == "KW_LET" {
+            let st: List[String] = borrow_walk_let(toks, i, n, moved, shr, mutb, owned);
+            i = parse_int(list_get(st, 0));
+            moved = list_get(st, 1); shr = list_get(st, 2); mutb = list_get(st, 3); owned = list_get(st, 4);
+        } else if k == "IDENT" {
+            let prev: String = bk(toks, i - 1);
+            let name: String = bt(toks, i);
+            if prev != "DOT" && prev != "COLON" && prev != "KW_FN" && prev != "KW_LET" && prev != "KW_MUT" && prev != "AMP" {
+                if bag_has(moved, name) {
+                    borrow_die_move(name, field_at(list_get(toks, i), 1));
+                }
+            }
+            i = i + 1;
+        } else {
+            i = i + 1;
+        }
+    }
+    return i;
+}
+
+pub fn check_borrow(toks: List[String]) {
+    let n: Int = list_len(toks);
+    let mut i: Int = 0;
+    while i < n {
+        let k: String = bk(toks, i);
+        if k == "KW_FN" || (k == "KW_PUB" && i + 1 < n && bk(toks, i + 1) == "KW_FN") {
+            i = borrow_walk_fn(toks, i, n);
+        } else {
+            i = i + 1;
+        }
+    }
+}

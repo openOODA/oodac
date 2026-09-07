@@ -1,0 +1,17 @@
+// # Probe: shared & of one root must check OK
+//
+// Logline: two shared borrows of Int x plus the owner use check OK.
+//
+// Setup: No caps. Int copies. Shared & does not alias-conflict.
+//
+// Beats:
+//   1. Bind x: Int.
+//   2. let a = &x; let b = &x.
+//   3. check prints OK.
+
+pub fn main() {
+    let x: Int = 1;
+    let _a = &x;
+    let _b = &x;
+    println(x.to_string());
+}

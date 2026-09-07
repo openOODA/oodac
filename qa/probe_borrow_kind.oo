@@ -1,0 +1,57 @@
+// # Probe: move and &mut alias cannot ship; shared & can
+//
+// Logline: check of move and mut-alias victims is ERR. Shared & victim is OK. No ELF for fails.
+//
+// Setup: ProcessCap + EnvCap + FsReadCap. Host is OODA_COMPILER.
+//
+// Beats:
+//   1. probe_borrow_move.oo check is nonzero and contains ERR move.
+//   2. probe_borrow_mut_alias.oo check is nonzero and contains ERR borrow.
+//   3. probe_borrow_shared.oo check is OK. Fail victims leave no ELF.
+
+pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
+    let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
+    let host: String = match hr { Ok(s) => s, Err(_) => "" };
+    if host == "" {
+        println("ERR\tOODA_COMPILER required");
+        process_exit(1);
+    }
+    let mv: String = "oodac/qa/probe_borrow_move.oo";
+    let ca: Result[String, String] = sys_exec(p, host, "check", mv);
+    let cmove: String = match ca { Ok(s) => s, Err(e) => e };
+    if ca.is_ok() {
+        println("ERR\tmove check must fail");
+        process_exit(1);
+    }
+    if str_index_of(cmove, "move") < 0 {
+        println("ERR\tmove silent");
+        process_exit(1);
+    }
+    let al: String = "oodac/qa/probe_borrow_mut_alias.oo";
+    let cb: Result[String, String] = sys_exec(p, host, "check", al);
+    let calias: String = match cb { Ok(s) => s, Err(e) => e };
+    if cb.is_ok() {
+        println("ERR\talias check must fail");
+        process_exit(1);
+    }
+    if str_index_of(calias, "borrow") < 0 {
+        println("ERR\talias silent");
+        process_exit(1);
+    }
+    let sh: Result[String, String] = sys_exec(p, host, "check", "oodac/qa/probe_borrow_shared.oo");
+    if !sh.is_ok() {
+        println("ERR\tshared & must check");
+        process_exit(1);
+    }
+    let out: String = ".ooda-cache/ooda-tmp/probe_borrow_move.bin";
+    let ba: Result[String, String] = sys_exec(p, host, "build", mv, "-o", out);
+    if ba.is_ok() {
+        println("ERR\tmove build must fail");
+        process_exit(1);
+    }
+    if path_exists(fs_r, out) {
+        println("ERR\tELF shipped");
+        process_exit(1);
+    }
+    println("OK");
+}

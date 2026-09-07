@@ -151,8 +151,10 @@ pub fn run_check_json_errors(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessC
         process_exit(1);
     }
     let r: Result[String, String] = sys_exec(sys, host, "check", path);
-    let out: String = match r { Ok(s) => s, Err(e) => e };
-    println(diag_check_output_to_json(out, path));
+    let mut raw: String = "";
+    if r.is_ok() { raw = r.val; } else { raw = r.val; }
+    let json: String = diag_check_output_to_json(raw, path);
+    println(json);
     if r.is_ok() { return; }
     process_exit(1);
 }

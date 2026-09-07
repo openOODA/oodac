@@ -1,0 +1,59 @@
+// # Map oo types to C typedef names
+//
+// Logline: Exact-name ifs from Ty tags to C types. No string match (seed emit-c is Ok/Some only).
+//
+// Setup: ty_tag and ty_arg live in ty.oo. Used by emit-c unique_fns rebuild.
+//
+// Beats:
+//   1. Primitives map to long long / double / int / OoStr / void / SIMD names.
+//   2. TyList / TyOption / TyResult use exact element names.
+//   3. Unknown tags become long long.
+
+import "ty.oo";
+
+pub fn ty_to_c(ty: String) -> String {
+    if ty == "TyInt" || ty == "Int" || ty == "i64" || ty == "isize" { return "long long"; }
+    if ty == "TyFloat" || ty == "Float" || ty == "f64" { return "double"; }
+    if ty == "TyBool" || ty == "Bool" { return "int"; }
+    if ty == "TyStr" || ty == "String" || ty == "str" { return "OoStr"; }
+    if ty == "TyUnit" || ty == "Void" || ty == "void" || ty == "unit" { return "void"; }
+    if ty == "TyF32x8" || ty == "f32x8" { return "f32x8"; }
+    if ty == "TyF64x4" || ty == "f64x4" { return "f64x4"; }
+    let tag: String = ty_tag(ty);
+    if tag == "TyName" { return ty_arg(ty, 0); }
+    if tag == "TyCap" { return "long long"; }
+    if tag == "TyRef" { return ty_to_c(ty_arg(ty, 0)) + "*"; }
+    if tag == "TyRefMut" { return ty_to_c(ty_arg(ty, 0)) + "*"; }
+    if tag == "TyList" {
+        let elem: String = ty_arg(ty, 0);
+        if elem == "TyInt" || elem == "Int" { return "OoIList"; }
+        if elem == "TyStr" || elem == "String" { return "OoSList"; }
+        if elem == "TyFloat" || elem == "Float" || elem == "f64" { return "OoFList"; }
+        if elem == "TyList(TyInt)" { return "OoLL_I"; }
+        if elem == "TyList(TyStr)" { return "OoLL_S"; }
+        if elem == "TyList(TyFloat)" { return "OoLL_F"; }
+        return "OoL_" + elem;
+    }
+    if tag == "TyOption" {
+        let elem: String = ty_arg(ty, 0);
+        if elem == "TyInt" || elem == "Int" { return "OoOpt_I"; }
+        if elem == "TyStr" || elem == "String" { return "OoOpt_S"; }
+        return "OoOpt_" + elem;
+    }
+    if tag == "TyResult" {
+        let ok: String = ty_arg(ty, 0);
+        let err: String = ty_arg(ty, 1);
+        if ok == "TyStr" && (err == "TyStr" || err == "String" || err == "str") { return "OoResS"; }
+        if ok == "TyUnit" && (err == "TyStr" || err == "String" || err == "str") { return "OoResV"; }
+        if ok == "TyInt" && (err == "TyStr" || err == "String" || err == "str") { return "OoResI"; }
+        if ok == "TyInt" && (err == "TyInt" || err == "Int") { return "OoResII"; }
+        if ok == "TyBool" && (err == "TyStr" || err == "String" || err == "str") { return "OoResB"; }
+        if ok == "TyFloat" && (err == "TyStr" || err == "String" || err == "str") { return "OoResF"; }
+        if ok == "TyList(TyInt)" && (err == "TyStr" || err == "String" || err == "str") { return "OoResLI"; }
+        if ok == "TyList(TyStr)" && (err == "TyStr" || err == "String" || err == "str") { return "OoResLS"; }
+        if ok == "TyList(TyFloat)" && (err == "TyStr" || err == "String" || err == "str") { return "OoResLF"; }
+        if err == "TyStr" || err == "String" || err == "str" { return "OoRes_" + ok; }
+        return "OoRes2_" + ok + "_" + err;
+    }
+    return "long long";
+}

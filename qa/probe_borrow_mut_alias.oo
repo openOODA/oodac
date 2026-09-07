@@ -1,0 +1,16 @@
+// # Probe victim: two &mut of one root must not check
+//
+// Logline: let a = &mut x then let b = &mut x is ERR borrow mut alias.
+//
+// Setup: No caps. Int is Copy; aliasing is still refused.
+//
+// Beats:
+//   1. Bind mut x.
+//   2. Take &mut x twice.
+
+pub fn main() {
+    let mut x: Int = 1;
+    let _a = &mut x;
+    let _b = &mut x;
+    println(x.to_string());
+}
