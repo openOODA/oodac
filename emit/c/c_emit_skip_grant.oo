@@ -51,7 +51,6 @@ pub fn c_emit_main_typed_cap_grants(mcap: String) {
 // CAP-G3: Ooda cap type → oo_cap_grant_<suffix> ("" if not a known grant).
 pub fn c_cap_grant_suffix(tn: String) -> String {
     if tn == "TcpCap" { return "tcp"; }
-    }
     if tn == "UdpCap" { return "udp";
     }
     if tn == "BindCap" { return "bind";
@@ -77,7 +76,6 @@ pub fn c_cap_grant_suffix(tn: String) -> String {
     if tn == "ArenaCap" { return "arena";
     }
     if tn == "FfiCap" { return "ffi"; }
-    }
     if tn == "ThreadCap" { return "thread";
     }
     if tn == "GpuCap" { return "gpu";
@@ -87,7 +85,6 @@ pub fn c_cap_grant_suffix(tn: String) -> String {
     if tn == "ProcessCap" { return "process";
     }
     if tn == "SignCap" { return "sign"; }
-    }
     if tn == "AudioCap" { return "audio";
     }
     if tn == "CameraCap" { return "camera";
