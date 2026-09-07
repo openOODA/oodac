@@ -2,29 +2,20 @@
 // Logline: Nested lexical frames, CFG borrow analysis, reverse-order ARC exit hooks.
 // Setup: Frames own variable lifetimes for the C emitter.
 // Beats: SymVar flags formal=1 borrow=2; FrameTable enter/leave/bind; borrow elides ARC.
-
 import "lex/token_parse_int.oo";
-
 pub type SymVar = struct {
     name: String, ty_ast: String, c_ty: String, flags: Int, borrow_root: String
 };
-
 pub type FrameTable = struct {
     levels: List[Int], parents: List[Int], frame_vars: List[String], active_frame: Int
 };
 
 pub fn c_is_managed_type(c_ty: String) -> Bool {
     if c_ty == "" || c_ty == "long long" || c_ty == "int" || c_ty == "double" || c_ty == "void" || c_ty == "float" || c_ty == "bool" { return false; }
-    if c_ty == "OoStr" || c_ty == "OoSList" || c_ty == "OoIList" || c_ty == "OoFList" { return true; }
-    if c_ty == "T" || c_ty == "S" || c_ty == "LI" || c_ty == "LF" || c_ty == "R" || c_ty == "RI" || c_ty == "RLI" || c_ty == "RLS" || c_ty == "RLF" || c_ty == "V" || c_ty == "RB" || c_ty == "RF" { return true; }
+    if c_ty == "OoStr" || c_ty == "OoSList" || c_ty == "OoIList" || c_ty == "OoFList" || c_ty == "T" || c_ty == "S" || c_ty == "LI" || c_ty == "LF" || c_ty == "R" || c_ty == "RI" || c_ty == "RLI" || c_ty == "RLS" || c_ty == "RLF" || c_ty == "V" || c_ty == "RB" || c_ty == "RF" { return true; }
     let n: Int = chars_len(c_ty);
-    if n >= 4 && (str_slice(c_ty, 0, 4) == "OoL_" || str_slice(c_ty, 0, 4) == "LLL_") { return true; }
-    if n >= 5 && (str_slice(c_ty, 0, 5) == "OoLL_" || str_slice(c_ty, 0, 5) == "LLLL_") { return true; }
-    if n >= 6 && (str_slice(c_ty, 0, 6) == "OoLLL_" || str_slice(c_ty, 0, 6) == "OoOpt_" || str_slice(c_ty, 0, 6) == "OoRes_") { return true; }
-    if n >= 7 && (str_slice(c_ty, 0, 7) == "OoLLLL_" || str_slice(c_ty, 0, 7) == "OoRes2_") { return true; }
-    if n >= 3 && str_slice(c_ty, 0, 3) == "LL_" { return true; }
-    let first_b: Int = byte_at(c_ty, 0);
-    return first_b >= 65 && first_b <= 90;
+    if n >= 3 && (str_slice(c_ty, 0, 3) == "LL_" || str_slice(c_ty, 0, 4) == "OoL_" || str_slice(c_ty, 0, 4) == "LLL_" || str_slice(c_ty, 0, 5) == "LLLL" || str_slice(c_ty, 0, 6) == "OoLLL_" || str_slice(c_ty, 0, 6) == "OoOpt_" || str_slice(c_ty, 0, 6) == "OoRes_" || str_slice(c_ty, 0, 7) == "OoRes2" || str_slice(c_ty, 0, 7) == "OoLLLL") { return true; }
+    return byte_at(c_ty, 0) >= 65 && byte_at(c_ty, 0) <= 90;
 }
 
 fn sv_pack(name: String, ty_ast: String, c_ty: String, flags: Int, borrow_root: String) -> SymVar {
@@ -80,6 +71,22 @@ pub fn c_frame_bind(tbl: FrameTable, name: String, ty_ast: String, c_ty: String,
 }
 
 pub fn c_frame_bind_borrow(tbl: FrameTable, name: String, ty_ast: String, c_ty: String, is_formal: Bool, is_borrow: Bool, borrow_root: String) -> FrameTable {
+    if is_borrow && borrow_root != "" {
+        let mut cur = tbl.active_frame;
+        while cur >= 0 {
+            let vstr = list_get(tbl.frame_vars, cur);
+            if vstr != "" {
+                let ls = str_split(vstr, "\n");
+                let mut i = list_len(ls) - 1;
+                while i >= 0 {
+                    let cv = c_symvar_decode(list_get(ls, i));
+                    if cv.borrow_root == borrow_root && cv.flags == 2 { println("ERR\tborrow\tmut alias " + borrow_root); process_exit(1); }
+                    i = i - 1;
+                }
+            }
+            cur = list_get(tbl.parents, cur);
+        }
+    }
     let cur_idx: Int = tbl.active_frame;
     let enc: String = c_symvar_encode(c_frame_var_borrow_new(name, ty_ast, c_ty, is_formal, is_borrow, borrow_root));
     let tbl_fvars: List[String] = tbl.frame_vars;
@@ -119,6 +126,7 @@ pub fn c_frame_borrow_check(table: FrameTable, var_name: String, scope_id: Int) 
     if var_name == "" { return false; }
     let mut clean_name: String = var_name;
     if chars_len(clean_name) > 1 && char_at(clean_name, 0) == "&" { clean_name = str_slice(clean_name, 1, chars_len(clean_name)); }
+    if chars_len(clean_name) > 4 && str_slice(clean_name, 0, 4) == "mut " { clean_name = str_slice(clean_name, 4, chars_len(clean_name)); }
     let n: Int = chars_len(clean_name);
     let mut di: Int = 0;
     let mut dot_idx: Int = -1;
@@ -184,7 +192,6 @@ pub fn c_frame_emit_exit(tbl: FrameTable) -> String {
     }
     return out;
 }
-
 pub fn c_frame_emit_all_exits(tbl: FrameTable) -> String {
     let mut cur: Int = tbl.active_frame;
     let mut out: String = "";
@@ -195,7 +202,6 @@ pub fn c_frame_emit_all_exits(tbl: FrameTable) -> String {
     }
     return out;
 }
-
 pub fn c_frame_emit_local_exits(tbl: FrameTable) -> String {
     let mut cur: Int = tbl.active_frame;
     let mut out: String = "";
@@ -206,7 +212,6 @@ pub fn c_frame_emit_local_exits(tbl: FrameTable) -> String {
     }
     return out;
 }
-
 pub fn c_arc_kind_release_sym(k: String, name: String) -> String {
     if k == "T" || k == "OoStr" { return "oo_str_release(" + name + "); "; }
     if k == "S" || k == "OoSList" || k == "OoL_S" { return "oo_slist_release(" + name + "); "; }
@@ -229,7 +234,6 @@ pub fn c_arc_kind_release_sym(k: String, name: String) -> String {
     if kn > 1 && byte_at(k, 0) >= 65 && byte_at(k, 0) <= 90 { return "oo_release_" + k + "(" + name + "); "; }
     return "";
 }
-
 pub fn c_arc_kind_retain_sym(k: String, name: String) -> String {
     if k == "T" || k == "OoStr" { return "oo_str_retain(" + name + "); "; }
     if k == "S" || k == "OoSList" || k == "OoL_S" { return "oo_slist_retain(" + name + "); "; }
