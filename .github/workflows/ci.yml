@@ -114,6 +114,9 @@ jobs:
           echo "=== emit needs check ==="
           "$HOST" build oodac/qa/probe_emit_needs_check.oo -o .ooda-cache/ooda-tmp/ci_emit_need.bin
           .ooda-cache/ooda-tmp/ci_emit_need.bin
+          echo "=== no chs_rt ==="
+          "$HOST" build oodac/qa/probe_no_chs_rt.oo -o .ooda-cache/ooda-tmp/ci_no_chs.bin
+          .ooda-cache/ooda-tmp/ci_no_chs.bin
           echo "=== four product mains ==="
           "$HOST" build oodac/qa/probe_four_mains.oo -o .ooda-cache/ooda-tmp/ci_four.bin
           .ooda-cache/ooda-tmp/ci_four.bin

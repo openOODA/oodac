@@ -125,12 +125,24 @@ process_exit(1);
         return "oo_cap_rpc_recv(" + args + ")";
     }
     if t == "oo_read_stdin" {
-        return "oo_read_stdin()";
+        if a0 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tread_stdin requires a cap token first arg");
+            process_exit(1);
+        }
+        return "oo_read_stdin(" + args + ")";
     }
     if t == "oo_read_stdin_chunk" {
+        if a0 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tread_stdin_chunk requires a cap token first arg");
+            process_exit(1);
+        }
         return "oo_read_stdin_chunk(" + args + ")";
     }
     if t == "oo_file_stamp" {
+        if a0 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tfile_stamp requires a cap token first arg");
+            process_exit(1);
+        }
         return "oo_file_stamp(" + args + ")";
     }
     if t == "monotonic_us" || t == "oo_monotonic_us" {

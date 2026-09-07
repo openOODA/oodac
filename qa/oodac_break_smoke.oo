@@ -23,7 +23,9 @@ pub fn main(p: &ProcessCap, env: &EnvCap) {
         println("ERR\tsealed victim must fail");
         process_exit(1);
     }
-    if str_index_of(a.val, "capability") < 0 || str_index_of(b.val, "capability") < 0 {
+    let at: String = match a { Ok(s) => s, Err(e) => e };
+    let bt: String = match b { Ok(s) => s, Err(e) => e };
+    if str_index_of(at, "capability") < 0 || str_index_of(bt, "capability") < 0 {
         println("ERR\tmissing capability diagnostic");
         process_exit(1);
     }

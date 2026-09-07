@@ -2,8 +2,8 @@
 # Why not .oo: this starts gcc and the seed (first compiler). RULES 1.13 host exception.
 # job: official in-repo pure multi-module oodac rebuild (emit each .oo, link once)
 # in:  <main.oo> <out_bin>
-# out: native binary via emit-c + gcc + chs_rt (compiler self-host).
-#      Product `oodac build` links oodar.c. unique_fns is awk, not Python.
+# out: native binary via emit-c + gcc + oodar.c + host_rt (compiler self-host).
+#      Product `oodac build` links the same oodar.c. unique_fns is awk, not Python.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 WS_ROOT="$(cd "$ROOT/.." && pwd)"
@@ -209,17 +209,20 @@ fi
 # Check gate unless PURE_SKIP_CHECK=1. Official path leaves that unset.
 if [[ "${PURE_SKIP_CHECK:-}" != "1" ]]; then
   nmods=${#MODS[@]}
-  # Small trees: 60+2*nmods, cap 180s. Large nmods (oodac/main.oo ~174):
-  # cold check is ~523s on this host; 180s cannot finish.
+  # Small trees: 60+2*nmods, cap 180s. Large nmods (oodac/main.oo ~218):
+  # cold check exceeds 900s on this host; 180s cannot finish.
   ck_to=$((60 + nmods * 2))
   if [[ $nmods -gt 80 ]]; then
-    ck_to=900
+    ck_to=1800
   elif [[ $ck_to -gt 180 ]]; then
     ck_to=180
   fi
   run_main_check() {
     echo "pure_build: check host=$OODAC_BIN nmods=$nmods timeout=${ck_to}s"
     mkdir -p "$TMP"
+    # Drop leftover art files so seed vs OODAART2 hosts cannot mix magics.
+    rm -f "$ROOT/.ooda-cache/ooda-tmp/art_"*.art
+    rm -f "$WS_ROOT/.ooda-cache/ooda-tmp/art_"*.art
     set +e
     (cd "$ROOT" && timeout "$ck_to" "$OODAC_BIN" check "$MAIN_ABS") >"$TMP/main_check.out" 2>"$TMP/main_check.err"
     main_ck=$?
@@ -299,8 +302,19 @@ for src in "${MODS[@]}"; do
     cp -f "$cache_c" "$mc"
     emit_skip=$((emit_skip + 1))
   else
-    cd_dir="$ROOT"
-    (cd "$cd_dir" && OODA_EMIT_NO_CONCAT=1 EMIT_NO_CONCAT=1 timeout 1800 "$OODAC_BIN" emit-c "$src") >"$mc" || true
+    emit_one() {
+      (cd "$ROOT" && OODA_EMIT_NO_CONCAT=1 EMIT_NO_CONCAT=1 timeout 1800 "$OODAC_BIN" emit-c "$1")
+    }
+    emit_one "$src" >"$mc" || true
+    if grep -qE $'^ERR\temit\tno artifact' "$mc"; then
+      rel="${src#"$ROOT"/}"
+      (cd "$ROOT" && timeout 180 "$OODAC_BIN" check "$src") >/dev/null 2>&1 || true
+      emit_one "$src" >"$mc" || true
+      if grep -qE $'^ERR\temit\tno artifact' "$mc" && [[ "$rel" != "$src" ]]; then
+        (cd "$ROOT" && timeout 180 "$OODAC_BIN" check "$rel") >/dev/null 2>&1 || true
+        emit_one "$rel" >"$mc" || true
+      fi
+    fi
     if [[ -s "$mc" ]] && grep -qE "$FN_DEF" "$mc" && ! grep -qE $'^ERR\tc_emit' "$mc"; then
       mkdir -p "$EMIT_CACHE"
       cat "$mc" > "$cache_c" 2>/dev/null || true
@@ -455,7 +469,12 @@ echo "void oo_emit_tmp_own(OoStr); void oo_emit_tmp_release_all_print(void);" >>
 echo "OoStr oo_emit_tmp_bind(OoStr);" >> "$TMP/preamble.c"
 echo "typedef struct WasmEnv WasmEnv; long long wasm_lower_expr(WasmEnv* env, OoStr node);" >> "$TMP/preamble.c"
 echo "typedef struct A64X A64X; A64X a64x_nested_fn(A64X);" >> "$TMP/preamble.c"
-echo "OoResS oo_actor_restart(long long,long long); OoStr oo_read_stdin(void); OoStr oo_file_stamp(OoStr);" >> "$TMP/preamble.c"
+sed -i \
+  -e 's/OoStr oo_file_stamp(OoStr);/OoStr oo_file_stamp(long long,OoStr);/g' \
+  -e 's/OoStr oo_read_stdin(void);/OoStr oo_read_stdin(long long);/g' \
+  -e 's/OoResS oo_read_stdin_chunk(long long);/OoResS oo_read_stdin_chunk(long long,long long);/g' \
+  "$TMP/preamble.c"
+echo "OoResS oo_actor_restart(long long,long long); OoStr oo_read_stdin(long long); OoResS oo_read_stdin_chunk(long long,long long); OoStr oo_file_stamp(long long,OoStr);" >> "$TMP/preamble.c"
 echo "OoResS oo_arena_create(long long,long long); OoResS oo_arena_alloc(long long,long long,long long); OoResS oo_arena_reset(long long,long long);" >> "$TMP/preamble.c"
 echo "int oo_landlock_is_available(void); OoResS oo_landlock_restrict(long long,OoStr,OoStr);" >> "$TMP/preamble.c"
 echo "OoResS oo_dns_resolve(long long,OoStr); OoResS oo_dns_resolve_ipv4(long long,OoStr);" >> "$TMP/preamble.c"
@@ -519,7 +538,11 @@ sed -i 's/OoResS oo_write_file/OoResV oo_write_file/g' "$TMP/preamble.c"
 mkdir -p "$TMP"
 touch "$TMP/protos.c" "$TMP/bodies.c"
 cat "$TMP/preamble.c" "$TMP/protos.c" "$TMP/bodies.c" >"$TMP/all.c"
-sed -i 's/OoResS oo_write_file/OoResV oo_write_file/g' "$TMP/all.c"
+sed -i \
+  -e 's/OoResS oo_write_file/OoResV oo_write_file/g' \
+  -e 's/OoStr oo_file_stamp(OoStr);/OoStr oo_file_stamp(long long,OoStr);/g' \
+  -e 's/OoStr oo_read_stdin(void);/OoStr oo_read_stdin(long long);/g' \
+  "$TMP/all.c"
 echo "pure_build: native_caps"
 
 if ! grep -q 'int main\|long long main' "$TMP/all.c" && ! grep -q 'main(int argc' "$TMP/all.c"; then
@@ -553,17 +576,77 @@ else
   echo "pure_build: OO_HAVE_OPENSSL=0 (TLS residual; no -lssl)"
 fi
 mkdir -p "$(dirname "$OUT")"
-BB="$WS_ROOT/oodar/core/blackbox"
-if [[ ! -f "$BB/blackbox.c" ]]; then
-  echo "ERR_BLACKBOX_MISSING $BB/blackbox.c" >&2
+OD="$WS_ROOT/oodar"
+if [[ ! -f "$OD/oodar.c" ]]; then
+  echo "ERR_OODAR_MISSING $OD/oodar.c" >&2
   exit 1
 fi
-if [[ ! -f "$ROOT/runtime/chs_rt.c" ]]; then
-  echo "ERR_CHS_RT_MISSING $ROOT/runtime/chs_rt.c" >&2
-  exit 1
-fi
-# Compiler self-host still links chs_rt (emit ABI). Product oodac build links oodar.c.
-gcc ${OODAC_GCC_OPT:--O2} -g0 -fno-ident -I"$ROOT/runtime" -I"$BB" "${OO_SSL_CFLAGS[@]}" "$ROOT/runtime/chs_rt.c" "$BB/blackbox.c" "$TMP/all.c" \
+# host_rt: emit-tmp helpers + Landlock ctor. Same C as cli/cli_host_rt.oo. Not chs_rt.
+cat > "$TMP/oodac_host_rt.c" << 'HOST_RT_EOF'
+#define _GNU_SOURCE 1
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <limits.h>
+#include "oodar.h"
+static int g_tn, g_np, g_nm;
+static int g_marks[64];
+static char g_names[256][16];
+void oo_emit_tmp_reset(void) { g_tn = 0; g_np = 0; g_nm = 0; }
+void oo_emit_tmp_enter(void) { if (g_nm >= 64) abort(); g_marks[g_nm++] = g_np; }
+void oo_emit_tmp_release_print(void) {
+  int old = 0; int i; if (g_nm > 0) old = g_marks[g_nm - 1]; i = g_np;
+  while (i > old) { i--; printf("  oo_str_release(%s);\n", g_names[i]); }
+}
+void oo_emit_tmp_leave(void) {
+  if (g_nm <= 0) return; int old = g_marks[g_nm - 1];
+  oo_emit_tmp_release_print(); g_nm--; g_np = old;
+}
+void oo_emit_tmp_own(OoStr expr) {
+  if (g_np <= 0 || !expr.data || expr.len <= 0) return;
+  const char *w = g_names[g_np - 1]; size_t wn = strlen(w);
+  if ((long long)wn != expr.len) return;
+  if (memcmp(expr.data, w, wn) != 0) return; g_np--;
+}
+void oo_emit_tmp_release_all_print(void) {
+  int i = g_np; while (i > 0) { i--; printf("  oo_str_release(%s);\n", g_names[i]); }
+  g_np = 0;
+}
+OoStr oo_emit_tmp_bind(OoStr call) {
+  if (g_np >= 256) abort();
+  int w = snprintf(g_names[g_np], 16, "__t%d", g_tn++);
+  if (w < 0) abort();
+  const char *p = call.data; int n = (p && call.len > 0) ? (int)call.len : 0;
+  printf("  OoStr %s = %.*s;\n", g_names[g_np], n, p ? p : "");
+  OoStr name = oo_str_intern_bytes(g_names[g_np], (long long)strlen(g_names[g_np]));
+  g_np++; return name;
+}
+static OoStr jail_str(const char *s) {
+  OoStr o; o.data = (char *)s; o.len = s ? (long long)strlen(s) : 0; return o;
+}
+__attribute__((constructor)) void oo_jail_landlock_ctor(void) {
+  const char *rd = getenv("OODA_FS_READDIR");
+  const char *wd = getenv("OODA_FS_WRITEDIR");
+  if (!rd || !rd[0] || !wd || !wd[0]) return;
+  if (!oo_landlock_is_available()) {
+    fprintf(stderr, "ERR\tlandlock\trequired when jail env set\n"); _exit(1);
+  }
+  static char rbuf[PATH_MAX * 2]; static char wbuf[PATH_MAX * 2];
+  size_t n = 0; const char *pre = "/usr:/bin:/lib:/lib64:";
+  while (pre[n] && n + 1 < sizeof rbuf) { rbuf[n] = pre[n]; n++; }
+  while (*rd && n + 1 < sizeof rbuf) rbuf[n++] = *rd++; rbuf[n] = 0;
+  n = 0; const char *w = wd; const char *suf = ":/tmp";
+  while (w && *w && n + 1 < sizeof wbuf) wbuf[n++] = *w++;
+  while (*suf && n + 1 < sizeof wbuf) wbuf[n++] = *suf++; wbuf[n] = 0;
+  long long sys = oo_cap_grant_sys();
+  OoResS r = oo_landlock_restrict(sys, jail_str(rbuf), jail_str(wbuf));
+  if (!r.ok) { fprintf(stderr, "ERR\tlandlock\tjail apply failed\n"); _exit(1); }
+}
+HOST_RT_EOF
+echo "pure_build: gcc oodar.c (no chs_rt.c)"
+gcc -c ${OODAC_GCC_OPT:--O2} -g0 -fno-ident "${OO_SSL_CFLAGS[@]}" -I"$OD" "$OD/oodar.c" -o "$TMP/oodar.o"
+gcc ${OODAC_GCC_OPT:--O2} -g0 -fno-ident -I"$OD" "${OO_SSL_CFLAGS[@]}" "$TMP/oodar.o" "$TMP/oodac_host_rt.c" "$TMP/all.c" \
   -frandom-seed=0 -Wl,--build-id=none -Wl,--strip-debug \
   -lm -ldl -lpthread "${OO_SSL_LIBS[@]}" -o "$OUT"
 chmod +x "$OUT"

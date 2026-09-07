@@ -192,7 +192,7 @@ pub fn c_emit_preamble() {
     println("long long oo_soa_layout(OoStr); long long oo_dod_layout(long long); long long oo_checkpoint(long long,long long); long long oo_rollback(long long);");
     println("OoResS oo_actor_restart(long long,long long); OoResS oo_otp_supervise(long long,long long);");
     println("OoResS oo_cap_rpc_send(long long,OoStr); OoResS oo_cap_rpc_recv(long long,OoStr);");
-    println("OoStr oo_read_stdin(void); OoResS oo_read_stdin_chunk(long long); OoStr oo_file_stamp(OoStr);");
+    println("OoStr oo_read_stdin(long long); OoResS oo_read_stdin_chunk(long long,long long); OoStr oo_file_stamp(long long,OoStr);");
     println("OoStr oo_str_macro_expand(OoStr); OoStr oo_str_ast_macro(OoStr);");
     println("long long oo_import_c(long long,OoStr); long long oo_ffi_gen(long long,OoStr); long long oo_lto_xlang_link(long long,OoStr,OoStr);");
     println("int oo_landlock_is_available(void); OoResS oo_landlock_restrict(long long,OoStr,OoStr);");

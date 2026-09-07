@@ -24,19 +24,19 @@ pub fn content_hash(s: String) -> String {
     return "L" + chars_len(s).to_string();
 }
 
-pub fn check_paths_listing(paths: List[String]) -> String {
+pub fn check_paths_listing(fs: &FsReadCap, paths: List[String]) -> String {
     let np = list_len(paths);
 let mut out: String = "";
 let mut i = 0;
 while i < np { let pth: String = list_get(paths, i);
-let st: String = oo_file_stamp(pth);
+let st: String = oo_file_stamp(fs, pth);
 out = out + pth + "\t" + st + "\n";
 i = i + 1;
 }
     return out;
 }
 
-pub fn check_listing_fresh(listing: String) -> Bool {
+pub fn check_listing_fresh(fs: &FsReadCap, listing: String) -> Bool {
     let n = bytes_len(listing);
 if n == 0 { return false;
 }
@@ -66,8 +66,8 @@ if n == 0 { return false;
                 }
                 let pth: String = str_slice(line, 0, tab);
                 let old: String = str_slice(line, tab + 1, ln);
-                let now: String = oo_file_stamp(pth);
-                if now == "0:0" {
+                let now: String = oo_file_stamp(fs, pth);
+                if now == "0:0" || now == "0:0:0" {
                     return false;
                 }
                 if now != old { return false;

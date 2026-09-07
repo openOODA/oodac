@@ -145,6 +145,7 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String) -> Int {
         env = type_env_put(env, "args", "slist");
         let mut mrk: String = "i32";
         if rk == "resi" { mrk = "resim"; }
+        if rk == "opti" || rk == "opts" { mrk = rk; }
         let mb: String = ll_emit_stmts(toks, p, n, mrk, env, 10);
         if ll_pterm(mb) == 0 { println("  ret i32 0"); }
         println("}");

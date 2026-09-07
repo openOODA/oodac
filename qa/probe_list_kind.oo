@@ -16,7 +16,7 @@ fn refuse_kind(p: &ProcessCap, fs_r: &FsReadCap, host: String, src: String, out:
         println("ERR\tcheck must fail\t" + src);
         process_exit(1);
     }
-    let ct: String = ca.val;
+    let ct: String = match ca { Ok(s) => s, Err(e) => e };
     if str_index_of(ct, "ERR") < 0 {
         println("ERR\tcheck silent\t" + src);
         process_exit(1);
@@ -26,7 +26,7 @@ fn refuse_kind(p: &ProcessCap, fs_r: &FsReadCap, host: String, src: String, out:
         println("ERR\tbuild must fail\t" + src);
         process_exit(1);
     }
-    let bt: String = ba.val;
+    let bt: String = match ba { Ok(s) => s, Err(e) => e };
     if str_index_of(bt, "ERR") < 0 {
         println("ERR\tbuild silent\t" + src);
         process_exit(1);

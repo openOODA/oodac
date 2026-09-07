@@ -105,7 +105,7 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
     let ck: Result[String, String] = sys_exec(sys, host, "check", path);
     if !ck.is_ok() {
         println("ERR\tbuild\tcheck failed");
-        let cmsg: String = ck.val;
+        let cmsg: String = match ck { Ok(s) => s, Err(e) => e };
         println(cmsg);
         process_exit(1);
     }
@@ -114,7 +114,7 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
         let em: Result[String, String] = sys_exec(sys, host, "emit-llvm", "--concat", path);
         if !em.is_ok() {
             println("ERR\tbuild\temit-llvm failed");
-            let emsg: String = em.val;
+            let emsg: String = match em { Ok(s) => s, Err(e) => e };
             println(emsg);
             process_exit(1);
         }
@@ -124,17 +124,17 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
             process_exit(1);
         }
         let obj: String = tmp_dir + "/oodar.o";
-        let co: Result[String, String] = sys_exec(sys, "/usr/bin/gcc", "-c", "-O2", "-g0", "-fno-ident", "-Doo_file_stamp=oo_file_stamp_oodar", "-I" + od, od + "/oodar.c", "-o", obj);
+        let co: Result[String, String] = sys_exec(sys, "/usr/bin/gcc", "-c", "-O2", "-g0", "-fno-ident", "-I" + od, od + "/oodar.c", "-o", obj);
         if !co.is_ok() {
             println("ERR\tbuild\toodar.o failed");
-            let ct: String = co.val;
+            let ct: String = match co { Ok(s) => s, Err(e) => e };
             println(ct);
             process_exit(1);
         }
         let r: Result[String, String] = sys_exec(sys, "/usr/bin/clang", "--no-default-config", "-O2", "-g0", "-fno-ident", "-Wno-override-module", "-I" + od, obj, hr, tmp_ll, "-frandom-seed=0", "-Wl,--build-id=none", "-Wl,--strip-debug", "-lm", "-ldl", "-lpthread", "-o", out);
         if !r.is_ok() {
             println("ERR\tbuild\tclang llvm failed");
-            let gtxt: String = r.val;
+            let gtxt: String = match r { Ok(s) => s, Err(e) => e };
             println(gtxt);
             process_exit(1);
         }
@@ -142,7 +142,7 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
         let em: Result[String, String] = sys_exec(sys, host, "emit-c", "--concat", path);
         if !em.is_ok() {
             println("ERR\tbuild\temit-c failed");
-            let emsg: String = em.val;
+            let emsg: String = match em { Ok(s) => s, Err(e) => e };
             println(emsg);
             process_exit(1);
         }
@@ -152,17 +152,17 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
             process_exit(1);
         }
         let obj: String = tmp_dir + "/oodar.o";
-        let co: Result[String, String] = sys_exec(sys, "/usr/bin/gcc", "-c", "-O2", "-g0", "-fno-ident", "-Doo_file_stamp=oo_file_stamp_oodar", "-I" + od, od + "/oodar.c", "-o", obj);
+        let co: Result[String, String] = sys_exec(sys, "/usr/bin/gcc", "-c", "-O2", "-g0", "-fno-ident", "-I" + od, od + "/oodar.c", "-o", obj);
         if !co.is_ok() {
             println("ERR\tbuild\toodar.o failed");
-            let ct: String = co.val;
+            let ct: String = match co { Ok(s) => s, Err(e) => e };
             println(ct);
             process_exit(1);
         }
         let r: Result[String, String] = sys_exec(sys, "/usr/bin/gcc", "-O2", "-g0", "-fno-ident", "-I" + od, obj, hr, tmp_c, "-frandom-seed=0", "-Wl,--build-id=none", "-Wl,--strip-debug", "-lm", "-ldl", "-lpthread", "-o", out);
         if !r.is_ok() {
             println("ERR\tbuild\tgcc failed");
-            let gtxt: String = r.val;
+            let gtxt: String = match r { Ok(s) => s, Err(e) => e };
             println(gtxt);
             process_exit(1);
         }

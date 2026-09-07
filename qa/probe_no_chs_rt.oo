@@ -1,0 +1,39 @@
+// # Probe: product build does not compile chs_rt.c
+//
+// Logline: oodac/runtime/chs_rt.c is absent. oodac build of a small main writes an ELF.
+//
+// Setup: ProcessCap + EnvCap + FsReadCap. Host is OODA_COMPILER.
+//
+// Beats:
+//   1. chs_rt.c is not in oodac/runtime or runtime.
+//   2. build probe_list_ok.oo succeeds.
+
+pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
+    let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
+    let host: String = match hr { Ok(s) => s, Err(_) => "" };
+    if host == "" {
+        println("ERR\tOODA_COMPILER required");
+        process_exit(1);
+    }
+    if path_exists(fs_r, "oodac/runtime/chs_rt.c") {
+        println("ERR\tchs_rt present oodac/runtime");
+        process_exit(1);
+    }
+    if path_exists(fs_r, "runtime/chs_rt.c") {
+        println("ERR\tchs_rt present runtime");
+        process_exit(1);
+    }
+    let out: String = ".ooda-cache/ooda-tmp/probe_no_chs.bin";
+    let br: Result[String, String] = sys_exec(p, host, "build", "oodac/qa/probe_list_ok.oo", "-o", out);
+    if br.is_err() {
+        println("ERR\tbuild without chs_rt");
+        let bt: String = match br { Ok(s) => s, Err(e) => e };
+        println(bt);
+        process_exit(1);
+    }
+    if !path_exists(fs_r, out) {
+        println("ERR\tELF missing");
+        process_exit(1);
+    }
+    println("OK");
+}

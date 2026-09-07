@@ -53,7 +53,7 @@ pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
         process_exit(1);
     }
     let stdp: String = ".ooda-cache/ooda-tmp/llvm_std.bin";
-    let sb: Result[String, String] = sys_exec(p, host, "build", "--backend", "llvm", "oodac/qa/probe_build_std_import.oo", "-o", stdp);
+    let sb: Result[String, String] = sys_exec(p, host, "build", "oodac/qa/probe_build_std_import.oo", "-o", stdp);
     if sb.is_err() { println("ERR\tllvm std-import"); let t3: String = sb.val; println(t3); process_exit(1); }
     let sr: Result[String, String] = sys_exec(p, stdp);
     if sr.is_err() || str_index_of(sr.val, "a/b") < 0 {

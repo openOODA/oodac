@@ -130,7 +130,7 @@ pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String, env
                 ssa = ll_ret_resi(v, ssa);
             } else if ret_kind == "void" {
                 println("  ret void");
-            } else if ret_kind == "i32" {
+            } else if ret_kind == "i32" || ret_kind == "opti" || ret_kind == "opts" {
                 println("  ret i32 0");
             } else if ll_pptr(v) != "" {
                 ssa = ssa + 1;

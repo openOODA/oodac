@@ -10,7 +10,7 @@
 //   3. ll_emit_stream_toks prints IR.
 
 import "lex/token_fmt.oo";
-import "ast/load_import.oo";
+import "check/check_collect.oo";
 import "types/typed_artifact.oo";
 import "emit/llvm/ANCHOR.oo";
 
@@ -37,7 +37,7 @@ fn ll_load_art(fs: &FsReadCap, dest: String) -> TypedArtifact {
 fn ll_toks_file(fs: &FsReadCap, path: String, src: String) -> List[String] {
     let auto: String = artifact_cache_path(artifact_sha(path, src));
     if !path_exists(fs, auto) {
-        println("ERR\tllvm\tno artifact; run check first");
+        println("ERR\tllvm\tno artifact; run check first: " + path);
         process_exit(1);
     }
     let art: TypedArtifact = ll_load_art(fs, auto);
@@ -60,12 +60,17 @@ pub fn run_emit_llvm(fs: &FsReadCap, env: &EnvCap, path: String, concat: Bool) {
         ll_emit_stream_toks(ll_toks_file(fs, path, src));
         return;
     }
-    let le: List[String] = load_expand(fs, path, list_new(), list_new());
-    let nle: Int = list_len(le);
+    let paths: List[String] = collect_module_paths(fs, path);
+    let nle: Int = list_len(paths);
     let mut toks: List[String] = list_new();
     let mut i: Int = 0;
-    while i < nle - 1 {
-        let p: String = list_get(le, i);
+    while i < nle {
+        let p: String = list_get(paths, i);
+        let pn0: Int = chars_len(p);
+        if pn0 >= 9 && str_slice(p, pn0 - 9, pn0) == "ANCHOR.oo" {
+            i = i + 1;
+            continue;
+        }
         let pr: Result[String, String] = read_file(fs, p);
         if pr.is_err() {
             println("ERR\tload\tunreadable file: " + p);

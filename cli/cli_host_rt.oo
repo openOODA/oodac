@@ -13,8 +13,7 @@ pub fn host_rt_c() -> String {
     let mut s: String = "#define _GNU_SOURCE 1\n";
     s = s + "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n";
     s = s + "#include <unistd.h>\n#include <limits.h>\n";
-    s = s + "#define oo_file_stamp oo_file_stamp_oodar\n#include \"oodar.h\"\n#undef oo_file_stamp\n";
-    s = s + "OoStr oo_file_stamp(OoStr path) { return oo_file_stamp_oodar(oo_cap_grant_fsread(), path); }\n";
+    s = s + "#include \"oodar.h\"\n";
     s = s + "static int g_tn, g_np, g_nm;\nstatic int g_marks[64];\n";
     s = s + "static char g_names[256][16];\n";
     s = s + "void oo_emit_tmp_reset(void) { g_tn = 0; g_np = 0; g_nm = 0; }\n";
@@ -60,6 +59,18 @@ pub fn host_rt_c() -> String {
     s = s + "  long long sys = oo_cap_grant_sys();\n";
     s = s + "  OoResS r = oo_landlock_restrict(sys, jail_str(rbuf), jail_str(wbuf));\n";
     s = s + "  if (!r.ok) { fprintf(stderr, \"ERR\\tlandlock\\tjail apply failed\\n\"); _exit(1); }\n";
+    s = s + "}\n";
+    s = s + "static OoResS oo_res_miss(const char *m) { OoResS r; r.ok = 0; r.val = oo_str_lit(m); return r; }\n";
+    s = s + "OoResS oo_sys_spawn(long long c, OoStr x) { (void)x; oo_cap_require_process(c, \"sys_spawn\"); return oo_res_miss(\"sys_spawn residual\"); }\n";
+    s = s + "OoResS oo_sys_wait(long long c, long long p) { (void)p; oo_cap_require_process(c, \"sys_wait\"); return oo_res_miss(\"sys_wait residual\"); }\n";
+    s = s + "OoResS oo_sys_kill(long long c, long long p, long long s) { (void)p; (void)s; oo_cap_require_process(c, \"sys_kill\"); return oo_res_miss(\"sys_kill residual\"); }\n";
+    s = s + "OoResS oo_sys_epoll_create(long long c, long long f) { (void)f; oo_cap_require_process(c, \"sys_epoll_create\"); return oo_res_miss(\"epoll residual\"); }\n";
+    s = s + "OoResS oo_sys_inotify_init(long long c) { oo_cap_require_process(c, \"sys_inotify_init\"); return oo_res_miss(\"inotify residual\"); }\n";
+    s = s + "OoResS oo_sys_prctl(long long c, long long o) { (void)o; oo_cap_require_process(c, \"sys_prctl\"); return oo_res_miss(\"prctl residual\"); }\n";
+    s = s + "OoResI oo_sys_exec_wait(long long c, OoStr cmd, OoSList a) { OoResI r; (void)cmd; (void)a; oo_cap_require_process(c, \"sys_exec_wait\"); r.ok = 0; r.val = 1; r.err = oo_str_lit(\"sys_exec_wait residual\"); return r; }\n";
+    s = s + "OoSList oo_slist_slice(OoSList l, long long lo, long long hi) {\n";
+    s = s + "  OoSList o = oo_slist_new(); if (lo < 0) lo = 0; if (hi > l.len) hi = l.len;\n";
+    s = s + "  long long i = lo; while (i < hi && l.data) { OoSList n = oo_slist_push(o, l.data[i]); oo_slist_release(o); o = n; i++; } return o;\n";
     s = s + "}\n";
     return s;
 }

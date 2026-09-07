@@ -26,7 +26,8 @@ pub fn main(p: &ProcessCap, env: &EnvCap) {
         println("ERR\tllvm must refuse Float");
         process_exit(1);
     }
-    if str_index_of(em.val, "unknown type") < 0 && str_index_of(em.val, "ERR\tllvm") < 0 {
+    let et: String = match em { Ok(s) => s, Err(e) => e };
+    if str_index_of(et, "unknown type") < 0 && str_index_of(et, "ERR\tllvm") < 0 {
         println("ERR\tmissing llvm type refuse");
         process_exit(1);
     }

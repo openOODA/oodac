@@ -28,7 +28,7 @@ pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
     let br: Result[String, String] = sys_exec(p, host, "build", "oodac/qa/probe_landlock_outside.oo", "-o", elf);
     if br.is_err() {
         println("ERR\tbuild landlock victim");
-        let bt: String = br.val;
+        let bt: String = match br { Ok(s) => s, Err(e) => e };
         println(bt);
         process_exit(1);
     }
@@ -49,7 +49,7 @@ pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
     let rr: Result[String, String] = sys_exec(p, elf);
     if rr.is_err() {
         println("ERR\tlandlock victim");
-        let et: String = rr.val;
+        let et: String = match rr { Ok(s) => s, Err(e) => e };
         println(et);
         process_exit(1);
     }

@@ -10,7 +10,7 @@
 //   3. Concat: load imports, tokenize each file, stream C.
 
 import "lex/token_fmt.oo";
-import "ast/load_import.oo";
+import "check/check_collect.oo";
 import "emit/c/c_emit.oo";
 import "types/typed_artifact.oo";
 
@@ -37,7 +37,7 @@ fn emit_load_art(fs: &FsReadCap, dest: String) -> TypedArtifact {
 fn emit_toks_for_file(fs: &FsReadCap, path: String, src: String) -> List[String] {
     let auto: String = artifact_cache_path(artifact_sha(path, src));
     if !path_exists(fs, auto) {
-        println("ERR\temit\tno artifact; run check first");
+        println("ERR\temit\tno artifact; run check first: " + path);
         process_exit(1);
     }
     let art: TypedArtifact = emit_load_art(fs, auto);
@@ -82,14 +82,19 @@ pub fn run_emit_c_family(fs: &FsReadCap, env: &EnvCap, cmd: String, path: String
         emit_c_one_tu(fs, path, m, is_plain, art_path);
         return;
     }
-    let le: List[String] = load_expand(fs, path, list_new(), list_new());
-    let nle: Int = list_len(le);
-    let src: String = list_get(le, nle - 1);
+    let paths: List[String] = collect_module_paths(fs, path);
+    let nle: Int = list_len(paths);
+    let er: Result[String, String] = read_file(fs, path);
+    if er.is_err() {
+        println("ERR\tload\tunreadable file: " + path);
+        process_exit(1);
+    }
+    let src: String = match er { Ok(s) => s, Err(_) => "" };
     let mut toks: List[String] = list_new();
     let mut seen: String = "\t";
     let mut i: Int = 0;
-    while i < nle - 1 {
-        let p: String = list_get(le, i);
+    while i < nle {
+        let p: String = list_get(paths, i);
         let pn: Int = chars_len(p);
         if pn >= 9 && str_slice(p, pn - 9, pn) == "ANCHOR.oo" {
             i = i + 1;
@@ -106,7 +111,7 @@ pub fn run_emit_c_family(fs: &FsReadCap, env: &EnvCap, cmd: String, path: String
             println("ERR\tload\tunreadable file: " + p);
             process_exit(1);
         }
-        let fsx: String = pr.val;
+        let fsx: String = match pr { Ok(s) => s, Err(_) => "" };
         toks = c_toks_append_file_at(toks, emit_toks_for_file(fs, p, fsx), p);
         i = i + 1;
     }
