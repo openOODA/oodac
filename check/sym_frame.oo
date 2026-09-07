@@ -76,7 +76,7 @@ pub fn c_frame_bind_borrow(tbl: FrameTable, name: String, ty_ast: String, c_ty: 
         while cur >= 0 {
             let vstr = list_get(tbl.frame_vars, cur);
             if vstr != "" {
-                let ls = str_split(vstr, "\n");
+                let ls: List[String] = str_split(vstr, "\n");
                 let mut i = list_len(ls) - 1;
                 while i >= 0 {
                     let cv = c_symvar_decode(list_get(ls, i));

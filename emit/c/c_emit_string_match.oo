@@ -1,0 +1,171 @@
+// # String literal match to C if/else via oo_str_eq
+//
+// Logline: Lowers match on String literal arms ("lit" => expr, _ => expr) to C string-equality chain for ty.oo enum-like dispatch.
+// Setup: toks on KW_MATCH; scrut is OoStr; arms are STRING or IDENT "_" with FATARROW and expr/block.
+// Beats:
+//   1. Emit scrut, chain oo_str_eq for literal arms, else for wildcard, handle blocks via c_block_arm_emit_value.
+//   2. Support let/assign/return via decl+has_ann+lty and scope env put.
+
+import "c_emit_env.oo";
+import "c_emit_helpers.oo";
+import "c_emit_ops.oo";
+import "c_emit_block_arm.oo";
+import "c_emit_arc_reassign.oo";
+
+pub fn c_emit_string_match_let(name: String, toks: List[String], pos: Int, n: Int, env: String, decl: Int, has_ann: Bool, lty: String) -> List[String] {
+    return c_emit_string_match_let_core(name, toks, pos, n, env, decl, has_ann, lty);
+}
+pub fn c_emit_string_match_stmt(toks: List[String], pos: Int, n: Int, env: String) -> List[String] {
+    let mut p: Int = pos + 1;
+    let pr: List[String] = c_emit_expr_c(toks, p, n, env);
+    p = parse_int(list_get(pr, 0));
+    let scrut: String = list_get(pr, 1);
+    if p >= n || c_tokk(toks, p) != "LBRACE" { println("ERR\tc_emit\tstring-match expected {"); process_exit(1); }
+    p = p + 1;
+    println("  {");
+    println("  OoStr __sm = " + scrut + ";");
+    let mut first: Bool = true;
+    let mut need_close: Int = 0;
+    while p < n && c_tokk(toks, p) != "RBRACE" {
+        let k: String = c_tokk(toks, p);
+        let t: String = c_tokt(toks, p);
+        let mut is_wild: Bool = false;
+        let mut lit: String = "";
+        if k == "STRING" { lit = t; p = p + 1; } else if k == "IDENT" && t == "_" { is_wild = true; p = p + 1; } else { println("ERR\tc_emit\tstring-match expected STRING or _"); process_exit(1); }
+        if p >= n || c_tokk(toks, p) != "FATARROW" { println("ERR\tc_emit\tstring-match expected =>"); process_exit(1); }
+        p = p + 1;
+        let mut arm_env: String = c_env_push_scope(env);
+        if is_wild {
+            if first { println("  {"); first = false; } else { println("  } else {"); }
+            need_close = need_close + 1;
+            if p < n && c_tokk(toks, p) == "LBRACE" {
+                let br: List[String] = c_emit_block(toks, p, n, arm_env);
+                p = parse_int(list_get(br, 0));
+                arm_env = c_emit_scope_exit(arm_env);
+            } else {
+                let st: List[String] = c_emit_stmt(toks, p, n, arm_env);
+                p = parse_int(list_get(st, 0));
+                arm_env = c_emit_scope_exit(arm_env);
+            }
+        } else {
+            if first { println("  if (oo_str_eq(__sm, oo_str_lit(" + lit + "))) {"); first = false; } else { println("  } else if (oo_str_eq(__sm, oo_str_lit(" + lit + "))) {"); }
+            need_close = need_close + 1;
+            if p < n && c_tokk(toks, p) == "LBRACE" {
+                let br: List[String] = c_emit_block(toks, p, n, arm_env);
+                p = parse_int(list_get(br, 0));
+                arm_env = c_emit_scope_exit(arm_env);
+            } else {
+                let st: List[String] = c_emit_stmt(toks, p, n, arm_env);
+                p = parse_int(list_get(st, 0));
+                arm_env = c_emit_scope_exit(arm_env);
+            }
+        }
+        p = c_match_skip_comma(toks, p, n);
+    }
+    if p < n && c_tokk(toks, p) == "RBRACE" { p = p + 1; }
+    let mut i: Int = 0;
+    while i < need_close { println("  }"); i = i + 1; }
+    println("  }");
+    return c_pack_pos_env(p, env);
+}
+pub fn c_emit_string_match_let_core(name: String, toks: List[String], pos: Int, n: Int, env: String, decl: Int, has_ann: Bool, lty: String) -> List[String] {
+    let mut p: Int = pos + 1;
+    let mut e: String = env;
+    let pr_m: List[String] = c_emit_expr_c(toks, p, n, e);
+    p = parse_int(list_get(pr_m, 0));
+    let scrut: String = list_get(pr_m, 1);
+    if p >= n || c_tokk(toks, p) != "LBRACE" { println("ERR\tc_emit\tstring-match expected {"); process_exit(1); }
+    p = p + 1;
+    if decl == 1 {
+        if has_ann { println("  " + lty + " " + name + ";");
+        } else { println("  OoStr " + name + ";"); }
+    }
+    println("  {");
+    println("  OoStr __sm = " + scrut + ";");
+    let mut first: Bool = true;
+    let mut need_close: Int = 0;
+    while p < n && c_tokk(toks, p) != "RBRACE" {
+        let k: String = c_tokk(toks, p);
+        let t: String = c_tokt(toks, p);
+        let mut is_wild: Bool = false;
+        let mut lit: String = "";
+        if k == "STRING" { lit = t; p = p + 1; } else if k == "IDENT" && t == "_" { is_wild = true; p = p + 1; } else { println("ERR\tc_emit\tstring-match expected STRING or _"); process_exit(1); }
+        if p >= n || c_tokk(toks, p) != "FATARROW" { println("ERR\tc_emit\tstring-match expected =>"); process_exit(1); }
+        p = p + 1;
+        if is_wild {
+            if first { println("  {"); first = false; } else { println("  } else {"); }
+            need_close = need_close + 1;
+            if p < n && c_tokk(toks, p) == "LBRACE" {
+                let split: List[String] = c_block_arm_split(toks, p, n);
+                let sk: String = list_get(split, 0);
+                let es: Int = parse_int(list_get(split, 1));
+                let rb: Int = parse_int(list_get(split, 2));
+                if sk == "unbalanced" {
+                    let br: List[String] = c_emit_block(toks, p, n, e);
+                    p = parse_int(list_get(br, 0));
+                } else if sk == "single" {
+                    oo_emit_tmp_enter();
+                    let pr: List[String] = c_emit_expr_c(toks, es, rb, e);
+                    p = parse_int(list_get(pr, 0));
+                    let mut ex: String = list_get(pr, 1);
+                    oo_emit_tmp_own(ex);
+                    if decl == 0 { c_emit_reassign_arc(name, ex, e); } else { println("    " + name + " = " + ex + ";"); }
+                    oo_emit_tmp_leave();
+                    if p < n && c_tokk(toks, p) == "RBRACE" { p = p + 1; }
+                } else {
+                    let _v: String = c_block_arm_emit_value(toks, p, es, rb, name, e);
+                    p = rb + 1;
+                }
+            } else {
+                oo_emit_tmp_enter();
+                let pr: List[String] = c_emit_expr_c(toks, p, n, e);
+                p = parse_int(list_get(pr, 0));
+                let mut ex: String = list_get(pr, 1);
+                oo_emit_tmp_own(ex);
+                if decl == 0 { c_emit_reassign_arc(name, ex, e); } else { println("    " + name + " = " + ex + ";"); }
+                oo_emit_tmp_leave();
+            }
+        } else {
+            if first { println("  if (oo_str_eq(__sm, oo_str_lit(" + lit + "))) {"); first = false; } else { println("  } else if (oo_str_eq(__sm, oo_str_lit(" + lit + "))) {"); }
+            need_close = need_close + 1;
+            if p < n && c_tokk(toks, p) == "LBRACE" {
+                let split: List[String] = c_block_arm_split(toks, p, n);
+                let sk: String = list_get(split, 0);
+                let es: Int = parse_int(list_get(split, 1));
+                let rb: Int = parse_int(list_get(split, 2));
+                if sk == "unbalanced" {
+                    let br: List[String] = c_emit_block(toks, p, n, e);
+                    p = parse_int(list_get(br, 0));
+                } else if sk == "single" {
+                    oo_emit_tmp_enter();
+                    let pr: List[String] = c_emit_expr_c(toks, es, rb, e);
+                    p = parse_int(list_get(pr, 0));
+                    let mut ex: String = list_get(pr, 1);
+                    oo_emit_tmp_own(ex);
+                    if decl == 0 { c_emit_reassign_arc(name, ex, e); } else { println("    " + name + " = " + ex + ";"); }
+                    oo_emit_tmp_leave();
+                    if p < n && c_tokk(toks, p) == "RBRACE" { p = p + 1; }
+                } else {
+                    let _v: String = c_block_arm_emit_value(toks, p, es, rb, name, e);
+                    p = rb + 1;
+                }
+            } else {
+                oo_emit_tmp_enter();
+                let pr: List[String] = c_emit_expr_c(toks, p, n, e);
+                p = parse_int(list_get(pr, 0));
+                let mut ex: String = list_get(pr, 1);
+                oo_emit_tmp_own(ex);
+                if decl == 0 { c_emit_reassign_arc(name, ex, e); } else { println("    " + name + " = " + ex + ";"); }
+                oo_emit_tmp_leave();
+            }
+        }
+        p = c_match_skip_comma(toks, p, n);
+    }
+    if p < n && c_tokk(toks, p) == "RBRACE" { p = p + 1; }
+    let mut i2: Int = 0;
+    while i2 < need_close { println("  }"); i2 = i2 + 1; }
+    println("  }");
+    if decl == 1 { e = c_env_put(e, name, "T"); if has_ann { e = c_env_put(e, "__ty__" + name, lty); } } else { e = c_env_put_last(e, name, "T"); }
+    if p < n && c_tokk(toks, p) == "SEMI" { p = p + 1; }
+    return c_pack_pos_env(p, e);
+}

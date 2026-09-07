@@ -43,6 +43,7 @@ import "c_emit_lower.oo";
 import "c_emit_match_kind.oo";
 import "c_emit_match_let.oo";
 import "c_emit_match_stmt.oo";
+import "c_emit_string_match.oo";
 import "c_emit_max_cycles.oo";
 import "c_emit_mono.oo";
 import "c_emit_netio.oo";
