@@ -154,7 +154,7 @@ pub fn is_sealed_ffi(name: String) -> Bool {
 // V2 granular 2026-08-12: accept all CAPS.oot 27 caps (CAP-G1 needs Http/Tcp/Udp/Bind).
 // Phase2-A: CompilerReadCap for LSP symbol table (minimal narrow, no supersede).
 pub fn is_cap_type(t: String) -> Bool {
-    return t == "NetCap" || t == "FsCap" || t == "FsReadCap" || t == "FsWriteCap" || t == "GpuCap" || t == "ThreadCap" || t == "SysCap" || t == "EnvCap" || t == "TimeCap" || t == "RandCap" || t == "AllocCap" || t == "MemCap" || t == "ArenaCap" || t == "UnsafeFFICap" || t == "FfiCap" || t == "HitlCap" || t == "AuditCap" || t == "SignCap" || t == "HttpCap" || t == "TcpCap" || t == "UdpCap" || t == "BindCap" || t == "ProcessCap" || t == "SyncCap" || t == "AudioCap" || t == "CameraCap" || t == "UsbCap" || t == "HidCap" || t == "WindowCap" || t == "FrameCap" || t == "CompilerReadCap" || t == "TlsCap";
+    return t == "NetCap" || t == "FsCap" || t == "FsReadCap" || t == "FsWriteCap" || t == "GpuCap" || t == "ThreadCap" || t == "SysCap" || t == "EnvCap" || t == "TimeCap" || t == "RandCap" || t == "AllocCap" || t == "MemCap" || t == "ArenaCap" || t == "UnsafeFFICap" || t == "FfiCap" || t == "HitlCap" || t == "AuditCap" || t == "SignCap" || t == "HttpCap" || t == "TcpCap" || t == "UdpCap" || t == "BindCap" || t == "ProcessCap" || t == "SyncCap" || t == "AudioCap" || t == "CameraCap" || t == "UsbCap" || t == "HidCap" || t == "WindowCap" || t == "FrameCap" || t == "CompilerReadCap" || t == "TlsCap" || t == "MetricsCap";
 }
 
 // F02 / Round 2.4: walk __alias__ chain so rebinds resolve to sealed name.
