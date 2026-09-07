@@ -5,6 +5,16 @@ on:
     branches: [main, phase-0-honest-ci]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      target_tag:
+        description: 'Specific release tag to target or rebuild (optional, e.g. v0.2.15)'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: write
 
 jobs:
   test:
@@ -154,8 +164,28 @@ jobs:
         run: |
           test -x oodac/bin/oodac_bin.core
           file oodac/bin/oodac_bin.core | grep -q 'ELF 64-bit'
+      - name: Stage hashed compiler asset
+        run: |
+          set -eu
+          mkdir -p dist
+          cp -L oodac/bin/oodac_bin.core dist/oodac-linux-x86_64
+          chmod +x dist/oodac-linux-x86_64
+          file dist/oodac-linux-x86_64 | grep -q 'ELF 64-bit'
+          (cd dist && sha256sum oodac-linux-x86_64 > oodac-linux-x86_64.sha256)
+          test -s dist/oodac-linux-x86_64.sha256
+          ls -lh dist/
+      - name: upload release assets
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets-linux-x86_64
+          path: dist/
+          if-no-files-found: error
   auto-release:
     needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    uses: openOODA/openOODA/.github/workflows/auto-release.yml@v1.0.6
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    uses: openOODA/openOODA/.github/workflows/auto-release.yml@main
     secrets: inherit
+    with:
+      artifact_pattern: 'release-assets-*'
+      target_tag: ${{ inputs.target_tag || '' }}
