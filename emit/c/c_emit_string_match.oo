@@ -48,7 +48,7 @@ pub fn c_emit_string_match_stmt(toks: List[String], pos: Int, n: Int, env: Strin
                 arm_env = c_emit_scope_exit(arm_env);
             }
         } else {
-            if first { println("  if (oo_str_eq(__sm, oo_str_lit(" + lit + "))) {"); first = false; } else { println("  } else if (oo_str_eq(__sm, oo_str_lit(" + lit + "))) {"); }
+            if first { println("  if (oo_str_eq(__sm, oo_str_lit(\"" + lit + "\"))) {"); first = false; } else { println("  } else if (oo_str_eq(__sm, oo_str_lit(\"" + lit + "\"))) {"); }
             need_close = need_close + 1;
             if p < n && c_tokk(toks, p) == "LBRACE" {
                 let br: List[String] = c_emit_block(toks, p, n, arm_env);
@@ -126,7 +126,7 @@ pub fn c_emit_string_match_let_core(name: String, toks: List[String], pos: Int, 
                 oo_emit_tmp_leave();
             }
         } else {
-            if first { println("  if (oo_str_eq(__sm, oo_str_lit(" + lit + "))) {"); first = false; } else { println("  } else if (oo_str_eq(__sm, oo_str_lit(" + lit + "))) {"); }
+            if first { println("  if (oo_str_eq(__sm, oo_str_lit(\"" + lit + "\"))) {"); first = false; } else { println("  } else if (oo_str_eq(__sm, oo_str_lit(\"" + lit + "\"))) {"); }
             need_close = need_close + 1;
             if p < n && c_tokk(toks, p) == "LBRACE" {
                 let split: List[String] = c_block_arm_split(toks, p, n);
