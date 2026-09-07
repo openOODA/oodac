@@ -1,13 +1,6 @@
-// # Lower match-let and match-assign to C
-//
-// Logline: Lowers name = match scrut { Ok/Some => … Err/None => … } to a C if/else that binds the payload and writes name.
-//
-// Setup: c_emit_expr_c, c_emit_block, c_env_get, c_env_put, c_env_put_last, c_emit_reassign_arc, c_match_skip_comma, c_match_rkind, c_block_arm_split, c_block_arm_emit_value, and c_pack_pos_env exist.
-//
-// Beats:
-//   1. Emit the scrutinee, pick V, R, or RI, require { then Ok or Some, and take the success bind.
-//   2. When decl is 1, declare name; emit if (__ml.ok) or != 0; bind typed payload; skip oo_str_to_int on RI; assign or emit block.
-//   3. Else bind Err/None, emit that expr or block, close braces, put I or T.
+// # Lower match-let to C (Result/Option + String literal arms)
+// Logline: Ok/Some/Err/None plus String "lit" arms via oo_str_eq.
+// Setup: c_emit_expr_c etc + string-match delegate.
 
 import "c_emit_env.oo";
 
@@ -21,6 +14,7 @@ import "c_emit_arc_reassign.oo";
 
 import "c_emit_result.oo";
 import "c_emit_block_arm.oo";
+import "c_emit_string_match.oo";
 pub fn c_emit_match_assign(name: String, toks: List[String], pos: Int, n: Int, env: String) -> List[String] {
     return c_emit_match_let_core(name, toks, pos, n, env, 0, false, "long long");
 }
@@ -47,6 +41,9 @@ pub fn c_emit_match_let_core(name: String, toks: List[String], pos: Int, n: Int,
         process_exit(1);
     }
     p = p + 1;
+    let mut ak: String = "";
+    if p < n { ak = c_tokk(toks, p); }
+    if ak == "STRING" { return c_emit_string_match_let(name, toks, pos, n, env, decl, has_ann, lty); }
     let mut arm1: String = "";
     if p < n { arm1 = c_tokt(toks, p); }
     if arm1 != "Ok" && arm1 != "Some" {

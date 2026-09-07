@@ -15,6 +15,7 @@ import "c_emit_helpers.oo";
 import "c_emit_arc.oo";
 import "c_emit_type_helpers.oo";
 import "c_emit_match_kind.oo";
+import "c_emit_string_match.oo";
 
 pub fn c_emit_match_stmt(toks: List[String], pos: Int, n: Int, env: String) -> List[String] {
     let mut p: Int = pos + 1;
@@ -23,6 +24,7 @@ pub fn c_emit_match_stmt(toks: List[String], pos: Int, n: Int, env: String) -> L
     let scrut: String = list_get(pr, 1);
     if p >= n || c_tokk(toks, p) != "LBRACE" { println("ERR\tc_emit\tmatch: expected {"); process_exit(1); }
     p = p + 1;
+    if p < n && c_tokk(toks, p) == "STRING" { return c_emit_string_match_stmt(toks, pos, n, env); }
     if p >= n || c_tokk(toks, p) != "IDENT" { println("ERR\tc_emit\tmatch: expected arm 1"); process_exit(1); }
     let arm1_tag: String = c_tokt(toks, p);
     p = p + 1;
