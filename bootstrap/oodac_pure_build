@@ -68,17 +68,8 @@ MAIN="$(oodac_abs "${ARGS[0]}")"
 OUT="$(oodac_abs "${ARGS[1]}")"
 
 if [[ -z "$SOVEREIGN_BACKEND" ]]; then
-  UNAME_M="$(uname -m 2>/dev/null || echo x86_64)"
-  UNAME_S="$(uname -s 2>/dev/null || echo Linux)"
-  # PERF: llvm via emit/llvm + clang -O2 is the default sovereign backend (rustc/Go/Zig steal).
-  # Direct native x86/aarch64 backends remain opt-in; C is the fallback legacy path.
-  if [[ "$UNAME_S" == "Darwin" ]]; then
-    SOVEREIGN_BACKEND="llvm"
-  elif [[ "$UNAME_M" == "aarch64" || "$UNAME_M" == "arm64" ]]; then
-    SOVEREIGN_BACKEND="llvm"
-  else
-    SOVEREIGN_BACKEND="llvm"
-  fi
+  # Product sovereign backend is llvm (clang -O2). C is --gcc. x86/aarch64/wasm are residual.
+  SOVEREIGN_BACKEND="llvm"
 fi
 OODAC_BIN="${OODAC_BIN:-$ROOT/bin/oodac_bin.core}"
 if [[ ! -x "$OODAC_BIN" ]]; then
@@ -524,7 +515,6 @@ if ! grep -q "static inline OoStr int_to_str" "$TMP/preamble.c"; then
 fi
 echo "OoStr oo_str_to_uppercase(OoStr); int oo_str_starts_with(OoStr,OoStr); int oo_str_ends_with(OoStr,OoStr);" >> "$TMP/preamble.c"
 echo "long long oo_str_index_of(OoStr,OoStr); OoStr oo_str_repeat(OoStr,long long);" >> "$TMP/preamble.c"
-echo "OoStr x86_emit_stream(OoStr); void x86_emit_linux64(OoSList);" >> "$TMP/preamble.c"
 if ! grep -q 'void oo_process_exit' "$TMP/preamble.c"; then
   echo "static inline void oo_process_exit(long long c) { exit((int)c); }" >> "$TMP/preamble.c"
 fi

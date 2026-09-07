@@ -2,7 +2,7 @@
 //
 // Logline: Convert Int to a decimal String without calling to_string (avoids oo_int_to_str recursion).
 //
-// Setup: Pure. Digits from a literal table. Used by AArch64 and x86 emitters and tc_drive.
+// Setup: Pure. Digits from a literal table. Used by C emit and tc_drive.
 //
 // Beats:
 //   1. Zero returns "0".

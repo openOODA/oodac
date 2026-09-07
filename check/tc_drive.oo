@@ -90,7 +90,7 @@ pub fn tc_check_fn(fn_node: String, sigs: String, arities: String) -> String {
     while si < ns { errs = errs_add(errs, tc_check_stmt(list_get_str(stmts, si), env)); si = si + 1; }
     if !(tail == "") {
         let tty: String = tc_expr_ty(tail, env); let rty: String = tc_env_get(env, "__ret__");
-        let bad: Bool = !(tty == "") && !(rty == "") && !(tty == rty) && !((tty == "TyInt") && (rty == "TyFloat")) && !((tty == "TyFloat") && (rty == "TyInt"));
+        let bad: Bool = !(tty == "") && !(rty == "") && !(tty == rty) && !((tty == "TyInt") && (rty == "TyFloat"));
         if bad { errs = errs_add(errs, mk_tc_error("", "0", "0", "ret_tail", "tail " + tty + " != ret " + rty)); }
     }
     return errs;
@@ -102,20 +102,20 @@ pub fn tc_check_stmt(stmt: String, env: String) -> String {
         let nm: String = list_get_str(a, 0); let dty: String = list_get_str(a, 1); let rhs: String = list_get_str(a, 2); let mut errs: String = "";
         if !(tc_env_get(env, nm) == "") { errs = errs_add(errs, mk_tc_error("", "0", "0", "dup_let", "name '" + nm + "' already bound")); }
         let rty: String = tc_expr_ty(rhs, env);
-        if !(rty == "") && !(dty == "") && !(rty == dty) && !((rty == "TyInt") && (dty == "TyFloat")) && !((rty == "TyFloat") && (dty == "TyInt")) { errs = errs_add(errs, mk_tc_error("", "0", "0", "let_assign", "rhs " + rty + " not assignable to " + dty)); }
+        if !(rty == "") && !(dty == "") && !(rty == dty) && !((rty == "TyInt") && (dty == "TyFloat")) { errs = errs_add(errs, mk_tc_error("", "0", "0", "let_assign", "rhs " + rty + " not assignable to " + dty)); }
         return errs_add(errs, tc_check_expr(rhs, env));
     }
     if (tag == "SAssign") {
         let lhs: String = list_get_str(a, 0); let rhs: String = list_get_str(a, 1);
         let lty: String = tc_expr_ty(lhs, env); let rty: String = tc_expr_ty(rhs, env); let mut errs: String = "";
         if (lty == "") { errs = errs_add(errs, mk_tc_error("", "0", "0", "undef_assign", "lhs not in env")); }
-        if !(rty == "") && !(lty == "") && !(rty == lty) && !((rty == "TyInt") && (lty == "TyFloat")) && !((rty == "TyFloat") && (lty == "TyInt")) { errs = errs_add(errs, mk_tc_error("", "0", "0", "assign_ty", "rhs " + rty + " not assignable to " + lty)); }
+        if !(rty == "") && !(lty == "") && !(rty == lty) && !((rty == "TyInt") && (lty == "TyFloat")) { errs = errs_add(errs, mk_tc_error("", "0", "0", "assign_ty", "rhs " + rty + " not assignable to " + lty)); }
         return errs_add(errs, tc_check_expr(rhs, env));
     }
     if (tag == "SReturn") {
         let expr: String = list_get_str(a, 0); let ret_ty: String = tc_env_get(env, "__ret__");
         let ety: String = tc_expr_ty(expr, env); let mut errs: String = tc_check_expr(expr, env);
-        if !(ety == "") && !(ret_ty == "") && !(ety == ret_ty) && !((ety == "TyInt") && (ret_ty == "TyFloat")) && !((ety == "TyFloat") && (ret_ty == "TyInt")) { errs = errs_add(errs, mk_tc_error("", "0", "0", "ret_ty", "return " + ety + " != fn ret " + ret_ty)); }
+        if !(ety == "") && !(ret_ty == "") && !(ety == ret_ty) && !((ety == "TyInt") && (ret_ty == "TyFloat")) { errs = errs_add(errs, mk_tc_error("", "0", "0", "ret_ty", "return " + ety + " != fn ret " + ret_ty)); }
         return errs;
     }
     if (tag == "SWhile") {
@@ -224,7 +224,7 @@ pub fn tc_expr_ty(expr: String, env: String) -> String {
         if (op == "+") || (op == "-") || (op == "*") || (op == "/") || (op == "%") {
             if (lt == "TyInt") && (rt == "TyInt") { return "TyInt"; }
             if (lt == "TyFloat") && (rt == "TyFloat") { return "TyFloat"; }
-            if ((lt == "TyInt") && (rt == "TyFloat")) || ((lt == "TyFloat") && (rt == "TyInt")) { return lt; }
+            if ((lt == "TyInt") && (rt == "TyFloat")) || ((lt == "TyFloat") && (rt == "TyInt")) { return "TyFloat"; }
             return "";
         }
         if (op == "==") || (op == "!=") || (op == "<") || (op == "<=") || (op == ">") || (op == ">=") {

@@ -69,13 +69,13 @@ pub fn smt_env_is_feasible(env: List[String]) -> Bool {
     }
     return true;
 }
-pub fn c_tokk(toks: List[String], i: Int) -> String {
+fn smt_tokk(toks: List[String], i: Int) -> String {
     if i >= list_len(toks) { return ""; }
     return field_at(list_get(toks, i), 0);
 }
-pub fn c_tokt(toks: List[String], i: Int) -> String {
+fn smt_tokt(toks: List[String], i: Int) -> String {
     if i >= list_len(toks) { return ""; }
-    return field_at(list_get(toks, i), 1);
+    return field_at(list_get(toks, i), 3);
 }
 pub fn tok_slice_eq(toks: List[String], p1: Int, e1: Int, p2: Int, e2: Int) -> Bool {
     let len1: Int = e1 - p1;
@@ -83,7 +83,7 @@ pub fn tok_slice_eq(toks: List[String], p1: Int, e1: Int, p2: Int, e2: Int) -> B
     if len1 != len2 { return false; }
     let mut i: Int = 0;
     while i < len1 {
-        if c_tokt(toks, p1 + i) != c_tokt(toks, p2 + i) || c_tokk(toks, p1 + i) != c_tokk(toks, p2 + i) { return false; }
+        if smt_tokt(toks, p1 + i) != smt_tokt(toks, p2 + i) || smt_tokk(toks, p1 + i) != smt_tokk(toks, p2 + i) { return false; }
         i = i + 1;
     }
     return true;
@@ -91,8 +91,8 @@ pub fn tok_slice_eq(toks: List[String], p1: Int, e1: Int, p2: Int, e2: Int) -> B
 pub fn smt_eval_prim(toks: List[String], pos: Int, end: Int, env: List[String]) -> PolyVal {
     if pos >= end { let res: PolyVal = PolyVal { pos: pos, inv: interval_bottom(), sign: sign_tag_bot() };
  return res; }
-    let k: String = c_tokk(toks, pos);
-    let v: String = c_tokt(toks, pos);
+    let k: String = smt_tokk(toks, pos);
+    let v: String = smt_tokt(toks, pos);
     if k == "INT" {
         let val: Int = parse_int(v);
         let res: PolyVal = PolyVal { pos: pos + 1, inv: interval_const(val), sign: sign_from_int(val) };
@@ -111,7 +111,7 @@ pub fn smt_eval_prim(toks: List[String], pos: Int, end: Int, env: List[String]) 
     if k == "LPAREN" {
         let inner: PolyVal = smt_eval_or_expr(toks, pos + 1, end, env);
         let mut p: Int = inner.pos;
-        if p < end && c_tokk(toks, p) == "RPAREN" { p = p + 1; }
+        if p < end && smt_tokk(toks, p) == "RPAREN" { p = p + 1; }
         let res: PolyVal = PolyVal { pos: p, inv: inner.inv, sign: inner.sign };
         return res;
     }
@@ -138,7 +138,7 @@ pub fn smt_eval_mul_expr(toks: List[String], pos: Int, end: Int, env: List[Strin
     let mut more: Bool = true;
     while more {
         if p >= end { more = false; }
-        else if c_tokk(toks, p) == "STAR" {
+        else if smt_tokk(toks, p) == "STAR" {
             let rhs_start: Int = p + 1;
             let right: PolyVal = smt_eval_prim(toks, rhs_start, end, env);
             p = right.pos;
@@ -165,12 +165,12 @@ pub fn smt_eval_add_expr(toks: List[String], pos: Int, end: Int, env: List[Strin
     let mut more: Bool = true;
     while more {
         if p >= end { more = false; }
-        else if c_tokk(toks, p) == "PLUS" {
+        else if smt_tokk(toks, p) == "PLUS" {
             let right: PolyVal = smt_eval_mul_expr(toks, p + 1, end, env);
             p = right.pos;
             cur_inv = interval_add(cur_inv, right.inv);
             cur_sign = sign_from_interval(cur_inv);
-        } else if c_tokk(toks, p) == "MINUS" {
+        } else if smt_tokk(toks, p) == "MINUS" {
             let right2: PolyVal = smt_eval_mul_expr(toks, p + 1, end, env);
             p = right2.pos;
             cur_inv = interval_sub(cur_inv, right2.inv);
@@ -184,7 +184,7 @@ pub fn smt_eval_cmp_expr(toks: List[String], pos: Int, end: Int, env: List[Strin
     let left: PolyVal = smt_eval_add_expr(toks, pos, end, env);
     let mut p: Int = left.pos;
     if p >= end { return left; }
-    let k: String = c_tokk(toks, p);
+    let k: String = smt_tokk(toks, p);
     if k == "EQEQ" || k == "NEQ" || k == "GT" || k == "LT" || k == "GTE" || k == "LTE" {
         let mut op: String = "==";
         if k == "NEQ" { op = "!="; } else if k == "GT" { op = ">"; } else if k == "LT" { op = "<"; } else if k == "GTE" { op = ">="; } else if k == "LTE" { op = "<="; }
@@ -202,12 +202,12 @@ pub fn smt_eval_cmp_expr(toks: List[String], pos: Int, end: Int, env: List[Strin
 pub fn smt_eval_and_expr(toks: List[String], pos: Int, end: Int, env: List[String]) -> PolyVal {
     let left: PolyVal = smt_eval_cmp_expr(toks, pos, end, env);
     let mut p: Int = left.pos;
-    if p >= end || c_tokk(toks, p) != "ANDAND" { return left; }
+    if p >= end || smt_tokk(toks, p) != "ANDAND" { return left; }
     let mut status: Int = left.sign;
     let mut more: Bool = true;
     while more {
         if p >= end { more = false; }
-        else if c_tokk(toks, p) == "ANDAND" {
+        else if smt_tokk(toks, p) == "ANDAND" {
             let right: PolyVal = smt_eval_cmp_expr(toks, p + 1, end, env);
             p = right.pos;
             let s2: Int = right.sign;
@@ -221,13 +221,13 @@ pub fn smt_eval_or_expr(toks: List[String], pos: Int, end: Int, env: List[String
     let left: PolyVal = smt_eval_and_expr(toks, pos, end, env);
     let mut p: Int = left.pos;
     if p >= end { return left; }
-    let k0: String = c_tokk(toks, p);
+    let k0: String = smt_tokk(toks, p);
     if k0 != "PIPEPIPE" && k0 != "OROR" { return left; }
     let mut status: Int = left.sign;
     let mut more: Bool = true;
     while more {
         if p >= end { more = false; }
-        else if c_tokk(toks, p) == "PIPEPIPE" || c_tokk(toks, p) == "OROR" {
+        else if smt_tokk(toks, p) == "PIPEPIPE" || smt_tokk(toks, p) == "OROR" {
             let right: PolyVal = smt_eval_and_expr(toks, p + 1, end, env);
             p = right.pos;
             let s2: Int = right.sign;

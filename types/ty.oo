@@ -8,13 +8,13 @@
 //   1. Constructors: ty_int, ty_float, ty_bool, ty_str, ty_unit, ty_list, ty_result, ty_name, ty_cap, ty_ref, ty_ref_mut (11 total).
 //   2. Tag accessors: ty_tag, ty_inner, ty_arg — structural access for tagged types.
 //   3. Equality: ty_eq on the tagged String.
-//   4. Assignability: ty_assignable — Int↔Float, ref-stripping, list covariance, Result unwrap.
-//   5. Coercion: ty_coerce — emit-time C cast (replaces c_emit_call_ty.oo:5-101 if-lists).
+//   4. Assignability: ty_assignable — Int→Float only, ref-stripping, list covariance, Result unwrap.
+//   5. Coercion: ty_coerce — emit-time C cast; unknown pair refuses.
 //   6. C mapping: ty_to_c — TyInt→long long, TyFloat→double, TyBool→int, TyStr→OoStr, TyList→OoIList, TyResult→OoResS, TyName(n)→n, TyRef→long long.
 //   7. Inference: ty_infer_lit — bool/int/float/str from literal token.
 //   8. Unification: ty_unify — Float>Int subsumption; Result/Option unwrap; ref stripping.
 //
-// Notes: ≤ 256 lines; only `.oo`/`.oot`; ASD-STE100. All functions are data-only (no c_emit_*.oo calls per Phase A rule, audit/green/c_emit_refactor_phase_a.oot:84). Coercion defaults to long long when in doubt (matches c_emit default in c_emit_call_ty.oo:5-101 if-lists).
+// Notes: ≤ 256 lines; only `.oo`/`.oot`; ASD-STE100. All functions are data-only (no c_emit_*.oo calls per Phase A rule). Coercion refuses unknown pairs.
 
 // Type constants: F32x8 = 14, F64x4 = 15 (kept as comments for reference).
 
@@ -111,13 +111,12 @@ pub fn ty_eq(a: String, b: String) -> Bool {
     return (a == b);
 }
 
-// Is `from` assignable to `to`? Identity + Int↔Float + ref-strip + list covariance + Result unwrap.
+// Is `from` assignable to `to`? Identity + Int→Float (not Float→Int) + ref-strip + list covariance + Result unwrap.
 // Enum-like: match on ty_tag(from) for exhaustive destructuring (step toward Ty enum).
 pub fn ty_assignable(to: String, from: String) -> Bool {
     if (to == from) { return true; }
     if (to == "TyF32x8" && from == "f32x8") || (to == "f32x8" && from == "TyF32x8") { return true; }
     if (to == "TyF64x4" && from == "f64x4") || (to == "f64x4" && from == "TyF64x4") { return true; }
-    if (to == "TyInt") && (from == "TyFloat") { return true; }
     if (to == "TyFloat") && (from == "TyInt") { return true; }
     return match ty_tag(from) {
         "TyRef" => ty_assignable(to, ty_arg(from, 0)),
@@ -136,10 +135,9 @@ pub fn ty_coerce(val: String, from: String, to: String) -> String {
     if (from == "TyInt") && (to == "TyFloat") {
         return "((double)(" + val + "))";
     }
-    if (from == "TyFloat") && (to == "TyInt") {
-        return "((long long)(" + val + "))";
-    }
-    return "((long long)(" + val + "))";
+    println("ERR\tty\tno coerce " + from + " -> " + to);
+    process_exit(1);
+    return val;
 }
 
 // Map an oo type to its C type representation. Enum-like: exhaustive match on primitives then tag dispatch.

@@ -84,6 +84,13 @@ jobs:
           test "$x86_rc" -eq 2
           test "$a64_rc" -eq 2
           test "$rom_rc" -eq 2
+          echo "=== flags-only ==="
+          set +e
+          "$HOST" --backend c
+          fo_rc=$?
+          set -e
+          echo "fo_rc=$fo_rc"
+          test "$fo_rc" -eq 2
           echo "=== cap sealed ==="
           set +e
           "$HOST" check oodac/qa/probe_cap_sealed.oo

@@ -2,12 +2,27 @@
 //
 // Logline: `oodac --backend c` with no command and no path must print usage and exit 2.
 //
-// Setup: Shipped bin/oodac. Old bug compiled test.oo. This file is not that default.
+// Setup: ProcessCap + EnvCap. Host is OODA_COMPILER. This file is not a default compile target.
 //
 // Beats:
-//   1. Invoke oodac with only --backend c.
-//   2. Observe usage on stdout and exit 2. No ELF, no test.oo.
+//   1. Invoke host with only --backend c.
+//   2. Observe non-zero exit. No ELF.
 
 pub fn probe_flags_only_sentinel() -> String {
     return "flags-only-must-not-compile-this";
+}
+
+pub fn main(p: &ProcessCap, env: &EnvCap) {
+    let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
+    let host: String = match hr { Ok(s) => s, Err(_) => "" };
+    if host == "" {
+        println("ERR\tOODA_COMPILER required");
+        process_exit(1);
+    }
+    let r: Result[String, String] = sys_exec(p, host, "--backend", "c");
+    if r.is_ok() {
+        println("ERR\tflags-only must exit 2");
+        process_exit(1);
+    }
+    println("OK");
 }

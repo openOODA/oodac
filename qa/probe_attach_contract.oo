@@ -46,6 +46,18 @@ pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
         println("ERR\temit/ANCHOR missing emit_backend");
         process_exit(1);
     }
+    let c1r: Result[String, String] = read_file(fs_r, "oodac/cli/cli_emit.oo");
+    let c2r: Result[String, String] = read_file(fs_r, "oodac/cli/cli_emit_llvm.oo");
+    if c1r.is_err() || c2r.is_err() {
+        println("ERR\tunreadable cli emit");
+        process_exit(1);
+    }
+    let c1: String = match c1r { Ok(s) => s, Err(_) => "" };
+    let c2: String = match c2r { Ok(s) => s, Err(_) => "" };
+    if str_index_of(c1, "emit_backend") < 0 || str_index_of(c2, "emit_backend") < 0 {
+        println("ERR\temit_backend not wired from cli emit");
+        process_exit(1);
+    }
     let wr: Result[String, String] = sys_exec(p, host, "build", "oodac/qa/probe_list_ok.oo", "--backend", "wasm");
     if wr.is_ok() {
         println("ERR\tbackend wasm must stay residual");
