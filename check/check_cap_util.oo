@@ -15,17 +15,20 @@ import "check_cap_grant.oo";
 
 // CAP-G1 Path-A: preferred Cap kind for sealed net op (not always NetCap).
 // HttpCap: fetch/http_get/net_get/downloadData/query_remote_api/net_connect
-// TcpCap:  tcp_connect/tcp_write/tcp_read/tcp_close/tls_connect
+// TcpCap:  tcp_connect/tcp_write/tcp_read/tcp_close/tcp_accept
+// TlsCap:  tls_connect (attenuated child of TcpCap via oo_cap_attenuate_v2 Rule 2)
 // BindCap: tcp_bind
 // UdpCap:  bind_udp/udp_recv/udp_send
 // NetCap:  sock_raw/raw_socket only (no soft granular)
-// No legacy supersede: callers must use the granular preferred kind (HttpCap/TcpCap/UdpCap/BindCap). &NetCap does NOT satisfy these.
+// No legacy supersede: callers must use the granular preferred kind (HttpCap/TcpCap/TlsCap/UdpCap/BindCap). &NetCap does NOT satisfy these.
+// TlsCap attenuation: &TlsCap is HMAC-derived from &TcpCap (parent_hmac||parent_rights||child_rights). TcpCap subsumes TlsCap is false; TlsCap is distinct child.
 pub fn sealed_net_kind_of(name: String) -> String {
     if name == "fetch" || name == "http_get" || name == "net_get" || name == "downloadData" || name == "query_remote_api" || name == "net_connect" { return "HttpCap";
 }
-    if name == "tcp_connect" || name == "tcp_write" || name == "tcp_read" || name == "tcp_close" || name == "tls_connect" || name == "tcp_accept" {
+    if name == "tcp_connect" || name == "tcp_write" || name == "tcp_read" || name == "tcp_close" || name == "tcp_accept" {
         return "TcpCap";
     }
+    if name == "tls_connect" { return "TlsCap"; }
     if name == "tcp_bind" { return "BindCap";
     }
     if name == "bind_udp" || name == "udp_recv" || name == "udp_send" { return "UdpCap";
@@ -151,7 +154,7 @@ pub fn is_sealed_ffi(name: String) -> Bool {
 // V2 granular 2026-08-12: accept all CAPS.oot 27 caps (CAP-G1 needs Http/Tcp/Udp/Bind).
 // Phase2-A: CompilerReadCap for LSP symbol table (minimal narrow, no supersede).
 pub fn is_cap_type(t: String) -> Bool {
-    return t == "NetCap" || t == "FsCap" || t == "FsReadCap" || t == "FsWriteCap" || t == "GpuCap" || t == "ThreadCap" || t == "SysCap" || t == "EnvCap" || t == "TimeCap" || t == "RandCap" || t == "AllocCap" || t == "MemCap" || t == "ArenaCap" || t == "UnsafeFFICap" || t == "FfiCap" || t == "HitlCap" || t == "AuditCap" || t == "SignCap" || t == "HttpCap" || t == "TcpCap" || t == "UdpCap" || t == "BindCap" || t == "ProcessCap" || t == "SyncCap" || t == "AudioCap" || t == "CameraCap" || t == "UsbCap" || t == "HidCap" || t == "WindowCap" || t == "FrameCap" || t == "CompilerReadCap";
+    return t == "NetCap" || t == "FsCap" || t == "FsReadCap" || t == "FsWriteCap" || t == "GpuCap" || t == "ThreadCap" || t == "SysCap" || t == "EnvCap" || t == "TimeCap" || t == "RandCap" || t == "AllocCap" || t == "MemCap" || t == "ArenaCap" || t == "UnsafeFFICap" || t == "FfiCap" || t == "HitlCap" || t == "AuditCap" || t == "SignCap" || t == "HttpCap" || t == "TcpCap" || t == "UdpCap" || t == "BindCap" || t == "ProcessCap" || t == "SyncCap" || t == "AudioCap" || t == "CameraCap" || t == "UsbCap" || t == "HidCap" || t == "WindowCap" || t == "FrameCap" || t == "CompilerReadCap" || t == "TlsCap";
 }
 
 // F02 / Round 2.4: walk __alias__ chain so rebinds resolve to sealed name.
