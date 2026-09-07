@@ -1,0 +1,8 @@
+// # oodac scripts
+//
+// Logline: Front door for in-repo .oo linters.
+//
+// Setup: Host rebuild lives in bootstrap/. These are .oo helpers.
+//
+// Beats:
+//   1. Mark scripts/ as a product directory.
