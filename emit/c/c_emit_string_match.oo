@@ -102,14 +102,8 @@ pub fn c_emit_string_match_let_core(name: String, toks: List[String], pos: Int, 
                 let es: Int = parse_int(list_get(split, 1));
                 let rb: Int = parse_int(list_get(split, 2));
                 if sk == "unbalanced" {
-                    if name == "__ret" || (pos > 0 && c_tokk(toks, pos-1) == "KW_RETURN") {
-                        let _v: String = c_block_arm_emit_value(toks, p, es, rb, "__ret_tmp", e);
-                        println("    return __ret_tmp;");
-                        p = rb + 1;
-                    } else {
-                        let br: List[String] = c_emit_block(toks, p, n, e);
-                        p = parse_int(list_get(br, 0));
-                    }
+                    let br: List[String] = c_emit_block(toks, p, n, e);
+                    p = parse_int(list_get(br, 0));
                 } else if sk == "single" {
                     oo_emit_tmp_enter();
                     let pr: List[String] = c_emit_expr_c(toks, es, rb, e);
@@ -147,14 +141,8 @@ pub fn c_emit_string_match_let_core(name: String, toks: List[String], pos: Int, 
                 let es: Int = parse_int(list_get(split, 1));
                 let rb: Int = parse_int(list_get(split, 2));
                 if sk == "unbalanced" {
-                    if name == "__ret" || (pos > 0 && c_tokk(toks, pos-1) == "KW_RETURN") {
-                        let _v: String = c_block_arm_emit_value(toks, p, es, rb, "__ret_tmp", e);
-                        println("    return __ret_tmp;");
-                        p = rb + 1;
-                    } else {
-                        let br: List[String] = c_emit_block(toks, p, n, e);
-                        p = parse_int(list_get(br, 0));
-                    }
+                    let br: List[String] = c_emit_block(toks, p, n, e);
+                    p = parse_int(list_get(br, 0));
                 } else if sk == "single" {
                     oo_emit_tmp_enter();
                     let pr: List[String] = c_emit_expr_c(toks, es, rb, e);
