@@ -86,7 +86,7 @@ pub fn c_frame_bind_borrow(tbl: FrameTable, name: String, ty_ast: String, c_ty: 
     let enc: String = c_symvar_encode(c_frame_var_borrow_new(name, ty_ast, c_ty, is_formal, is_borrow, borrow_root));
     let tbl_fvars: List[String] = tbl.frame_vars;
     let cur_v: String = list_get(tbl_fvars, cur_idx);
-    let new_v: String = if cur_v == "" { enc } else { cur_v + "\n" + enc };
+    let new_v: String = if cur_v == "" { enc + "" } else { cur_v + "\n" + enc };
     let mut fvars: List[String] = list_new();
     let nf: Int = list_len(tbl_fvars);
     let mut i: Int = 0;
