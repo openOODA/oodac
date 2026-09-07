@@ -1,0 +1,69 @@
+// # Scan tokens into artifact env and cap set
+//
+// Logline: Walk TSV token rows for &Cap names and colon type annotations. Shared names live in types/.
+//
+// Setup: field_at on token rows. Caps are IDENT after AMP. Env is name=type; bindings.
+//
+// Beats:
+//   1. Cap set is tab-wrapped names from AMP IDENT.
+//   2. Env records let/param IDENT after COLON until EQ SEMI RPAREN.
+//   3. Empty toks yield empty strings.
+
+import "lex/token_fmt.oo";
+import "types_core.oo";
+
+fn scan_ty_text(toks: List[String], pos0: Int, n: Int) -> String {
+    let mut out: String = "";
+    let mut p: Int = pos0;
+    while p < n {
+        let k: String = field_at(list_get(toks, p), 0);
+        if k == "EQ" || k == "SEMI" || k == "RPAREN" || k == "COMMA" || k == "LBRACE" {
+            return out;
+        }
+        out = out + field_at(list_get(toks, p), 3);
+        p = p + 1;
+    }
+    return out;
+}
+
+pub fn artifact_scan_caps(toks: List[String]) -> String {
+    let n: Int = list_len(toks);
+    let mut caps: String = "\t";
+    let mut i: Int = 0;
+    while i + 1 < n {
+        let k: String = field_at(list_get(toks, i), 0);
+        if k == "AMP" {
+            let k2: String = field_at(list_get(toks, i + 1), 0);
+            if k2 == "IDENT" {
+                let nm: String = field_at(list_get(toks, i + 1), 3);
+                let key: String = "\t" + nm + "\t";
+                if !caps.contains(key) {
+                    caps = caps + nm + "\t";
+                }
+            }
+        }
+        i = i + 1;
+    }
+    return caps;
+}
+
+pub fn artifact_scan_env(toks: List[String]) -> String {
+    let n: Int = list_len(toks);
+    let mut env: String = "";
+    let mut i: Int = 0;
+    while i + 2 < n {
+        let k: String = field_at(list_get(toks, i), 0);
+        if k == "IDENT" {
+            let k1: String = field_at(list_get(toks, i + 1), 0);
+            if k1 == "COLON" {
+                let nm: String = field_at(list_get(toks, i), 3);
+                let ty: String = scan_ty_text(toks, i + 2, n);
+                if chars_len(nm) > 0 && chars_len(ty) > 0 {
+                    env = type_env_put(env, nm, ty);
+                }
+            }
+        }
+        i = i + 1;
+    }
+    return env;
+}

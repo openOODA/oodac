@@ -1,12 +1,13 @@
-# C-path only — not a product backend
+# Attach contract — C is the reference backend
 
-Logline: x86 silent-miscompile notes are historical. Product oodac is the C backend. This file is not a live emit-x86 plan.
+File: oodac/docs/silent-miscompile-prevention.oot
 
-Setup: Other backends attach only after C check is the front door of build and there is no known C silent-wrong ELF.
+C remains the reference ISA. `oodac check` is the front door of `oodac build`. A check-fail source must not ship an ELF.
 
-Beats:
-  1. Product `--backend` accepts `c` only. Residual backends exit 2.
-  2. Do not add `x86_emit_*.oo` as a success path.
-  3. C lowering must fail closed rather than emit a lying ELF.
+A new `--backend` is allowed only as a second consumer of the typed artifact (tokens + type env + cap set + source coords) that check writes. That backend lives in `emit/<name>/`. It imports `types/` and the artifact. It does not import `emit/c/` lowering.
 
-Status: not a product backend. C path only.
+`--backend llvm` is a product arm: `emit/llvm/` consumes the typed artifact and clang links oodar.c plus host_rt. Residual names (wasm, x86) exit 2.
+
+C lowering must fail closed rather than emit a lying ELF. GNU statement-expr, `__typeof__`, and hardcoded Result defaults are silent-wrong. The unique C bar is the hostile probe a new backend must also pass: cap-sealed, List/Option/Result kinds, landlock, std-import, tokenize-once artifact mutate, four product mains.
+
+Status: C is the reference. Attach is open. Residual backends are not product.

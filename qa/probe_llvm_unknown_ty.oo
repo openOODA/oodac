@@ -1,0 +1,18 @@
+// # Probe: llvm refuses an unmapped type
+//
+// Logline: emit-llvm of a Float-typed let must ERR unknown type, not lower to i64.
+//
+// Setup: ProcessCap + EnvCap. Host is OODA_COMPILER. Victim is this file after check.
+//
+// Beats:
+//   1. check of this file is OK.
+//   2. emit-llvm --concat exits nonzero.
+//   3. Diagnostic names unknown type.
+
+fn takes(x: Float) -> Float {
+    return x;
+}
+
+pub fn main() {
+    takes(1.0);
+}

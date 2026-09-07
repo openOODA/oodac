@@ -1,0 +1,196 @@
+// # LLVM function emit
+//
+// Logline: Emit main and named fns with real param types. Cap formals grant in main.
+//
+// Setup: Lists use sret/byval. Main is i32. Result main returns 0/1.
+//
+// Beats:
+//   1. Parse name, params, optional arrow type into a sig string.
+//   2. main grants caps. Formals copy into %v_name allocas.
+//   3. Body via ll_emit_stmts.
+
+import "ll_tok.oo";
+import "ll_ty.oo";
+import "ll_stmt.oo";
+import "types/types_core.oo";
+
+pub fn ll_fn_name_at(toks: List[String], pos: Int, n: Int) -> String {
+    let mut p: Int = pos;
+    if p < n && ll_k(toks, p) == "KW_PUB" { p = p + 1; }
+    if p < n && ll_k(toks, p) == "KW_FN" { p = p + 1; }
+    if p < n && ll_k(toks, p) == "IDENT" { return ll_t(toks, p); }
+    return "";
+}
+
+pub fn ll_parse_sig(toks: List[String], pos: Int, n: Int) -> String {
+    let mut p: Int = pos;
+    if ll_k(toks, p) == "KW_PUB" { p = p + 1; }
+    if ll_k(toks, p) != "KW_FN" { return ""; }
+    p = p + 1;
+    let name: String = ll_t(toks, p);
+    p = p + 1;
+    if p < n && ll_k(toks, p) == "LPAREN" { p = p + 1; }
+    let mut aks: String = "";
+    while p < n && ll_k(toks, p) != "RPAREN" {
+        if ll_k(toks, p) == "COMMA" { p = p + 1; continue; }
+        if ll_k(toks, p) == "IDENT" {
+            p = p + 1;
+            if p < n && ll_k(toks, p) == "COLON" {
+                p = p + 1;
+                let k: String = ll_ty_at(toks, p, n);
+                if aks != "" { aks = aks + ","; }
+                aks = aks + k;
+                p = ll_skip_type(toks, p, n);
+            }
+        } else {
+            p = p + 1;
+        }
+    }
+    if p < n && ll_k(toks, p) == "RPAREN" { p = p + 1; }
+    let mut rk: String = "void";
+    if p < n && ll_k(toks, p) == "ARROW" {
+        p = p + 1;
+        rk = ll_ty_at(toks, p, n);
+    }
+    if name == "main" { rk = "i32"; }
+    return name + "=" + aks + ">" + rk;
+}
+
+pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String) -> Int {
+    let mut p: Int = pos;
+    if ll_k(toks, p) == "KW_PUB" { p = p + 1; }
+    if ll_k(toks, p) != "KW_FN" { return ll_skip_fn(toks, pos, n); }
+    p = p + 1;
+    let name: String = ll_t(toks, p);
+    p = p + 1;
+    if p < n && ll_k(toks, p) == "LPAREN" { p = p + 1; }
+    let mut env: String = fenv;
+    let mut caps: String = "";
+    let mut form: String = "";
+    let mut plist: String = "";
+    while p < n && ll_k(toks, p) != "RPAREN" {
+        if ll_k(toks, p) == "COMMA" { p = p + 1; continue; }
+        if ll_k(toks, p) == "IDENT" {
+            let pn: String = ll_t(toks, p);
+            p = p + 1;
+            if p < n && ll_k(toks, p) == "COLON" {
+                p = p + 1;
+                let cn: String = ll_peek_cap_name(toks, p, n);
+                let g: String = ll_cap_grant(cn);
+                let k: String = ll_ty_at(toks, p, n);
+                env = type_env_put(env, pn, k);
+                if g != "" { caps = caps + pn + "=" + g + ";"; }
+                if form != "" { form = form + "\t"; }
+                form = form + pn + ":" + k;
+                if name != "main" {
+                    if plist != "" { plist = plist + ", "; }
+                    plist = plist + ll_pass(k) + " %p_" + pn;
+                }
+                p = ll_skip_type(toks, p, n);
+            }
+        } else {
+            p = p + 1;
+        }
+    }
+    if p < n && ll_k(toks, p) == "RPAREN" { p = p + 1; }
+    let mut rk: String = "void";
+    if p < n && ll_k(toks, p) == "ARROW" {
+        p = p + 1;
+        rk = ll_ty_at(toks, p, n);
+        p = ll_skip_type(toks, p, n);
+    }
+    while p < n && ll_k(toks, p) != "LBRACE" {
+        if ll_k(toks, p) == "SEMI" { return p + 1; }
+        p = p + 1;
+    }
+    if p >= n { return p; }
+    p = p + 1;
+    if name == "main" {
+        println("define i32 @main(i32 %argc, ptr %argv) {");
+        println("entry:");
+        let mut i: Int = 0;
+        let cn: Int = chars_len(caps);
+        while i < cn {
+            if char_at(caps, i) == "=" {
+                let mut s: Int = i;
+                while s > 0 && char_at(caps, s - 1) != ";" { s = s - 1; }
+                let nm: String = str_slice(caps, s, i);
+                let mut e: Int = i + 1;
+                while e < cn && char_at(caps, e) != ";" { e = e + 1; }
+                let suf: String = str_slice(caps, i + 1, e);
+                println("  " + ll_var(nm) + " = alloca i64, align 8");
+                println("  %g_" + nm + " = call i64 @oo_cap_grant_" + suf + "()");
+                println("  store i64 %g_" + nm + ", ptr " + ll_var(nm));
+            }
+            i = i + 1;
+        }
+        println("  %v_args = alloca %OoSList, align 8");
+        println("  call void @oo_slist_new(ptr sret(%OoSList) align 8 %v_args)");
+        println("  br label %args0");
+        println("args0:");
+        println("  %ai = phi i32 [ 1, %entry ], [ %ai2, %args1 ]");
+        println("  %acmp = icmp slt i32 %ai, %argc");
+        println("  br i1 %acmp, label %args1, label %args2");
+        println("args1:");
+        println("  %ap = getelementptr ptr, ptr %argv, i32 %ai");
+        println("  %astr = load ptr, ptr %ap");
+        println("  %alit = call { ptr, i64 } @oo_str_lit(ptr %astr)");
+        println("  %anew = alloca %OoSList, align 8");
+        println("  call void @oo_slist_push(ptr sret(%OoSList) align 8 %anew, ptr byval(%OoSList) align 8 %v_args, { ptr, i64 } %alit)");
+        println("  %acpy = load %OoSList, ptr %anew");
+        println("  store %OoSList %acpy, ptr %v_args");
+        println("  %ai2 = add i32 %ai, 1");
+        println("  br label %args0");
+        println("args2:");
+        env = type_env_put(env, "args", "slist");
+        let mut mrk: String = "i32";
+        if rk == "resi" { mrk = "resim"; }
+        if rk == "opti" || rk == "opts" { mrk = rk; }
+        let mb: String = ll_emit_stmts(toks, p, n, mrk, env, 10);
+        if ll_pterm(mb) == 0 { println("  ret i32 0"); }
+        println("}");
+        return ll_skip_fn(toks, pos, n);
+    }
+    if ll_is_mem(rk) {
+        if plist != "" {
+            println("define void @" + name + "(ptr sret(" + ll_ir_alloc(rk) + ") align 8 %ret, " + plist + ") {");
+        } else {
+            println("define void @" + name + "(ptr sret(" + ll_ir_alloc(rk) + ") align 8 %ret) {");
+        }
+    } else if rk == "void" {
+        println("define void @" + name + "(" + plist + ") {");
+    } else {
+        println("define " + ll_ir_val(rk) + " @" + name + "(" + plist + ") {");
+    }
+    let mut fi: Int = 0;
+    let fnn: Int = chars_len(form);
+    let mut start: Int = 0;
+    let mut ssa: Int = 1;
+    while fi <= fnn {
+        if fi == fnn || char_at(form, fi) == "\t" {
+            if fi > start {
+                let pair: String = str_slice(form, start, fi);
+                let col: Int = str_index_of(pair, ":");
+                let pn: String = str_slice(pair, 0, col);
+                let k: String = str_slice(pair, col + 1, chars_len(pair));
+                println("  " + ll_var(pn) + " = alloca " + ll_ir_alloc(k) + ", align 8");
+                if ll_is_mem(k) {
+                    ssa = ssa + 1;
+                    println("  " + ll_ssa(ssa) + " = load " + ll_ir_val(k) + ", ptr %p_" + pn);
+                    println("  store " + ll_ir_val(k) + " " + ll_ssa(ssa) + ", ptr " + ll_var(pn));
+                } else {
+                    println("  store " + ll_ir_val(k) + " %p_" + pn + ", ptr " + ll_var(pn));
+                }
+            }
+            start = fi + 1;
+        }
+        fi = fi + 1;
+    }
+    let fb: String = ll_emit_stmts(toks, p, n, rk, env, ssa + 1);
+    if ll_pterm(fb) == 0 {
+        if rk == "void" || ll_is_mem(rk) { println("  ret void"); }
+        else { println("  unreachable"); }
+    }
+    println("}");
+    return ll_skip_fn(toks, pos, n);
+}

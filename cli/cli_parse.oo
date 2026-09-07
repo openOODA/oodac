@@ -5,12 +5,12 @@
 // Setup: path_exists and file_size on FsReadCap. Usage matches dispatched commands.
 //
 // Beats:
-//   1. Accept --backend c, --json-errors, --plain, -o. Reject residual flags.
+//   1. Accept --backend c, --json-errors, --plain, --concat, --artifact, -o. Reject residual flags.
 //   2. Require a readable path under 64KiB.
-//   3. Pack cmd, path, out, backend, json-errors, plain.
+//   3. Pack cmd, path, out, backend, json-errors, plain, concat, artifact.
 
 pub fn parse_cli_argv(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, args: List[String]) -> List[String] {
-    let usage: String = "oodac: usage: tokens|check|build|emit-c|emit-protos|emit-bodies|emit-preamble <file>";
+    let usage: String = "oodac: usage: tokens|check|build|emit-c|emit-llvm|emit-protos|emit-bodies|emit-preamble <file>";
     if list_len(args) < 1 {
         println(usage);
         process_exit(2);
@@ -21,6 +21,8 @@ pub fn parse_cli_argv(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, arg
     let mut backend: String = "c";
     let mut json_errors: Bool = false;
     let mut is_plain: Bool = false;
+    let mut concat: Bool = false;
+    let mut artifact: String = "";
     let mut npos: Int = 0;
     let mut i: Int = 0;
     while i < list_len(args) {
@@ -31,7 +33,7 @@ pub fn parse_cli_argv(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, arg
                 process_exit(2);
             }
             let bv: String = list_get(args, i + 1);
-            if bv != "c" {
+            if bv != "c" && bv != "llvm" {
                 println("ERR\tbackend\tresidual: " + bv);
                 process_exit(2);
             }
@@ -43,6 +45,16 @@ pub fn parse_cli_argv(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, arg
         } else if a == "-g" || a == "--debug" || a == "--plain" {
             is_plain = true;
             i = i + 1;
+        } else if a == "--concat" {
+            concat = true;
+            i = i + 1;
+        } else if a == "--artifact" {
+            if i + 1 >= list_len(args) {
+                println("ERR\tartifact\tmissing value");
+                process_exit(2);
+            }
+            artifact = list_get(args, i + 1);
+            i = i + 2;
         } else if a == "-o" {
             if i + 1 >= list_len(args) {
                 println("ERR\t-o\tmissing value");
@@ -75,7 +87,7 @@ pub fn parse_cli_argv(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, arg
         println(usage);
         process_exit(2);
     }
-    if cmd != "tokens" && cmd != "check" && cmd != "build" && cmd != "emit-c" && cmd != "emit-protos" && cmd != "emit-bodies" && cmd != "emit-preamble" {
+    if cmd != "tokens" && cmd != "check" && cmd != "build" && cmd != "emit-c" && cmd != "emit-llvm" && cmd != "emit-protos" && cmd != "emit-bodies" && cmd != "emit-preamble" {
         println("ERR\tcmd\tresidual: " + cmd);
         process_exit(2);
     }
@@ -103,5 +115,9 @@ pub fn parse_cli_argv(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, arg
     let mut f_pl: String = "0";
     if is_plain { f_pl = "1"; }
     packed = list_push(packed, f_pl);
+    let mut f_cat: String = "0";
+    if concat { f_cat = "1"; }
+    packed = list_push(packed, f_cat);
+    packed = list_push(packed, artifact);
     return packed;
 }

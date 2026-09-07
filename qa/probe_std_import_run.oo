@@ -1,0 +1,49 @@
+// # Probe: build of std path_join prints a/b
+//
+// Logline: oodac build of probe_build_std_import.oo is native and the ELF prints a/b.
+//
+// Setup: ProcessCap + EnvCap + FsReadCap. Host is OODA_COMPILER. Polyrepo std/.
+//
+// Beats:
+//   1. build writes an ELF and prints OK_PURE_NATIVE.
+//   2. Running the ELF stdout contains a/b.
+
+pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
+    let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
+    let host: String = match hr { Ok(s) => s, Err(_) => "" };
+    if host == "" {
+        println("ERR\tOODA_COMPILER required");
+        process_exit(1);
+    }
+    let src: String = "oodac/qa/probe_build_std_import.oo";
+    let out: String = ".ooda-cache/ooda-tmp/probe_std_import.bin";
+    let br: Result[String, String] = sys_exec(p, host, "build", src, "-o", out);
+    if br.is_err() {
+        println("ERR\tstd-import build");
+        let bt: String = br.val;
+        println(bt);
+        process_exit(1);
+    }
+    let btxt: String = match br { Ok(s) => s, Err(_) => "" };
+    if str_index_of(btxt, "OK_PURE_NATIVE") < 0 {
+        println("ERR\tmissing OK_PURE_NATIVE");
+        println(btxt);
+        process_exit(1);
+    }
+    if !path_exists(fs_r, out) {
+        println("ERR\tELF missing");
+        process_exit(1);
+    }
+    let rr: Result[String, String] = sys_exec(p, out);
+    if rr.is_err() {
+        println("ERR\tstd-import run");
+        process_exit(1);
+    }
+    let ot: String = match rr { Ok(s) => s, Err(_) => "" };
+    if str_index_of(ot, "a/b") < 0 {
+        println("ERR\tstdout not a/b");
+        println(ot);
+        process_exit(1);
+    }
+    println("OK");
+}

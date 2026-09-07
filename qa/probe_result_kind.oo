@@ -22,6 +22,11 @@ pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
         println("ERR\tok_str check must fail");
         process_exit(1);
     }
+    let cat: String = match ca { Ok(s) => s, Err(e) => e };
+    if str_index_of(cat, "ERR") < 0 {
+        println("ERR\tok_str check silent");
+        process_exit(1);
+    }
     let ba: Result[String, String] = sys_exec(p, host, "build", a, "-o", oa);
     if ba.is_ok() {
         println("ERR\tok_str build must fail");

@@ -1,0 +1,248 @@
+// # LLVM expression lowering
+//
+// Logline: Walk primary, postfix method/call, unary, and binop tokens. Fail closed on unknown.
+//
+// Setup: Locals in env name=kind. Aggregates live in allocas. STRING globals are @.s<pos>.
+//
+// Beats:
+//   1. INT/STRING/IDENT load, user calls, and builtins.
+//   2. .to_string .is_some .is_none .is_ok .is_err methods.
+//   3. + == != and string concat via oo_str_concat / oo_str_eq.
+import "ll_tok.oo";
+import "ll_ty.oo";
+import "types/types_core.oo";
+import "ll_call.oo";
+import "ll_builtin.oo";
+import "ll_ctor.oo";
+pub fn ll_expr(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> String {
+    return ll_binop(toks, pos, n, ssa0, env);
+}
+fn ll_unary(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> String {
+    if pos < n && ll_k(toks, pos) == "BANG" {
+        let r: String = ll_unary(toks, pos + 1, n, ssa0, env);
+        let s: Int = ll_pssa(r) + 1;
+        println("  " + ll_ssa(s) + " = xor i1 " + ll_ssa(ll_pssa(r)) + ", true");
+        return ll_pack(ll_ppos(r), s, "i1", "");
+    }
+    if pos < n && ll_k(toks, pos) == "MINUS" {
+        let r: String = ll_unary(toks, pos + 1, n, ssa0, env);
+        let s: Int = ll_pssa(r) + 1;
+        println("  " + ll_ssa(s) + " = sub i64 0, " + ll_ssa(ll_pssa(r)));
+        return ll_pack(ll_ppos(r), s, "i64", "");
+    }
+    return ll_postfix(toks, pos, n, ssa0, env);
+}
+
+fn ll_postfix(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> String {
+    let mut r: String = ll_primary(toks, pos, n, ssa0, env);
+    let mut p: Int = ll_ppos(r);
+    let mut ssa: Int = ll_pssa(r);
+    while p < n && ll_k(toks, p) == "DOT" {
+        p = p + 1;
+        if p >= n || ll_k(toks, p) != "IDENT" {
+            println("ERR\tllvm\tmethod");
+            process_exit(1);
+        }
+        let m: String = ll_t(toks, p);
+        p = p + 1;
+        if p < n && ll_k(toks, p) == "LPAREN" { p = ll_skip_paren(toks, p, n); }
+        r = ll_method(ll_pk(r), ll_pssa(r), ll_pptr(r), m, ssa, env);
+        ssa = ll_pssa(r);
+        r = ll_pack(p, ssa, ll_pk(r), ll_pptr(r));
+    }
+    return r;
+}
+
+fn ll_cmp(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> String {
+    let mut r: String = ll_unary(toks, pos, n, ssa0, env);
+    let mut p: Int = ll_ppos(r);
+    while p < n {
+        let op: String = ll_k(toks, p);
+        if op != "PLUS" && op != "MINUS" && op != "EQEQ" && op != "NEQ" && op != "LT" && op != "GT" && op != "LTE" && op != "GTE" {
+            return r;
+        }
+        p = p + 1;
+        let rhs: String = ll_unary(toks, p, n, ll_pssa(r), env);
+        r = ll_apply_binop(op, r, rhs);
+        p = ll_ppos(rhs);
+        r = ll_pack(p, ll_pssa(r), ll_pk(r), ll_pptr(r));
+    }
+    return r;
+}
+
+fn ll_binop(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> String {
+    let mut r: String = ll_cmp(toks, pos, n, ssa0, env);
+    let mut p: Int = ll_ppos(r);
+    while p < n {
+        let op: String = ll_k(toks, p);
+        if op != "ANDAND" && op != "OROR" { return r; }
+        p = p + 1;
+        let ls: Int = ll_pssa(r);
+        let id: Int = ls;
+        if op == "ANDAND" {
+            println("  br i1 " + ll_ssa(ls) + ", label %ar" + id.to_string() + ", label %af" + id.to_string());
+            println("ar" + id.to_string() + ":");
+            let rhs: String = ll_cmp(toks, p, n, ls, env);
+            p = ll_ppos(rhs);
+            let rs: Int = ll_pssa(rhs);
+            println("  br label %ae" + id.to_string());
+            println("af" + id.to_string() + ":");
+            println("  br label %ae" + id.to_string());
+            println("ae" + id.to_string() + ":");
+            let ph: Int = rs + 1;
+            println("  " + ll_ssa(ph) + " = phi i1 [ " + ll_ssa(rs) + ", %ar" + id.to_string() + " ], [ false, %af" + id.to_string() + " ]");
+            r = ll_pack(p, ph, "i1", "");
+        } else {
+            println("  br i1 " + ll_ssa(ls) + ", label %ot" + id.to_string() + ", label %or" + id.to_string());
+            println("or" + id.to_string() + ":");
+            let rhs: String = ll_cmp(toks, p, n, ls, env);
+            p = ll_ppos(rhs);
+            let rs: Int = ll_pssa(rhs);
+            println("  br label %ae" + id.to_string());
+            println("ot" + id.to_string() + ":");
+            println("  br label %ae" + id.to_string());
+            println("ae" + id.to_string() + ":");
+            let ph: Int = rs + 1;
+            println("  " + ll_ssa(ph) + " = phi i1 [ true, %ot" + id.to_string() + " ], [ " + ll_ssa(rs) + ", %or" + id.to_string() + " ]");
+            r = ll_pack(p, ph, "i1", "");
+        }
+    }
+    return r;
+}
+fn ll_primary(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> String {
+    if pos >= n {
+        println("ERR\tllvm\texpr eof");
+        process_exit(1);
+    }
+    let k: String = ll_k(toks, pos);
+    if k == "INT" {
+        let s: Int = ssa0 + 1;
+        println("  " + ll_ssa(s) + " = add i64 0, " + ll_t(toks, pos));
+        return ll_pack(pos + 1, s, "i64", "");
+    }
+    if k == "KW_TRUE" || k == "KW_FALSE" {
+        let s: Int = ssa0 + 1;
+        let mut bit: String = "0";
+        if k == "KW_TRUE" { bit = "1"; }
+        println("  " + ll_ssa(s) + " = add i1 0, " + bit);
+        return ll_pack(pos + 1, s, "i1", "");
+    }
+    if k == "STRING" {
+        return ll_str_gep(toks, pos, ssa0);
+    }
+    if k == "LPAREN" {
+        let r: String = ll_expr(toks, pos + 1, n, ssa0, env);
+        let p: Int = ll_ppos(r);
+        if p < n && ll_k(toks, p) == "RPAREN" {
+            return ll_pack(p + 1, ll_pssa(r), ll_pk(r), ll_pptr(r));
+        }
+        return r;
+    }
+    if k == "KW_MATCH" {
+        return ll_match_expr(toks, pos, n, ssa0, env);
+    }
+    if k == "IDENT" {
+        let nm: String = ll_t(toks, pos);
+        if pos + 1 < n && ll_k(toks, pos + 1) == "LPAREN" {
+            return ll_call_at(toks, pos, n, ssa0, env);
+        }
+        if nm == "None" {
+            let c: String = ll_ctor("None", ll_pack(pos, ssa0, "i64", ""), ssa0, type_env_get(env, "__e__"));
+            return ll_pack(pos + 1, ll_pssa(c), ll_pk(c), ll_pptr(c));
+        }
+        let ld: String = ll_load_ident(nm, env, ssa0);
+        return ll_pack(pos + 1, ll_pssa(ld), ll_pk(ld), ll_pptr(ld));
+    }
+    println("ERR\tllvm\tunsupported expr " + k);
+    process_exit(1);
+    return ll_pack(pos, ssa0, "i64", "");
+}
+
+fn ll_call_at(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> String {
+    let nm: String = ll_t(toks, pos);
+    let mut p: Int = pos + 1;
+    if p >= n || ll_k(toks, p) != "LPAREN" {
+        println("ERR\tllvm\tcall");
+        process_exit(1);
+    }
+    p = p + 1;
+    let mut args: List[String] = list_new();
+    let mut ssa: Int = ssa0;
+    while p < n && ll_k(toks, p) != "RPAREN" {
+        if ll_k(toks, p) == "COMMA" { p = p + 1; continue; }
+        let a: String = ll_expr(toks, p, n, ssa, env);
+        args = list_push(args, a);
+        p = ll_ppos(a);
+        ssa = ll_pssa(a);
+    }
+    if p < n && ll_k(toks, p) == "RPAREN" { p = p + 1; }
+    let b: String = ll_builtin(nm, args, ssa, type_env_get(env, "__e__"));
+    if b != "" {
+        return ll_pack(p, ll_pssa(b), ll_pk(b), ll_pptr(b));
+    }
+    let sig: String = type_env_get(env, "__fn__" + nm);
+    if sig == "" {
+        println("ERR\tllvm\tunknown call " + nm);
+        process_exit(1);
+    }
+    let u: String = ll_user_call(nm, sig, args, ssa);
+    return ll_pack(p, ll_pssa(u), ll_pk(u), ll_pptr(u));
+}
+
+fn ll_arm_val(arm: String, ssa0: Int) -> Int {
+    if ll_pptr(arm) == "" { return ll_pssa(arm); }
+    let s: Int = ll_hw(ll_pssa(arm), ssa0) + 1;
+    println("  " + ll_ssa(s) + " = load " + ll_ir_val(ll_pk(arm)) + ", ptr " + ll_pptr(arm));
+    return s;
+}
+
+fn ll_match_expr(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> String {
+    let scr: String = ll_expr(toks, pos + 1, n, ssa0, env);
+    let mut p: Int = ll_ppos(scr);
+    if p < n && ll_k(toks, p) == "LBRACE" { p = p + 1; }
+    let sk: String = ll_pk(scr);
+    let sp: String = ll_ensure_ptr(scr, ll_pssa(scr));
+    let id: Int = ll_pssa(sp) + 1;
+    let cmp: Int = ll_match_tag(sk, ll_pptr(sp), ll_pssa(sp));
+    println("  br i1 " + ll_ssa(cmp) + ", label %mok" + id.to_string() + ", label %merr" + id.to_string());
+    while p < n && ll_k(toks, p) != "IDENT" { p = p + 1; }
+    if p < n { p = p + 1; }
+    if p < n && ll_k(toks, p) == "LPAREN" { p = p + 1; }
+    let mut bn: String = "_";
+    if p < n && ll_k(toks, p) == "IDENT" { bn = ll_t(toks, p); p = p + 1; }
+    while p < n && ll_k(toks, p) != "FATARROW" { p = p + 1; }
+    if p < n { p = p + 1; }
+    println("mok" + id.to_string() + ":");
+    let b: String = ll_match_bind(sk, ll_pptr(sp), bn, 1, id, cmp);
+    let mut env2: String = env;
+    if ll_pptr(b) != "" {
+        env2 = type_env_put(type_env_put(env, bn, ll_pk(b)), "__l__" + bn, ll_pptr(b));
+    }
+    let okarm: String = ll_expr(toks, p, n, ll_pssa(b) + 1, env2);
+    p = ll_ppos(okarm);
+    let oks: Int = ll_arm_val(okarm, ll_pssa(okarm));
+    if p < n && ll_k(toks, p) == "COMMA" { p = p + 1; }
+    println("  br label %mend" + id.to_string());
+    if p < n && ll_k(toks, p) == "IDENT" { p = p + 1; }
+    if p < n && ll_k(toks, p) == "LPAREN" { p = p + 1; }
+    let mut ebn: String = "_";
+    if p < n && ll_k(toks, p) == "IDENT" { ebn = ll_t(toks, p); p = p + 1; }
+    while p < n && ll_k(toks, p) != "FATARROW" { p = p + 1; }
+    if p < n { p = p + 1; }
+    println("merr" + id.to_string() + ":");
+    let eb: String = ll_match_bind(sk, ll_pptr(sp), ebn, 0, id, oks);
+    let mut env3: String = env;
+    if ll_pptr(eb) != "" {
+        env3 = type_env_put(type_env_put(env, ebn, ll_pk(eb)), "__l__" + ebn, ll_pptr(eb));
+    }
+    let erarm: String = ll_expr(toks, p, n, ll_pssa(eb) + 1, env3);
+    p = ll_ppos(erarm);
+    let ers: Int = ll_arm_val(erarm, ll_pssa(erarm));
+    if p < n && ll_k(toks, p) == "RBRACE" { p = p + 1; }
+    println("  br label %mend" + id.to_string());
+    println("mend" + id.to_string() + ":");
+    let ph: Int = ll_hw(oks, ers) + 1;
+    let pk: String = ll_pk(okarm);
+    println("  " + ll_ssa(ph) + " = phi " + ll_ir_val(pk) + " [ " + ll_ssa(oks) + ", %mok" + id.to_string() + " ], [ " + ll_ssa(ers) + ", %merr" + id.to_string() + " ]");
+    return ll_pack(p, ph, pk, "");
+}

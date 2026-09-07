@@ -1,0 +1,135 @@
+// # LLVM token row helpers
+//
+// Logline: Kind and text from TSV rows. Skip types, parens, braces. Pack expr results.
+//
+// Setup: field_at from lex. skip_balanced from types/token_search. parse_int for packed pos.
+//
+// Beats:
+//   1. ll_k and ll_t read kind and text.
+//   2. ll_skip_type walks IDENT List[T] AMP types.
+//   3. ll_pack holds pos, ssa, kind, and optional alloca ptr.
+
+import "lex/token_fmt.oo";
+import "lex/token_parse_int.oo";
+import "types/token_search.oo";
+
+pub fn ll_k(toks: List[String], i: Int) -> String {
+    if i < 0 || i >= list_len(toks) { return ""; }
+    return field_at(list_get(toks, i), 0);
+}
+
+pub fn ll_t(toks: List[String], i: Int) -> String {
+    if i < 0 || i >= list_len(toks) { return ""; }
+    return field_at(list_get(toks, i), 3);
+}
+
+pub fn ll_skip_type(toks: List[String], pos: Int, n: Int) -> Int {
+    let mut p: Int = pos;
+    if p < n && ll_k(toks, p) == "AMP" { p = p + 1; }
+    if p < n && ll_k(toks, p) == "KW_MUT" { p = p + 1; }
+    if p >= n { return p; }
+    if ll_k(toks, p) != "IDENT" { return p; }
+    p = p + 1;
+    if p < n && ll_k(toks, p) == "LBRACKET" {
+        let mut d: Int = 1;
+        p = p + 1;
+        while p < n && d > 0 {
+            let k: String = ll_k(toks, p);
+            if k == "LBRACKET" { d = d + 1; }
+            if k == "RBRACKET" { d = d - 1; }
+            p = p + 1;
+        }
+    }
+    return p;
+}
+
+pub fn ll_skip_paren(toks: List[String], pos: Int, n: Int) -> Int {
+    let mut p: Int = pos;
+    if p >= n || ll_k(toks, p) != "LPAREN" { return p; }
+    let mut d: Int = 0;
+    while p < n {
+        if ll_k(toks, p) == "LPAREN" { d = d + 1; }
+        if ll_k(toks, p) == "RPAREN" {
+            d = d - 1;
+            p = p + 1;
+            if d == 0 { return p; }
+        } else {
+            p = p + 1;
+        }
+    }
+    return p;
+}
+
+pub fn ll_skip_fn(toks: List[String], pos: Int, n: Int) -> Int {
+    let mut p: Int = pos;
+    if ll_k(toks, p) == "KW_PUB" { p = p + 1; }
+    if ll_k(toks, p) != "KW_FN" { return p + 1; }
+    p = p + 1;
+    if p < n && ll_k(toks, p) == "IDENT" { p = p + 1; }
+    while p < n && ll_k(toks, p) != "LBRACE" {
+        if ll_k(toks, p) == "SEMI" { return p + 1; }
+        p = p + 1;
+    }
+    if p < n && ll_k(toks, p) == "LBRACE" {
+        return skip_balanced(toks, p);
+    }
+    return p;
+}
+
+pub fn ll_pack(pos: Int, ssa: Int, kind: String, ptr: String) -> String {
+    return pos.to_string() + "\t" + ssa.to_string() + "\t" + kind + "\t" + ptr;
+}
+
+pub fn ll_ppos(r: String) -> Int {
+    return parse_int(field_at(r, 0));
+}
+
+pub fn ll_pssa(r: String) -> Int {
+    return parse_int(field_at(r, 1));
+}
+
+pub fn ll_pk(r: String) -> String {
+    return field_at(r, 2);
+}
+
+pub fn ll_pptr(r: String) -> String {
+    return field_at(r, 3);
+}
+
+pub fn ll_ssa(n: Int) -> String {
+    return "%t" + n.to_string();
+}
+
+pub fn ll_var(name: String) -> String {
+    return "%v_" + name;
+}
+
+pub fn ll_tmpa(n: Int) -> String {
+    return "%a" + n.to_string();
+}
+
+pub fn ll_hw(a: Int, b: Int) -> Int {
+    if a > b { return a; }
+    return b;
+}
+
+pub fn ll_pterm(r: String) -> Int {
+    if field_at(r, 4) == "1" { return 1; }
+    return 0;
+}
+
+pub fn ll_skip_to_rbrace(toks: List[String], pos: Int, n: Int) -> Int {
+    let mut p: Int = pos;
+    let mut d: Int = 0;
+    while p < n {
+        let k: String = ll_k(toks, p);
+        if k == "LBRACE" { d = d + 1; }
+        if k == "RBRACE" {
+            if d == 0 { return p; }
+            d = d - 1;
+        }
+        if k == "EOF" { return p; }
+        p = p + 1;
+    }
+    return p;
+}

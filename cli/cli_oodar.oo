@@ -1,0 +1,47 @@
+// # Resolve oodar and write the host runtime TU
+//
+// Logline: Find oodar/oodar.c. Write emit-tmp plus jail ctor next to generated C.
+//
+// Setup: Workspace has oodar/ beside oodac/. Host path is OODA_COMPILER.
+//
+// Beats:
+//   1. oodar_root fails closed when oodar.c is missing.
+//   2. write_host_rt writes oodac_host_rt.c under the jail tmp dir.
+
+import "cli_host_rt.oo";
+
+fn path_parent_oodar(p: String) -> String {
+    let n: Int = chars_len(p);
+    let mut i: Int = n;
+    while i > 0 {
+        i = i - 1;
+        if char_at(p, i) == "/" {
+            if i == 0 { return "/"; }
+            return str_slice(p, 0, i);
+        }
+    }
+    return ".";
+}
+
+pub fn oodar_root(fs_r: &FsReadCap, host: String) -> String {
+    if path_exists(fs_r, "oodar/oodar.c") { return "oodar"; }
+    if path_exists(fs_r, "../oodar/oodar.c") { return "../oodar"; }
+    let a: String = path_parent_oodar(host);
+    let b: String = path_parent_oodar(a);
+    let c: String = path_parent_oodar(b);
+    if path_exists(fs_r, c + "/oodar/oodar.c") { return c + "/oodar"; }
+    if path_exists(fs_r, b + "/oodar/oodar.c") { return b + "/oodar"; }
+    println("ERR\tbuild\toodar.c missing");
+    process_exit(1);
+    return "";
+}
+
+pub fn write_host_rt(fs_w: &FsWriteCap, tmp_dir: String) -> String {
+    let dest: String = tmp_dir + "/oodac_host_rt.c";
+    let wr: Result[Void, String] = write_file(fs_w, dest, host_rt_c());
+    if wr.is_err() {
+        println("ERR\tbuild\twrite host_rt failed");
+        process_exit(1);
+    }
+    return dest;
+}

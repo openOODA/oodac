@@ -1,0 +1,14 @@
+// # Artifact victim: one List[String] main
+//
+// Logline: Product check writes an artifact. Mutate String to Int in toks. emit-c must follow toks.
+//
+// Setup: No imports. list_new is a builtin. One String token in the type annotation.
+//
+// Beats:
+//   1. let xs is List[String].
+//   2. println the length.
+
+pub fn main() {
+    let mut xs: List[String] = list_new();
+    println(list_len(xs).to_string());
+}

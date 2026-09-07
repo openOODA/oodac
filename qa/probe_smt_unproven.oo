@@ -1,0 +1,19 @@
+// # Probe victim: ident requires must not check
+//
+// Logline: requires x > 0 is not proved and must fail closed.
+//
+// Setup: Well-typed Int fn except the unproven contract.
+//
+// Beats:
+//   1. check and build must ERR.
+//   2. No ELF.
+
+pub fn f(x: Int) -> Int
+    requires x > 0
+{
+    return x;
+}
+
+pub fn main() {
+    let _n: Int = f(1);
+}

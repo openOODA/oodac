@@ -19,6 +19,8 @@ import "ty_parse.oo";
 import "ty_mangle.oo";
 import "types_core.oo";
 import "token_typed.oo";
+import "typed_artifact.oo";
+import "artifact_scan.oo";
 import "str_escape.oo";
 import "token_search.oo";
 

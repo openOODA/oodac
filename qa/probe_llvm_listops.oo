@@ -1,0 +1,19 @@
+// # Probe: llvm list_get, list_push, list_slice
+//
+// Logline: Product llvm ELF prints 2 then b from list_get/slice/push.
+//
+// Setup: No caps. List[String] builtins.
+//
+// Beats:
+//   1. push a, b; get 1 is b.
+//   2. slice(1, 2) length is 1.
+
+pub fn main() {
+    let mut xs: List[String] = list_new();
+    xs = list_push(xs, "a");
+    xs = list_push(xs, "b");
+    println(list_len(xs).to_string());
+    println(list_get(xs, 1));
+    let ys: List[String] = list_slice(xs, 1, 2);
+    println(list_len(ys).to_string());
+}

@@ -1,12 +1,12 @@
-// # Probe: emit-c refuses rvalue & of a call
+// # Probe: emit-c refuses GNU rvalue & of a call
 //
-// Logline: Product emit-c of probe_amp_rvalue.oo must not print GNU __auto_type.
+// Logline: Product emit-c of probe_amp_rvalue.oo must not print GNU typeof or statement-expr.
 //
 // Setup: ProcessCap + EnvCap. Host is OODA_COMPILER.
 //
 // Beats:
 //   1. sys_exec host emit-c oodac/qa/probe_amp_rvalue.oo is Ok.
-//   2. Captured C has no __auto_type.
+//   2. Captured C has no __typeof__, __auto_type, or ({.
 
 pub fn main(p: &ProcessCap, env: &EnvCap) {
     let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
@@ -21,8 +21,16 @@ pub fn main(p: &ProcessCap, env: &EnvCap) {
         process_exit(1);
     }
     let txt: String = match r { Ok(s) => s, Err(_) => "" };
+    if str_index_of(txt, "__typeof__") >= 0 {
+        println("ERR\tGNU __typeof__ in emit-c");
+        process_exit(1);
+    }
     if str_index_of(txt, "__auto_type") >= 0 {
         println("ERR\tGNU __auto_type in emit-c");
+        process_exit(1);
+    }
+    if str_index_of(txt, "({") >= 0 {
+        println("ERR\tGNU statement-expr in emit-c");
         process_exit(1);
     }
     println("OK");

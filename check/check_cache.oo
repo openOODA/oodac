@@ -26,7 +26,7 @@ pub fn check_cache_ensure(fs: &FsReadCap, sys: &ProcessCap) {
     if path_exists(fs, root) {
         return;
     }
-    let r = sys_exec(sys, "mkdir", "-p", root);
+    let r = sys_exec(sys, "/usr/bin/mkdir", "-p", root);
     if r.is_err() {
         return;
     }
@@ -57,7 +57,7 @@ pub fn check_cache_put(fs: &FsWriteCap, sys: &ProcessCap, key: String) {
     }
     let p: String = check_cache_path(key);
     let root: String = check_cache_root();
-    let r = sys_exec(sys, "mkdir", "-p", root);
+    let r = sys_exec(sys, "/usr/bin/mkdir", "-p", root);
     if r.is_err() {
         return;
     }
@@ -74,7 +74,7 @@ pub fn check_cache_put_body(fs: &FsWriteCap, sys: &ProcessCap, key: String, body
     }
     let p: String = check_cache_path(key);
     let root: String = check_cache_root();
-    let r = sys_exec(sys, "mkdir", "-p", root);
+    let r = sys_exec(sys, "/usr/bin/mkdir", "-p", root);
     if r.is_err() {
         return;
     }
@@ -84,29 +84,29 @@ pub fn check_cache_put_body(fs: &FsWriteCap, sys: &ProcessCap, key: String, body
     }
 }
 
-pub fn check_cache_ident() -> String {
-    let st: String = oo_file_stamp("/proc/self/exe");
-if st == "0:0" { return "";
+pub fn check_cache_ident(fs: &FsReadCap) -> String {
+    let st: String = oo_file_stamp(fs, "/proc/self/exe");
+if st == "0:0" || st == "0:0:0" { return "";
 }
     return "ts5\nexe:" + st;
 }
 
-pub fn check_cache_mod_key(h: String) -> String {
-    let id: String = check_cache_ident();
+pub fn check_cache_mod_key(fs: &FsReadCap, h: String) -> String {
+    let id: String = check_cache_ident(fs);
 if chars_len(id) == 0 { return "";
 }
     return "m_" + content_hash(id + "\n" + h);
 }
 
-pub fn check_cache_tree_key(h: String) -> String {
-    let id: String = check_cache_ident();
+pub fn check_cache_tree_key(fs: &FsReadCap, h: String) -> String {
+    let id: String = check_cache_ident(fs);
 if chars_len(id) == 0 { return "";
 }
     return "t_ts5_" + content_hash(id + "\n" + h);
 }
 
-pub fn check_cache_graph_key(root: String) -> String {
-    let id: String = check_cache_ident();
+pub fn check_cache_graph_key(fs: &FsReadCap, root: String) -> String {
+    let id: String = check_cache_ident(fs);
 if chars_len(id) == 0 { return "";
 }
     return "g_" + content_hash(id + "\n" + root);

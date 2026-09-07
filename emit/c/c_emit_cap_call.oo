@@ -1,0 +1,131 @@
+// # Lower sealed cap calls to C
+//
+// Logline: Map read_file, write_file, env, time, alloc, and net free names to oo_* when a0 is a cap ident.
+//
+// Setup: First arg must be a cap IDENT. Empty return means the caller keeps the default call.
+//
+// Beats:
+//   1. Fs and env names require a cap ident then emit oo_read_file and kin.
+//   2. Time, rand, and alloc names do the same.
+//   3. Unknown sealed net or ffi names fail closed.
+
+import "c_emit_args.oo";
+import "c_emit_libfloor.oo";
+import "check/check_cap_util.oo";
+
+pub fn c_emit_cap_call(t: String, a0: String, a1: String, a2g: String, args: String) -> String {
+    if t == "read_file" {
+        if a1 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tread_file requires &FsReadCap as first arg (not int/lit)");
+            process_exit(1);
+        }
+        return "oo_read_file(" + a0 + ", " + a1 + ")";
+    }
+    if t == "write_file" {
+        if !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\twrite_file requires &FsWriteCap as first arg (not int/lit)");
+            process_exit(1);
+        }
+        return "oo_write_file(" + args + ")";
+    }
+    if t == "path_exists" {
+        if a1 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tpath_exists requires &FsReadCap as first arg (not int/lit)");
+            process_exit(1);
+        }
+        return "oo_path_exists(" + a0 + ", " + a1 + ")";
+    }
+    if t == "file_size" {
+        if a1 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tfile_size requires &FsReadCap as first arg (not int/lit)");
+            process_exit(1);
+        }
+        return "oo_file_size(" + a0 + ", " + a1 + ")";
+    }
+    if t == "env_get" {
+        if a1 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tenv_get requires &EnvCap as first arg (not int/lit)");
+            process_exit(1);
+        }
+        return "oo_env_get(" + a0 + ", " + a1 + ")";
+    }
+    if t == "sys_exec" {
+        if !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tsys_exec requires &ProcessCap as first arg (not int/lit)");
+            process_exit(1);
+        }
+        let rest: String = c_args_drop_first(args);
+        if rest == "" {
+            println("ERR\tc_emit\tsys_exec requires program argv");
+            process_exit(1);
+        }
+        return "oo_sys_exec(" + a0 + ", (int)(sizeof((OoStr[]){" + c_args_strip_cr(rest) + "})/sizeof(OoStr)), (OoStr[]){" + c_args_strip_cr(rest) + "})";
+    }
+    if t == "fetch" {
+        if a1 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tfetch requires &HttpCap as first arg (not int/lit)");
+            process_exit(1);
+        }
+        return "oo_fetch(" + a0 + ", " + a1 + ")";
+    }
+    if t == "now_ms" {
+        if !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tnow_ms requires &TimeCap as first arg (not int/lit)");
+            process_exit(1);
+        }
+        return "oo_now_ms(" + a0 + ")";
+    }
+    if t == "sleep_ms" {
+        if a1 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tsleep_ms requires &TimeCap as first arg (not int/lit)");
+            process_exit(1);
+        }
+        return "oo_sleep_ms(" + a0 + ", " + a1 + ")";
+    }
+    if t == "random" {
+        if !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\trandom requires &RandCap as first arg (not int/lit)");
+            process_exit(1);
+        }
+        return "oo_random(" + a0 + ")";
+    }
+    if t == "seed" {
+        if a1 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tseed requires &RandCap as first arg (not int/lit)");
+            process_exit(1);
+        }
+        return "(oo_seed(" + a0 + ", " + a1 + "), 0)";
+    }
+    if t == "alloc_bytes" || t == "malloc" {
+        if a1 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\t" + t + " requires &AllocCap as first arg (not int/lit)");
+            process_exit(1);
+        }
+        return "oo_alloc_bytes(" + a0 + ", " + a1 + ")";
+    }
+    if t == "free_bytes" || t == "free" {
+        if a1 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\t" + t + " requires &AllocCap as first arg (not int/lit)");
+            process_exit(1);
+        }
+        return "(oo_free_bytes(" + a0 + ", " + a1 + "), 0)";
+    }
+    if t == "realloc" {
+        if a1 == "" || a2g == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\trealloc requires &AllocCap as first arg (not int/lit)");
+            process_exit(1);
+        }
+        return "(oo_free_bytes(" + a0 + ", " + a1 + "), oo_alloc_bytes(" + a0 + ", " + a2g + "))";
+    }
+    let lib: String = c_emit_libfloor_call(t, a0, a1, args);
+    if lib != "" { return lib; }
+    if is_sealed_net(t) {
+        println("ERR\tc_emit\tnet residual: sealed op '" + t + "' not lowered (fail-closed)");
+        process_exit(1);
+    }
+    if is_sealed_ffi(t) {
+        println("ERR\tc_emit\tffi residual: sealed op '" + t + "' not lowered (no host/C TCB lower)");
+        process_exit(1);
+    }
+    return "";
+}

@@ -1,0 +1,15 @@
+// # Probe entry: imports sibling, does not name the marker
+//
+// Logline: One-TU emit-c of this file must not dump concat_sib_secret_token_zz.
+//
+// Setup: Import sibling. main prints a constant.
+//
+// Beats:
+//   1. Import probe_concat_sib.oo.
+//   2. main does not call the sibling marker.
+
+import "probe_concat_sib.oo";
+
+pub fn main() {
+    println("hi");
+}

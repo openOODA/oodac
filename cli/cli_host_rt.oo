@@ -1,0 +1,70 @@
+// # Host runtime C for product ELFs
+//
+// Logline: Emit-tmp helpers and Landlock jail ctor. Linked with oodar.c. Not chs_rt.
+//
+// Setup: Written to the jail tmp dir at build. gcc -I oodar compiles this TU.
+//
+// Beats:
+//   1. host_rt_c returns one C translation unit.
+//   2. oo_emit_tmp_* match the emit-c builtins.
+//   3. Jail ctor requires OODA_FS_READDIR and OODA_FS_WRITEDIR, or OODA_NO_JAIL=1.
+
+pub fn host_rt_c() -> String {
+    let mut s: String = "#define _GNU_SOURCE 1\n";
+    s = s + "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n";
+    s = s + "#include <unistd.h>\n#include <limits.h>\n#include <sys/prctl.h>\n";
+    s = s + "#include \"oodar.h\"\n";
+    s = s + "static int g_tn, g_np, g_nm;\nstatic int g_marks[64];\n";
+    s = s + "static char g_names[256][16];\n";
+    s = s + "void oo_emit_tmp_reset(void) { g_tn = 0; g_np = 0; g_nm = 0; }\n";
+    s = s + "void oo_emit_tmp_enter(void) { if (g_nm >= 64) abort(); g_marks[g_nm++] = g_np; }\n";
+    s = s + "void oo_emit_tmp_release_print(void) {\n";
+    s = s + "  int old = 0; int i; if (g_nm > 0) old = g_marks[g_nm - 1]; i = g_np;\n";
+    s = s + "  while (i > old) { i--; printf(\"  oo_str_release(%s);\\n\", g_names[i]); }\n}\n";
+    s = s + "void oo_emit_tmp_leave(void) {\n";
+    s = s + "  if (g_nm <= 0) return; int old = g_marks[g_nm - 1];\n";
+    s = s + "  oo_emit_tmp_release_print(); g_nm--; g_np = old;\n}\n";
+    s = s + "void oo_emit_tmp_own(OoStr expr) {\n";
+    s = s + "  if (g_np <= 0 || !expr.data || expr.len <= 0) return;\n";
+    s = s + "  const char *w = g_names[g_np - 1]; size_t wn = strlen(w);\n";
+    s = s + "  if ((long long)wn != expr.len) return;\n";
+    s = s + "  if (memcmp(expr.data, w, wn) != 0) return; g_np--;\n}\n";
+    s = s + "void oo_emit_tmp_release_all_print(void) {\n";
+    s = s + "  int i = g_np; while (i > 0) { i--; printf(\"  oo_str_release(%s);\\n\", g_names[i]); }\n";
+    s = s + "  g_np = 0;\n}\n";
+    s = s + "OoStr oo_emit_tmp_bind(OoStr call) {\n";
+    s = s + "  if (g_np >= 256) abort();\n";
+    s = s + "  int w = snprintf(g_names[g_np], 16, \"__t%d\", g_tn++);\n";
+    s = s + "  if (w < 0) abort();\n";
+    s = s + "  const char *p = call.data; int n = (p && call.len > 0) ? (int)call.len : 0;\n";
+    s = s + "  printf(\"  OoStr %s = %.*s;\\n\", g_names[g_np], n, p ? p : \"\");\n";
+    s = s + "  OoStr name = oo_str_intern_bytes(g_names[g_np], (long long)strlen(g_names[g_np]));\n";
+    s = s + "  g_np++; return name;\n}\n";
+    s = s + "static OoStr jail_str(const char *s) {\n";
+    s = s + "  OoStr o; o.data = (char *)s; o.len = s ? (long long)strlen(s) : 0; return o;\n}\n";
+    s = s + "__attribute__((constructor)) void oo_jail_landlock_ctor(void) {\n";
+    s = s + "  const char *rd = getenv(\"OODA_FS_READDIR\");\n";
+    s = s + "  const char *wd = getenv(\"OODA_FS_WRITEDIR\");\n";
+    s = s + "  if (!rd || !rd[0] || !wd || !wd[0]) {\n";
+    s = s + "    const char *off = getenv(\"OODA_NO_JAIL\");\n";
+    s = s + "    if (off && off[0] == '1' && off[1] == 0) return;\n";
+    s = s + "    fprintf(stderr, \"ERR\\tlandlock\\tOODA_FS_READDIR and OODA_FS_WRITEDIR required (or OODA_NO_JAIL=1)\\n\");\n";
+    s = s + "    _exit(1);\n";
+    s = s + "  }\n";
+    s = s + "  if (prctl(PR_GET_NO_NEW_PRIVS, 0, 0, 0, 0) == 1) return;\n";
+    s = s + "  if (!oo_landlock_is_available()) {\n";
+    s = s + "    fprintf(stderr, \"ERR\\tlandlock\\trequired when jail env set\\n\"); _exit(1);\n";
+    s = s + "  }\n";
+    s = s + "  static char rbuf[PATH_MAX * 2]; static char wbuf[PATH_MAX * 2];\n";
+    s = s + "  size_t n = 0; const char *pre = \"/usr:/bin:/lib:/lib64:\";\n";
+    s = s + "  while (pre[n] && n + 1 < sizeof rbuf) { rbuf[n] = pre[n]; n++; }\n";
+    s = s + "  while (*rd && n + 1 < sizeof rbuf) rbuf[n++] = *rd++; rbuf[n] = 0;\n";
+    s = s + "  n = 0; const char *w = wd; const char *suf = \":/tmp\";\n";
+    s = s + "  while (w && *w && n + 1 < sizeof wbuf) wbuf[n++] = *w++;\n";
+    s = s + "  while (*suf && n + 1 < sizeof wbuf) wbuf[n++] = *suf++; wbuf[n] = 0;\n";
+    s = s + "  long long sys = oo_cap_grant_sys();\n";
+    s = s + "  OoResS r = oo_landlock_restrict(sys, jail_str(rbuf), jail_str(wbuf));\n";
+    s = s + "  if (!r.ok) { fprintf(stderr, \"ERR\\tlandlock\\tjail apply failed\\n\"); _exit(1); }\n";
+    s = s + "}\n";
+    return s;
+}

@@ -1,0 +1,45 @@
+// # Probe: const-false SMT requires cannot ship
+//
+// Logline: check and build of probe_smt_false.oo are ERR and leave no ELF.
+//
+// Setup: ProcessCap + EnvCap + FsReadCap. Host is OODA_COMPILER.
+//
+// Beats:
+//   1. check is nonzero and contains ERR.
+//   2. build is nonzero, contains ERR, ELF absent.
+
+pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
+    let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
+    let host: String = match hr { Ok(s) => s, Err(_) => "" };
+    if host == "" {
+        println("ERR\tOODA_COMPILER required");
+        process_exit(1);
+    }
+    let src: String = "oodac/qa/probe_smt_false.oo";
+    let out: String = ".ooda-cache/ooda-tmp/probe_smt_false.bin";
+    let ca: Result[String, String] = sys_exec(p, host, "check", src);
+    if ca.is_ok() {
+        println("ERR\tcheck must fail");
+        process_exit(1);
+    }
+    let ct: String = ca.val;
+    if str_index_of(ct, "ERR") < 0 {
+        println("ERR\tcheck silent");
+        process_exit(1);
+    }
+    let ba: Result[String, String] = sys_exec(p, host, "build", src, "-o", out);
+    if ba.is_ok() {
+        println("ERR\tbuild must fail");
+        process_exit(1);
+    }
+    let bt: String = ba.val;
+    if str_index_of(bt, "ERR") < 0 {
+        println("ERR\tbuild silent");
+        process_exit(1);
+    }
+    if path_exists(fs_r, out) {
+        println("ERR\tELF shipped");
+        process_exit(1);
+    }
+    println("OK");
+}

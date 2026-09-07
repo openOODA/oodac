@@ -1,0 +1,52 @@
+// # Probe: two product builds of the same source share an ELF hash
+//
+// Logline: oodac build of probe_artifact_list.oo twice writes bit-identical ELFs.
+//
+// Setup: ProcessCap + EnvCap + FsReadCap. Host is OODA_COMPILER. sha256sum.
+//
+// Beats:
+//   1. Build the victim to two -o paths.
+//   2. Both ELFs exist.
+//   3. sha256sum of the two files is equal.
+
+pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
+    let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
+    let host: String = match hr { Ok(s) => s, Err(_) => "" };
+    if host == "" {
+        println("ERR\tOODA_COMPILER required");
+        process_exit(1);
+    }
+    let a: String = ".ooda-cache/ooda-tmp/elf_hash_a.bin";
+    let b: String = ".ooda-cache/ooda-tmp/elf_hash_b.bin";
+    let ra: Result[String, String] = sys_exec(p, host, "build", "oodac/qa/probe_artifact_list.oo", "-o", a);
+    if ra.is_err() {
+        println("ERR\telf hash build a");
+        process_exit(1);
+    }
+    let rb: Result[String, String] = sys_exec(p, host, "build", "oodac/qa/probe_artifact_list.oo", "-o", b);
+    if rb.is_err() {
+        println("ERR\telf hash build b");
+        process_exit(1);
+    }
+    if !path_exists(fs_r, a) || !path_exists(fs_r, b) {
+        println("ERR\telf hash missing ELF");
+        process_exit(1);
+    }
+    let sa: Result[String, String] = sys_exec(p, "sha256sum", a);
+    let sb: Result[String, String] = sys_exec(p, "sha256sum", b);
+    if sa.is_err() || sb.is_err() {
+        println("ERR\telf hash sha256sum");
+        process_exit(1);
+    }
+    let ha: String = match sa { Ok(s) => s, Err(_) => "" };
+    let hb: String = match sb { Ok(s) => s, Err(_) => "" };
+    if chars_len(ha) < 64 || chars_len(hb) < 64 {
+        println("ERR\telf hash short digest");
+        process_exit(1);
+    }
+    if str_slice(ha, 0, 64) != str_slice(hb, 0, 64) {
+        println("ERR\telf hash mismatch");
+        process_exit(1);
+    }
+    println("OK");
+}

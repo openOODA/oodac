@@ -1,0 +1,11 @@
+// # Probe: llvm main args skip argv0
+//
+// Logline: Product llvm ELF prints argc-from-ooda args length.
+//
+// Setup: No extra caps. args is filled from argv[1..].
+//
+// Beats:
+//   1. Running with no extra argv prints 0.
+pub fn main(args: List[String]) {
+    println(list_len(args).to_string());
+}

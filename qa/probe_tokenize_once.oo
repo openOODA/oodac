@@ -1,0 +1,55 @@
+// # Probe: check writes a typed artifact; emit-c consumes it
+//
+// Logline: After check of probe_artifact_list.oo the art_<sha>.art file exists and emit-c --artifact prints slist lowering.
+//
+// Setup: ProcessCap + EnvCap + FsReadCap. Host is OODA_COMPILER. SHA matches types/typed_artifact.oo.
+//
+// Beats:
+//   1. check the victim is OK.
+//   2. artifact cache path exists.
+//   3. emit-c --artifact that path contains xs_lvl1 = oo_slist_new.
+
+fn art_sha16(path: String, src: String) -> String {
+    let digest: String = crypto_sha256_internal(path + "\n" + src);
+    if chars_len(digest) >= 16 {
+        return str_slice(digest, 0, 16);
+    }
+    return digest;
+}
+
+pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
+    let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
+    let host: String = match hr { Ok(s) => s, Err(_) => "" };
+    if host == "" {
+        println("ERR\tOODA_COMPILER required");
+        process_exit(1);
+    }
+    let srcp: String = "oodac/qa/probe_artifact_list.oo";
+    let sr: Result[String, String] = read_file(fs_r, srcp);
+    if sr.is_err() {
+        println("ERR\tunreadable victim");
+        process_exit(1);
+    }
+    let src: String = match sr { Ok(s) => s, Err(_) => "" };
+    let ck: Result[String, String] = sys_exec(p, host, "check", srcp);
+    if ck.is_err() {
+        println("ERR\tcheck victim");
+        process_exit(1);
+    }
+    let dest: String = ".ooda-cache/ooda-tmp/art_" + art_sha16(srcp, src) + ".art";
+    if !path_exists(fs_r, dest) {
+        println("ERR\tno artifact " + dest);
+        process_exit(1);
+    }
+    let em: Result[String, String] = sys_exec(p, host, "emit-c", "--artifact", dest, srcp);
+    if em.is_err() {
+        println("ERR\temit-c --artifact");
+        process_exit(1);
+    }
+    let txt: String = match em { Ok(s) => s, Err(_) => "" };
+    if str_index_of(txt, "xs_lvl1 = oo_slist_new") < 0 {
+        println("ERR\tartifact emit missed slist xs");
+        process_exit(1);
+    }
+    println("OK");
+}

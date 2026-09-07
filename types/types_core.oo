@@ -8,14 +8,9 @@
 //   1. Unified cohesive implementation.
 
 pub fn check_caps(toks: List[String], pos0: Int) -> Int {
-    let n: Int = list_len(toks);
-if pos0 < 0 || pos0 >= n { println("ERR\tcapability\tpos out of bounds at " + pos0.to_string());
-process_exit(1);
-}
-  if n > 1048576 { println("ERR\tcapability\ttoken stream exceeds 1MiB limit");
-  process_exit(1);
-  }
-  return pos0;
+    println("ERR\tcapability\tuse check_function");
+    process_exit(1);
+    return pos0;
 }
 
 pub fn check_types(src: String) -> String {

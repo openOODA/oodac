@@ -1,7 +1,0 @@
-name=inglic
-version=1.0.0
-origin=dir
-deps=
-caps=FsRead
-payload=inglic.oo
-license=Proprietary

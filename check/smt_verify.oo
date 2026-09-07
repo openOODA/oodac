@@ -1,6 +1,6 @@
 // # Ahead-of-Time SMT Contract Verification Pass / SMT-LIB2 Formula Generator
 //
-// Logline: Integrates contract parsing, weakest precondition derivation, and LIA proving into compiler check. Generates standard SMT-LIB2 QF_LIA S-expressions from parsed contract clauses and verification conditions.
+// Logline: Refuse const-false contracts and unproven ident relations. Do not claim QF_LIA for call-shaped requires.
 //
 // Setup: Merged cohesive compiler module.
 //
@@ -19,16 +19,66 @@ fn smt_verify_pass_refuse(kind: String, line: String, col: String) {
     process_exit(1);
 }
 
+fn smt_is_ident(s: String) -> Bool {
+    let n: Int = chars_len(s);
+    if n <= 0 { return false; }
+    let c0: String = char_at(s, 0);
+    if !char_is_alpha(c0) && c0 != "_" { return false; }
+    let mut i = 1;
+    while i < n {
+        let c: String = char_at(s, i);
+        if !char_is_alpha(c) && !char_is_digit(c) && c != "_" { return false; }
+        i = i + 1;
+    }
+    return true;
+}
+
+fn smt_is_int_lit(s: String) -> Bool {
+    let n: Int = chars_len(s);
+    if n <= 0 { return false; }
+    let mut i: Int = 0;
+    if char_at(s, 0) == "-" {
+        if n == 1 { return false; }
+        i = 1;
+    }
+    while i < n {
+        let c: String = char_at(s, i);
+        if str_index_of("0123456789", c) < 0 { return false; }
+        i = i + 1;
+    }
+    return true;
+}
+
 pub fn smt_verify_pass_run(toks: List[String]) -> Bool {
     let clauses: List[String] = smt_contract_parse_tokens(toks);
-let n: Int = list_len(clauses);
-let mut i: Int = 0;
-while i < n { let cl: String = list_get(clauses, i);
-let is_c: Bool = smt_contract_parse_is_const(cl);
-if is_c { let cv: Int = 0 + smt_contract_parse_const_val(cl);
-let op_str: String = smt_contract_parse_op(cl);
-let rc: Int = 0 + smt_contract_parse_rhs_const(cl);
-if cv == 0 && op_str == "==" && rc == 0 { }
+    let n: Int = list_len(clauses);
+    let mut i: Int = 0;
+    while i < n {
+        let cl: String = list_get(clauses, i);
+        let kind: String = smt_contract_parse_kind(cl);
+        let line: String = smt_contract_parse_line(cl);
+        let col: String = smt_contract_parse_col(cl);
+        let op_str: String = smt_contract_parse_op(cl);
+        let rc: Int = 0 + smt_contract_parse_rhs_const(cl);
+        let rv: String = smt_contract_parse_rhs_var(cl);
+        let lhs: String = smt_contract_parse_lhs(cl);
+        let is_c: Bool = smt_contract_parse_is_const(cl);
+        if kind == "requires" || kind == "ensures" {
+            if is_c {
+                let cv: Int = 0 + smt_contract_parse_const_val(cl);
+                if lhs == "" && cv == 0 {
+                    smt_verify_pass_refuse(kind, line, col);
+                }
+            }
+            if rv == "" && smt_is_int_lit(lhs) {
+                let lv: Int = parse_int(lhs);
+                if !smt_prover_lia_eval_rel(op_str, lv, rc) {
+                    smt_verify_pass_refuse(kind, line, col);
+                }
+            } else if smt_is_ident(lhs) && rv == "" {
+                println("ERR\tsmt\tunproven " + kind + " at " + line + ":" + col);
+                process_exit(1);
+            }
         }
         i = i + 1;
     }

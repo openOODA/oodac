@@ -1,38 +1,75 @@
 // # Run the emit-c family
 //
-// Logline: Stream C for emit-c. Concat imports for product build. One-TU when OODA_EMIT_NO_CONCAT=1.
+// Logline: Stream C for emit-c. One-TU by default. Concat only when OODA_EMIT_CONCAT=1.
 //
-// Setup: load_expand for concat. One-TU tokenizes only the target file. EnvCap reads the flag.
+// Setup: One-TU tokenizes only the target file. load_expand for explicit concat. EnvCap reads the flag.
 //
 // Beats:
 //   1. Map cmd to mode once/preamble/protos/bodies.
-//   2. Concat: load imports, tokenize each file, stream C.
-//   3. One-TU: tokenize only `path` so unique_fns never sees an import-graph dump.
+//   2. One-TU: tokenize only `path` so unique_fns never sees an import-graph dump.
+//   3. Concat: load imports, tokenize each file, stream C.
 
 import "lex/token_fmt.oo";
-import "ast/load_import.oo";
+import "check/check_collect.oo";
 import "emit/c/c_emit.oo";
+import "types/typed_artifact.oo";
 
-fn emit_c_no_concat(env: &EnvCap) -> Bool {
-    let r: Result[String, String] = env_get(env, "OODA_EMIT_NO_CONCAT");
+fn emit_c_concat(env: &EnvCap) -> Bool {
+    let r: Result[String, String] = env_get(env, "OODA_EMIT_CONCAT");
     let v: String = match r { Ok(s) => s, Err(_) => "" };
     return v == "1";
 }
 
-fn emit_c_one_tu(fs: &FsReadCap, path: String, mode: String, is_plain: Bool) {
+fn emit_load_art(fs: &FsReadCap, dest: String) -> TypedArtifact {
+    if !path_exists(fs, dest) {
+        println("ERR\temit\tno artifact");
+        process_exit(1);
+    }
+    let rr: Result[String, String] = read_file(fs, dest);
+    if rr.is_err() {
+        println("ERR\temit\tartifact unreadable");
+        process_exit(1);
+    }
+    let body: String = match rr { Ok(s) => s, Err(_) => "" };
+    return artifact_decode(body);
+}
+
+fn emit_toks_for_file(fs: &FsReadCap, path: String, src: String) -> List[String] {
+    let auto: String = artifact_cache_path(artifact_sha(path, src));
+    if !path_exists(fs, auto) {
+        println("ERR\temit\tno artifact; run check first: " + path);
+        process_exit(1);
+    }
+    let art: TypedArtifact = emit_load_art(fs, auto);
+    let want: String = artifact_sha(path, src);
+    if !(art.sha == want) {
+        println("ERR\temit\tartifact sha mismatch");
+        process_exit(1);
+    }
+    return art.toks;
+}
+
+fn emit_c_one_tu(fs: &FsReadCap, path: String, mode: String, is_plain: Bool, art_path: String) {
     let pr: Result[String, String] = read_file(fs, path);
     if pr.is_err() {
         println("ERR\tload\tunreadable file: " + path);
         process_exit(1);
     }
     let fsx: String = match pr { Ok(s) => s, Err(_) => "" };
+    let mut raw: List[String] = list_new();
+    if art_path != "" {
+        let art: TypedArtifact = emit_load_art(fs, art_path);
+        raw = art.toks;
+    } else {
+        raw = emit_toks_for_file(fs, path, fsx);
+    }
     let mut toks: List[String] = list_new();
-    toks = c_toks_append_file_at(toks, tokenize_lines(fsx), path);
+    toks = c_toks_append_file_at(toks, raw, path);
     toks = c_toks_append_eof(toks);
     c_emit_stream_toks_at(fsx, toks, mode, path, is_plain);
 }
 
-pub fn run_emit_c_family(fs: &FsReadCap, env: &EnvCap, cmd: String, path: String, is_plain: Bool) {
+pub fn run_emit_c_family(fs: &FsReadCap, env: &EnvCap, cmd: String, path: String, is_plain: Bool, concat: Bool, art_path: String) {
     let mut m: String = "once";
     if cmd == "emit-preamble" { m = "preamble"; }
     else if cmd == "emit-protos" { m = "protos"; }
@@ -41,18 +78,23 @@ pub fn run_emit_c_family(fs: &FsReadCap, env: &EnvCap, cmd: String, path: String
         c_emit_stream_mode("", "preamble");
         return;
     }
-    if emit_c_no_concat(env) {
-        emit_c_one_tu(fs, path, m, is_plain);
+    if art_path != "" || (!concat && !emit_c_concat(env)) {
+        emit_c_one_tu(fs, path, m, is_plain, art_path);
         return;
     }
-    let le: List[String] = load_expand(fs, path, list_new(), list_new());
-    let nle: Int = list_len(le);
-    let src: String = list_get(le, nle - 1);
+    let paths: List[String] = collect_module_paths(fs, path);
+    let nle: Int = list_len(paths);
+    let er: Result[String, String] = read_file(fs, path);
+    if er.is_err() {
+        println("ERR\tload\tunreadable file: " + path);
+        process_exit(1);
+    }
+    let src: String = match er { Ok(s) => s, Err(_) => "" };
     let mut toks: List[String] = list_new();
     let mut seen: String = "\t";
     let mut i: Int = 0;
-    while i < nle - 1 {
-        let p: String = list_get(le, i);
+    while i < nle {
+        let p: String = list_get(paths, i);
         let pn: Int = chars_len(p);
         if pn >= 9 && str_slice(p, pn - 9, pn) == "ANCHOR.oo" {
             i = i + 1;
@@ -69,8 +111,8 @@ pub fn run_emit_c_family(fs: &FsReadCap, env: &EnvCap, cmd: String, path: String
             println("ERR\tload\tunreadable file: " + p);
             process_exit(1);
         }
-        let fsx: String = pr.val;
-        toks = c_toks_append_file_at(toks, tokenize_lines(fsx), p);
+        let fsx: String = match pr { Ok(s) => s, Err(_) => "" };
+        toks = c_toks_append_file_at(toks, emit_toks_for_file(fs, p, fsx), p);
         i = i + 1;
     }
     toks = c_toks_append_eof(toks);

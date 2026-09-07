@@ -2,7 +2,7 @@
 //
 // Logline: Map a sys_* free call to an oo_sys_* snippet when the first arg is a SysCap ident, or print ERR and exit, or return empty.
 //
-// Setup: c_arg_is_cap_ident, println, and process_exit exist; the call emitter tries this for sys_* names. Residual: epoll, inotify, and prctl are sealed stubs, not full async I/O.
+// Setup: c_arg_is_cap_ident, println, and process_exit exist; the call emitter tries this for sys_* names. epoll, inotify, and prctl refuse in oodar.
 //
 // Beats:
 //   1. sys_spawn, sys_wait, and sys_kill require a cap ident in a0 and a nonempty a1, then return the matching oo_sys_* call.
@@ -125,12 +125,24 @@ process_exit(1);
         return "oo_cap_rpc_recv(" + args + ")";
     }
     if t == "oo_read_stdin" {
-        return "oo_read_stdin()";
+        if a0 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tread_stdin requires a cap token first arg");
+            process_exit(1);
+        }
+        return "oo_read_stdin(" + args + ")";
     }
     if t == "oo_read_stdin_chunk" {
+        if a0 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tread_stdin_chunk requires a cap token first arg");
+            process_exit(1);
+        }
         return "oo_read_stdin_chunk(" + args + ")";
     }
     if t == "oo_file_stamp" {
+        if a0 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tfile_stamp requires a cap token first arg");
+            process_exit(1);
+        }
         return "oo_file_stamp(" + args + ")";
     }
     if t == "monotonic_us" || t == "oo_monotonic_us" {

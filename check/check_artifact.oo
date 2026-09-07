@@ -1,0 +1,35 @@
+// # Persist the typed artifact after a passing check
+//
+// Logline: Write token rows under .ooda-cache so emit-c does not re-lex.
+//
+// Setup: FsWriteCap. mkdir via ProcessCap. Decode refuses a bad magic.
+//
+// Beats:
+//   1. Pack path, sha, and toks only.
+//   2. Encode OODAART2 text.
+//   3. write_file the cache path. Missing write is ERR.
+
+import "types/typed_artifact.oo";
+
+pub fn artifact_ensure_dir(sys: &ProcessCap) {
+    let _: Result[String, String] = sys_exec(sys, "/usr/bin/mkdir", "-p", ".ooda-cache/ooda-tmp");
+}
+
+pub fn artifact_write_toks(fs_w: &FsWriteCap, sys: &ProcessCap, path: String, src: String, toks: List[String]) -> String {
+    artifact_ensure_dir(sys);
+    let art: TypedArtifact = artifact_new(path, src, toks);
+    let dest: String = artifact_cache_path(art.sha);
+    let body: String = artifact_encode(art);
+    let wr: Result[Void, String] = write_file(fs_w, dest, body);
+    if wr.is_err() {
+        println("ERR\tartifact\twrite failed");
+        process_exit(1);
+    }
+    return dest;
+}
+
+pub fn artifact_remove_toks(sys: &ProcessCap, path: String, src: String) {
+    let sha: String = artifact_sha(path, src);
+    let dest: String = artifact_cache_path(sha);
+    let _: Result[String, String] = sys_exec(sys, "rm", "-f", dest);
+}

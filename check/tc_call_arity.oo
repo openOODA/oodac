@@ -82,7 +82,7 @@ pub fn typecheck_call_arity(toks: List[String]) {
         + "println=1\tprint=1\tprocess_exit=1\tto_string=1\tmeta_epoch=0\tmeta_mix=1\tmeta_is_path_a=0\tmeta_decoy_touch=0\tenv_get=2\t"
         + "oo_rlimit_set_mem_mb=2\too_rlimit_set_nofile=2\too_rlimit_set_cpu_sec=2\t"
         + "oo_arena_create=2\tarena_create=2\too_arena_alloc=3\tarena_alloc=3\too_arena_reset=2\tarena_reset=2\t"
-        + "oo_actor_restart=2\tactor_restart=2\too_read_stdin=0\too_read_stdin_chunk=1\too_file_stamp=1\t"
+        + "oo_actor_restart=2\tactor_restart=2\too_read_stdin=1\too_read_stdin_chunk=2\too_file_stamp=2\t"
         + "soa_layout=1\tdod_layout=1\tcheckpoint=1\trollback=0\t"
         + "otp_supervise=2\tcap_rpc_send=2\tcap_rpc_recv=2\t"
         + "macro_expand=1\tast_macro=1\thot_reload=1\too_hot_reload=1\t"

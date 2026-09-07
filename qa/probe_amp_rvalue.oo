@@ -1,12 +1,12 @@
-// # Probe victim: rvalue & of a call must not emit GNU __auto_type
+// # Probe victim: rvalue & of a call must not emit GNU C
 //
-// Logline: emit-c of &id(1) must not contain GNU __auto_type.
+// Logline: emit-c of &id(1) must not contain GNU typeof, auto_type, or statement-expr.
 //
 // Setup: id returns Int. main takes the address of a call.
 //
 // Beats:
 //   1. emit-c produces C.
-//   2. Output does not contain __auto_type.
+//   2. Output has no __typeof__, __auto_type, or ({.
 
 fn id(x: Int) -> Int {
     return x;

@@ -1,0 +1,80 @@
+// # LLVM runtime ABI header
+//
+// Logline: Print x86_64 SysV declares for oo_* matching clang sret/byval for lists and {ptr,i64} for OoStr.
+//
+// Setup: Product links oodar.c and host_rt. No emit/c import.
+//
+// Beats:
+//   1. Module datalayout and aggregate types.
+//   2. Declare list, str, print, cap, fs, and exec helpers.
+//   3. STRING globals use @.s<pos> from the token index.
+
+import "lex/token_fmt.oo";
+
+pub fn ll_c_esc(s: String) -> String {
+    let n: Int = chars_len(s);
+    let mut o: String = "";
+    let mut i: Int = 0;
+    while i < n {
+        let c: String = char_at(s, i);
+        if c == "\\" {
+            o = o + "\\\\";
+        } else if c == "\"" {
+            o = o + "\\22";
+        } else if c == "\n" {
+            o = o + "\\0A";
+        } else if c == "\t" {
+            o = o + "\\09";
+        } else {
+            o = o + c;
+        }
+        i = i + 1;
+    }
+    return o;
+}
+
+pub fn ll_rt_header(toks: List[String]) {
+    println("target datalayout = \"e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128\"");
+    println("target triple = \"x86_64-unknown-linux-gnu\"");
+    println("%OoStr = type { ptr, i64 }");
+    println("%OoSList = type { ptr, i64, i64 }");
+    println("%OoIList = type { ptr, i64, i64 }");
+    println("%OoResI = type { i32, i64, %OoStr }");
+    println("%OoResS = type { i32, %OoStr }");
+    println("%OoOptI = type { i32, i64 }");
+    println("%OoOptS = type { i32, %OoStr }");
+    println("declare void @oo_slist_new(ptr sret(%OoSList) align 8)");
+    println("declare i64 @oo_slist_len(ptr byval(%OoSList) align 8)");
+    println("declare void @oo_ilist_new(ptr sret(%OoIList) align 8)");
+    println("declare i64 @oo_ilist_len(ptr byval(%OoIList) align 8)");
+    println("declare { ptr, i64 } @oo_int_to_str(i64)");
+    println("declare { ptr, i64 } @oo_str_lit(ptr)");
+    println("declare { ptr, i64 } @oo_str_concat({ ptr, i64 }, { ptr, i64 })");
+    println("declare { ptr, i64 } @oo_char_at({ ptr, i64 }, i64)");
+    println("declare { ptr, i64 } @oo_str_slice({ ptr, i64 }, i64, i64)");
+    println("declare void @oo_print_str(ptr, i64)");
+    println("declare void @oo_println()");
+    println("declare i64 @oo_chars_len({ ptr, i64 })");
+    println("declare i32 @oo_str_eq({ ptr, i64 }, { ptr, i64 })");
+    println("declare i32 @oo_str_ends_with({ ptr, i64 }, { ptr, i64 })");
+    println("declare i32 @oo_str_starts_with({ ptr, i64 }, { ptr, i64 })");
+    println("declare i64 @oo_str_index_of({ ptr, i64 }, { ptr, i64 })");
+    println("declare i32 @oo_path_exists(i64, { ptr, i64 })");
+    println("declare void @oo_env_get(ptr sret(%OoResS) align 8, i64, { ptr, i64 })");
+    println("declare void @oo_sys_exec(ptr sret(%OoResS) align 8, i64, i32, ptr)");
+    println("declare void @oo_process_exit(i64)");
+    println("declare i64 @oo_cap_grant_process()");
+    println("declare i64 @oo_cap_grant_env()");
+    println("declare i64 @oo_cap_grant_fsread()");
+    println("declare i64 @oo_cap_grant_fswrite()");
+    println("declare i64 @oo_cap_grant_bind()");
+    println("declare i64 @oo_cap_grant_sys()");
+    println("declare i64 @oo_cap_grant_time()");
+    println("declare i64 @oo_cap_grant_alloc()");
+    println("declare void @oo_slist_push(ptr sret(%OoSList) align 8, ptr byval(%OoSList) align 8, { ptr, i64 })");
+    println("declare { ptr, i64 } @oo_slist_get(ptr byval(%OoSList) align 8, i64)");
+    println("declare void @oo_slist_slice(ptr sret(%OoSList) align 8, ptr byval(%OoSList) align 8, i64, i64)");
+    println("declare void @oo_ilist_push(ptr sret(%OoIList) align 8, ptr byval(%OoIList) align 8, i64)");
+    println("declare i64 @oo_ilist_get(ptr byval(%OoIList) align 8, i64)");
+    println("declare void @oo_ilist_slice(ptr sret(%OoIList) align 8, ptr byval(%OoIList) align 8, i64, i64)");
+}

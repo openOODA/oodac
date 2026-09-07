@@ -1,0 +1,174 @@
+// # LLVM statement lowering
+//
+// Logline: Lower let, assign, if, while, return, println, and expression statements.
+//
+// Setup: Env maps names to kinds. Aggregates in %v_name allocas. No emit/c import.
+//
+// Beats:
+//   1. let with annotation stores the expr into an alloca.
+//   2. if/while branch on i1. return Ok/Err for Result mains.
+//   3. println walks the argument expression.
+
+import "ll_tok.oo";
+import "ll_ty.oo";
+import "ll_expr.oo";
+import "ll_call.oo";
+import "ll_ctor.oo";
+import "types/types_core.oo";
+
+fn ll_store(name: String, kind: String, v: String, ssa0: Int) -> Int {
+    let dst: String = ll_var(name);
+    if ll_is_agg(kind) {
+        if ll_pptr(v) != "" {
+            let s: Int = ssa0 + 1;
+            println("  " + ll_ssa(s) + " = load " + ll_ir_val(kind) + ", ptr " + ll_pptr(v));
+            println("  store " + ll_ir_val(kind) + " " + ll_ssa(s) + ", ptr " + dst);
+            return s;
+        }
+        println("  store " + ll_ir_val(kind) + " " + ll_ssa(ll_pssa(v)) + ", ptr " + dst);
+        return ssa0;
+    }
+    println("  store " + ll_ir_val(kind) + " " + ll_ssa(ll_pssa(v)) + ", ptr " + dst);
+    return ssa0;
+}
+
+fn ll_cond_i1(v: String, ssa0: Int) -> Int {
+    if ll_pk(v) == "i1" { return ll_pssa(v); }
+    let s: Int = ssa0 + 1;
+    println("  " + ll_ssa(s) + " = icmp ne i64 " + ll_ssa(ll_pssa(v)) + ", 0");
+    return s;
+}
+
+pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String, env0: String, ssa0: Int) -> String {
+    let mut p: Int = pos;
+    let mut ssa: Int = ssa0;
+    let mut env: String = env0;
+    while p < n {
+        let k: String = ll_k(toks, p);
+        if k == "RBRACE" || k == "EOF" { return ll_pack(p, ssa, ret_kind, env); }
+        if k == "KW_LET" {
+            p = p + 1;
+            if p < n && ll_k(toks, p) == "KW_MUT" { p = p + 1; }
+            let name: String = ll_t(toks, p);
+            p = p + 1;
+            let mut ty: String = "i64";
+            if p < n && ll_k(toks, p) == "COLON" {
+                p = p + 1;
+                ty = ll_ty_at(toks, p, n);
+                p = ll_skip_type(toks, p, n);
+            }
+            if p < n && ll_k(toks, p) == "EQ" { p = p + 1; }
+            let envx: String = type_env_put("", "__e__", ty) + env;
+            let v: String = ll_expr(toks, p, n, ssa, envx);
+            p = ll_ppos(v);
+            ssa = ll_pssa(v);
+            if ll_pk(v) != "" && ll_pk(v) != "void" { ty = ll_pk(v); }
+            println("  " + ll_var(name) + " = alloca " + ll_ir_alloc(ty) + ", align 8");
+            ssa = ll_store(name, ty, v, ssa);
+            env = type_env_put(env, name, ty);
+            if p < n && ll_k(toks, p) == "SEMI" { p = p + 1; }
+        } else if k == "KW_IF" {
+            let c: String = ll_expr(toks, p + 1, n, ssa, env);
+            p = ll_ppos(c);
+            ssa = ll_pssa(c);
+            let cid: Int = ssa;
+            let cv: Int = ll_cond_i1(c, ssa);
+            ssa = cv;
+            println("  br i1 " + ll_ssa(cv) + ", label %then" + cid.to_string() + ", label %else" + cid.to_string());
+            if p < n && ll_k(toks, p) == "LBRACE" { p = p + 1; }
+            println("then" + cid.to_string() + ":");
+            let th: String = ll_emit_stmts(toks, p, n, ret_kind, env, ssa);
+            p = ll_ppos(th);
+            ssa = ll_pssa(th);
+            if p < n && ll_k(toks, p) == "RBRACE" { p = p + 1; }
+            if ll_pterm(th) == 0 { println("  br label %end" + cid.to_string()); }
+            println("else" + cid.to_string() + ":");
+            let mut et: Int = 0;
+            if p < n && ll_k(toks, p) == "KW_ELSE" {
+                p = p + 1;
+                if p < n && ll_k(toks, p) == "LBRACE" { p = p + 1; }
+                let el: String = ll_emit_stmts(toks, p, n, ret_kind, env, ssa);
+                p = ll_ppos(el);
+                ssa = ll_pssa(el);
+                if p < n && ll_k(toks, p) == "RBRACE" { p = p + 1; }
+                et = ll_pterm(el);
+            }
+            if et == 0 { println("  br label %end" + cid.to_string()); }
+            println("end" + cid.to_string() + ":");
+            if ll_pterm(th) != 0 && et != 0 {
+                println("  unreachable");
+                p = ll_skip_to_rbrace(toks, p, n);
+                return ll_pack(p, ssa, ret_kind, env) + "\t1";
+            }
+        } else if k == "KW_WHILE" {
+            let wid: Int = ssa + 1;
+            println("  br label %wcond" + wid.to_string());
+            println("wcond" + wid.to_string() + ":");
+            let c: String = ll_expr(toks, p + 1, n, ssa, env);
+            p = ll_ppos(c);
+            ssa = ll_pssa(c);
+            let cv: Int = ll_cond_i1(c, ssa);
+            ssa = cv;
+            println("  br i1 " + ll_ssa(cv) + ", label %wbody" + wid.to_string() + ", label %wend" + wid.to_string());
+            if p < n && ll_k(toks, p) == "LBRACE" { p = p + 1; }
+            println("wbody" + wid.to_string() + ":");
+            let bd: String = ll_emit_stmts(toks, p, n, ret_kind, env, ssa);
+            p = ll_ppos(bd);
+            ssa = ll_pssa(bd);
+            if p < n && ll_k(toks, p) == "RBRACE" { p = p + 1; }
+            if ll_pterm(bd) == 0 { println("  br label %wcond" + wid.to_string()); }
+            println("wend" + wid.to_string() + ":");
+        } else if k == "KW_RETURN" {
+            let envx: String = type_env_put("", "__e__", ret_kind) + env;
+            let v: String = ll_expr(toks, p + 1, n, ssa, envx);
+            p = ll_ppos(v);
+            ssa = ll_pssa(v);
+            if p < n && ll_k(toks, p) == "SEMI" { p = p + 1; }
+            if ret_kind == "resim" {
+                ssa = ll_ret_resim(v, ssa);
+            } else if ret_kind == "resi" {
+                ssa = ll_ret_resi(v, ssa);
+            } else if ret_kind == "void" {
+                println("  ret void");
+            } else if ret_kind == "i32" || ret_kind == "opti" || ret_kind == "opts" {
+                println("  ret i32 0");
+            } else if ll_pptr(v) != "" {
+                ssa = ssa + 1;
+                println("  " + ll_ssa(ssa) + " = load " + ll_ir_val(ret_kind) + ", ptr " + ll_pptr(v));
+                if ll_is_mem(ret_kind) {
+                    println("  store " + ll_ir_val(ret_kind) + " " + ll_ssa(ssa) + ", ptr %ret");
+                    println("  ret void");
+                } else {
+                    println("  ret " + ll_ir_val(ret_kind) + " " + ll_ssa(ssa));
+                }
+            } else {
+                println("  ret " + ll_ir_val(ret_kind) + " " + ll_ssa(ll_pssa(v)));
+            }
+            p = ll_skip_to_rbrace(toks, p, n);
+            return ll_pack(p, ssa, ret_kind, env) + "\t1";
+        } else if k == "IDENT" && ll_t(toks, p) == "println" {
+            let v: String = ll_expr(toks, p + 2, n, ssa, env);
+            p = ll_ppos(v);
+            if p < n && ll_k(toks, p) == "RPAREN" { p = p + 1; }
+            if p < n && ll_k(toks, p) == "SEMI" { p = p + 1; }
+            ssa = ll_print_val(ll_pk(v), ll_pssa(v), ll_pptr(v), ll_pssa(v));
+        } else if k == "IDENT" && p + 1 < n && ll_k(toks, p + 1) == "EQ" {
+            let name: String = ll_t(toks, p);
+            let ty: String = type_env_get(env, name);
+            let v: String = ll_expr(toks, p + 2, n, ssa, type_env_put("", "__e__", ty) + env);
+            p = ll_ppos(v);
+            ssa = ll_store(name, ty, v, ll_pssa(v));
+            if p < n && ll_k(toks, p) == "SEMI" { p = p + 1; }
+        } else {
+            let v: String = ll_expr(toks, p, n, ssa, env);
+            p = ll_ppos(v);
+            ssa = ll_pssa(v);
+            if p < n && ll_k(toks, p) == "SEMI" { p = p + 1; }
+            if ll_pk(v) == "noret" {
+                p = ll_skip_to_rbrace(toks, p, n);
+                return ll_pack(p, ssa, ret_kind, env) + "\t1";
+            }
+        }
+    }
+    return ll_pack(p, ssa, ret_kind, env);
+}

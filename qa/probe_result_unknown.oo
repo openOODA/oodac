@@ -1,0 +1,13 @@
+// # Probe victim: incomplete Result must not map to OoResS
+//
+// Logline: Result[String] with no Err type must not compile as OoResS.
+//
+// Setup: One type argument. Unknown Result mapping fails closed.
+//
+// Beats:
+//   1. check and build must ERR.
+//   2. No ELF.
+
+pub fn main() -> Result[String] {
+    return Ok("x");
+}

@@ -2,7 +2,7 @@
 //
 // Logline: Prints the C includes, OoStr list and Result typedefs, runtime prototypes, cap grants, and assert macros that every emit-c translation unit needs.
 //
-// Setup: println exists; function bodies live in chs_rt.c; this file only declares them. Residual: no product seccomp-bpf floor — process-local cap tokens only.
+// Setup: println exists; function bodies live in oodar.c; this file only declares them. Residual: no product seccomp-bpf floor — process-local cap tokens only.
 //
 // Beats:
 //   1. Print the std includes and the OoStr, OoIList, OoSList, OoResS, and OoResV typedefs.
@@ -12,7 +12,7 @@
 pub fn c_emit_preamble() {
     println("#ifndef OODAR_CRYPTO_INTERNAL\n#define OODAR_CRYPTO_INTERNAL 1\n#endif");
     println("#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <stdbool.h>\n#include <stddef.h>\n#include <stdint.h>\n#include <unistd.h>");
-    println("/* runtime decls (defined in chs_rt.c) */");
+    println("/* runtime decls (defined in oodar.c) */");
     println("typedef struct { uint32_t ref_count; uint32_t flags; } OoListHeader;");
     println("void *oo_list_alloc_payload(size_t elem_size, size_t cap);");
     println("void oo_list_quota_release_bytes(long long cap, size_t elem_size);");
@@ -129,7 +129,7 @@ pub fn c_emit_preamble() {
     println("long long oo_cap_grant_fs(void); long long oo_cap_grant_sys(void); long long oo_cap_grant_env(void); long long oo_cap_grant_net(void);");
     println("long long oo_cap_grant_time(void); long long oo_cap_grant_rand(void); long long oo_cap_grant_alloc(void); long long oo_cap_grant_arena(void); long long oo_cap_grant_ffi(void);");
     println("long long oo_cap_grant_thread(void); long long oo_cap_grant_gpu(void); long long oo_cap_grant_compiler_read(void);");
-    // CAP-G3: granular + V2 grants DE1 main inject may emit (defined chs_rt_sys.c).
+    // CAP-G3: granular + V2 grants DE1 main inject may emit (defined in oodar).
     // Net: http/tcp/udp/bind | Fs: fsread/fswrite | OS: process/sync/mem/sign
     // HW/UI: audio/camera/usb/hid/window/frame. audit header-only residual (no T).
     println("long long oo_cap_grant_http(void); long long oo_cap_grant_tcp(void); long long oo_cap_grant_udp(void); long long oo_cap_grant_bind(void);");
@@ -192,7 +192,7 @@ pub fn c_emit_preamble() {
     println("long long oo_soa_layout(OoStr); long long oo_dod_layout(long long); long long oo_checkpoint(long long,long long); long long oo_rollback(long long);");
     println("OoResS oo_actor_restart(long long,long long); OoResS oo_otp_supervise(long long,long long);");
     println("OoResS oo_cap_rpc_send(long long,OoStr); OoResS oo_cap_rpc_recv(long long,OoStr);");
-    println("OoStr oo_read_stdin(void); OoResS oo_read_stdin_chunk(long long); OoStr oo_file_stamp(OoStr);");
+    println("OoStr oo_read_stdin(long long); OoResS oo_read_stdin_chunk(long long,long long); OoStr oo_file_stamp(long long,OoStr);");
     println("OoStr oo_str_macro_expand(OoStr); OoStr oo_str_ast_macro(OoStr);");
     println("long long oo_import_c(long long,OoStr); long long oo_ffi_gen(long long,OoStr); long long oo_lto_xlang_link(long long,OoStr,OoStr);");
     println("int oo_landlock_is_available(void); OoResS oo_landlock_restrict(long long,OoStr,OoStr);");

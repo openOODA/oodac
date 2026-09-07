@@ -2,12 +2,15 @@
 //
 // Logline: check then emit-c via ProcessCap argv, write C under the jail, gcc argv.
 //
-// Setup: Host is OODA_COMPILER or OODAC_BIN only. C backend only. No sh -c.
+// Setup: Host is OODA_COMPILER or OODAC_BIN only. Links oodar.c. No sh -c.
 //
 // Beats:
-//   1. Refuse non-c backends, -o a directory, and entry files with no main.
+//   1. Refuse residual backends, compiler-main concat, -o a directory, and no main.
 //   2. sys_exec host check; on ERR do not emit or gcc.
-//   3. mkdir; sys_exec host emit-c; gcc with chs_rt and oodar blackbox.c.
+//   3. mkdir; emit-c or emit-llvm; gcc/clang oodar.c plus host_rt.
+
+import "lex/token_fmt.oo";
+import "cli_oodar.oo";
 
 fn compiler_host(env: &EnvCap) -> String {
     let oc: Result[String, String] = env_get(env, "OODA_COMPILER");
@@ -23,43 +26,34 @@ fn compiler_host(env: &EnvCap) -> String {
     return "";
 }
 
-fn path_parent(p: String) -> String {
-    let n: Int = chars_len(p);
-    let mut i: Int = n;
-    while i > 0 {
-        i = i - 1;
-        if char_at(p, i) == "/" {
-            if i == 0 { return "/"; }
-            return str_slice(p, 0, i);
+fn src_has_main(src: String) -> Bool {
+    let toks: List[String] = tokenize_lines(src);
+    let n: Int = list_len(toks);
+    let mut i: Int = 0;
+    while i < n {
+        let k: String = field_at(list_get(toks, i), 0);
+        if k == "KW_FN" {
+            if i + 1 < n {
+                let k2: String = field_at(list_get(toks, i + 1), 0);
+                let t2: String = field_at(list_get(toks, i + 1), 3);
+                if k2 == "IDENT" && t2 == "main" {
+                    return true;
+                }
+            }
+        }
+        i = i + 1;
+    }
+    return false;
+}
+
+fn path_is_compiler_main(path: String) -> Bool {
+    let n: Int = chars_len(path);
+    if n >= 13 {
+        if str_slice(path, n - 13, n) == "oodac/main.oo" {
+            return true;
         }
     }
-    return ".";
-}
-
-fn runtime_dir(fs_r: &FsReadCap, host: String) -> String {
-    if path_exists(fs_r, "oodac/runtime/chs_rt.c") { return "oodac/runtime"; }
-    let cand: String = path_parent(path_parent(host)) + "/runtime";
-    if path_exists(fs_r, cand + "/chs_rt.c") { return cand; }
-    println("ERR\tbuild\tchs_rt missing");
-    process_exit(1);
-    return "";
-}
-
-fn blackbox_dir(fs_r: &FsReadCap, rt: String) -> String {
-    if path_exists(fs_r, "oodar/core/blackbox/blackbox.c") {
-        return "oodar/core/blackbox";
-    }
-    let cand: String = path_parent(path_parent(rt)) + "/oodar/core/blackbox";
-    if path_exists(fs_r, cand + "/blackbox.c") { return cand; }
-    println("ERR\tbuild\tblackbox.c missing");
-    process_exit(1);
-    return "";
-}
-
-fn src_has_main(src: String) -> Bool {
-    if str_index_of(src, "fn main(") >= 0 { return true; }
-    if str_index_of(src, "fn main (") >= 0 { return true; }
-    return false;
+    return path == "oodac/main.oo";
 }
 
 fn cache_dir(env: &EnvCap) -> String {
@@ -73,9 +67,13 @@ fn cache_dir(env: &EnvCap) -> String {
 pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env: &EnvCap, path: String, out_arg: String, backend: String) {
     let mut out: String = path + ".bin";
     if out_arg != "" { out = out_arg; }
-    if backend != "" && backend != "c" {
+    if backend != "" && backend != "c" && backend != "llvm" {
         println("ERR\tbuild\tbackend residual: " + backend);
         process_exit(2);
+    }
+    if path_is_compiler_main(path) {
+        println("ERR\tbuild\tcompiler rebuild is unique_fns");
+        process_exit(1);
     }
     if path_exists(fs_r, out) {
         if path_exists(fs_r, out + "/.") {
@@ -94,12 +92,12 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
         process_exit(1);
     }
     let host: String = compiler_host(env);
-    let rt: String = runtime_dir(fs_r, host);
-    let bb: String = blackbox_dir(fs_r, rt);
+    let od: String = oodar_root(fs_r, host);
     let tmp_dir: String = cache_dir(env);
-    let tmp_h: String = crypto_sha256_internal(out + ":" + path);
+    let tmp_h: String = crypto_sha256_internal(path);
     let tmp_c: String = tmp_dir + "/all_" + str_slice(tmp_h, 0, 16) + ".c";
-    let mk: Result[String, String] = sys_exec(sys, "mkdir", "-p", tmp_dir);
+    let tmp_ll: String = tmp_dir + "/all_" + str_slice(tmp_h, 0, 16) + ".ll";
+    let mk: Result[String, String] = sys_exec(sys, "/usr/bin/mkdir", "-p", tmp_dir);
     if mk.is_err() {
         println("ERR\tbuild\tmkdir failed");
         process_exit(1);
@@ -107,28 +105,67 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
     let ck: Result[String, String] = sys_exec(sys, host, "check", path);
     if !ck.is_ok() {
         println("ERR\tbuild\tcheck failed");
-        let cmsg: String = ck.val;
+        let cmsg: String = match ck { Ok(s) => s, Err(e) => e };
         println(cmsg);
         process_exit(1);
     }
-    let em: Result[String, String] = sys_exec(sys, host, "emit-c", path);
-    if !em.is_ok() {
-        println("ERR\tbuild\temit-c failed");
-        let emsg: String = em.val;
-        println(emsg);
-        process_exit(1);
-    }
-    let wr: Result[Void, String] = write_file(fs_w, tmp_c, em.val);
-    if wr.is_err() {
-        println("ERR\tbuild\twrite C failed");
-        process_exit(1);
-    }
-    let r: Result[String, String] = sys_exec(sys, "gcc", "-O2", "-I" + rt, "-I" + bb, rt + "/chs_rt.c", bb + "/blackbox.c", tmp_c, "-frandom-seed=0", "-Wl,--build-id=none", "-lm", "-ldl", "-lpthread", "-o", out);
-    if !r.is_ok() {
-        println("ERR\tbuild\tgcc failed");
-        let gtxt: String = r.val;
-        println(gtxt);
-        process_exit(1);
+    let hr: String = write_host_rt(fs_w, tmp_dir);
+    if backend == "llvm" {
+        let em: Result[String, String] = sys_exec(sys, host, "emit-llvm", "--concat", path);
+        if !em.is_ok() {
+            println("ERR\tbuild\temit-llvm failed");
+            let emsg: String = match em { Ok(s) => s, Err(e) => e };
+            println(emsg);
+            process_exit(1);
+        }
+        let wr: Result[Void, String] = write_file(fs_w, tmp_ll, em.val);
+        if wr.is_err() {
+            println("ERR\tbuild\twrite LLVM IR failed");
+            process_exit(1);
+        }
+        let obj: String = tmp_dir + "/oodar.o";
+        let co: Result[String, String] = sys_exec(sys, "/usr/bin/gcc", "-c", "-O2", "-g0", "-fno-ident", "-I" + od, od + "/oodar.c", "-o", obj);
+        if !co.is_ok() {
+            println("ERR\tbuild\toodar.o failed");
+            let ct: String = match co { Ok(s) => s, Err(e) => e };
+            println(ct);
+            process_exit(1);
+        }
+        let r: Result[String, String] = sys_exec(sys, "/usr/bin/clang", "--no-default-config", "-O2", "-g0", "-fno-ident", "-Wno-override-module", "-I" + od, obj, hr, tmp_ll, "-frandom-seed=0", "-Wl,--build-id=none", "-Wl,--strip-debug", "-lm", "-ldl", "-lpthread", "-o", out);
+        if !r.is_ok() {
+            println("ERR\tbuild\tclang llvm failed");
+            let gtxt: String = match r { Ok(s) => s, Err(e) => e };
+            println(gtxt);
+            process_exit(1);
+        }
+    } else {
+        let em: Result[String, String] = sys_exec(sys, host, "emit-c", "--concat", path);
+        if !em.is_ok() {
+            println("ERR\tbuild\temit-c failed");
+            let emsg: String = match em { Ok(s) => s, Err(e) => e };
+            println(emsg);
+            process_exit(1);
+        }
+        let wr: Result[Void, String] = write_file(fs_w, tmp_c, em.val);
+        if wr.is_err() {
+            println("ERR\tbuild\twrite C failed");
+            process_exit(1);
+        }
+        let obj: String = tmp_dir + "/oodar.o";
+        let co: Result[String, String] = sys_exec(sys, "/usr/bin/gcc", "-c", "-O2", "-g0", "-fno-ident", "-I" + od, od + "/oodar.c", "-o", obj);
+        if !co.is_ok() {
+            println("ERR\tbuild\toodar.o failed");
+            let ct: String = match co { Ok(s) => s, Err(e) => e };
+            println(ct);
+            process_exit(1);
+        }
+        let r: Result[String, String] = sys_exec(sys, "/usr/bin/gcc", "-O2", "-g0", "-fno-ident", "-I" + od, obj, hr, tmp_c, "-frandom-seed=0", "-Wl,--build-id=none", "-Wl,--strip-debug", "-lm", "-ldl", "-lpthread", "-o", out);
+        if !r.is_ok() {
+            println("ERR\tbuild\tgcc failed");
+            let gtxt: String = match r { Ok(s) => s, Err(e) => e };
+            println(gtxt);
+            process_exit(1);
+        }
     }
     println("OK_PURE_NATIVE");
     println("OK\tbuild\t" + out);

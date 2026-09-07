@@ -1,0 +1,12 @@
+// # Probe sibling: concat-only marker
+//
+// Logline: Unique fn name exists only in this sibling TU.
+//
+// Setup: Not a main. Imported by probe_concat_entry.oo.
+//
+// Beats:
+//   1. Define concat_sib_secret_token_zz.
+
+pub fn concat_sib_secret_token_zz() -> Int {
+    return 7;
+}

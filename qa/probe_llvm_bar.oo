@@ -1,0 +1,99 @@
+// # Probe: llvm backend unique bar slice
+//
+// Logline: llvm unique-bar victims match C. Kind drivers stay C. Landlock runs under jail.
+//
+// Setup: ProcessCap + EnvCap + FsReadCap. Host is OODA_COMPILER. clang must exist. Jail env inherited.
+//
+// Beats:
+//   1. list/option/result/std-import/short-circuit/match run. Result Ok 0; Err 1.
+//   2. landlock_outside builds, has oo_jail_landlock_ctor, run prints OK.
+//   3. kind-mismatch callee ERR no ELF. Kind drivers stay C. wasm residual.
+
+pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
+    let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
+    let host: String = match hr { Ok(s) => s, Err(_) => "" };
+    if host == "" {
+        println("ERR\tOODA_COMPILER required");
+        process_exit(1);
+    }
+    let out: String = ".ooda-cache/ooda-tmp/llvm_list.bin";
+    let br: Result[String, String] = sys_exec(p, host, "build", "--backend", "llvm", "oodac/qa/probe_artifact_list.oo", "-o", out);
+    if br.is_err() {
+        println("ERR\tllvm build list");
+        let bt: String = br.val;
+        println(bt);
+        process_exit(1);
+    }
+    let rr: Result[String, String] = sys_exec(p, out);
+    if rr.is_err() || str_index_of(rr.val, "0") < 0 {
+        println("ERR\tllvm list run");
+        process_exit(1);
+    }
+    let okp: String = ".ooda-cache/ooda-tmp/llvm_ok.bin";
+    let okr: Result[String, String] = sys_exec(p, host, "build", "--backend", "llvm", "oodac/qa/probe_result_main_ok.oo", "-o", okp);
+    if okr.is_err() { println("ERR\tllvm result ok"); process_exit(1); }
+    let oke: Result[String, String] = sys_exec(p, okp);
+    if oke.is_err() { println("ERR\tllvm result ok run"); process_exit(1); }
+    let erp: String = ".ooda-cache/ooda-tmp/llvm_err.bin";
+    let errb: Result[String, String] = sys_exec(p, host, "build", "--backend", "llvm", "oodac/qa/probe_result_main_err.oo", "-o", erp);
+    if errb.is_err() { println("ERR\tllvm result err build"); process_exit(1); }
+    let erre: Result[String, String] = sys_exec(p, erp);
+    if erre.is_ok() { println("ERR\tllvm Err main must exit 1"); process_exit(1); }
+    let lop: String = ".ooda-cache/ooda-tmp/llvm_listok.bin";
+    let lb: Result[String, String] = sys_exec(p, host, "build", "--backend", "llvm", "oodac/qa/probe_list_ok.oo", "-o", lop);
+    if lb.is_err() { println("ERR\tllvm list_ok"); let t1: String = lb.val; println(t1); process_exit(1); }
+    let lr: Result[String, String] = sys_exec(p, lop);
+    if lr.is_err() { println("ERR\tllvm list_ok run"); process_exit(1); }
+    let op: String = ".ooda-cache/ooda-tmp/llvm_opt.bin";
+    let ob: Result[String, String] = sys_exec(p, host, "build", "--backend", "llvm", "oodac/qa/probe_option_ok.oo", "-o", op);
+    if ob.is_err() { println("ERR\tllvm option_ok"); let t2: String = ob.val; println(t2); process_exit(1); }
+    let orr: Result[String, String] = sys_exec(p, op);
+    if orr.is_err() || str_index_of(orr.val, "ok") < 0 || str_index_of(orr.val, "none") < 0 {
+        println("ERR\tllvm option_ok run");
+        process_exit(1);
+    }
+    let stdp: String = ".ooda-cache/ooda-tmp/llvm_std.bin";
+    let sb: Result[String, String] = sys_exec(p, host, "build", "oodac/qa/probe_build_std_import.oo", "-o", stdp);
+    if sb.is_err() { println("ERR\tllvm std-import"); let t3: String = sb.val; println(t3); process_exit(1); }
+    let sr: Result[String, String] = sys_exec(p, stdp);
+    if sr.is_err() || str_index_of(sr.val, "a/b") < 0 {
+        println("ERR\tllvm std-import run");
+        process_exit(1);
+    }
+    let scp: String = ".ooda-cache/ooda-tmp/llvm_sc.bin";
+    let scb: Result[String, String] = sys_exec(p, host, "build", "--backend", "llvm", "oodac/qa/probe_llvm_sc.oo", "-o", scp);
+    if scb.is_err() { println("ERR\tllvm sc"); let t5: String = scb.val; println(t5); process_exit(1); }
+    let scr: Result[String, String] = sys_exec(p, scp);
+    if scr.is_err() || str_index_of(scr.val, "sc") < 0 || str_index_of(scr.val, "boom") >= 0 {
+        println("ERR\tllvm sc run");
+        process_exit(1);
+    }
+    let mp: String = ".ooda-cache/ooda-tmp/llvm_match.bin";
+    let mb: Result[String, String] = sys_exec(p, host, "build", "--backend", "llvm", "oodac/qa/probe_llvm_match.oo", "-o", mp);
+    if mb.is_err() { println("ERR\tllvm match"); let t6: String = mb.val; println(t6); process_exit(1); }
+    let mr: Result[String, String] = sys_exec(p, mp);
+    if mr.is_err() || str_index_of(mr.val, "3") < 0 || str_index_of(mr.val, "2") < 0 {
+        println("ERR\tllvm match run");
+        process_exit(1);
+    }
+    let llp: String = ".ooda-cache/ooda-tmp/llvm_land.bin";
+    let llb: Result[String, String] = sys_exec(p, host, "build", "--backend", "llvm", "oodac/qa/probe_landlock_outside.oo", "-o", llp);
+    if llb.is_err() { println("ERR\tllvm landlock"); let t4: String = llb.val; println(t4); process_exit(1); }
+    let nmr: Result[String, String] = sys_exec(p, "nm", llp);
+    if nmr.is_err() || str_index_of(nmr.val, "oo_jail_landlock_ctor") < 0 {
+        println("ERR\tllvm landlock ctor");
+        process_exit(1);
+    }
+    let lrr: Result[String, String] = sys_exec(p, llp);
+    if lrr.is_err() || str_index_of(lrr.val, "OK") < 0 {
+        println("ERR\tllvm landlock run");
+        process_exit(1);
+    }
+    let bad: String = ".ooda-cache/ooda-tmp/llvm_kind.bin";
+    let kb: Result[String, String] = sys_exec(p, host, "build", "--backend", "llvm", "oodac/qa/probe_list_kind_callee.oo", "-o", bad);
+    if kb.is_ok() { println("ERR\tllvm kind callee must fail"); process_exit(1); }
+    if path_exists(fs_r, bad) { println("ERR\tllvm kind ELF shipped"); process_exit(1); }
+    let wr: Result[String, String] = sys_exec(p, host, "build", "oodac/qa/probe_list_ok.oo", "--backend", "wasm");
+    if wr.is_ok() { println("ERR\twasm residual must fail"); process_exit(1); }
+    println("OK");
+}

@@ -2,7 +2,7 @@
 //
 // Logline: Maps the Result[T] type tokens at pos to the OoRes* C typedef name emitted by the C backend.
 //
-// Setup: toks at pos sits on Result IDENT; c_tokk, c_tokt, c_result_e_is_int, c_peek_list_elem, and c_emit_res_list_ty exist; unknown defaults to OoResS and residual forms fail-closed.
+// Setup: toks at pos sits on Result IDENT. Unknown Result/Option C mapping fails closed. Rvalue & of a call uses an ISO C99 compound literal of a known type, not GNU typeof.
 //
 // Beats:
 //   1. Parse generic type applications for Result and Option.
@@ -12,10 +12,23 @@
 import "c_emit_mono.oo";
 import "c_emit_skip.oo";
 import "c_emit_olist.oo";
+import "c_emit_env.oo";
 //
 // c_result_c_ty, c_option_c_ty, and c_ref_c_ty were moved to
 // c_emit_skip.oo (which this file imports) to break the import cycle.
 // They are reachable from c_emit_skip.oo's perspective.
+
+fn c_amp_callee_name(inner: String) -> String {
+    let n: Int = chars_len(inner);
+    let mut i: Int = 0;
+    while i < n {
+        if char_at(inner, i) == "(" {
+            return str_slice(inner, 0, i);
+        }
+        i = i + 1;
+    }
+    return "";
+}
 
 pub fn c_emit_unary_c(toks: List[String], pos: Int, n: Int, env: String, k: String) -> List[String] {
     let mut p: Int = pos + 1;
@@ -46,7 +59,16 @@ pub fn c_emit_unary_c(toks: List[String], pos: Int, n: Int, env: String, k: Stri
         inner = list_get(pru, 1);
     }
     if k == "AMP" && inner.contains("(") {
-        return c_emit_pack2(p.to_string(), "({ __typeof__(" + inner + ") __amp = " + inner + "; &__amp; })");
+        let fname: String = c_amp_callee_name(inner);
+        let mut cty: String = "";
+        if fname != "" {
+            cty = c_env_get(env, "__frty__" + fname);
+        }
+        if cty == "" || cty == "void" {
+            println("ERR\temit\trvalue & needs a known type");
+            process_exit(1);
+        }
+        return c_emit_pack2(p.to_string(), "&(" + cty + "){ " + inner + " }");
     }
     // !(p).f / &mut (p).f: postfix field binds tighter than unary ! and &.
     let grouped: String = "(" + inner + ")";
