@@ -106,24 +106,24 @@ if netio != "" { return netio;
         }
         return "oo_gpu_launch(" + a0 + ", " + a1 + ")";
     }
-    // M156/M165: UnsafeFFICap — OS dlopen allowlist + dlsym/dlclose residual stubs
+    // M156/M165: FfiCap — OS dlopen allowlist + dlsym/dlclose residual stubs
     if t == "dlopen" {
         if a1 == "" || !c_arg_is_cap_ident(a0) {
-            println("ERR\tc_emit\tdlopen requires &UnsafeFFICap as first arg (not int/lit)");
+            println("ERR\tc_emit\tdlopen requires &FfiCap as first arg (not int/lit)");
             process_exit(1);
         }
         return "oo_dlopen(" + a0 + ", " + a1 + ")";
     }
     if t == "dlsym" {
         if !c_arg_is_cap_ident(a0) {
-            println("ERR\tc_emit\tdlsym requires &UnsafeFFICap as first arg (not int/lit)");
+            println("ERR\tc_emit\tdlsym requires &FfiCap as first arg (not int/lit)");
             process_exit(1);
         }
         return "oo_dlsym(" + args + ")";
     }
     if t == "dlclose" {
         if a1 == "" || !c_arg_is_cap_ident(a0) {
-            println("ERR\tc_emit\tdlclose requires &UnsafeFFICap as first arg (not int/lit)");
+            println("ERR\tc_emit\tdlclose requires &FfiCap as first arg (not int/lit)");
             process_exit(1);
         }
         return "oo_dlclose(" + a0 + ", " + a1 + ")";

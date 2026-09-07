@@ -13,8 +13,8 @@ Product CLI, check, and emit-c sources live under `cli/`, `check/`, and
 
 | Sealed op (granular required) | Broad cap | Replace with |
 |---|---|---|
-| `fetch` / `http_get` / `net_get` / `net_connect` | `&NetCap` | `&HttpCap` |
-| `tcp_connect` / `tcp_write` / `tcp_read` / `tcp_close` / `tls_connect` | `&NetCap` | `&TcpCap` |
+| `fetch` / `http_get` / `net_get` / `net_connect` / `tls_connect` | `&NetCap` | `&TcpCap` |
+| `tcp_connect` / `tcp_write` / `tcp_read` / `tcp_close` | `&NetCap` | `&TcpCap` |
 | `tcp_bind` | `&NetCap` | `&BindCap` |
 | `bind_udp` / `udp_recv` / `udp_send` | `&NetCap` | `&UdpCap` |
 | `read_file` / `fs_read` / `path_exists` / `file_size` | `&FsCap` | `&FsReadCap` |

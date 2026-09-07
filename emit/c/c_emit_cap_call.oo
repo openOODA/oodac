@@ -63,7 +63,7 @@ pub fn c_emit_cap_call(t: String, a0: String, a1: String, a2g: String, args: Str
     }
     if t == "fetch" {
         if a1 == "" || !c_arg_is_cap_ident(a0) {
-            println("ERR\tc_emit\tfetch requires &HttpCap as first arg (not int/lit)");
+            println("ERR\tc_emit\tfetch requires &TcpCap as first arg (not int/lit)");
             process_exit(1);
         }
         return "oo_fetch(" + a0 + ", " + a1 + ")";

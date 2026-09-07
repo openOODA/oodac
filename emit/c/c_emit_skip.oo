@@ -89,12 +89,10 @@ pub fn c_ty_at(toks: List[String], pos: Int, n: Int) -> String {
         || tn == "NetCap" || tn == "EnvCap" || tn == "TimeCap" || tn == "RandCap"
         || tn == "AllocCap" || tn == "FfiCap" || tn == "ThreadCap" || tn == "GpuCap"
         || tn == "AudioCap" || tn == "CameraCap" || tn == "UsbCap" || tn == "HidCap"
-        || tn == "WindowCap" || tn == "FrameCap" || tn == "HttpCap" || tn == "TcpCap"
-        || tn == "UdpCap" || tn == "BindCap" || tn == "SyncCap" || tn == "MemCap"
-        || tn == "SignCap" || tn == "SysCap" {
-        return "long long";
-    }
-    if tn == "HitlCap" || tn == "AuditCap" || tn == "IoCap" {
+        || tn == "WindowCap" || tn == "FrameCap" || tn == "TcpCap"
+        || tn == "UdpCap" || tn == "BindCap"
+        || tn == "SignCap" || tn == "SysCap" || tn == "MetricsCap"
+        || tn == "ArenaCap" || tn == "CompilerReadCap" {
         return "long long";
     }
     return tn;
@@ -222,10 +220,7 @@ if p >= n { return "long long";
     if c_cap_grant_suffix(tn) != "" {
         return "long long";
     }
-    if tn == "HitlCap" || tn == "IoCap" {
-        return "long long";
-    }
-    if tn == "AuditCap" {
+    if tn == "MetricsCap" || tn == "CompilerReadCap" {
         return "long long";
     }
     if tn == "List" {

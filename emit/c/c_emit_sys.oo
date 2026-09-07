@@ -211,14 +211,14 @@ process_exit(1);
     // OPEN-70: product C-header / FFI-gen / LTO. Cap first; no ambient lower.
     if t == "import_c" || t == "oo_import_c" {
         if a1 == "" || !c_arg_is_cap_ident(a0) {
-            println("ERR\tc_emit\timport_c requires &UnsafeFFICap first arg");
+            println("ERR\tc_emit\timport_c requires &FfiCap first arg");
             process_exit(1);
         }
         return "oo_import_c(" + args + ")";
     }
     if t == "ffi_gen" || t == "oo_ffi_gen" {
         if a1 == "" || !c_arg_is_cap_ident(a0) {
-            println("ERR\tc_emit\tffi_gen requires &UnsafeFFICap first arg");
+            println("ERR\tc_emit\tffi_gen requires &FfiCap first arg");
             process_exit(1);
         }
         return "oo_ffi_gen(" + args + ")";

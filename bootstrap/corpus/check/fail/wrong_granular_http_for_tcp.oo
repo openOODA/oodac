@@ -1,13 +1,13 @@
 // # wrong granular http for tcp
 //
-// Logline: Check-fail fixture that holds HttpCap and must not authorize tcp_bind.
+// Logline: Check-fail fixture that holds TcpCap and must not authorize tcp_bind.
 //
 // Beats:
-//   1. bad takes http: &HttpCap.
+//   1. bad takes tcp: &TcpCap.
 //   2. tcp_bind is called with that token.
-//   3. Check must keep the net grant precise.
+//   3. Check must keep BindCap precise.
 
-pub fn bad(http: &HttpCap) {
-    let r = tcp_bind(http, 8080);
+pub fn bad(tcp: &TcpCap) {
+    let r = tcp_bind(tcp, 8080);
 }
 pub fn main() {}

@@ -61,8 +61,6 @@ pub fn cap_deny(fname: String, op: String, kind: String, line: String, col: Stri
 // No legacy supersede: callers must use the granular preferred kind (HttpCap, TcpCap, UdpCap, BindCap).
 // &NetCap is reserved for sock_raw / raw_socket — it does not satisfy HttpCap / TcpCap / UdpCap / BindCap.
 pub fn is_soft_net_kind(kind: String) -> Bool {
-    if kind == "HttpCap" { return true;
-    }
     if kind == "TcpCap" { return true;
     }
     if kind == "UdpCap" { return true;

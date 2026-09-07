@@ -138,7 +138,7 @@ pub fn ty_parse_at(toks: List[String], pos: Int, n: Int) -> List[String] {
                 }
                 ty_pack2(p.to_string(), ty_box(elem_ty))
             },
-            _ => if is_cap_type(t) || t == "HitlCap" || t == "AuditCap" || t == "IoCap" || t == "ProcessCap" {
+            _ => if is_cap_type(t) {
                 ty_pack2(p.to_string(), ty_cap(t))
             } else {
                 ty_pack2(p.to_string(), ty_name(t))

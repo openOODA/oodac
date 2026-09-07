@@ -1,13 +1,13 @@
 // # ok unsafe ffi host
 //
-// Logline: Check-pass fixture that grants host_ast_dump through an UnsafeFFICap token.
+// Logline: Check-pass fixture that grants host_ast_dump through an FfiCap token.
 //
 // Beats:
-//   1. ok takes ffi: &UnsafeFFICap.
+//   1. ok takes ffi: &FfiCap.
 //   2. host_ast_dump is called with that token.
 //   3. Check must accept the host dump.
 
-pub fn ok(ffi: &UnsafeFFICap) {
+pub fn ok(ffi: &FfiCap) {
     let r = host_ast_dump(ffi, "x.oo");
 }
 pub fn main() {}

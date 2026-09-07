@@ -23,12 +23,12 @@ import "check_cap_grant.oo";
 // No legacy supersede: callers must use the granular preferred kind (HttpCap/TcpCap/TlsCap/UdpCap/BindCap). &NetCap does NOT satisfy these.
 // TlsCap attenuation: &TlsCap is HMAC-derived from &TcpCap (parent_hmac||parent_rights||child_rights). TcpCap subsumes TlsCap is false; TlsCap is distinct child.
 pub fn sealed_net_kind_of(name: String) -> String {
-    if name == "fetch" || name == "http_get" || name == "net_get" || name == "downloadData" || name == "query_remote_api" || name == "net_connect" { return "HttpCap";
+    if name == "fetch" || name == "http_get" || name == "net_get" || name == "downloadData" || name == "query_remote_api" || name == "net_connect" { return "TcpCap";
 }
     if name == "tcp_connect" || name == "tcp_write" || name == "tcp_read" || name == "tcp_close" || name == "tcp_accept" {
         return "TcpCap";
     }
-    if name == "tls_connect" { return "TlsCap"; }
+    if name == "tls_connect" { return "TcpCap"; }
     if name == "tcp_bind" { return "BindCap";
     }
     if name == "bind_udp" || name == "udp_recv" || name == "udp_send" { return "UdpCap";
@@ -154,7 +154,7 @@ pub fn is_sealed_ffi(name: String) -> Bool {
 // V2 granular 2026-08-12: accept all CAPS.oot 27 caps (CAP-G1 needs Http/Tcp/Udp/Bind).
 // Phase2-A: CompilerReadCap for LSP symbol table (minimal narrow, no supersede).
 pub fn is_cap_type(t: String) -> Bool {
-    return t == "NetCap" || t == "FsCap" || t == "FsReadCap" || t == "FsWriteCap" || t == "GpuCap" || t == "ThreadCap" || t == "SysCap" || t == "EnvCap" || t == "TimeCap" || t == "RandCap" || t == "AllocCap" || t == "MemCap" || t == "ArenaCap" || t == "UnsafeFFICap" || t == "FfiCap" || t == "HitlCap" || t == "AuditCap" || t == "SignCap" || t == "HttpCap" || t == "TcpCap" || t == "UdpCap" || t == "BindCap" || t == "ProcessCap" || t == "SyncCap" || t == "AudioCap" || t == "CameraCap" || t == "UsbCap" || t == "HidCap" || t == "WindowCap" || t == "FrameCap" || t == "CompilerReadCap" || t == "TlsCap" || t == "MetricsCap";
+    return t == "NetCap" || t == "FsCap" || t == "FsReadCap" || t == "FsWriteCap" || t == "GpuCap" || t == "ThreadCap" || t == "SysCap" || t == "EnvCap" || t == "TimeCap" || t == "RandCap" || t == "AllocCap" || t == "ArenaCap" || t == "FfiCap" || t == "SignCap" || t == "TcpCap" || t == "UdpCap" || t == "BindCap" || t == "ProcessCap" || t == "AudioCap" || t == "CameraCap" || t == "UsbCap" || t == "HidCap" || t == "WindowCap" || t == "FrameCap" || t == "CompilerReadCap" || t == "MetricsCap";
 }
 
 // F02 / Round 2.4: walk __alias__ chain so rebinds resolve to sealed name.
@@ -200,7 +200,7 @@ pub fn sealed_kind_of(name: String) -> String {
     }
     if is_sealed_alloc(name) { return "AllocCap";
     }
-    if is_sealed_ffi(name) { return "UnsafeFFICap";
+    if is_sealed_ffi(name) { return "FfiCap"; }
     }
     if is_sealed_thread(name) { return "ThreadCap";
     }

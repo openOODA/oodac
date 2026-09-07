@@ -1,0 +1,66 @@
+// # Type tag enumeration
+//
+// Logline: Decode a tagged type string into a TyTag sum type so matching is exhaustive.
+//
+// Setup: Imports ty_tag from ty.oo. Nested payloads stay strings. Completeness 4.
+//
+// Beats:
+//   1. TyTag enumerates every constructor ty.oo can emit.
+//   2. ty_kind maps a wire string onto that enum.
+//   3. Unknown wire text is TUnknown, never a silent Int.
+
+fn ty_kind_tag(ty: String) -> String {
+    let n: Int = chars_len(ty);
+    let mut i: Int = 0;
+    while i < n {
+        if char_at(ty, i) == "(" { return str_slice(ty, 0, i); }
+        i = i + 1;
+    }
+    return ty;
+}
+
+type TyTag =
+    TInt
+  | TFloat
+  | TBool
+  | TStr
+  | TUnit
+  | TF32x8
+  | TF64x4
+  | TList
+  | TOption
+  | TResult
+  | TBox
+  | TName
+  | TCap
+  | TRef
+  | TRefMut
+  | TUnknown;
+
+pub fn ty_kind(ty: String) -> TyTag {
+    let t: String = ty_kind_tag(ty);
+    if t == "TyInt" || t == "Int" || t == "i64" || t == "isize" { return TInt; }
+    if t == "TyFloat" || t == "Float" || t == "f64" { return TFloat; }
+    if t == "TyBool" || t == "Bool" { return TBool; }
+    if t == "TyStr" || t == "String" || t == "str" { return TStr; }
+    if t == "TyUnit" || t == "Void" || t == "void" || t == "unit" { return TUnit; }
+    if t == "TyF32x8" || t == "f32x8" { return TF32x8; }
+    if t == "TyF64x4" || t == "f64x4" { return TF64x4; }
+    if t == "TyList" { return TList; }
+    if t == "TyOption" { return TOption; }
+    if t == "TyResult" { return TResult; }
+    if t == "TyBox" { return TBox; }
+    if t == "TyName" { return TName; }
+    if t == "TyCap" { return TCap; }
+    if t == "TyRef" { return TRef; }
+    if t == "TyRefMut" { return TRefMut; }
+    return TUnknown;
+}
+
+pub fn ty_kind_is_ref(k: TyTag) -> Bool {
+    return match k {
+        TRef => true,
+        TRefMut => true,
+        _ => false,
+    };
+}

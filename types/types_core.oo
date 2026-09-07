@@ -78,7 +78,7 @@ pub fn result_ok_payload_type(rty: String) -> String {
 }
 
 pub fn is_cap_type(t: String) -> Bool {
-    return t == "NetCap" || t == "FsCap" || t == "FsReadCap" || t == "FsWriteCap" || t == "GpuCap" || t == "ThreadCap" || t == "SysCap" || t == "EnvCap" || t == "TimeCap" || t == "RandCap" || t == "AllocCap" || t == "MemCap" || t == "ArenaCap" || t == "UnsafeFFICap" || t == "FfiCap" || t == "HitlCap" || t == "AuditCap" || t == "SignCap" || t == "HttpCap" || t == "TcpCap" || t == "UdpCap" || t == "BindCap" || t == "ProcessCap" || t == "SyncCap" || t == "AudioCap" || t == "CameraCap" || t == "UsbCap" || t == "HidCap" || t == "WindowCap" || t == "FrameCap" || t == "CompilerReadCap" || t == "TlsCap" || t == "MetricsCap";
+    return t == "NetCap" || t == "FsCap" || t == "FsReadCap" || t == "FsWriteCap" || t == "GpuCap" || t == "ThreadCap" || t == "SysCap" || t == "EnvCap" || t == "TimeCap" || t == "RandCap" || t == "AllocCap" || t == "ArenaCap" || t == "FfiCap" || t == "SignCap" || t == "TcpCap" || t == "UdpCap" || t == "BindCap" || t == "ProcessCap" || t == "AudioCap" || t == "CameraCap" || t == "UsbCap" || t == "HidCap" || t == "WindowCap" || t == "FrameCap" || t == "CompilerReadCap" || t == "MetricsCap";
 }
 
 

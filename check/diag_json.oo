@@ -53,7 +53,7 @@ pub fn diag_kind_to_code(kind: String) -> String {
 
 // Token-cheap agent hint (no AST rewrite; see DIAG_CODES.oot). Residual not host AiDiagnostic.
 pub fn diag_fix_hint(code: String) -> String {
-    if code == "E_CAP" { return "Add matching &FsReadCap/&FsWriteCap (per op), &EnvCap, &HttpCap/&TcpCap/&UdpCap/&BindCap/&NetCap(sock_raw), &TimeCap, &RandCap, &AllocCap, or &UnsafeFFICap param; sealed ops need a capability.";
+    if code == "E_CAP" { return "Add matching &FsReadCap/&FsWriteCap (per op), &EnvCap, &TcpCap/&UdpCap/&BindCap/&NetCap(sock_raw), &TimeCap, &RandCap, &AllocCap, or &FfiCap param; sealed ops need a capability."; }
 }
     if code == "E_TC" {
         return "Fix type/name error: define the symbol, correct arity, or adjust annotations.";
@@ -119,7 +119,7 @@ pub fn diag_obj_json(code: String, line: String, col: String, msg: String, path:
         }
         let pus_s: String = pus.to_string();
         let cus_s: String = cus.to_string();
-        extra = ",\"kind\":\"CapabilitySecurityViolation\",\"suggested_fix\":\"Add capability handle parameter (per op: &HttpCap, &TcpCap, &UdpCap, &BindCap, &NetCap(sock_raw), &FsReadCap, &FsWriteCap, &ProcessCap, &SysCap(residual))\",\"timings_us\":{\"parse_us\":" + pus_s + ",\"check_us\":" + cus_s + "}";
+        extra = ",\"kind\":\"CapabilitySecurityViolation\",\"suggested_fix\":\"Add capability handle parameter (per op: &TcpCap, &UdpCap, &BindCap, &NetCap(sock_raw), &FsReadCap, &FsWriteCap, &ProcessCap, &SysCap(residual))\",\"timings_us\":{\"parse_us\":" + pus_s + ",\"check_us\":" + cus_s + "}";
     } else if code == "E_TC" {
         extra = ",\"kind\":\"arg_count\"";
     }
