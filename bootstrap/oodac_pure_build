@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Why not .oo: this starts gcc and the seed (first compiler). RULES 1.13 host exception.
+# Why not .oo: this starts clang and the seed (first compiler). RULES 1.13 host exception.
 # job: official in-repo pure multi-module oodac rebuild (emit each .oo, link once)
 # in:  <main.oo> <out_bin>
-# out: native binary via emit-c + gcc + oodar.c + host_rt (compiler self-host).
+# out: native binary via emit-llvm + clang -O2 + oodar.c + host_rt (compiler self-host).
 #      Product `oodac build` links the same oodar.c. unique_fns is awk, not Python.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -70,15 +70,14 @@ OUT="$(oodac_abs "${ARGS[1]}")"
 if [[ -z "$SOVEREIGN_BACKEND" ]]; then
   UNAME_M="$(uname -m 2>/dev/null || echo x86_64)"
   UNAME_S="$(uname -s 2>/dev/null || echo Linux)"
-  # REDTEAM: the emit-x86/emit-aarch64 direct native paths cannot self-host
-  # oodac (Result[T] and struct types exceed the 24-arm chain). Default to
-  # the battle-tested C99 path and let users opt in to direct native backends.
+  # PERF: llvm via emit/llvm + clang -O2 is the default sovereign backend (rustc/Go/Zig steal).
+  # Direct native x86/aarch64 backends remain opt-in; C is the fallback legacy path.
   if [[ "$UNAME_S" == "Darwin" ]]; then
-    SOVEREIGN_BACKEND="c"
+    SOVEREIGN_BACKEND="llvm"
   elif [[ "$UNAME_M" == "aarch64" || "$UNAME_M" == "arm64" ]]; then
-    SOVEREIGN_BACKEND="c"
+    SOVEREIGN_BACKEND="llvm"
   else
-    SOVEREIGN_BACKEND="c"
+    SOVEREIGN_BACKEND="llvm"
   fi
 fi
 OODAC_BIN="${OODAC_BIN:-$ROOT/bin/oodac_bin.core}"
@@ -651,9 +650,9 @@ __attribute__((constructor)) void oo_jail_landlock_ctor(void) {
   if (!r.ok) { fprintf(stderr, "ERR\tlandlock\tjail apply failed\n"); _exit(1); }
 }
 HOST_RT_EOF
-echo "pure_build: gcc oodar.c (no chs_rt.c)"
-gcc -c ${OODAC_GCC_OPT:--O2} -g0 -fno-ident "${OO_SSL_CFLAGS[@]}" -I"$OD" "$OD/oodar.c" -o "$TMP/oodar.o"
-gcc ${OODAC_GCC_OPT:--O2} -g0 -fno-ident -I"$OD" "${OO_SSL_CFLAGS[@]}" "$TMP/oodar.o" "$TMP/oodac_host_rt.c" "$TMP/all.c" \
+echo "pure_build: clang -O2 oodar.c (no chs_rt.c)"
+clang -c -O2 -g0 -fno-ident "${OO_SSL_CFLAGS[@]}" -I"$OD" "$OD/oodar.c" -o "$TMP/oodar.o"
+clang -O2 -g0 -fno-ident -I"$OD" "${OO_SSL_CFLAGS[@]}" "$TMP/oodar.o" "$TMP/oodac_host_rt.c" "$TMP/all.c" \
   -frandom-seed=0 -Wl,--build-id=none -Wl,--strip-debug \
   -lm -ldl -lpthread "${OO_SSL_LIBS[@]}" -o "$OUT"
 chmod +x "$OUT"

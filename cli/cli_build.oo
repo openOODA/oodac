@@ -1,13 +1,13 @@
 // # Build a source file to a native C binary
 //
-// Logline: check then emit-c via ProcessCap argv, write C under the jail, gcc argv.
+// Logline: check then emit-llvm (default) via ProcessCap argv, write IR/C under jail, clang -O2.
 //
 // Setup: Host is OODA_COMPILER or OODAC_BIN only. Links oodar.c. No sh -c.
 //
 // Beats:
 //   1. Refuse residual backends, compiler-main concat, -o a directory, and no main.
-//   2. sys_exec host check; on ERR do not emit or gcc.
-//   3. mkdir; emit-c or emit-llvm; gcc/clang oodar.c plus host_rt.
+//   2. sys_exec host check; on ERR do not emit or clang.
+//   3. mkdir; emit-llvm (default, clang -O2) or emit-c; oodar.c plus host_rt.
 
 import "lex/token_fmt.oo";
 import "cli_oodar.oo";
@@ -110,7 +110,7 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
         process_exit(1);
     }
     let hr: String = write_host_rt(fs_w, tmp_dir);
-    if backend == "llvm" {
+    if backend == "llvm" || backend == "" {
         let em: Result[String, String] = sys_exec(sys, host, "emit-llvm", "--concat", path);
         if !em.is_ok() {
             println("ERR\tbuild\temit-llvm failed");
