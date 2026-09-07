@@ -589,6 +589,7 @@ cat > "$TMP/oodac_host_rt.c" << 'HOST_RT_EOF'
 #include <string.h>
 #include <unistd.h>
 #include <limits.h>
+#include <sys/prctl.h>
 #include "oodar.h"
 static int g_tn, g_np, g_nm;
 static int g_marks[64];
@@ -628,7 +629,13 @@ static OoStr jail_str(const char *s) {
 __attribute__((constructor)) void oo_jail_landlock_ctor(void) {
   const char *rd = getenv("OODA_FS_READDIR");
   const char *wd = getenv("OODA_FS_WRITEDIR");
-  if (!rd || !rd[0] || !wd || !wd[0]) return;
+  if (!rd || !rd[0] || !wd || !wd[0]) {
+    const char *off = getenv("OODA_NO_JAIL");
+    if (off && off[0] == '1' && off[1] == 0) return;
+    fprintf(stderr, "ERR\tlandlock\tOODA_FS_READDIR and OODA_FS_WRITEDIR required (or OODA_NO_JAIL=1)\n");
+    _exit(1);
+  }
+  if (prctl(PR_GET_NO_NEW_PRIVS, 0, 0, 0, 0) == 1) return;
   if (!oo_landlock_is_available()) {
     fprintf(stderr, "ERR\tlandlock\trequired when jail env set\n"); _exit(1);
   }
@@ -668,7 +675,7 @@ elif [[ $oodac_named -eq 1 ]]; then
     rm -f "$OUT"
     exit 1
   fi
-  if ! timeout 60 "$OUT" check "$ROOT/fixtures/hello.oo" | grep -q '^OK$'; then
+  if ! timeout 60 "$OUT" check "$ROOT/qa/probe_list_ok.oo" | grep -q '^OK$'; then
     echo "ERR_OODAC_HELLO $OUT" >&2
     rm -f "$OUT"
     exit 1

@@ -1,11 +1,11 @@
 // # CLI Subsystem — Module Entry Door
 //
-// Logline: Command-line parse, C-backend build, and emit-c dispatch.
+// Logline: Command-line parse, C-backend build, emit-c, and emit-llvm dispatch.
 //
-// Setup: Imports CLI parse, build, and emit-c plus the C-path compiler ANCHORs.
+// Setup: Imports CLI parse, build, emit-c, and emit-llvm plus the compiler ANCHORs.
 //
 // Beats:
-//   1. Import parser, build, and emit-c siblings.
+//   1. Import parser, build, emit-c, and emit-llvm siblings.
 //   2. Re-export parse_cli_argv, run_build_san, and run_emit_c_family.
 //   3. Preserve <= 256 lines.
 
@@ -16,6 +16,7 @@ import "types/ANCHOR.oo";
 import "emit/c/ANCHOR.oo";
 import "cli_build.oo";
 import "cli_emit.oo";
+import "cli_emit_llvm.oo";
 import "cli_parse.oo";
 
 // ──▓▓ Public CLI API ──▓▓──

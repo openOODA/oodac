@@ -1,0 +1,56 @@
+// # Match Result and Option C kinds
+//
+// Logline: Name the C result kind for a match scrutinee and retain arm payloads.
+//
+// Setup: env holds __ty__ and __ret__ notes. Scrutinee C text may be an oo_sys_* call.
+//
+// Beats:
+//   1. c_match_rkind maps env and call text to R, RI, V, or OoOpt_*.
+//   2. c_emit_arm_retain emits oo_*_retain for heap payloads.
+
+import "c_emit_env.oo";
+
+pub fn c_match_rkind(env: String, scrut: String) -> String {
+    if str_starts_with(scrut, "oo_sys_exec_wait") || str_starts_with(scrut, "sys_exec_wait") { return "RI"; }
+    if str_starts_with(scrut, "oo_read_file") || str_starts_with(scrut, "read_file") || str_starts_with(scrut, "oo_sys_exec") || str_starts_with(scrut, "sys_exec") { return "R"; }
+    let sty: String = c_env_get(env, "__ty__" + scrut);
+    if sty != "" {
+        if sty == "OoResS" { return "R"; }
+        if sty == "OoResV" { return "V"; }
+        if sty == "OoResI" { return "RI"; }
+        if sty == "OoResII" { return "RII"; }
+        if sty == "OoResLI" || sty == "OoRes_OoL_I" { return "RLI"; }
+        if sty == "OoResLS" || sty == "OoRes_OoL_S" { return "RLS"; }
+        if sty == "OoResLF" || sty == "OoRes_OoL_F" { return "RLF"; }
+        if sty == "OoResB" { return "RB"; }
+        if sty == "OoResF" { return "RF"; }
+        if chars_len(sty) > 5 && (str_slice(sty, 0, 5) == "OoRes" || str_slice(sty, 0, 5) == "OoOpt") { return sty; }
+    }
+    let sk: String = c_env_get(env, scrut);
+    if sk == "V" || sk == "RI" || sk == "RII" || sk == "RLI" || sk == "RB" || sk == "RF" || sk == "RLS" || sk == "RLF" { return sk; }
+    if chars_len(sk) > 5 && (str_slice(sk, 0, 5) == "OoRes" || str_slice(sk, 0, 5) == "OoOpt") { return sk; }
+    let rp: String = c_env_get(env, "respay__");
+    if rp == "RI" || rp == "I" { return "RI"; }
+    if sk == "R" { return "R"; }
+    let ret: String = c_env_get(env, "__ret__");
+    if ret == "RI" || ret == "RII" || ret == "RLI" || ret == "RLS" || ret == "RLF" || ret == "RB" || ret == "RF" || ret == "V" { return ret; }
+    let ret_ct: String = c_env_get(env, "__ret_c_ty__");
+    if ret_ct != "" && chars_len(ret_ct) > 5 {
+        if str_slice(ret_ct, 0, 5) == "OoRes" || str_slice(ret_ct, 0, 5) == "OoOpt" { return ret_ct; }
+    }
+    return "R";
+}
+
+pub fn c_emit_arm_retain(ty: String, name: String) {
+    if ty == "OoStr" { println("    oo_str_retain(" + name + ");"); }
+    else if ty == "OoSList" || ty == "OoL_S" { println("    oo_slist_retain(" + name + ");"); }
+    else if ty == "OoIList" || ty == "OoL_I" { println("    oo_ilist_retain(" + name + ");"); }
+    else if ty == "OoFList" || ty == "OoL_F" { println("    oo_flist_retain(" + name + ");"); }
+    else if chars_len(ty) > 4 && str_slice(ty, 0, 4) == "OoL_" { println("    oo_retain_" + ty + "(" + name + ");"); }
+    else if chars_len(ty) > 6 && str_slice(ty, 0, 6) == "OoOpt_" { println("    oo_retain_" + ty + "(" + name + ");"); }
+    else if chars_len(ty) > 6 && str_slice(ty, 0, 6) == "OoRes_" { println("    oo_retain_" + ty + "(" + name + ");"); }
+    else if chars_len(ty) > 7 && str_slice(ty, 0, 7) == "OoRes2_" { println("    oo_retain_" + ty + "(" + name + ");"); }
+    else if chars_len(ty) > 5 && str_slice(ty, 0, 5) == "OoLL_" { println("    oo_retain_" + ty + "(" + name + ");"); }
+    else if chars_len(ty) > 6 && str_slice(ty, 0, 6) == "OoLLL_" { println("    oo_retain_" + ty + "(" + name + ");"); }
+    else if chars_len(ty) > 1 && byte_at(ty, 0) >= 65 && byte_at(ty, 0) <= 90 { println("    oo_retain_" + ty + "(" + name + ");"); }
+}

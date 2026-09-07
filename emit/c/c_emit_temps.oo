@@ -2,7 +2,7 @@
 //
 // Logline: Names which String-producing calls must bind to __tN locals so ARC can release them at scope exit.
 //
-// Setup: oodac is single-threaded. Process state lives in chs_rt_emit_tmp.c. Those C functions are builtins, not Ooda wrappers.
+// Setup: oodac is single-threaded. Process state lives in host_rt emit-tmp helpers. Those C functions are builtins, not Ooda wrappers.
 //
 // Beats:
 //   1. Emit calls oo_emit_tmp_reset, enter, leave, own, release_all_print, and bind as free names.

@@ -141,6 +141,14 @@ jobs:
           echo "=== double-run sealed ==="
           "$HOST" build oodac/qa/oodac_break_smoke.oo -o .ooda-cache/ooda-tmp/ci_dbl.bin
           .ooda-cache/ooda-tmp/ci_dbl.bin
+          echo "=== smt const-false ==="
+          "$HOST" build oodac/qa/probe_smt_false_kind.oo -o .ooda-cache/ooda-tmp/ci_smt_false.bin
+          .ooda-cache/ooda-tmp/ci_smt_false.bin
+          .ooda-cache/ooda-tmp/ci_smt_false.bin
+          echo "=== smt unproven ident ==="
+          "$HOST" build oodac/qa/probe_smt_unproven_kind.oo -o .ooda-cache/ooda-tmp/ci_smt_unp.bin
+          .ooda-cache/ooda-tmp/ci_smt_unp.bin
+          .ooda-cache/ooda-tmp/ci_smt_unp.bin
           echo "UNIQUE_C_BAR_OK"
       - name: Compiler core is ELF
         run: |

@@ -101,7 +101,7 @@ if n == 0 { return "oo_str_lit(\"\")";
     }
     // CRIT 7.2: one str_slice for the last arg span — no per-char OoStr thrash.
     // Runtime: product oodac T c_sys_exec_last_arg calls oo_str_slice×1, 0 concat,
-    // no char[N]. chs_rt has no copy (oo_sys_exec is fork+execvp, other ABI).
+    // no char[N]. oodar oo_sys_exec is fork+execvp.
     if last_start >= n { return args;
     }
     let out = str_slice(args, last_start, n);

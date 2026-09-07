@@ -1,8 +1,0 @@
-// # emit-x86 for i in 0..5 sum
-pub fn main() {
-    let mut s: Int = 0;
-    for i in 0..5 {
-        s = s + i;
-    }
-    println(s);
-}

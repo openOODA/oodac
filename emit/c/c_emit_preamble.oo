@@ -129,7 +129,7 @@ pub fn c_emit_preamble() {
     println("long long oo_cap_grant_fs(void); long long oo_cap_grant_sys(void); long long oo_cap_grant_env(void); long long oo_cap_grant_net(void);");
     println("long long oo_cap_grant_time(void); long long oo_cap_grant_rand(void); long long oo_cap_grant_alloc(void); long long oo_cap_grant_arena(void); long long oo_cap_grant_ffi(void);");
     println("long long oo_cap_grant_thread(void); long long oo_cap_grant_gpu(void); long long oo_cap_grant_compiler_read(void);");
-    // CAP-G3: granular + V2 grants DE1 main inject may emit (defined chs_rt_sys.c).
+    // CAP-G3: granular + V2 grants DE1 main inject may emit (defined in oodar).
     // Net: http/tcp/udp/bind | Fs: fsread/fswrite | OS: process/sync/mem/sign
     // HW/UI: audio/camera/usb/hid/window/frame. audit header-only residual (no T).
     println("long long oo_cap_grant_http(void); long long oo_cap_grant_tcp(void); long long oo_cap_grant_udp(void); long long oo_cap_grant_bind(void);");

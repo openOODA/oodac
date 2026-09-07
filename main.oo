@@ -2,11 +2,11 @@
 //
 // Logline: Parse argv and run check, build, emit-c, or tokens on the C backend.
 //
-// Setup: C-path only. Dispatch check, build, emit-c, tokens.
+// Setup: Dispatch check, build, emit-c, emit-llvm, and tokens. C is the reference ISA.
 //
 // Beats:
 //   1. Unpack cmd/path/out/backend/json/plain.
-//   2. Dispatch check, build, emit-c family, or tokens.
+//   2. Dispatch check, build, emit-c family, emit-llvm, or tokens.
 //   3. Unknown cmd exits 2.
 
 import "lex/ANCHOR.oo";
