@@ -48,99 +48,102 @@ pub fn ty_parse_at(toks: List[String], pos: Int, n: Int) -> List[String] {
 
     if k == "IDENT" {
         p = p + 1;
-        // Primitive types
-        if t == "Int" || t == "i64" || t == "i32" || t == "isize" { return ty_pack2(p.to_string(), ty_int());
-        }
-        if t == "Float" || t == "f64" || t == "f32" { return ty_pack2(p.to_string(), ty_float());
-        }
-        if t == "Bool" || t == "bool" { return ty_pack2(p.to_string(), ty_bool());
-        }
-        if t == "String" || t == "str" { return ty_pack2(p.to_string(), ty_str());
-        }
-        if t == "Void" || t == "void" || t == "unit" { return ty_pack2(p.to_string(), ty_unit());
-        }
-        if t == "f32x8" || t == "TyF32x8" { return ty_pack2(p.to_string(), ty_f32x8());
-        }
-        if t == "f64x4" || t == "TyF64x4" { return ty_pack2(p.to_string(), ty_f64x4());
-        }
+        // Enum-like: primitives via exhaustive match (Ty enum step 2).
+        let prim_ty: String = match t {
+            "Int" => ty_int(),
+            "i64" => ty_int(),
+            "i32" => ty_int(),
+            "isize" => ty_int(),
+            "Float" => ty_float(),
+            "f64" => ty_float(),
+            "f32" => ty_float(),
+            "Bool" => ty_bool(),
+            "bool" => ty_bool(),
+            "String" => ty_str(),
+            "str" => ty_str(),
+            "Void" => ty_unit(),
+            "void" => ty_unit(),
+            "unit" => ty_unit(),
+            "f32x8" => ty_f32x8(),
+            "TyF32x8" => ty_f32x8(),
+            "f64x4" => ty_f64x4(),
+            "TyF64x4" => ty_f64x4(),
+            _ => "",
+        };
+        if prim_ty != "" { return ty_pack2(p.to_string(), prim_ty); }
 
-        // Generic List: List[T] or List<T>
-        if t == "List" {
-            let mut elem_ty: String = ty_str();
-            if p < n && (c_tokk(toks, p) == "LBRACKET" || c_tokk(toks, p) == "LT") {
-                p = p + 1;
-                let p_arg2: Int = p;
-                let sub: List[String] = ty_parse_at(toks, p_arg2, n);
-                p = parse_int(list_get(sub, 0));
-                elem_ty = list_get(sub, 1);
-                if p < n && (c_tokk(toks, p) == "RBRACKET" || c_tokk(toks, p) == "GT") {
+        // Enum-like: generics via exhaustive match (Ty enum step 2).
+        return match t {
+            "List" => {
+                let mut elem_ty: String = ty_str();
+                if p < n && (c_tokk(toks, p) == "LBRACKET" || c_tokk(toks, p) == "LT") {
                     p = p + 1;
+                    let p_arg2: Int = p;
+                    let sub: List[String] = ty_parse_at(toks, p_arg2, n);
+                    p = parse_int(list_get(sub, 0));
+                    elem_ty = list_get(sub, 1);
+                    if p < n && (c_tokk(toks, p) == "RBRACKET" || c_tokk(toks, p) == "GT") {
+                        p = p + 1;
+                    }
                 }
-            }
-            return ty_pack2(p.to_string(), ty_list(elem_ty));
-        }
-
-        // Generic Option: Option[T] or Option<T>
-        if t == "Option" {
-            let mut elem_ty: String = ty_int();
-            if p < n && (c_tokk(toks, p) == "LBRACKET" || c_tokk(toks, p) == "LT") {
-                p = p + 1;
-                let p_outer: Int = p;
-                let sub: List[String] = ty_parse_at(toks, p_outer, n);
-                p = parse_int(list_get(sub, 0));
-                elem_ty = list_get(sub, 1);
-                if p < n && (c_tokk(toks, p) == "RBRACKET" || c_tokk(toks, p) == "GT") {
+                ty_pack2(p.to_string(), ty_list(elem_ty))
+            },
+            "Option" => {
+                let mut elem_ty: String = ty_int();
+                if p < n && (c_tokk(toks, p) == "LBRACKET" || c_tokk(toks, p) == "LT") {
                     p = p + 1;
+                    let p_outer: Int = p;
+                    let sub: List[String] = ty_parse_at(toks, p_outer, n);
+                    p = parse_int(list_get(sub, 0));
+                    elem_ty = list_get(sub, 1);
+                    if p < n && (c_tokk(toks, p) == "RBRACKET" || c_tokk(toks, p) == "GT") {
+                        p = p + 1;
+                    }
                 }
-            }
-            return ty_pack2(p.to_string(), ty_option(elem_ty));
-        }
-
-        // Generic Result: Result[T, E] or Result[T] or Result<T, E>
-        if t == "Result" {
-            let mut ok_ty: String = ty_unit();
-            let mut err_ty: String = ty_str();
-            if p < n && (c_tokk(toks, p) == "LBRACKET" || c_tokk(toks, p) == "LT") {
-                p = p + 1;
-                let p_outer: Int = p;
-                let sub1: List[String] = ty_parse_at(toks, p_outer, n);
-                p = parse_int(list_get(sub1, 0));
-                ok_ty = list_get(sub1, 1);
-                if p < n && c_tokk(toks, p) == "COMMA" {
+                ty_pack2(p.to_string(), ty_option(elem_ty))
+            },
+            "Result" => {
+                let mut ok_ty: String = ty_unit();
+                let mut err_ty: String = ty_str();
+                if p < n && (c_tokk(toks, p) == "LBRACKET" || c_tokk(toks, p) == "LT") {
                     p = p + 1;
-                    let p_outer2: Int = p;
-                    let sub2: List[String] = ty_parse_at(toks, p_outer2, n);
-                    p = parse_int(list_get(sub2, 0));
-                    err_ty = list_get(sub2, 1);
+                    let p_outer: Int = p;
+                    let sub1: List[String] = ty_parse_at(toks, p_outer, n);
+                    p = parse_int(list_get(sub1, 0));
+                    ok_ty = list_get(sub1, 1);
+                    if p < n && c_tokk(toks, p) == "COMMA" {
+                        p = p + 1;
+                        let p_outer2: Int = p;
+                        let sub2: List[String] = ty_parse_at(toks, p_outer2, n);
+                        p = parse_int(list_get(sub2, 0));
+                        err_ty = list_get(sub2, 1);
+                    }
+                    if p < n && (c_tokk(toks, p) == "RBRACKET" || c_tokk(toks, p) == "GT") {
+                        p = p + 1;
+                    }
                 }
-                if p < n && (c_tokk(toks, p) == "RBRACKET" || c_tokk(toks, p) == "GT") {
+                ty_pack2(p.to_string(), ty_result(ok_ty, err_ty))
+            },
+            "Box" => {
+                let mut elem_ty: String = ty_unit();
+                if p < n && (c_tokk(toks, p) == "LBRACKET" || c_tokk(toks, p) == "LT") {
                     p = p + 1;
+                    let p_outer: Int = p;
+                    let sub: List[String] = ty_parse_at(toks, p_outer, n);
+                    p = parse_int(list_get(sub, 0));
+                    elem_ty = list_get(sub, 1);
+                    if p < n && (c_tokk(toks, p) == "RBRACKET" || c_tokk(toks, p) == "GT") {
+                        p = p + 1;
+                    }
                 }
-            }
-            return ty_pack2(p.to_string(), ty_result(ok_ty, err_ty));
-        }
-
-        // Generic Box: Box[T] or Box<T>
-        if t == "Box" {
-            let mut elem_ty: String = ty_unit();
-            if p < n && (c_tokk(toks, p) == "LBRACKET" || c_tokk(toks, p) == "LT") {
-                p = p + 1;
-                let p_outer: Int = p;
-                let sub: List[String] = ty_parse_at(toks, p_outer, n);
-                p = parse_int(list_get(sub, 0));
-                elem_ty = list_get(sub, 1);
-                if p < n && (c_tokk(toks, p) == "RBRACKET" || c_tokk(toks, p) == "GT") {
-                    p = p + 1;
-                }
-            }
-            return ty_pack2(p.to_string(), ty_box(elem_ty));
-        }
-
-        // Capabilities & Named Structs
-        if is_cap_type(t) || t == "HitlCap" || t == "AuditCap" || t == "IoCap" || t == "ProcessCap" {
-            return ty_pack2(p.to_string(), ty_cap(t));
-        }
-        return ty_pack2(p.to_string(), ty_name(t));
+                ty_pack2(p.to_string(), ty_box(elem_ty))
+            },
+            _ => if is_cap_type(t) || t == "HitlCap" || t == "AuditCap" || t == "IoCap" || t == "ProcessCap" {
+                ty_pack2(p.to_string(), ty_cap(t))
+            } else {
+                ty_pack2(p.to_string(), ty_name(t))
+            },
+        };
     }
 
     let next_p: Int = p + 1;
