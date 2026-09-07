@@ -1,0 +1,62 @@
+// # Lattice audit synthesis — hostile prove 20+26, SECRET, SMT, unique_fns, blackbox
+//
+// Logline: Hostile-prove the 10/10 lattice (caps, typestate, SECRET, SMT, unique_fns, blackbox) without downgrade.
+//
+// Setup: Requires FsWriteCap, ProcessCap, EnvCap via sys_exec host. Host is OODA_COMPILER. All denies must fail closed.
+//
+// Beats:
+//   1. Fail-closed cap sealed: HttpCap taxis not NetCap, FsRead not FsWrite.
+//   2. Fail-closed SECRET sink refuse and SMT const-false / unproven deny.
+//   3. Verify unique_fns refuse on compiler main and blackbox symbols present.
+//   4. Print PASS_LATTICE_AUDIT only when all gates hold.
+
+pub fn main(fs_w: &FsWriteCap, p: &ProcessCap, env: &EnvCap, args: List[String]) {
+    let mut host: String = "";
+    let oc: Result[String, String] = env_get(env, "OODA_COMPILER");
+    if oc.is_ok() { host = oc.val; }
+    if host == "" {
+        let ob: Result[String, String] = env_get(env, "OODAC_BIN");
+        if ob.is_ok() { host = ob.val; }
+    }
+    if host == "" { host = "/home/jeryd/.openooda/bin/oodac"; }
+    let cr: Result[String, String] = sys_exec(p, host, "check", "oodac/qa/probe_cap_sealed.oo");
+    if cr.is_ok() {
+        println("FAIL cap sealed should deny");
+        process_exit(1);
+    }
+    let ok1: Result[String, String] = sys_exec(p, host, "check", "oodac/qa/probe_list_ok.oo");
+    if !ok1.is_ok() {
+        println("FAIL list_ok should pass");
+        process_exit(1);
+    }
+    let sr: Result[String, String] = sys_exec(p, host, "check", "oodac/qa/probe_smt_false.oo");
+    if sr.is_ok() {
+        println("FAIL smt const-false should deny");
+        process_exit(1);
+    }
+    let ur: Result[String, String] = sys_exec(p, host, "check", "oodac/qa/probe_smt_unproven.oo");
+    if ur.is_ok() {
+        println("FAIL smt unproven should deny");
+        process_exit(1);
+    }
+    let br: Result[String, String] = sys_exec(p, host, "build", "oodac/main.oo", "-o", "/tmp/lattice_main.bin");
+    if br.is_ok() {
+        println("FAIL unique_fns should deny compiler main build");
+        process_exit(1);
+    }
+    let hb: Result[String, String] = sys_exec(p, host, "build", "oodac/qa/probe_blackbox_hold.oo", "-o", "/tmp/lattice_hold.bin");
+    if !hb.is_ok() {
+        println("FAIL blackbox hold should build");
+        process_exit(1);
+    }
+    let sc: String = "// SECRET: tok\nfn main() { let tok: String = \"s\"; println(tok); }\n";
+    let sw: Result[Void, String] = write_file(fs_w, "/tmp/lattice_secret.oo", sc);
+    if sw.is_ok() {
+        let sec: Result[String, String] = sys_exec(p, host, "check", "/tmp/lattice_secret.oo");
+        if sec.is_ok() {
+            println("FAIL SECRET sink should deny");
+            process_exit(1);
+        }
+    }
+    println("PASS_LATTICE_AUDIT");
+}

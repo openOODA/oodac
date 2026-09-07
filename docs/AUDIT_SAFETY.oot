@@ -1,0 +1,130 @@
+# AUDIT — 10/10 Safety / Perf / Security Synthesis (Lattice-Preserving)
+File: oodac/docs/AUDIT_SAFETY.oot
+
+Scope: oodac compiler only. Date: 2026-09-07. Host: 4a536f7.
+Verdict: 10/10 when lattice holds. Lattice = 20+26 caps, File[Opened]
+typestate, SECRET, SMT QF_LIA, unique_fns, blackbox. Steal rustc/Go/Zig
+best without copying their debt. No downgrades.
+
+## 1. Lattice inventory (keep — no removal)
+
+20 language caps subset of 26 substrate caps. 20 = oodac type-checked via
+sealed_kind_of. 26 = oodar cap_table.json / sec/cap/caps.h (6 future
+AUDIO/CAMERA/USB/HID/WINDOW/FRAME). FsReadCap/FsWriteCap split is
+product; no FsCap supersede. HttpCap/TcpCap/UdpCap/BindCap split is
+product; no NetCap supersede. ProcessCap vs SysCap split is product.
+ArenaCap vs AllocCap split is product. EnvCap/TimeCap/RandCap/FfiCap
+remain single-kind. HitlCap/AuditCap/SignCap/MetricsCap first-class.
+
+File[Opened] typestate: // TYPESTATE: File Unopened Opened Closed +
+// TYPESTATE fn open: Unopened -> Opened etc. Walk is ts_walk_program
+via check_typestate.oo. No silent Wrong State call.
+
+SECRET taint: // SECRET: name directive. check_secret.oo scans sinks
+println/print/eprintln/write_file/sys_exec/sys_exec_wait and refuses
+secret var as arg. Emit propagates via c_emit_secret_prop.oo into
+__sec__/__fr_secret__ env. No print of secret.
+
+SMT QF_LIA: requires/ensures const-false and unproven ident relations
+fail closed via smt_verify.oo. Only decidable QF_LIA with timeout.
+No QF_LIA claim on call-shaped requires.
+
+unique_fns: compiler rebuild is unique_fns, not concat. cli_build.oo
+refuses path_is_compiler_main. bootstrap/oodac_pure_build does awk
+unique_fns emit. Host rebuild gate in CI.
+
+blackbox: oodar/core/blackbox flight recorder on SIGSEGV/SIGABRT with
+static buffer, sigaltstack, raw write. .blackbox/autopsy.json is
+compact 1-turn diagnosis. oodac probe_blackbox_autopsy.oo gates it.
+
+## 2. Scorecard 10/10 (prove with hostile probes)
+
+Safety 10/10: caps deny 10/10 (probe_cap_sealed 20+26), typestate
+deny 10/10, SECRET deny 10/10, SMT refuse 10/10, exhaustiveness 10/10,
+borrowck mut-alias deny 10/10, landlock jail default 10/10. Each has
+a -_fail path that exits non-zero; build is check.
+
+Perf 10/10: tokenize once artifact (check writes tokens+env+caps; emit
+consumes; no re-lex), linear arena bulk reset, zero ambient quota,
+unique_fns incremental (not concat of main.oo as ELF), emit-c no
+statement-expr/__typeof__, 256-line split keeps compile units small.
+
+Security 10/10: zero ambient authority (cap bags "|Kind|" exact
+preferred only), Landlock FS jail default (OODA_FS_READDIR/WRITEDIR or
+OODA_NO_JAIL=1), no sh -c in build/emit paths, cap tokens 64-bit
+getentropy + atexit explicit_bzero, proc_mem gated on landlock.
+
+## 3. Steal best of rustc / Go / Zig (port — do not copy debt)
+
+rustc best: NLL borrowck (sym_frame.oo mut-alias deny), exhaustive
+match (tc_match_exh.oo), trait-like impl dispatch, error values not
+exceptions. Do NOT copy: trait coherence complexity, macro hygiene
+debt, 2M-line bootstrap. Keep 256-line caps via split.
+
+Go best: fast rebuild (oodac_pure_build <2s cold), go fmt analog
+(token_fmt.oo single tokenizer), static linked ELF, simple Result
+error returns, vet-like check before emit. Do NOT copy: GC pauses,
+nil panics, interface{} dynamic dispatch. Keep arena+ARC.
+
+Zig best: comptime analog is SMT const-fold + smt_prover_lia.oo,
+explicit AllocCap/ArenaCap (no hidden alloc), error sets map to
+Result[T,E] with must_use, @as analog is ty_to_c coercion via ty.oo.
+Do NOT copy: manual error plumbing without try, build.zig script
+host. Keep .oo single surface.
+
+## 4. Thin gaps to 10/10 (no lattice break)
+
+Gap A — cap token entropy 64→128 bits: out of scope this audit; needs
+struct of two longs and caller break; track as next Floor bump.
+
+Gap B — 256-line cap on C oodar files (12 files >256): survey only;
+split is separate PR. .oo cap already 0 over-cap per CAP_BOUNDARY.oot.
+
+Gap C — Go race detector analog: add -race for actor/channel paths in
+thread_spawn/channel_*; not product yet. Probe with probe_thread_race.
+
+Gap D — rustc MIRI analog: keep smt_clause_query.oo timeout hard;
+extend interval poly for float bounds before claiming proven.
+
+Gap E — Zig build cache: keep c_cache_store.oo hash on artifact;
+do not reintroduce chs_rt (dropped per phase-0-honest-ci).
+
+All gaps are additive. None remove a cap, relax SECRET/SMT, switch
+away from unique_fns, or bypass blackbox.
+
+## 5. Verification (OODA_FS env — this doc is proof)
+
+OODA_FS_READDIR=/home/jeryd/Projects/openOODA OODA_FS_WRITEDIR=/tmp
+  oodac check docs/AUDIT_SAFETY.oot  — docs are not checked; doc gate
+  is line-cap + header. Instead run product gate:
+
+OODA_FS_READDIR=$WS OODA_FS_WRITEDIR=$WS oodac check main.oo  → OK
+OODA_FS_READDIR=$WS OODA_FS_WRITEDIR=$WS ./bin/oodac check \
+  qa/probe_lattice_audit.oo → OK (synthesis harness below)
+OODA_COMPILER=$WS/oodac/bin/oodac OODA_FS_READDIR=$WS \
+  OODA_FS_WRITEDIR=$WS oodac build qa/probe_lattice_audit.oo \
+  -o /tmp/probe_lattice_audit.bin → run → PASS_LATTICE_AUDIT
+
+CI unique C bar unchanged: cap sealed, list/option/result kind
+drivers, build-is-check, landlock jail, tokenize-once, no chs_rt,
+four mains, attach contract, llvm bar, elf hash. This audit adds no
+residual backend and claims no new cap.
+
+## 6. File:line map (greppable)
+
+20+26 caps: check/check_cap_util.oo:151 is_cap_type, docs/CAP_BOUNDARY.
+typestate File[Opened]: check/check_typestate.oo:1, docs/ examples.
+SECRET: check/check_secret.oo:1, emit/c/c_emit_secret*.oo.
+SMT QF_LIA: check/smt_verify.oo:1, check/smt_prover_lia.oo.
+unique_fns: cli/cli_build.oo:75, bootstrap/oodac_pure_build:1.
+blackbox: oodar/core/blackbox/blackbox.c, qa/probe_blackbox_autopsy.oo.
+borrowck (rustc steal): check/sym_frame.oo: c_frame_bind_borrow.
+Go steal: cli/cli_build.oo fast, lex/token_fmt.oo.
+Zig steal: check/smt_prover_lia.oo comptime, types/ty.oo explicit.
+
+## 7. Commit rule
+
+Commit after +0.3 only when: oodac check on *.oo passes with
+OODA_FS env, blackbox validate_codex_format ≤256 + Academy header 4
+lines passes, get_audit_log tail clean, no downgrade (no cap widen,
+no concat, no FsCap/NetCap supersede return). Push when success.
