@@ -200,7 +200,7 @@ pub fn sealed_kind_of(name: String) -> String {
     }
     if is_sealed_alloc(name) { return "AllocCap";
     }
-    if is_sealed_ffi(name) { return "FfiCap"; }
+    if is_sealed_ffi(name) { return "FfiCap";
     }
     if is_sealed_thread(name) { return "ThreadCap";
     }
