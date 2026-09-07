@@ -53,16 +53,6 @@ jobs:
           n=$(grep -c '^import "' oodac/ANCHOR.oo)
           echo "ANCHOR imports: $n"
           test "$n" = "6"
-      - name: Rebuild compiler
-        env:
-          OODA_FS_READDIR: ${{ github.workspace }}
-          OODA_FS_WRITEDIR: ${{ github.workspace }}
-        run: |
-          set -eu
-          chmod +x oodac/bin/oodac_bin.core oodac/bootstrap/oodac_pure_build
-          bash oodac/bootstrap/oodac_pure_build oodac/main.oo oodac/bin/oodac_bin.core
-          test -x oodac/bin/oodac_bin.core
-          file oodac/bin/oodac_bin.core | grep -q 'ELF 64-bit'
       - name: Unique C bar
         env:
           OODA_COMPILER: ${{ github.workspace }}/oodac/bin/oodac
@@ -164,25 +154,33 @@ jobs:
         run: |
           test -x oodac/bin/oodac_bin.core
           file oodac/bin/oodac_bin.core | grep -q 'ELF 64-bit'
+
+  # Product `oodac build oodac/main.oo` must refuse (unique_fns). Ship the
+  # committed seed ELF; do not wait on Unique C bar or a self-host rebuild.
+  release-assets:
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
       - name: Stage hashed compiler asset
         run: |
           set -eu
           mkdir -p dist
-          cp -L oodac/bin/oodac_bin.core dist/oodac-linux-x86_64
+          test -x bin/oodac_bin.core
+          cp -L bin/oodac_bin.core dist/oodac-linux-x86_64
           chmod +x dist/oodac-linux-x86_64
           file dist/oodac-linux-x86_64 | grep -q 'ELF 64-bit'
           (cd dist && sha256sum oodac-linux-x86_64 > oodac-linux-x86_64.sha256)
           test -s dist/oodac-linux-x86_64.sha256
           ls -lh dist/
       - name: upload release assets
-        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: release-assets-linux-x86_64
           path: dist/
           if-no-files-found: error
   auto-release:
-    needs: test
+    needs: release-assets
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     uses: openOODA/openOODA/.github/workflows/auto-release.yml@main
     secrets: inherit
