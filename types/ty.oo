@@ -16,7 +16,7 @@
 //
 // Notes: ≤ 256 lines; only `.oo`/`.oot`; ASD-STE100. All functions are data-only (no c_emit_*.oo calls per Phase A rule, audit/green/c_emit_refactor_phase_a.oot:84). Coercion defaults to long long when in doubt (matches c_emit default in c_emit_call_ty.oo:5-101 if-lists).
 
-import "ty_kind.oo";
+// Type constants: F32x8 = 14, F64x4 = 15 (kept as comments for reference).
 
 // Type constructors (one per mk_ty_* in ast.oo:58-68) — thin wrappers that tag the type with a stable id so ty_eq works on the literal String.
 pub fn ty_int() -> String {
@@ -111,19 +111,21 @@ pub fn ty_eq(a: String, b: String) -> Bool {
     return (a == b);
 }
 
+// Is `from` assignable to `to`? Identity + Int↔Float + ref-strip + list covariance + Result unwrap.
+// Enum-like: match on ty_tag(from) for exhaustive destructuring (step toward Ty enum).
 pub fn ty_assignable(to: String, from: String) -> Bool {
     if (to == from) { return true; }
     if (to == "TyF32x8" && from == "f32x8") || (to == "f32x8" && from == "TyF32x8") { return true; }
     if (to == "TyF64x4" && from == "f64x4") || (to == "f64x4" && from == "TyF64x4") { return true; }
     if (to == "TyInt") && (from == "TyFloat") { return true; }
     if (to == "TyFloat") && (from == "TyInt") { return true; }
-    return match ty_kind(from) {
-        TRef => ty_assignable(to, ty_arg(from, 0)),
-        TRefMut => ty_assignable(to, ty_arg(from, 0)),
-        TList => if ty_kind(to) == TList { ty_assignable(ty_arg(to, 0), ty_arg(from, 0)) } else { false },
-        TResult => ty_assignable(to, ty_arg(from, 0)),
-        TOption => ty_assignable(to, ty_arg(from, 0)),
-        TBox => ty_assignable(to, ty_arg(from, 0)),
+    return match ty_tag(from) {
+        "TyRef" => ty_assignable(to, ty_arg(from, 0)),
+        "TyRefMut" => ty_assignable(to, ty_arg(from, 0)),
+        "TyList" => if ty_tag(to) == "TyList" { ty_assignable(ty_arg(to, 0), ty_arg(from, 0)) } else { false },
+        "TyResult" => ty_assignable(to, ty_arg(from, 0)),
+        "TyOption" => ty_assignable(to, ty_arg(from, 0)),
+        "TyBox" => ty_assignable(to, ty_arg(from, 0)),
         _ => false,
     };
 }
