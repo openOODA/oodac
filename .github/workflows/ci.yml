@@ -185,6 +185,7 @@ jobs:
           llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/user_fn_call.oo "$(printf '42\nhi\n55')"
           llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/multi_diamond.oo 112
           llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/cap_spread.oo 7
+          llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/method_calls.oo "$(printf '1\n0\n6\n2\n42')"
           echo "=== compiler not concat ==="
           "$HOST" build --backend c oodac/qa/probe_compiler_not_concat.oo -o .ooda-cache/ooda-tmp/ci_nocat.bin
           .ooda-cache/ooda-tmp/ci_nocat.bin

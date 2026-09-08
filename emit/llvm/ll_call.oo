@@ -1,4 +1,4 @@
-// # LLVM method, ctor, and binop lowering
+// # LLVM ctor, load, match, and binop lowering
 //
 // Logline: Methods on allocas. Binops on SSA. Some/None/Ok/Err constructors.
 //
@@ -180,38 +180,4 @@ pub fn ll_apply_binop(op: String, lhs: String, rhs: String) -> String {
     let s: Int = s0 + 1;
     println("  " + ll_ssa(s) + " = icmp " + pred + " i64 " + ll_ssa(ll_pssa(lhs)) + ", " + ll_ssa(ll_pssa(rhs)));
     return ll_pack(ll_ppos(rhs), s, "i1", "");
-}
-
-pub fn ll_method(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, env: String) -> String {
-    if m == "to_string" {
-        if kind == "str" { return ll_pack(0, ssa, "str", ptr); }
-        let s: Int = ssa0 + 1;
-        println("  " + ll_ssa(s) + " = call { ptr, i64 } @oo_int_to_str(i64 " + ll_ssa(ssa) + ")");
-        return ll_pack(0, s, "str", "");
-    }
-    if m == "is_some" || m == "is_ok" {
-        let p: String = str_slice(ptr, 0, chars_len(ptr));
-        let s: Int = ssa0 + 1;
-        println("  " + ll_ssa(s) + " = getelementptr " + ll_ir_alloc(kind) + ", ptr " + p + ", i32 0, i32 0");
-        let s2: Int = s + 1;
-        println("  " + ll_ssa(s2) + " = load i32, ptr " + ll_ssa(s));
-        let s3: Int = s2 + 1;
-        println("  " + ll_ssa(s3) + " = icmp ne i32 " + ll_ssa(s2) + ", 0");
-        return ll_pack(0, s3, "i1", "");
-    }
-    if m == "val" || m == "err" {
-        return ll_field_load(kind, ssa, ptr, m, ssa0);
-    }
-    if m == "is_none" || m == "is_err" {
-        let s: Int = ssa0 + 1;
-        println("  " + ll_ssa(s) + " = getelementptr " + ll_ir_alloc(kind) + ", ptr " + ptr + ", i32 0, i32 0");
-        let s2: Int = s + 1;
-        println("  " + ll_ssa(s2) + " = load i32, ptr " + ll_ssa(s));
-        let s3: Int = s2 + 1;
-        println("  " + ll_ssa(s3) + " = icmp eq i32 " + ll_ssa(s2) + ", 0");
-        return ll_pack(0, s3, "i1", "");
-    }
-    println("ERR\tllvm\tunsupported method " + m);
-    process_exit(1);
-    return ll_pack(0, ssa0, "i64", "");
 }

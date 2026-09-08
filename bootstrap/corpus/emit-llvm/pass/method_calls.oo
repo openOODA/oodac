@@ -1,0 +1,32 @@
+// # llvm method calls
+//
+// Logline: LLVM pass fixture for contains, len, and unwrap methods.
+//
+// Setup: contains lowers through an argument-taking method call; len
+//   dispatches on str vs list; unwrap reads the ok payload.
+//
+// Beats:
+//   1. contains finds foo and misses qux.
+//   2. len measures a string and a list.
+//   3. unwrap reads 42 from Ok.
+//   4. Output is 1 0 6 2 42.
+
+pub fn main() {
+    let s: String = "foobar";
+    if s.contains("foo") {
+        println(1);
+    } else {
+        println(0);
+    }
+    if s.contains("qux") {
+        println(1);
+    } else {
+        println(0);
+    }
+    println(s.len());
+    let v: List[Int] = list_new();
+    let v2 = list_push(list_push(v, 1), 2);
+    println(v2.len());
+    let o: Result[Int, String] = Ok(42);
+    println(o.unwrap());
+}

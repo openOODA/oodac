@@ -1,0 +1,169 @@
+// # LLVM method-call lowering
+//
+// Logline: Lower .method() calls: builtins, predicates, payloads, and unwrap.
+//
+// Setup: ll_tok and ll_ty for packs and types; sibling fns (print, tag,
+//   field load, as-val) resolve through the emit closure.
+//
+// Beats:
+//   1. Zero-arg predicates and payloads lower inline.
+//   2. contains/len take one lowered argument.
+//   3. unwrap branches to ok-load or message plus exit.
+//   4. Match expressions lower through tag-check plus arm phis.
+//
+
+import "ll_tok.oo";
+import "ll_ty.oo";
+
+pub fn ll_method(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, env: String, arg: String) -> String {
+    if m == "to_string" {
+        if kind == "str" { return ll_pack(0, ssa, "str", ptr); }
+        let s: Int = ssa0 + 1;
+        println("  " + ll_ssa(s) + " = call { ptr, i64 } @oo_int_to_str(i64 " + ll_ssa(ssa) + ")");
+        return ll_pack(0, s, "str", "");
+    }
+    if m == "is_some" || m == "is_ok" {
+        let p: String = str_slice(ptr, 0, chars_len(ptr));
+        let s: Int = ssa0 + 1;
+        println("  " + ll_ssa(s) + " = getelementptr " + ll_ir_alloc(kind) + ", ptr " + p + ", i32 0, i32 0");
+        let s2: Int = s + 1;
+        println("  " + ll_ssa(s2) + " = load i32, ptr " + ll_ssa(s));
+        let s3: Int = s2 + 1;
+        println("  " + ll_ssa(s3) + " = icmp ne i32 " + ll_ssa(s2) + ", 0");
+        return ll_pack(0, s3, "i1", "");
+    }
+    if m == "val" || m == "err" {
+        return ll_field_load(kind, ssa, ptr, m, ssa0);
+    }
+    if m == "is_none" || m == "is_err" {
+        let s: Int = ssa0 + 1;
+        println("  " + ll_ssa(s) + " = getelementptr " + ll_ir_alloc(kind) + ", ptr " + ptr + ", i32 0, i32 0");
+        let s2: Int = s + 1;
+        println("  " + ll_ssa(s2) + " = load i32, ptr " + ll_ssa(s));
+        let s3: Int = s2 + 1;
+        println("  " + ll_ssa(s3) + " = icmp eq i32 " + ll_ssa(s2) + ", 0");
+        return ll_pack(0, s3, "i1", "");
+    }
+    if m == "contains" {
+        if ll_pk(arg) == "" || ll_pk(arg) == "empty" {
+            println("ERR\tllvm\tcontains needs an argument");
+            process_exit(1);
+        }
+        let r0: String = ll_as_val(ll_pack(0, ssa, kind, ptr), ssa0);
+        let a0: String = ll_as_val(arg, ll_pssa(r0));
+        let s: Int = ll_pssa(a0) + 1;
+        println("  " + ll_ssa(s) + " = call i32 @oo_str_contains({ ptr, i64 } " + ll_ssa(ll_pssa(r0)) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ")");
+        let s2: Int = s + 1;
+        println("  " + ll_ssa(s2) + " = icmp ne i32 " + ll_ssa(s) + ", 0");
+        return ll_pack(0, s2, "i1", "");
+    }
+    if m == "len" {
+        if ll_pk(arg) == "" {
+            println("ERR\tllvm\tlen needs parens");
+            process_exit(1);
+        }
+        if kind == "str" {
+            let rv: String = ll_as_val(ll_pack(0, ssa, kind, ptr), ssa0);
+            let s: Int = ll_pssa(rv) + 1;
+            println("  " + ll_ssa(s) + " = call i64 @oo_chars_len({ ptr, i64 } " + ll_ssa(ll_pssa(rv)) + ")");
+            return ll_pack(0, s, "i64", "");
+        }
+        if kind == "ilist" || kind == "slist" {
+            let e: String = ll_ensure_ptr(ll_pack(0, ssa, kind, ptr), ssa0);
+            let s: Int = ll_pssa(e) + 1;
+            if kind == "ilist" {
+                println("  " + ll_ssa(s) + " = call i64 @oo_ilist_len(ptr byval(%OoIList) align 8 " + ll_pptr(e) + ")");
+            } else {
+                println("  " + ll_ssa(s) + " = call i64 @oo_slist_len(ptr byval(%OoSList) align 8 " + ll_pptr(e) + ")");
+            }
+            return ll_pack(0, s, "i64", "");
+        }
+        println("ERR\tllvm\tlen needs str or list");
+        process_exit(1);
+    }
+    if m == "unwrap" {
+        if kind != "resi" && kind != "ress" && kind != "opti" && kind != "opts" {
+            println("ERR\tllvm\tunwrap needs Result or Option");
+            process_exit(1);
+        }
+        let base: String = ll_ensure_ptr(ll_pack(0, ssa, kind, ptr), ssa0);
+        let bp: String = ll_pptr(base);
+        let tag: Int = ll_match_tag(kind, bp, ll_pssa(base));
+        let id: Int = tag + 1;
+        println("  br i1 " + ll_ssa(tag) + ", label %uok" + id.to_string() + ", label %uerr" + id.to_string());
+        println("uok" + id.to_string() + ":");
+        println("  br label %umerge" + id.to_string());
+        println("uerr" + id.to_string() + ":");
+        let ms: Int = tag + 1;
+        println("  " + ll_ssa(ms) + " = getelementptr [12 x i8], ptr @.uunwrapmsg, i64 0, i64 0");
+        let ml: Int = ms + 1;
+        println("  " + ll_ssa(ml) + " = call { ptr, i64 } @oo_str_lit(ptr " + ll_ssa(ms) + ")");
+        let pe: Int = ll_print_val("str", ml, "", ml);
+        println("  call void @oo_process_exit(i64 1)");
+        println("  unreachable");
+        println("umerge" + id.to_string() + ":");
+        let lv: String = ll_field_load(kind, ssa, bp, "val", pe);
+        return ll_pack(0, ll_pssa(lv), ll_pk(lv), "");
+    }
+    println("ERR\tllvm\tunsupported method " + m);
+    process_exit(1);
+    return ll_pack(0, ssa0, "i64", "");
+}
+
+fn ll_arm_val(arm: String, ssa0: Int) -> Int {
+    if ll_pptr(arm) == "" { return ll_pssa(arm); }
+    let s: Int = ll_hw(ll_pssa(arm), ssa0) + 1;
+    println("  " + ll_ssa(s) + " = load " + ll_ir_val(ll_pk(arm)) + ", ptr " + ll_pptr(arm));
+    return s;
+}
+
+fn ll_match_expr(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> String {
+    let scr: String = ll_expr(toks, pos + 1, n, ssa0, env);
+    let mut p: Int = ll_ppos(scr);
+    if p < n && ll_k(toks, p) == "LBRACE" { p = p + 1; }
+    let sk: String = ll_pk(scr);
+    let sp: String = ll_ensure_ptr(scr, ll_pssa(scr));
+    let id: Int = ll_pssa(sp) + 1;
+    let cmp: Int = ll_match_tag(sk, ll_pptr(sp), ll_pssa(sp));
+    println("  br i1 " + ll_ssa(cmp) + ", label %mok" + id.to_string() + ", label %merr" + id.to_string());
+    while p < n && ll_k(toks, p) != "IDENT" { p = p + 1; }
+    if p < n { p = p + 1; }
+    if p < n && ll_k(toks, p) == "LPAREN" { p = p + 1; }
+    let mut bn: String = "_";
+    if p < n && ll_k(toks, p) == "IDENT" { bn = ll_t(toks, p); p = p + 1; }
+    while p < n && ll_k(toks, p) != "FATARROW" { p = p + 1; }
+    if p < n { p = p + 1; }
+    println("mok" + id.to_string() + ":");
+    let b: String = ll_match_bind(sk, ll_pptr(sp), bn, 1, id, cmp);
+    let mut env2: String = str_slice(env, 0, chars_len(env));
+    if ll_pptr(b) != "" {
+        env2 = type_env_put(type_env_put(env, bn, ll_pk(b)), "__l__" + bn, ll_pptr(b));
+    }
+    let okarm: String = ll_expr(toks, p, n, ll_pssa(b) + 1, env2);
+    p = ll_ppos(okarm);
+    let oks: Int = ll_arm_val(okarm, ll_pssa(okarm));
+    if p < n && ll_k(toks, p) == "COMMA" { p = p + 1; }
+    println("  br label %mend" + id.to_string());
+    if p < n && ll_k(toks, p) == "IDENT" { p = p + 1; }
+    if p < n && ll_k(toks, p) == "LPAREN" { p = p + 1; }
+    let mut ebn: String = "_";
+    if p < n && ll_k(toks, p) == "IDENT" { ebn = ll_t(toks, p); p = p + 1; }
+    while p < n && ll_k(toks, p) != "FATARROW" { p = p + 1; }
+    if p < n { p = p + 1; }
+    println("merr" + id.to_string() + ":");
+    let eb: String = ll_match_bind(sk, ll_pptr(sp), ebn, 0, id, oks);
+    let mut env3: String = str_slice(env, 0, chars_len(env));
+    if ll_pptr(eb) != "" {
+        env3 = type_env_put(type_env_put(env, ebn, ll_pk(eb)), "__l__" + ebn, ll_pptr(eb));
+    }
+    let erarm: String = ll_expr(toks, p, n, ll_pssa(eb) + 1, env3);
+    p = ll_ppos(erarm);
+    let ers: Int = ll_arm_val(erarm, ll_pssa(erarm));
+    if p < n && ll_k(toks, p) == "RBRACE" { p = p + 1; }
+    println("  br label %mend" + id.to_string());
+    println("mend" + id.to_string() + ":");
+    let ph: Int = ll_hw(oks, ers) + 1;
+    let pk: String = ll_pk(okarm);
+    println("  " + ll_ssa(ph) + " = phi " + ll_ir_val(pk) + " [ " + ll_ssa(oks) + ", %mok" + id.to_string() + " ], [ " + ll_ssa(ers) + ", %merr" + id.to_string() + " ]");
+    return ll_pack(p, ph, pk, "");
+}

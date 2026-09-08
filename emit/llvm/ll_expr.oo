@@ -12,6 +12,7 @@ import "ll_tok.oo";
 import "ll_ty.oo";
 import "types/types_core.oo";
 import "ll_call.oo";
+import "ll_method.oo";
 import "ll_builtin.oo";
 import "ll_ctor.oo";
 pub fn ll_expr(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> String {
@@ -45,8 +46,25 @@ fn ll_postfix(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> S
         }
         let m: String = ll_t(toks, p);
         p = p + 1;
-        if p < n && ll_k(toks, p) == "LPAREN" { p = ll_skip_paren(toks, p, n); }
-        r = ll_method(ll_pk(r), ll_pssa(r), ll_pptr(r), m, ssa, env);
+        let mut arg: String = ll_pack(p, ssa, "", "");
+        if p < n && ll_k(toks, p) == "LPAREN" {
+            p = p + 1;
+            if p < n && ll_k(toks, p) == "RPAREN" {
+                arg = ll_pack(p, ssa, "empty", "");
+                p = p + 1;
+            } else {
+                let av: String = ll_expr(toks, p, n, ssa, env);
+                p = ll_ppos(av);
+                ssa = ll_pssa(av);
+                if p >= n || ll_k(toks, p) != "RPAREN" {
+                    println("ERR\tllvm\tmethod args residual");
+                    process_exit(1);
+                }
+                p = p + 1;
+                arg = ll_pack(p, ssa, ll_pk(av), ll_pptr(av));
+            }
+        }
+        r = ll_method(ll_pk(r), ll_pssa(r), ll_pptr(r), m, ssa, env, arg);
         ssa = ll_pssa(r);
         r = ll_pack(p, ssa, ll_pk(r), ll_pptr(r));
     }
@@ -187,62 +205,4 @@ fn ll_call_at(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> S
     }
     let u: String = ll_user_call(nm, sig, args, ssa);
     return ll_pack(p, ll_pssa(u), ll_pk(u), ll_pptr(u));
-}
-
-fn ll_arm_val(arm: String, ssa0: Int) -> Int {
-    if ll_pptr(arm) == "" { return ll_pssa(arm); }
-    let s: Int = ll_hw(ll_pssa(arm), ssa0) + 1;
-    println("  " + ll_ssa(s) + " = load " + ll_ir_val(ll_pk(arm)) + ", ptr " + ll_pptr(arm));
-    return s;
-}
-
-fn ll_match_expr(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> String {
-    let scr: String = ll_expr(toks, pos + 1, n, ssa0, env);
-    let mut p: Int = ll_ppos(scr);
-    if p < n && ll_k(toks, p) == "LBRACE" { p = p + 1; }
-    let sk: String = ll_pk(scr);
-    let sp: String = ll_ensure_ptr(scr, ll_pssa(scr));
-    let id: Int = ll_pssa(sp) + 1;
-    let cmp: Int = ll_match_tag(sk, ll_pptr(sp), ll_pssa(sp));
-    println("  br i1 " + ll_ssa(cmp) + ", label %mok" + id.to_string() + ", label %merr" + id.to_string());
-    while p < n && ll_k(toks, p) != "IDENT" { p = p + 1; }
-    if p < n { p = p + 1; }
-    if p < n && ll_k(toks, p) == "LPAREN" { p = p + 1; }
-    let mut bn: String = "_";
-    if p < n && ll_k(toks, p) == "IDENT" { bn = ll_t(toks, p); p = p + 1; }
-    while p < n && ll_k(toks, p) != "FATARROW" { p = p + 1; }
-    if p < n { p = p + 1; }
-    println("mok" + id.to_string() + ":");
-    let b: String = ll_match_bind(sk, ll_pptr(sp), bn, 1, id, cmp);
-    let mut env2: String = str_slice(env, 0, chars_len(env));
-    if ll_pptr(b) != "" {
-        env2 = type_env_put(type_env_put(env, bn, ll_pk(b)), "__l__" + bn, ll_pptr(b));
-    }
-    let okarm: String = ll_expr(toks, p, n, ll_pssa(b) + 1, env2);
-    p = ll_ppos(okarm);
-    let oks: Int = ll_arm_val(okarm, ll_pssa(okarm));
-    if p < n && ll_k(toks, p) == "COMMA" { p = p + 1; }
-    println("  br label %mend" + id.to_string());
-    if p < n && ll_k(toks, p) == "IDENT" { p = p + 1; }
-    if p < n && ll_k(toks, p) == "LPAREN" { p = p + 1; }
-    let mut ebn: String = "_";
-    if p < n && ll_k(toks, p) == "IDENT" { ebn = ll_t(toks, p); p = p + 1; }
-    while p < n && ll_k(toks, p) != "FATARROW" { p = p + 1; }
-    if p < n { p = p + 1; }
-    println("merr" + id.to_string() + ":");
-    let eb: String = ll_match_bind(sk, ll_pptr(sp), ebn, 0, id, oks);
-    let mut env3: String = str_slice(env, 0, chars_len(env));
-    if ll_pptr(eb) != "" {
-        env3 = type_env_put(type_env_put(env, ebn, ll_pk(eb)), "__l__" + ebn, ll_pptr(eb));
-    }
-    let erarm: String = ll_expr(toks, p, n, ll_pssa(eb) + 1, env3);
-    p = ll_ppos(erarm);
-    let ers: Int = ll_arm_val(erarm, ll_pssa(erarm));
-    if p < n && ll_k(toks, p) == "RBRACE" { p = p + 1; }
-    println("  br label %mend" + id.to_string());
-    println("mend" + id.to_string() + ":");
-    let ph: Int = ll_hw(oks, ers) + 1;
-    let pk: String = ll_pk(okarm);
-    println("  " + ll_ssa(ph) + " = phi " + ll_ir_val(pk) + " [ " + ll_ssa(oks) + ", %mok" + id.to_string() + " ], [ " + ll_ssa(ers) + ", %merr" + id.to_string() + " ]");
-    return ll_pack(p, ph, pk, "");
 }
