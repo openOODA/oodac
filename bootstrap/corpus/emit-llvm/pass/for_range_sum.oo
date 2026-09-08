@@ -1,0 +1,16 @@
+// # llvm for range sum
+//
+// Logline: LLVM pass fixture that sums 0..5 with a for-range loop.
+//
+// Beats:
+//   1. main binds a mutable sum.
+//   2. A for loop walks 0..5.
+//   3. Output is 10.
+
+pub fn main() {
+    let mut s: Int = 0;
+    for i in 0..5 {
+        s = s + i;
+    }
+    println(s);
+}

@@ -165,6 +165,24 @@ jobs:
           .ooda-cache/ooda-tmp/ci_llvm.bin
           "$HOST" build --backend c oodac/qa/probe_llvm_ty_refuse.oo -o .ooda-cache/ooda-tmp/ci_llvm_ty.bin
           .ooda-cache/ooda-tmp/ci_llvm_ty.bin
+          echo "=== emit-llvm corpus ==="
+          llvm_pass() {
+            "$HOST" build --backend llvm "$1" -o .ooda-cache/ooda-tmp/llvm_gate.bin
+            out=$(.ooda-cache/ooda-tmp/llvm_gate.bin)
+            test "$out" = "$2"
+          }
+          llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/fn_ret_int.oo 42
+          llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/println_str.oo "hello llvm"
+          llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/if_else.oo big
+          llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/while_sum.oo 10
+          llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/for_range_sum.oo 10
+          llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/str_concat.oo foobar
+          llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/list_get.oo 7
+          llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/match_ok.oo ok
+          llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/bool_print.oo "$(printf '0\n1\n1')"
+          llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/str_starts_with.oo "$(printf '1\n1')"
+          llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/result_val_err.oo "$(printf '42\nboom')"
+          llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/user_fn_call.oo "$(printf '42\nhi\n55')"
           echo "=== compiler not concat ==="
           "$HOST" build --backend c oodac/qa/probe_compiler_not_concat.oo -o .ooda-cache/ooda-tmp/ci_nocat.bin
           .ooda-cache/ooda-tmp/ci_nocat.bin

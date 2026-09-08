@@ -1,0 +1,18 @@
+// # llvm while sum
+//
+// Logline: LLVM pass fixture that sums 0..5 with a while loop.
+//
+// Beats:
+//   1. main binds mutable i and acc.
+//   2. while accumulates acc + i.
+//   3. Output is 10.
+
+pub fn main() {
+    let mut i: Int = 0;
+    let mut acc: Int = 0;
+    while i < 5 {
+        acc = acc + i;
+        i = i + 1;
+    }
+    println(acc);
+}

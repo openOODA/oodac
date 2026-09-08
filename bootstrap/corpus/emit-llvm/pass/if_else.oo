@@ -1,0 +1,17 @@
+// # llvm if else
+//
+// Logline: LLVM pass fixture that branches on a comparison.
+//
+// Beats:
+//   1. main binds x to 3.
+//   2. x > 2 selects the big arm.
+//   3. Output is big.
+
+pub fn main() {
+    let x: Int = 3;
+    if x > 2 {
+        println("big");
+    } else {
+        println("small");
+    }
+}

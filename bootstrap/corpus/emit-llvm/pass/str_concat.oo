@@ -1,0 +1,12 @@
+// # llvm str concat
+//
+// Logline: LLVM pass fixture that concatenates two literals.
+//
+// Beats:
+//   1. main binds s to foo + bar.
+//   2. Output is foobar.
+
+pub fn main() {
+    let s: String = "foo" + "bar";
+    println(s);
+}

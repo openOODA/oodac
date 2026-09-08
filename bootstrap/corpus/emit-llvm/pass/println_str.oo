@@ -1,0 +1,11 @@
+// # llvm println str
+//
+// Logline: LLVM pass fixture that prints a string literal.
+//
+// Beats:
+//   1. main prints one literal.
+//   2. Output is hello llvm.
+
+pub fn main() {
+    println("hello llvm");
+}

@@ -1,0 +1,16 @@
+// # llvm fn ret int
+//
+// Logline: LLVM pass fixture that returns Int from a helper and prints it.
+//
+// Beats:
+//   1. add returns a + b.
+//   2. main calls add(20, 22).
+//   3. println prints 42.
+
+fn add(a: Int, b: Int) -> Int {
+    return a + b;
+}
+
+pub fn main() {
+    println(add(20, 22));
+}

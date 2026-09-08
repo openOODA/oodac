@@ -1,0 +1,14 @@
+// # llvm match ok
+//
+// Logline: LLVM pass fixture that matches an Ok result.
+//
+// Beats:
+//   1. main binds r to Ok(5).
+//   2. match selects the ok arm.
+//   3. Output is ok.
+
+pub fn main() {
+    let r: Result[Int, String] = Ok(5);
+    let m: String = match r { Ok(v) => "ok", Err(e) => "err" };
+    println(m);
+}

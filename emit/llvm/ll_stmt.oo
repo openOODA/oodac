@@ -118,6 +118,78 @@ pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String, env
             if p < n && ll_k(toks, p) == "RBRACE" { p = p + 1; }
             if ll_pterm(bd) == 0 { println("  br label %wcond" + wid.to_string()); }
             println("wend" + wid.to_string() + ":");
+        } else if k == "KW_FOR" {
+            p = p + 1;
+            if p >= n || ll_k(toks, p) != "IDENT" {
+                println("ERR\tllvm\tfor residual (expected loop IDENT)");
+                process_exit(1);
+            }
+            let fname: String = ll_t(toks, p);
+            p = p + 1;
+            if p >= n {
+                println("ERR\tllvm\tfor residual (need 'in')");
+                process_exit(1);
+            }
+            if ll_k(toks, p) == "KW_IN" { p = p + 1; } else {
+                if ll_k(toks, p) != "IDENT" || ll_t(toks, p) != "in" {
+                    println("ERR\tllvm\tfor residual (need 'in')");
+                    process_exit(1);
+                }
+                p = p + 1;
+            }
+            let lo: String = ll_expr(toks, p, n, ssa, env);
+            p = ll_ppos(lo);
+            ssa = ll_pssa(lo);
+            if p >= n || ll_k(toks, p) != "DOTDOT" {
+                println("ERR\tllvm\tfor residual (expected .. between bounds)");
+                process_exit(1);
+            }
+            p = p + 1;
+            let hi: String = ll_expr(toks, p, n, ssa, env);
+            p = ll_ppos(hi);
+            ssa = ll_pssa(hi);
+            if ll_pk(lo) != "i64" || ll_pk(hi) != "i64" {
+                println("ERR\tllvm\tfor residual (i64 range bounds only)");
+                process_exit(1);
+            }
+            let mut los: Int = ll_pssa(lo);
+            if ll_pptr(lo) != "" {
+                ssa = ssa + 1;
+                println("  " + ll_ssa(ssa) + " = load i64, ptr " + ll_pptr(lo));
+                los = ssa;
+            }
+            let mut his: Int = ll_pssa(hi);
+            if ll_pptr(hi) != "" {
+                ssa = ssa + 1;
+                println("  " + ll_ssa(ssa) + " = load i64, ptr " + ll_pptr(hi));
+                his = ssa;
+            }
+            let fid: Int = ssa + 1;
+            println("  " + ll_var(fname) + " = alloca i64, align 8");
+            println("  store i64 " + ll_ssa(los) + ", ptr " + ll_var(fname));
+            let envf: String = type_env_put(env, fname, "i64");
+            println("  br label %fcond" + fid.to_string());
+            println("fcond" + fid.to_string() + ":");
+            ssa = ssa + 1;
+            println("  " + ll_ssa(ssa) + " = load i64, ptr " + ll_var(fname));
+            ssa = ssa + 1;
+            println("  " + ll_ssa(ssa) + " = icmp slt i64 " + ll_ssa(ssa - 1) + ", " + ll_ssa(his));
+            println("  br i1 " + ll_ssa(ssa) + ", label %fbody" + fid.to_string() + ", label %fend" + fid.to_string());
+            if p < n && ll_k(toks, p) == "LBRACE" { p = p + 1; }
+            println("fbody" + fid.to_string() + ":");
+            let fb: String = ll_emit_stmts(toks, p, n, ret_kind, envf, ssa);
+            p = ll_ppos(fb);
+            ssa = ll_pssa(fb);
+            if p < n && ll_k(toks, p) == "RBRACE" { p = p + 1; }
+            if ll_pterm(fb) == 0 {
+                ssa = ssa + 1;
+                println("  " + ll_ssa(ssa) + " = load i64, ptr " + ll_var(fname));
+                ssa = ssa + 1;
+                println("  " + ll_ssa(ssa) + " = add i64 " + ll_ssa(ssa - 1) + ", 1");
+                println("  store i64 " + ll_ssa(ssa) + ", ptr " + ll_var(fname));
+                println("  br label %fcond" + fid.to_string());
+            }
+            println("fend" + fid.to_string() + ":");
         } else if k == "KW_RETURN" {
             let envx: String = type_env_put("", "__e__", ret_kind) + env;
             let v: String = ll_expr(toks, p + 1, n, ssa, envx);

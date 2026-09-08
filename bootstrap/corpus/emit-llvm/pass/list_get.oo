@@ -1,0 +1,14 @@
+// # llvm list get
+//
+// Logline: LLVM pass fixture that pushes and reads an Int list.
+//
+// Beats:
+//   1. main builds a one-element list.
+//   2. list_get reads index 0.
+//   3. Output is 7.
+
+pub fn main() {
+    let v: List[Int] = list_new();
+    let v2 = list_push(v, 7);
+    println(list_get(v2, 0));
+}
