@@ -2,7 +2,7 @@
 //
 // Logline: Looks up type aliases, maps literal tokens to types, tests annotation compatibility, and combines binary-operator types.
 //
-// Setup: aliases is a tab-separated name:Type map; first match wins, so callers reset env per function; mixed arith and non-Int bitops return ERR_BINOP.
+// Setup: aliases is a tab-separated name:Type map; last match wins, so callers reset env per function; mixed arith and non-Int bitops return ERR_BINOP.
 //
 // Beats:
 //   1. resolve_type_alias returns the bound type or the original name; lit_token_type maps INT, FLOAT, STRING, true, and false.
@@ -15,31 +15,40 @@ if !aliases.contains(key) { return ann;
 }
     let tn = chars_len(aliases);
     let kn = chars_len(key);
-    let mut pos = 0;
-    let mut last_found = "";
-    while pos + kn <= tn { let mut m = true;
-    let mut j = 0;
-    while j < kn { if char_at(aliases, pos + j) != char_at(key, j) { m = false;
-    j = kn;
-    } else {
-                j = j + 1;
-            }
-        }
-        if m { let mut out = "";
-        let mut p = pos + kn;
-        while p < tn { let c = char_at(aliases, p);
-        if c == "\t" { p = tn;
-        } else {
-                    out = out + c;
-                    p = p + 1;
+    // Backward search: the last occurrence wins, and names bind at the
+    // end, so the first match from the end is the answer. Same value as
+    // the old forward scan (which kept overwriting last_found).
+    let mut found = 0 - 1;
+    let mut pos = tn - kn;
+    while pos >= 0 {
+        if found < 0 {
+            let mut m = true;
+            let mut j = 0;
+            while j < kn {
+                if char_at(aliases, pos + j) != char_at(key, j) { m = false;
+                j = kn;
+                } else {
+                    j = j + 1;
                 }
             }
-            last_found = out;
+            if m { found = pos; }
         }
-        pos = pos + 1;
+        pos = pos - 1;
     }
-    if last_found != "" {
-        return last_found;
+    if found < 0 {
+        return ann;
+    }
+    let mut out = "";
+    let mut p = found + kn;
+    while p < tn { let c = char_at(aliases, p);
+    if c == "\t" { p = tn;
+    } else {
+            out = out + c;
+            p = p + 1;
+        }
+    }
+    if out != "" {
+        return out;
     }
     return ann;
 }
