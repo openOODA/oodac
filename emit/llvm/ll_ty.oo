@@ -25,6 +25,11 @@ pub fn ll_ty_at(toks: List[String], pos: Int, n: Int) -> String {
     if t == "Void" { return "void"; }
     if t == "ProcessCap" || t == "EnvCap" || t == "FsReadCap" || t == "FsWriteCap" { return "i64"; }
     if t == "SysCap" || t == "AllocCap" || t == "TimeCap" || t == "BindCap" { return "i64"; }
+    if t == "TcpCap" || t == "UdpCap" || t == "NetCap" || t == "FsCap" { return "i64"; }
+    if t == "RandCap" || t == "ArenaCap" || t == "FfiCap" || t == "ThreadCap" { return "i64"; }
+    if t == "GpuCap" || t == "CompilerReadCap" || t == "SignCap" || t == "AudioCap" { return "i64"; }
+    if t == "CameraCap" || t == "UsbCap" || t == "HidCap" || t == "WindowCap" { return "i64"; }
+    if t == "FrameCap" { return "i64"; }
     if t == "List" {
         if p + 2 < n && ll_k(toks, p + 1) == "LBRACKET" && ll_k(toks, p + 2) == "IDENT" {
             let e: String = ll_t(toks, p + 2);
@@ -66,6 +71,16 @@ pub fn ll_cap_grant(ty: String) -> String {
     if ty == "SysCap" { return "sys"; }
     if ty == "TimeCap" { return "time"; }
     if ty == "AllocCap" { return "alloc"; }
+    if ty == "TcpCap" { return "tcp"; }
+    if ty == "UdpCap" { return "udp"; }
+    if ty == "NetCap" { return "net"; }
+    if ty == "FsCap" { return "fs"; }
+    if ty == "RandCap" { return "rand"; }
+    if ty == "ArenaCap" { return "arena"; }
+    if ty == "FfiCap" { return "ffi"; }
+    if ty == "ThreadCap" { return "thread"; }
+    if ty == "GpuCap" { return "gpu"; }
+    if ty == "CompilerReadCap" { return "compiler_read"; }
     return "";
 }
 

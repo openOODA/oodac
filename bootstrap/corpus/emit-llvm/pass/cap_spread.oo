@@ -1,0 +1,19 @@
+// # llvm cap spread
+//
+// Logline: LLVM pass fixture granting and forwarding six cap kinds.
+//
+// Setup: main takes FsRead, Net, Tcp, Time, Alloc, Rand caps; grants mint
+//   at entry and forward as i64 handles to a helper.
+//
+// Beats:
+//   1. Six cap types map and grant.
+//   2. Helper receives every handle.
+//   3. Output is 7.
+
+fn use6(fs: &FsReadCap, n: &NetCap, tcp: &TcpCap, t: &TimeCap, a: &AllocCap, r: &RandCap) -> Int {
+    return 7;
+}
+
+pub fn main(fs: &FsReadCap, n: &NetCap, tcp: &TcpCap, t: &TimeCap, a: &AllocCap, r: &RandCap) {
+    println(use6(fs, n, tcp, t, a, r));
+}

@@ -71,6 +71,16 @@ pub fn ll_rt_header(toks: List[String]) {
     println("declare i64 @oo_cap_grant_sys()");
     println("declare i64 @oo_cap_grant_time()");
     println("declare i64 @oo_cap_grant_alloc()");
+    println("declare i64 @oo_cap_grant_tcp()");
+    println("declare i64 @oo_cap_grant_udp()");
+    println("declare i64 @oo_cap_grant_net()");
+    println("declare i64 @oo_cap_grant_fs()");
+    println("declare i64 @oo_cap_grant_rand()");
+    println("declare i64 @oo_cap_grant_arena()");
+    println("declare i64 @oo_cap_grant_ffi()");
+    println("declare i64 @oo_cap_grant_thread()");
+    println("declare i64 @oo_cap_grant_gpu()");
+    println("declare i64 @oo_cap_grant_compiler_read()");
     println("declare void @oo_slist_push(ptr sret(%OoSList) align 8, ptr byval(%OoSList) align 8, { ptr, i64 })");
     println("declare { ptr, i64 } @oo_slist_get(ptr byval(%OoSList) align 8, i64)");
     println("declare void @oo_slist_slice(ptr sret(%OoSList) align 8, ptr byval(%OoSList) align 8, i64, i64)");
