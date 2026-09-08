@@ -1,0 +1,29 @@
+// # llvm multi diamond
+//
+// Logline: LLVM multi-file fixture proving diamond imports and dead-code drop.
+//
+// Setup: Imports both arms; base arrives transitively twice and links once.
+//   unused_poison holds a for-list loop the LLVM backend cannot lower: the
+//   build passes only if reachability drops it.
+//
+// Beats:
+//   1. Import left and right arms (base shared transitively).
+//   2. Dead unlowerable fn is dropped, not emitted.
+//   3. Output is 112.
+
+import "multi_left_lib.oo";
+import "multi_right_lib.oo";
+
+pub fn unused_poison() -> Int {
+    let v: List[Int] = list_new();
+    let v2 = list_push(v, 5);
+    let mut s: Int = 0;
+    for i in v2 {
+        s = s + i;
+    }
+    return s;
+}
+
+pub fn main() {
+    println(left() + right());
+}

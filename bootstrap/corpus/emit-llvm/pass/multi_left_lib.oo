@@ -1,0 +1,16 @@
+// # llvm multi left lib
+//
+// Logline: LLVM multi-file fixture left arm: left adds 10 to base.
+//
+// Setup: multi_diamond imports this file; it imports multi_base_lib.
+//
+// Beats:
+//   1. Import the shared base lib.
+//   2. left returns base plus 10.
+//   3. Output arm is 11.
+
+import "multi_base_lib.oo";
+
+pub fn left() -> Int {
+    return base() + 10;
+}

@@ -1,0 +1,14 @@
+// # llvm multi base lib
+//
+// Logline: LLVM multi-file fixture leaf: base returns 1.
+//
+// Setup: Imported by multi_left_lib and multi_right_lib (diamond).
+//
+// Beats:
+//   1. base takes no imports.
+//   2. base returns 1.
+//   3. One copy serves both diamond arms.
+
+pub fn base() -> Int {
+    return 1;
+}

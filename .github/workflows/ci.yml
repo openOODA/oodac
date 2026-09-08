@@ -183,10 +183,7 @@ jobs:
           llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/result_val_err.oo "$(printf '42\nboom')"
           llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/str_starts_with.oo "$(printf '1\n1')"
           llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/user_fn_call.oo "$(printf '42\nhi\n55')"
-          llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/bool_print.oo "$(printf '0\n1\n1')"
-          llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/str_starts_with.oo "$(printf '1\n1')"
-          llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/result_val_err.oo "$(printf '42\nboom')"
-          llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/user_fn_call.oo "$(printf '42\nhi\n55')"
+          llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/multi_diamond.oo 112
           echo "=== compiler not concat ==="
           "$HOST" build --backend c oodac/qa/probe_compiler_not_concat.oo -o .ooda-cache/ooda-tmp/ci_nocat.bin
           .ooda-cache/ooda-tmp/ci_nocat.bin
