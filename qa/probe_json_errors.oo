@@ -1,12 +1,14 @@
 // # Probe: --json-errors prints a JSON array
 //
 // Logline: check --json-errors of a well-typed file is []. A cap victim is nonzero JSON.
+//          A type stanza is exactly one E_TC object: no arrow/echo/caret E_OTHER noise.
 //
 // Setup: ProcessCap + EnvCap. Host is OODA_COMPILER. No .val (llvm seed).
 //
 // Beats:
 //   1. check --json-errors probe_list_ok.oo exits 0 and stdout is [].
 //   2. check --json-errors probe_cap_sealed.oo exits nonzero and contains "code".
+//   3. check --json-errors probe_type_stanza.oo exits nonzero with one "code" (E_TC, no E_OTHER).
 
 pub fn main(p: &ProcessCap, env: &EnvCap) {
     let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
@@ -35,6 +37,36 @@ pub fn main(p: &ProcessCap, env: &EnvCap) {
     if str_index_of(bt, "\"code\"") < 0 {
         println("ERR\tjson-errors missing code");
         println(bt);
+        process_exit(1);
+    }
+    let st: Result[String, String] = sys_exec(p, host, "check", "--json-errors", "oodac/qa/probe_type_stanza.oo");
+    if st.is_ok() {
+        println("ERR\tjson-errors stanza must fail");
+        process_exit(1);
+    }
+    let so: String = match st { Ok(s) => s, Err(e) => e };
+    if str_index_of(so, "\"code\":\"E_TC\"") < 0 {
+        println("ERR\tjson-errors stanza missing E_TC");
+        println(so);
+        process_exit(1);
+    }
+    if str_index_of(so, "E_OTHER") >= 0 {
+        println("ERR\tjson-errors stanza must not emit E_OTHER context noise");
+        println(so);
+        process_exit(1);
+    }
+    let mut codes: Int = 0;
+    let mut ci: Int = 0;
+    let cn: Int = chars_len(so);
+    while ci + 6 <= cn {
+        if str_slice(so, ci, ci + 6) == "\"code\"" {
+            codes = codes + 1;
+        }
+        ci = ci + 1;
+    }
+    if codes != 1 {
+        println("ERR\tjson-errors stanza must be exactly one object");
+        println(so);
         process_exit(1);
     }
     println("OK");

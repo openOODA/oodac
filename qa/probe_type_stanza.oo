@@ -1,0 +1,14 @@
+// # Victim: type error stanza for --json-errors shape proof
+//
+// Logline: Deliberately mistyped binding so probe_json_errors can prove one error is one JSON object.
+//
+// Setup: Never fixed. Never built. Checked expecting failure only.
+//
+// Beats:
+//   1. check fails with a type stanza (ERR, arrow, source echo, caret).
+//   2. check --json-errors yields exactly one object with code E_TC.
+
+pub fn main() -> Result[Int, String] {
+    let x: Int = "not an int";
+    return Ok(0);
+}
