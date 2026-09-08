@@ -26,7 +26,7 @@ pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
         println("ERR\tcompiler concat ELF exists");
         process_exit(1);
     }
-    let txt: String = br.val;
+    let txt: String = match br { Ok(s) => s, Err(e) => e };
     if str_index_of(txt, "unique_fns") < 0 {
         println("ERR\tmissing unique_fns refuse");
         process_exit(1);

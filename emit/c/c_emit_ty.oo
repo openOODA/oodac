@@ -45,7 +45,7 @@ pub fn c_lower_call_name(name: String) -> String {
 }
 
 pub fn c_list_c_name(op: String, kind: String) -> String {
-    let mut k: String = kind;
+    let mut k: String = str_slice(kind, 0, chars_len(kind));
 if k == "" { k = "I";
 }
     if k == "LF" {

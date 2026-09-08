@@ -22,7 +22,7 @@ import "c_emit_struct.oo";
 
 pub fn c_emit_let_stmt(toks: List[String], pos: Int, n: Int, env: String) -> List[String] {
     let mut p: Int = pos;
-    let mut e: String = env;
+    let mut e: String = str_slice(env, 0, chars_len(env));
     let k: String = c_tokk(toks, p);
     if k == "KW_LET" {
         p = p + 1;
@@ -119,7 +119,7 @@ pub fn c_emit_let_stmt(toks: List[String], pos: Int, n: Int, env: String) -> Lis
         if p < n && c_tokk(toks, p) == "SEMI" { p = p + 1; }
         return c_pack_pos_env(p, e);
     }
-    let mut env_rhs: String = e;
+    let mut env_rhs: String = str_slice(e, 0, chars_len(e));
     if ann_kind != "" { env_rhs = c_env_put(e, "__ann__", ann_kind); }
     if c_env_get(e, "__plain__") != "1" && c_env_get(e, "__sec__" + name) == "1" {
         env_rhs = c_env_put(env_rhs, "__sec_rhs__", "1");

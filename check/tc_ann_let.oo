@@ -16,7 +16,7 @@ import "tc_ok_err.oo";
 
 
 pub fn ann_check_let(toks: List[String], i: Int, n: Int, aliases: String, lit_env0: String, ret_table: String, struct_table: String) -> String {
-    let mut lit_env = lit_env0;
+    let mut lit_env: String = str_slice(lit_env0, 0, chars_len(lit_env0));
 let mut p = i + 1;
 if p < n && field_at(list_get(toks, p), 0) == "KW_MUT" { p = p + 1;
 }

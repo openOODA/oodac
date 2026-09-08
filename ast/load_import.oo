@@ -76,7 +76,7 @@ pub fn load_expand(fs: &FsReadCap, path_raw: String, stack: List[String], done: 
                 }
                     }
                 }
-                if is_hdr { let mut base = imp;
+                if is_hdr { let mut base: String = str_slice(imp, 0, ni);
                 let mut bk = 0;
                 while bk < ni { if char_at(imp, bk) == "/" { base = str_slice(imp, bk + 1, ni);
                 }

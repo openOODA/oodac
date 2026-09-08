@@ -111,7 +111,7 @@ if field_at(list_get(toks, pos), 0) == "KW_PUB" { pos = pos + 1;
                 }
             }
             if pty == "&FsCap" || pty == "FsCap" || pty == "&NetCap" || pty == "NetCap" || pty == "&SysCap" || pty == "SysCap" || pty == "&EnvCap" || pty == "EnvCap" || pty == "&TimeCap" || pty == "TimeCap" || pty == "&RandCap" || pty == "RandCap" || pty == "&AllocCap" || pty == "AllocCap" || pty == "&GpuCap" || pty == "GpuCap" || pty == "&ThreadCap" || pty == "ThreadCap" || pty == "&CryptoCap" || pty == "CryptoCap" {
-                let mut cname = pty;
+                let mut cname: String = str_slice(pty, 0, chars_len(pty));
                 if str_slice(cname, 0, 1) == "&" { cname = str_slice(cname, 1, chars_len(cname));
                 }
                 if caps != "" { caps = caps + ",";

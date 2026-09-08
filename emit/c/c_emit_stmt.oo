@@ -26,7 +26,7 @@ import "c_emit_lower.oo";
 
 pub fn c_emit_stmt(toks: List[String], pos: Int, n: Int, env: String) -> List[String] {
     let mut p: Int = pos;
-    let mut e: String = env;
+    let mut e: String = str_slice(env, 0, chars_len(env));
     let k: String = c_tokk(toks, p);
     if k == "LBRACE" {
         // Nested bare block: C braces + one ARC frame via c_emit_block
@@ -151,7 +151,7 @@ pub fn c_emit_stmt(toks: List[String], pos: Int, n: Int, env: String) -> List[St
 
 pub fn c_emit_if_stmt(toks: List[String], pos: Int, n: Int, env: String) -> List[String] {
     let mut p: Int = pos + 1;
-    let mut e: String = env;
+    let mut e: String = str_slice(env, 0, chars_len(env));
     oo_emit_tmp_enter();
     let pr: List[String] = c_emit_expr_c(toks, p, n, e);
     p = parse_int(list_get(pr, 0));

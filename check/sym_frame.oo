@@ -123,7 +123,7 @@ fn c_frame_find_region(tbl: FrameTable, name: String) -> Int {
 }
 pub fn c_frame_lifetime_ok(tbl: FrameTable, borrow_root: String) -> Bool {
     if borrow_root == "" { return true; }
-    let mut clean: String = borrow_root;
+    let mut clean: String = str_slice(borrow_root, 0, chars_len(borrow_root));
     if chars_len(clean) > 1 && char_at(clean, 0) == "&" { clean = str_slice(clean, 1, chars_len(clean)); }
     if chars_len(clean) > 4 && str_slice(clean, 0, 4) == "mut " { clean = str_slice(clean, 4, chars_len(clean)); }
     let n: Int = chars_len(clean);
@@ -144,7 +144,7 @@ pub fn c_frame_lifetime_ok(tbl: FrameTable, borrow_root: String) -> Bool {
 pub fn c_frame_is_moved(tbl: FrameTable, name: String) -> Bool { let v: SymVar = c_frame_lookup(tbl, name); if v.name == "" { return false; } return sv_is_moved(v.flags); }
 pub fn c_frame_check_use(tbl: FrameTable, name: String) -> Bool {
     if name == "" { return true; }
-    let mut clean: String = name;
+    let mut clean: String = str_slice(name, 0, chars_len(name));
     if chars_len(clean) > 1 && char_at(clean, 0) == "&" { clean = str_slice(clean, 1, chars_len(clean)); }
     if chars_len(clean) > 4 && str_slice(clean, 0, 4) == "mut " { clean = str_slice(clean, 4, chars_len(clean)); }
     let v: SymVar = c_frame_lookup(tbl, clean);
@@ -153,7 +153,7 @@ pub fn c_frame_check_use(tbl: FrameTable, name: String) -> Bool {
     return true;
 }
 pub fn c_frame_move(tbl: FrameTable, name: String) -> FrameTable {
-    let mut clean: String = name; if chars_len(clean) > 1 && char_at(clean, 0) == "&" { clean = str_slice(clean, 1, chars_len(clean)); }
+    let mut clean: String = str_slice(name, 0, chars_len(name)); if chars_len(clean) > 1 && char_at(clean, 0) == "&" { clean = str_slice(clean, 1, chars_len(clean)); }
     let v: SymVar = c_frame_lookup(tbl, clean);
     if v.name == "" { println("ERR	move	unknown " + clean); process_exit(1); }
     if sv_is_moved(v.flags) { println("ERR	move	double move " + clean); process_exit(1); }
@@ -175,7 +175,7 @@ pub fn c_frame_move(tbl: FrameTable, name: String) -> FrameTable {
 
 pub fn c_frame_borrow_check(table: FrameTable, var_name: String, scope_id: Int) -> Bool {
     if var_name == "" { return false; }
-    let mut clean_name: String = var_name;
+    let mut clean_name: String = str_slice(var_name, 0, chars_len(var_name));
     if chars_len(clean_name) > 1 && char_at(clean_name, 0) == "&" { clean_name = str_slice(clean_name, 1, chars_len(clean_name)); }
     if chars_len(clean_name) > 4 && str_slice(clean_name, 0, 4) == "mut " { clean_name = str_slice(clean_name, 4, chars_len(clean_name)); }
     let n: Int = chars_len(clean_name);

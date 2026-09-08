@@ -19,7 +19,7 @@ import "c_emit_dwarf.oo";
 
 pub fn c_emit_block(toks: List[String], pos: Int, n: Int, env: String) -> List[String] {
     let mut p: Int = pos;
-    let mut e: String = env;
+    let mut e: String = str_slice(env, 0, chars_len(env));
     let mut iter: Int = 0;
     if c_tokk(toks, p) == "LBRACE" {
         p = p + 1;

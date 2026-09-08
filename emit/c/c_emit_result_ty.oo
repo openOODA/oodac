@@ -87,7 +87,7 @@ pub fn c_emit_unary_c(toks: List[String], pos: Int, n: Int, env: String, k: Stri
 
 pub fn c_frty_note(fn_env: String, fn_name: String, toks: List[String], p: Int, n: Int) -> String {
     let rty: String = c_ty_at(toks, p, n);
-let mut e: String = fn_env;
+let mut e: String = str_slice(fn_env, 0, chars_len(fn_env));
 if rty != "" { if rty != "void" { e = c_env_put(e, "__frty__" + fn_name, rty);
 }
     }

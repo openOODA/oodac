@@ -191,7 +191,7 @@ pub fn tc_bind_match_arm(toks: List[String], i: Int, n: Int, lit_env: String) ->
                 fp = fp - 1;
             }
         }
-        let mut out_env: String = lit_env;
+        let mut out_env: String = str_slice(lit_env, 0, chars_len(lit_env));
         if cur_fn != "" {
             out_env = out_env + cur_fn + "." + bname + ":" + bty + "\t";
         }

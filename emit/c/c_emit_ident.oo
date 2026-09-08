@@ -21,7 +21,7 @@ pub fn c_secret_tok_is_sec(toks: List[String], i: Int, n: Int, env: String) -> B
     let sn: String = c_tokt(toks, i);
     if i + 1 < n && c_tokk(toks, i + 1) == "LPAREN" && c_env_get(env, "__fr_secret__" + sn) == "1" { return true; }
     if i + 1 < n && c_tokk(toks, i + 1) == "DOT" {
-        let mut path: String = sn;
+        let mut path: String = str_slice(sn, 0, chars_len(sn));
         let mut t: Int = i + 1;
         let mut last_m: String = "";
         while t + 1 < n && c_tokk(toks, t) == "DOT" && c_tokk(toks, t + 1) == "IDENT" {
@@ -53,7 +53,7 @@ pub fn c_secret_note_lhs_assign(toks: List[String], i: Int, n: Int, env: String)
     let id: String = c_tokt(toks, i);
     if i + 3 < n && c_tokk(toks, i + 1) == "DOT" {
         let mut q: Int = i + 1;
-        let mut path: String = id;
+        let mut path: String = str_slice(id, 0, chars_len(id));
         let mut found: Bool = false;
         let mut rhs: Int = 0;
         while q + 1 < n && c_tokk(toks, q) == "DOT" && c_tokk(toks, q + 1) == "IDENT" {
@@ -87,7 +87,7 @@ pub fn c_secret_note_lhs_assign(toks: List[String], i: Int, n: Int, env: String)
 
 pub fn c_emit_ident_stmt(toks: List[String], pos: Int, n: Int, env: String) -> List[String] {
     let mut p: Int = pos;
-    let mut e: String = env;
+    let mut e: String = str_slice(env, 0, chars_len(env));
     let id: String = c_tokt(toks, p);
     if id == "println" {
         p = c_emit_println(toks, p, n, e);
@@ -130,7 +130,7 @@ pub fn c_emit_ident_stmt(toks: List[String], pos: Int, n: Int, env: String) -> L
             if c_env_get(e, "__ptr__" + id) == "1" || c_env_get(e, "__ptr__" + c_recv) == "1" { lhs = c_recv + "->" + fname; }
             p = p + 4;
             let rhs_pos: Int = p;
-            let mut env_rhs: String = e;
+            let mut env_rhs: String = str_slice(e, 0, chars_len(e));
             let mut fk: String = c_env_get(e, "__fldelem__" + fname);
             if fk == "" { fk = c_env_get(e, "__fldelem__" + id + "." + fname); }
             if fk != "" { env_rhs = c_env_put(e, "__ann__", fk); }
@@ -152,7 +152,7 @@ pub fn c_emit_ident_stmt(toks: List[String], pos: Int, n: Int, env: String) -> L
     }
     if p + 1 < n {
         if c_tokk(toks, p + 1) == "EQ" {
-            let name: String = id;
+            let name: String = str_slice(id, 0, chars_len(id));
             let c_target: String = c_env_cvar(e, name);
             p = p + 2;
             e = c_secret_try_record_alias_rhs(toks, p, n, e, name);

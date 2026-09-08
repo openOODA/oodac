@@ -30,10 +30,7 @@ pub fn ts_apply_call(env: String, binds0: String, fname: String, arg: String, li
     if from_st == "" {
         if arg == "" { return binds0;
         }
-        let mut ctor: String = binds0;
-        if arg != "" {
-            ctor = ts_set(binds0, arg, to_st);
-        }
+        let ctor: String = ts_set(binds0, arg, to_st);
         return c_env_put(ctor, "__tsused__", "1");
     }
     if arg == "" {

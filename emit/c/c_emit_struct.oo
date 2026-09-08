@@ -26,7 +26,7 @@ pub fn c_struct_field_c_ty(toks: List[String], pos: Int, n: Int) -> String {
     return ty_to_c_typedef(ty_ast);
 }
 pub fn c_emit_one_type_alias(toks: List[String], pos: Int, n: Int, seen_state: String) -> List[String] {
-    let mut seen: String = seen_state;
+    let mut seen: String = str_slice(seen_state, 0, chars_len(seen_state));
     let mut p: Int = pos;
     if p < n && c_tokk(toks, p) == "KW_TYPE" { p = p + 1; }
     if p >= n || c_tokk(toks, p) != "IDENT" { return list_push(list_push(list_new(), skip_until_semi(toks, pos).to_string()), seen); }
@@ -111,7 +111,7 @@ pub fn c_emit_one_type_alias(toks: List[String], pos: Int, n: Int, seen_state: S
     let after_sum: Int = 0 + c_try_emit_sum_alias(toks, p, n, name);
     if after_sum != p { return list_push(list_push(list_new(), after_sum.to_string()), seen); }
     let simple: String = c_struct_field_c_ty(toks, p, n);
-    let mut cty: String = simple;
+    let mut cty: String = str_slice(simple, 0, chars_len(simple));
     if cty == name { cty = "long long"; }
     println("#ifndef OO_TY_" + name);
     println("#define OO_TY_" + name);

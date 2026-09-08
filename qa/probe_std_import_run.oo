@@ -1,6 +1,6 @@
 // # Probe: build of std path_join prints a/b
 //
-// Logline: oodac build of probe_build_std_import.oo is native and the ELF prints a/b.
+// Logline: oodac build --backend c of probe_build_std_import.oo is native and the ELF prints a/b.
 //
 // Setup: ProcessCap + EnvCap + FsReadCap. Host is OODA_COMPILER. Polyrepo std/.
 //
@@ -17,10 +17,10 @@ pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
     }
     let src: String = "oodac/qa/probe_build_std_import.oo";
     let out: String = ".ooda-cache/ooda-tmp/probe_std_import.bin";
-    let br: Result[String, String] = sys_exec(p, host, "build", src, "-o", out);
+    let br: Result[String, String] = sys_exec(p, host, "build", "--backend", "c", src, "-o", out);
     if br.is_err() {
         println("ERR\tstd-import build");
-        let bt: String = br.val;
+        let bt: String = match br { Ok(s) => s, Err(e) => e };
         println(bt);
         process_exit(1);
     }

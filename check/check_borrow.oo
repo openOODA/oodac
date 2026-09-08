@@ -53,6 +53,13 @@ fn borrow_skip_type(toks: List[String], i0: Int, n: Int) -> Int {
     return i;
 }
 
+fn borrow_is_copy_op(k: String) -> Bool {
+    if k == "PLUS" || k == "MINUS" || k == "STAR" || k == "SLASH" || k == "PERCENT" { return true; }
+    if k == "EQEQ" || k == "NEQ" || k == "LT" || k == "GT" || k == "LTE" || k == "GTE" { return true; }
+    if k == "AMPAMP" || k == "PIPEPIPE" { return true; }
+    return false;
+}
+
 fn borrow_die_move(name: String, line: String) {
     println("ERR\tmove\tuse after move " + name + " at " + line);
     process_exit(1);
@@ -63,10 +70,10 @@ fn borrow_die_alias(name: String, line: String) {
 }
 
 fn borrow_walk_let(toks: List[String], i0: Int, n: Int, moved0: String, shr0: String, mutb0: String, owned0: String) -> List[String] {
-    let mut moved: String = moved0;
-    let mut shr: String = shr0;
-    let mut mutb: String = mutb0;
-    let mut owned: String = owned0;
+    let mut moved: String = str_slice(moved0, 0, chars_len(moved0));
+    let mut shr: String = str_slice(shr0, 0, chars_len(shr0));
+    let mut mutb: String = str_slice(mutb0, 0, chars_len(mutb0));
+    let mut owned: String = str_slice(owned0, 0, chars_len(owned0));
     let mut p: Int = i0 + 1;
     if p < n && bk(toks, p) == "KW_MUT" { p = p + 1; }
     if p >= n || bk(toks, p) != "IDENT" {
@@ -108,8 +115,8 @@ fn borrow_walk_let(toks: List[String], i0: Int, n: Int, moved0: String, shr0: St
         } else if p < n && bk(toks, p) == "IDENT" {
             let src: String = bt(toks, p);
             let nxt: String = bk(toks, p + 1);
-            if nxt != "LPAREN" && nxt != "DOT" && nxt != "COLON" {
-                if bag_has(moved, src) { borrow_die_move(src, line); }
+            if bag_has(moved, src) { borrow_die_move(src, line); }
+            if nxt != "LPAREN" && nxt != "DOT" && nxt != "COLON" && !borrow_is_copy_op(nxt) {
                 if bag_has(owned, src) || borrow_is_managed(ty) {
                     moved = bag_add(moved, src);
                     owned = bag_add(owned, vname);

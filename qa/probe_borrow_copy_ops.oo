@@ -1,0 +1,25 @@
+// # Probe: comparison and concat ops copy, they must not move
+//
+// Logline: repeated ==, !=, and + on one String binding check OK and run OK.
+//
+// Setup: No caps. EQEQ/NEQ/PLUS are copy ops; the owner stays live.
+//
+// Beats:
+//   1. Bind c: String from a literal.
+//   2. Compare c twice with == and !=.
+//   3. Concat c twice with + and keep using c.
+
+pub fn main() {
+    let c: String = "x";
+    let a: Bool = c == "B";
+    let b: Bool = c == "|";
+    let d: Bool = c != "B";
+    let e: String = c + "!";
+    let f: String = c + "?";
+    if a { println("is_bs"); }
+    if b { println("is_pipe"); }
+    if d { println("not_bs"); }
+    println(e);
+    println(f);
+    println(c);
+}

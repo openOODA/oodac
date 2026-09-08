@@ -6,7 +6,7 @@
 //
 // Beats:
 //   1. INT/STRING/IDENT load, user calls, and builtins.
-//   2. .to_string .is_some .is_none .is_ok .is_err methods.
+//   2. .to_string .is_some .is_none .is_ok .is_err .val .err methods.
 //   3. + == != and string concat via oo_str_concat / oo_str_eq.
 import "ll_tok.oo";
 import "ll_ty.oo";
@@ -214,7 +214,7 @@ fn ll_match_expr(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -
     if p < n { p = p + 1; }
     println("mok" + id.to_string() + ":");
     let b: String = ll_match_bind(sk, ll_pptr(sp), bn, 1, id, cmp);
-    let mut env2: String = env;
+    let mut env2: String = str_slice(env, 0, chars_len(env));
     if ll_pptr(b) != "" {
         env2 = type_env_put(type_env_put(env, bn, ll_pk(b)), "__l__" + bn, ll_pptr(b));
     }
@@ -231,7 +231,7 @@ fn ll_match_expr(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -
     if p < n { p = p + 1; }
     println("merr" + id.to_string() + ":");
     let eb: String = ll_match_bind(sk, ll_pptr(sp), ebn, 0, id, oks);
-    let mut env3: String = env;
+    let mut env3: String = str_slice(env, 0, chars_len(env));
     if ll_pptr(eb) != "" {
         env3 = type_env_put(type_env_put(env, ebn, ll_pk(eb)), "__l__" + ebn, ll_pptr(eb));
     }

@@ -19,7 +19,7 @@ import "c_emit_helpers.oo";
 pub fn c_emit_mono_list(m: String) {
     if m == "I" || m == "S" || m == "F" || m == "LI" || m == "LS" || m == "LF" || m == "LL_I" || m == "LL_S" || m == "LL_F" || m == "LLL_I" || m == "LLL_S" || m == "LLL_F" || m == "LLLL_I" || m == "LLLL_S" || m == "LLLL_F" { return; }
     let list_ty: String = "OoL_" + m;
-    let elem_c: String = m;
+    let elem_c: String = str_slice(m, 0, chars_len(m));
     println("#ifndef OO_TY_" + list_ty);
     println("#define OO_TY_" + list_ty);
     println("#ifndef OO_HAVE_" + list_ty);
@@ -112,7 +112,7 @@ pub fn c_emit_mono_list(m: String) {
 pub fn c_emit_mono_option(m: String) {
     if m == "I" || m == "S" || m == "B" || m == "F" || m == "LI" || m == "LS" || m == "LF" || m == "OoL_I" || m == "OoL_S" || m == "OoL_F" || m == "OoRes_S" || m == "OoResS" { return; }
     let opt_ty: String = "OoOpt_" + m;
-    let mut elem_c: String = m;
+    let mut elem_c: String = str_slice(m, 0, chars_len(m));
     if m == "I" { elem_c = "long long"; }
     else if m == "S" { elem_c = "OoStr"; }
     else if m == "B" { elem_c = "int"; }
@@ -153,7 +153,7 @@ pub fn c_emit_mono_result(ok_m: String, err_m: String) {
     if err_m != "S" && err_m != "String" && err_m != "OoStr" {
         res_ty = "OoRes2_" + ok_m + "_" + err_m;
     }
-    let mut ok_c: String = ok_m;
+    let mut ok_c: String = str_slice(ok_m, 0, chars_len(ok_m));
     if ok_m == "I" { ok_c = "long long"; }
     else if ok_m == "S" { ok_c = "OoStr"; }
     else if ok_m == "B" { ok_c = "int"; }

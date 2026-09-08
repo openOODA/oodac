@@ -200,7 +200,7 @@ pub fn ll_user_call(name: String, sig: String, args: List[String], ssa0: Int) ->
             if call != "" { call = call + ", "; }
             call = call + ll_pass(ll_pk(ap)) + " " + ll_pptr(ap);
         } else {
-            let mut av: String = a;
+            let mut av: String = str_slice(a, 0, chars_len(a));
             if ll_pk(a) == "str" {
                 av = ll_as_val(a, s);
                 s = ll_pssa(av);

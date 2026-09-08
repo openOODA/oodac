@@ -124,7 +124,7 @@ pub fn c_emit_need_ty(cty: String) {
 // Record List field and param names so list_len((tree).nodes) can pick OoL_*.
 pub fn c_list_field_env(toks: List[String], env0: String) -> String {
     let n: Int = list_len(toks);
-let mut e: String = env0;
+let mut e: String = str_slice(env0, 0, chars_len(env0));
 let mut i: Int = 0;
 let mut sname: String = "";
 while i + 4 < n { let k0: String = c_tokk(toks, i);

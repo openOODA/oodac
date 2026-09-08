@@ -34,8 +34,8 @@ pub fn c_emit_fn_mode(toks: List[String], pos: Int, n: Int, fn_env: String, mode
     let src_path: String = c_env_get(fn_env, "__file__");
     let c_fn_name: String = c_mangle_fn_name(fn_name, src_path);
     // Inherit prior fn String-return map so println(make(..)) sees OoStr.
-    let mut env = fn_env;
-    let mut out_fn = fn_env;
+    let mut env: String = str_slice(fn_env, 0, chars_len(fn_env));
+    let mut out_fn: String = str_slice(fn_env, 0, chars_len(fn_env));
     env = c_env_put(env, "__cname__" + fn_name, c_fn_name);
     out_fn = c_env_put(out_fn, "__cname__" + fn_name, c_fn_name);
     let mut plist = "";
@@ -138,8 +138,7 @@ pub fn c_emit_fn_mode(toks: List[String], pos: Int, n: Int, fn_env: String, mode
 
     if mode == "protos" || mode == "protos_noarc" {
         if fn_name != "main" {
-            let fn_attr: String = c_fn_attributes(fn_name, env);
-            let mut sig = fn_attr + ret_ty + " " + c_fn_name;
+            let mut sig: String = c_fn_attributes(fn_name, env) + ret_ty + " " + c_fn_name;
             if first { sig = sig + "(void)"; } else { sig = sig + "(" + plist + ")"; }
             println(sig + ";");
         }
@@ -182,8 +181,7 @@ pub fn c_emit_fn_mode(toks: List[String], pos: Int, n: Int, fn_env: String, mode
     } else {
         if mode == "all" || mode == "bodies" || mode == "all_noarc" || mode == "bodies_noarc" {
             println("");
-            let fn_attr: String = c_fn_attributes(fn_name, env);
-            let mut sig = fn_attr + ret_ty + " " + c_fn_name;
+            let mut sig: String = c_fn_attributes(fn_name, env) + ret_ty + " " + c_fn_name;
             if first { sig = sig + "(void)"; } else { sig = sig + "(" + plist + ")"; }
             let fl2: String = c_tokf(toks, pos, 1);
             let fp2: String = c_env_get(env, "__file__");

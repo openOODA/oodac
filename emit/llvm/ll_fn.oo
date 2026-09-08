@@ -64,7 +64,7 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String) -> Int {
     let name: String = ll_t(toks, p);
     p = p + 1;
     if p < n && ll_k(toks, p) == "LPAREN" { p = p + 1; }
-    let mut env: String = fenv;
+    let mut env: String = str_slice(fenv, 0, chars_len(fenv));
     let mut caps: String = "";
     let mut form: String = "";
     let mut plist: String = "";

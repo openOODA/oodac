@@ -15,7 +15,7 @@ import "c_emit_env.oo";
 
 pub fn c_sum_env_from_toks(toks: List[String], env0: String) -> String {
     let n: Int = list_len(toks);
-let mut e: String = env0;
+let mut e: String = str_slice(env0, 0, chars_len(env0));
 let mut i: Int = 0;
 while i < n { let k: String = c_tokk(toks, i);
 let mut p: Int = i;
@@ -104,7 +104,7 @@ if spec == "" { return "";
     if payk == "U" {
         return "((" + ty + "){" + tag + ", 0, oo_str_lit(\"\")})";
     }
-    let mut pay: String = args;
+    let mut pay: String = str_slice(args, 0, chars_len(args));
     if pay == "" {
         pay = "0";
     }
@@ -143,7 +143,7 @@ pub fn c_emit_sum_match_let(
     decl: Int
 ) -> List[String] {
     let mut p: Int = pos + 1;
-    let mut e: String = env;
+    let mut e: String = str_slice(env, 0, chars_len(env));
     let pr: List[String] = c_emit_expr_c(toks, p, n, e);
     p = parse_int(list_get(pr, 0));
     let scrut: String = list_get(pr, 1);

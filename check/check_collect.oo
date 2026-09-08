@@ -64,7 +64,7 @@ fn collect_expand(fs: &FsReadCap, path: String, stack: String, done: String) -> 
     }
     let src: String = match src_r { Ok(s)    => s, Err(msg) => msg };
     let dir: String = path_dirname(path);
-    let mut done_cur: String = done;
+    let mut done_cur: String = str_slice(done, 0, chars_len(done));
     let mut paths_acc: String = "";
     let n = chars_len(src);
     let mut i = 0;

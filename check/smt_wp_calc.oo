@@ -72,7 +72,7 @@ pub fn smt_wp_calc_step(post: String, assign: String) -> String {
 }
 
 pub fn smt_wp_calc_derive(pre: String, assigns: List[String], post: String) -> String {
-    let mut cur: String = post;
+    let mut cur: String = str_slice(post, 0, chars_len(post));
 let n: Int = list_len(assigns);
 let mut i: Int = n - 1;
 while i >= 0 { let st: String = list_get(assigns, i);

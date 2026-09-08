@@ -118,7 +118,7 @@ fn check_modules(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, paths: L
     while i < np {
         let pth2: String = list_get(paths, i);
         let raw2: String = list_get(raws, i);
-        let mut body: String = raw2;
+        let mut body: String = str_slice(raw2, 0, chars_len(raw2));
         if i + 1 < np { body = strip_import_lines(raw2); }
         if chars_len(body) > 0 {
             let toks: List[String] = run_check_core_binds_path(sys, body, binds, pth2);

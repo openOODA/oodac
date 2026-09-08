@@ -42,7 +42,7 @@ fn ll_cond_i1(v: String, ssa0: Int) -> Int {
 pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String, env0: String, ssa0: Int) -> String {
     let mut p: Int = pos;
     let mut ssa: Int = ssa0;
-    let mut env: String = env0;
+    let mut env: String = str_slice(env0, 0, chars_len(env0));
     while p < n {
         let k: String = ll_k(toks, p);
         if k == "RBRACE" || k == "EOF" { return ll_pack(p, ssa, ret_kind, env); }

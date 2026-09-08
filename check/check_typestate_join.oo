@@ -184,7 +184,7 @@ process_exit(1);
     let binds: String = ts_walk_span(toks, i + 1, lb, env, binds0);
     let then_end: Int = ts_skip_braces(toks, lb);
     let then_b: String = ts_walk_span(toks, lb + 1, then_end - 1, env, binds);
-    let mut else_b: String = binds;
+    let mut else_b: String = str_slice(binds, 0, chars_len(binds));
     if then_end < hi { let e1: String = ts_tok_kind(toks, then_end);
     if e1 == "KW_ELSE" { if then_end + 1 < hi { let e2: String = ts_tok_kind(toks, then_end + 1);
     if e2 == "KW_IF" { else_b = ts_eval_if(toks, then_end + 1, hi, env, binds);
@@ -200,7 +200,7 @@ process_exit(1);
 }
 
 pub fn ts_walk_span(toks: List[String], lo: Int, hi: Int, env: String, binds0: String) -> String {
-    let mut binds: String = binds0;
+    let mut binds: String = str_slice(binds0, 0, chars_len(binds0));
 let mut i = lo;
 while i < hi { let k: String = ts_tok_kind(toks, i);
 if k == "KW_RETURN" { let rs: Int = ts_skip_semi(toks, i + 1, hi);

@@ -43,7 +43,7 @@ pub fn smt_extract_fn_params(toks: List[String], fn_idx: Int, env: List[String])
     if p >= n || c_tokk(toks, p) != "LPAREN" { return env;
     }
     p = p + 1;
-    let mut cur_env = env;
+    let mut cur_env: List[String] = env;
     while p < n && c_tokk(toks, p) != "RPAREN" && c_tokk(toks, p) != "LBRACE" {
         let k: String = c_tokk(toks, p);
         if k == "IDENT" {

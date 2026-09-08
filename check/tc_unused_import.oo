@@ -116,7 +116,6 @@ fn tc_imp_is_call(toks: List[String], n: Int, j: Int) -> Bool {
 }
 
 fn tc_imp_used(toks: List[String], n: Int, stem: String) -> Bool {
-    let prefix: String = stem + "_";
     let mut j: Int = 0;
     while j < n {
         let tk: String = list_get(toks, j);
@@ -124,7 +123,7 @@ fn tc_imp_used(toks: List[String], n: Int, stem: String) -> Bool {
             let id: String = field_at(tk, 3);
             if id == stem { return true;
             }
-            if tc_imp_starts(id, prefix) { return true;
+            if tc_imp_starts(id, stem + "_") { return true;
             }
             if tc_imp_is_call(toks, n, j) {
                 if tc_imp_shared_component(stem, id) { return true;

@@ -107,7 +107,7 @@ pub fn typecheck_mut_assign_types(toks: List[String]) {
                             vty = env_lookup_type(mut_env, name);
                         }
                         if vty != "" {
-                            if i + 2 < n { let env_rhs = lit_env + mut_env;
+                            if i + 2 < n { let env_rhs: String = str_slice(lit_env, 0, chars_len(lit_env)) + mut_env;
                             let mut rty: String = infer_typed_expr_type(toks, i + 2, env_rhs);
                             if rty == "" { let mut re = i + 2;
                             let mut cont_a = true;

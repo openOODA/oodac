@@ -18,14 +18,14 @@ pub fn main(p: &ProcessCap, env: &EnvCap) {
     let d: Result[String, String] = sys_exec(p, host, "check", "oodac/check/check_drive.oo");
     if d.is_err() {
         println("ERR\tisolated check_drive");
-        let dt: String = d.val;
+        let dt: String = match d { Ok(s) => s, Err(e) => e };
         println(dt);
         process_exit(1);
     }
     let m: Result[String, String] = sys_exec(p, host, "check", "oodac/check/check_mod.oo");
     if m.is_err() {
         println("ERR\tisolated check_mod");
-        let mt: String = m.val;
+        let mt: String = match m { Ok(s) => s, Err(e) => e };
         println(mt);
         process_exit(1);
     }

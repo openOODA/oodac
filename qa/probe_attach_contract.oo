@@ -1,12 +1,12 @@
 // # Probe: attach-contract docs and residual backend
 //
-// Logline: Docs name the typed artifact and C as reference. emit/ANCHOR has emit_backend. --backend wasm exits 2.
+// Logline: Docs name the typed artifact and C as reference. CLI emit consumes toks. wasm exits 2.
 //
 // Setup: ProcessCap + EnvCap + FsReadCap. Host is OODA_COMPILER.
 //
 // Beats:
 //   1. Both attach docs contain typed artifact and reference.
-//   2. emit/ANCHOR.oo defines emit_backend.
+//   2. emit/ANCHOR.oo defines emit_backend. CLI emit reads art.toks and does not lex.
 //   3. build --backend wasm of a well-typed file exits 2.
 
 pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
@@ -54,8 +54,12 @@ pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
     }
     let c1: String = match c1r { Ok(s) => s, Err(_) => "" };
     let c2: String = match c2r { Ok(s) => s, Err(_) => "" };
-    if str_index_of(c1, "emit_backend") < 0 || str_index_of(c2, "emit_backend") < 0 {
-        println("ERR\temit_backend not wired from cli emit");
+    if str_index_of(c1, "art.toks") < 0 || str_index_of(c2, "art.toks") < 0 {
+        println("ERR\tcli emit does not consume artifact toks");
+        process_exit(1);
+    }
+    if str_index_of(c1, "lex_scan_source") >= 0 || str_index_of(c2, "lex_scan_source") >= 0 {
+        println("ERR\tcli emit re-lexes");
         process_exit(1);
     }
     let wr: Result[String, String] = sys_exec(p, host, "build", "oodac/qa/probe_list_ok.oo", "--backend", "wasm");

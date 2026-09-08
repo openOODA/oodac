@@ -36,7 +36,7 @@ pub fn list_has(lst: List[String], val: String) -> Bool {
 }
 
 pub fn path_normalize(path: String) -> String {
-    let mut clean_name: String = path;
+    let mut clean_name: String = str_slice(path, 0, chars_len(path));
 let mut cleaning: Bool = true;
 let mut guard: Int = 0;
 while cleaning && guard < 32 { guard = guard + 1;
@@ -168,7 +168,7 @@ pub fn probe_parent_walk(fs: &FsReadCap, imp: String) -> String {
 }
 
 pub fn probe_sibling_walk(fs: &FsReadCap, dir: String, imp: String) -> String {
-    let mut cur: String = dir;
+    let mut cur: String = str_slice(dir, 0, chars_len(dir));
     let mut i: Int = 0;
     while i < 8 {
         if cur == "" || cur == "/" { return ""; }

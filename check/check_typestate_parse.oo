@@ -143,12 +143,11 @@ pub fn ts_parse_machine_line(rest: String, env0: String) -> String {
     while i < n {
         let st: String = ts_read_ident(rest, i);
         if st == "" { break; }
-        let full: String = tname + "#" + st;
-        if c_env_get(env, "__tss__" + full) == "1" {
+        if c_env_get(env, "__tss__" + tname + "#" + st) == "1" {
             println("ERR\ttypestate\tstate name " + st + " used twice on " + tname);
             process_exit(1);
         }
-        env = c_env_put(env, "__tss__" + full, "1");
+        env = c_env_put(env, "__tss__" + tname + "#" + st, "1");
         nstates = nstates + 1;
         i = ts_skip_ws(rest, i + chars_len(st));
     }
@@ -210,12 +209,11 @@ pub fn ts_parse_end_line(rest: String, env0: String) -> String {
         println("ERR\ttypestate\tneed end state name");
         process_exit(1);
     }
-    let full: String = cur + "#" + st;
-    if c_env_get(env0, "__tss__" + full) != "1" {
+    if c_env_get(env0, "__tss__" + cur + "#" + st) != "1" {
         println("ERR\ttypestate\tunknown end state " + st);
         process_exit(1);
     }
-    return c_env_put(env0, "__tsend__" + cur, full);
+    return c_env_put(env0, "__tsend__" + cur, cur + "#" + st);
 }
 
 pub fn ts_parse_directives(src: String) -> String {

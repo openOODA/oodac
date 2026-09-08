@@ -1,0 +1,41 @@
+// # Probe: --json-errors prints a JSON array
+//
+// Logline: check --json-errors of a well-typed file is []. A cap victim is nonzero JSON.
+//
+// Setup: ProcessCap + EnvCap. Host is OODA_COMPILER. No .val (llvm seed).
+//
+// Beats:
+//   1. check --json-errors probe_list_ok.oo exits 0 and stdout is [].
+//   2. check --json-errors probe_cap_sealed.oo exits nonzero and contains "code".
+
+pub fn main(p: &ProcessCap, env: &EnvCap) {
+    let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
+    let host: String = match hr { Ok(s) => s, Err(_) => "" };
+    if host == "" {
+        println("ERR\tOODA_COMPILER required");
+        process_exit(1);
+    }
+    let ok: Result[String, String] = sys_exec(p, host, "check", "--json-errors", "oodac/qa/probe_list_ok.oo");
+    if ok.is_err() {
+        println("ERR\tjson-errors well-typed must be 0");
+        process_exit(1);
+    }
+    let ot: String = match ok { Ok(s) => s, Err(_) => "" };
+    if str_index_of(ot, "[]") < 0 {
+        println("ERR\tjson-errors missing []");
+        println(ot);
+        process_exit(1);
+    }
+    let bad: Result[String, String] = sys_exec(p, host, "check", "--json-errors", "oodac/qa/probe_cap_sealed.oo");
+    if bad.is_ok() {
+        println("ERR\tjson-errors sealed must fail");
+        process_exit(1);
+    }
+    let bt: String = match bad { Ok(s) => s, Err(e) => e };
+    if str_index_of(bt, "\"code\"") < 0 {
+        println("ERR\tjson-errors missing code");
+        println(bt);
+        process_exit(1);
+    }
+    println("OK");
+}

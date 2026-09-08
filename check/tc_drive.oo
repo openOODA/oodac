@@ -197,7 +197,7 @@ pub fn tc_check_expr(expr: String, env: String) -> String {
     if (tag == "EBinop") { return errs_add(errs_add(errs, tc_check_expr(list_get_str(a, 1), env)), tc_check_expr(list_get_str(a, 2), env)); }
     if (tag == "EUnop") { return errs_add(errs, tc_check_expr(list_get_str(a, 1), env)); }
     if (tag == "EClosure") {
-        let params: String = list_get_str(a, 0); let body: String = list_get_str(a, 1); let np: Int = (0 + list_len_str(params)); let mut pi: Int = 0; let mut c_env: String = env;
+        let params: String = list_get_str(a, 0); let body: String = list_get_str(a, 1); let np: Int = (0 + list_len_str(params)); let mut pi: Int = 0; let mut c_env: String = str_slice(env, 0, chars_len(env));
         while pi < np { let pnode: String = list_get_str(params, pi); let pa: String = tc_args_of(pnode); c_env = tc_env_put(c_env, list_get_str(pa, 0), list_get_str(pa, 1)); pi = pi + 1; }
         return if (ast_tag(body) == "AstBlock") { tc_walk_block(body, c_env) } else { tc_check_expr(body, c_env) };
     }

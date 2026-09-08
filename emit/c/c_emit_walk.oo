@@ -58,7 +58,7 @@ if p < n { if c_tokk(toks, p) == "KW_PUB" { p = p + 1;
 
 pub fn c_emit_walk_items(toks: List[String], n: Int, fn_env0: String, mode: String, meta_emit: Bool) -> String {
     let mut pos: Int = 0;
-    let mut fn_env: String = fn_env0;
+    let mut fn_env: String = str_slice(fn_env0, 0, chars_len(fn_env0));
     let mut iter: Int = 0;
 while pos < n { iter = iter + 1;
 if iter > n + 100 { println("ERR\tc_emit\thang guard exceeded at pos " + pos.to_string());

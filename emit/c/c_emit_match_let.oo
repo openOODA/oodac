@@ -31,7 +31,7 @@ pub fn c_emit_match_let_typed(name: String, toks: List[String], pos: Int, n: Int
 }
 pub fn c_emit_match_let_core(name: String, toks: List[String], pos: Int, n: Int, env: String, decl: Int, has_ann: Bool, lty: String) -> List[String] {
     let mut p = pos + 1;
-    let mut e: String = env;
+    let mut e: String = str_slice(env, 0, chars_len(env));
     let pr_m: List[String] = c_emit_expr_c(toks, p, n, e);
     p = parse_int(list_get(pr_m, 0));
     let scrut = list_get(pr_m, 1);
@@ -97,7 +97,7 @@ pub fn c_emit_match_let_core(name: String, toks: List[String], pos: Int, n: Int,
         else { println("  OoResS __ml = " + scrut + ";"); }
         println("  if (__ml.ok) {");
     }
-    let mut eok = e;
+    let mut eok: String = str_slice(e, 0, chars_len(e));
     if use_res {
         if rkind == "RI" || rkind == "RII" { println("    long long " + ok_bind + " = __ml.val;"); }
         else if rkind == "RLI" { println("    OoIList " + ok_bind + " = __ml.val;"); c_emit_arm_retain("OoIList", ok_bind); }

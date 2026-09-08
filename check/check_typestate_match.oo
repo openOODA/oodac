@@ -15,7 +15,7 @@ let lb: Int = ts_find_lbrace(toks, i, hi);
 let mend: Int = ts_skip_braces(toks, lb);
 let mut p = lb + 1;
 let mut have = false;
-let mut acc: String = binds0;
+let mut acc: String = str_slice(binds0, 0, chars_len(binds0));
 while p < mend - 1 { let k: String = ts_tok_kind(toks, p);
 if k == "FATARROW" { if p + 1 >= mend { println("ERR\ttypestate\tmatch arm needs a body at line " + line);
 process_exit(1);

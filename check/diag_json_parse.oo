@@ -107,7 +107,7 @@ pub fn diag_err_line_to_json(line: String, path: String) -> String {
     }
     if chars_len(line) >= 4 { if str_slice(line, 0, 4) == "ERR\t" { let rest: String = str_slice(line, 4, chars_len(line));
     let t1 = 0 + diag_find(rest, "\t");
-    let mut kind: String = rest;
+    let mut kind: String = str_slice(rest, 0, chars_len(rest));
     let mut msg: String = "";
     if t1 >= 0 { kind = str_slice(rest, 0, t1);
     msg = str_slice(rest, t1 + 1, chars_len(rest));

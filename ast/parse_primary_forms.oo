@@ -47,8 +47,8 @@ if field_at(list_get(toks, pos), 0) == "RPAREN" { pos = pos + 1;
         return pos;
     }
     if k == "KW_MATCH" {
-        let ml = line;
-        let mc = col;
+        let ml: String = str_slice(line, 0, chars_len(line));
+        let mc: String = str_slice(col, 0, chars_len(col));
         pos = pos + 1;
         let mut scan_pos = 0 + skip_expr_bp(toks, pos, 0);
         if field_at(list_get(toks, scan_pos), 0) == "LBRACE" {
@@ -113,8 +113,8 @@ if field_at(list_get(toks, pos), 0) == "RPAREN" { pos = pos + 1;
         return pos;
     }
     if k == "KW_IF" {
-        let il = line;
-        let ic = col;
+        let il: String = str_slice(line, 0, chars_len(line));
+        let ic: String = str_slice(col, 0, chars_len(col));
         pos = pos + 1;
         println(pad + "EXPR IF @" + il + ":" + ic);
         pos = parse_expr_dump(toks, pos, depth + 1);

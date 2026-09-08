@@ -149,7 +149,7 @@ pub fn ll_method(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, env:
         return ll_pack(0, s, "str", "");
     }
     if m == "is_some" || m == "is_ok" {
-        let p: String = ptr;
+        let p: String = str_slice(ptr, 0, chars_len(ptr));
         let s: Int = ssa0 + 1;
         println("  " + ll_ssa(s) + " = getelementptr " + ll_ir_alloc(kind) + ", ptr " + p + ", i32 0, i32 0");
         let s2: Int = s + 1;

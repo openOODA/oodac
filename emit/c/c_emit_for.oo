@@ -91,7 +91,7 @@ pub fn c_for_bound(toks: List[String], pos: Int, n: Int, env: String) -> List[St
 
 pub fn c_emit_for_in_list(toks: List[String], pos: Int, n: Int, env: String, v: String, xs: String) -> List[String] {
     let mut p: Int = pos;
-    let mut e: String = env;
+    let mut e: String = str_slice(env, 0, chars_len(env));
     let mut kind: String = c_env_get(e, xs);
     if kind == "" || kind == "I" { kind = "I";
     }
@@ -129,7 +129,7 @@ pub fn c_emit_for_in_list(toks: List[String], pos: Int, n: Int, env: String, v: 
 
 pub fn c_emit_for_stmt(toks: List[String], pos: Int, n: Int, env: String) -> List[String] {
     let mut p: Int = pos + 1;
-    let mut e: String = env;
+    let mut e: String = str_slice(env, 0, chars_len(env));
     if p >= n || c_tokk(toks, p) != "IDENT" {
         println("ERR\tc_emit\tfor residual (expected loop IDENT)");
         process_exit(1);

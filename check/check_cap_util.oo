@@ -156,7 +156,7 @@ pub fn is_cap_type(t: String) -> Bool {
 // F02 / Round 2.4: walk __alias__ chain so rebinds resolve to sealed name.
 pub fn c_arg_cap_type_resolved(env: String, name: String, param_types: String) -> String {
     let max_depth = 32;
-let mut cur = name;
+let mut cur: String = str_slice(name, 0, chars_len(name));
 let mut depth = 0;
 while depth < max_depth { let kind: String = sealed_kind_of(cur);
 if kind != "" { return kind;

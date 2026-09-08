@@ -125,25 +125,25 @@ pub fn c_reassign_nested_kind(name: String, rhs: String, kind: String) {
     let need_retain: Bool = c_list_is_ident(rhs) || (rhs.contains(".") && !rhs.contains("("));
     let mut out: String = "  ";
     if chars_len(kind) >= 4 && str_slice(kind, 0, 4) == "OoL_" {
-        let ty: String = kind;
+        let ty: String = str_slice(kind, 0, chars_len(kind));
         if need_retain { out = out + "oo_retain_" + ty + "(" + rhs + "); ";
         }
         out = out + "{ " + ty + " __tmp = " + name + "; " + name + " = " + rhs + "; oo_release_" + ty + "(__tmp); }";
         println(out);
     } else if chars_len(kind) >= 7 && str_slice(kind, 0, 7) == "OoLLLL_" {
-        let ty: String = kind;
+        let ty: String = str_slice(kind, 0, chars_len(kind));
         if need_retain { out = out + "oo_retain_" + ty + "(" + rhs + "); ";
         }
         out = out + "{ " + ty + " __tmp = " + name + "; " + name + " = " + rhs + "; oo_release_" + ty + "(__tmp); }";
         println(out);
     } else if chars_len(kind) >= 6 && str_slice(kind, 0, 6) == "OoLLL_" {
-        let ty: String = kind;
+        let ty: String = str_slice(kind, 0, chars_len(kind));
         if need_retain { out = out + "oo_retain_" + ty + "(" + rhs + "); ";
         }
         out = out + "{ " + ty + " __tmp = " + name + "; " + name + " = " + rhs + "; oo_release_" + ty + "(__tmp); }";
         println(out);
     } else if chars_len(kind) >= 5 && str_slice(kind, 0, 5) == "OoLL_" {
-        let ty: String = kind;
+        let ty: String = str_slice(kind, 0, chars_len(kind));
         if need_retain { out = out + "oo_retain_" + ty + "(" + rhs + "); ";
         }
         out = out + "{ " + ty + " __tmp = " + name + "; " + name + " = " + rhs + "; oo_release_" + ty + "(__tmp); }";

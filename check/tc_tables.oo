@@ -52,7 +52,7 @@ if n > 1000000 { return "";
                                                 if p < n { pty = tc_read_result_ann(pty, toks, p);
                                                 p = tc_skip_brackets(toks, p);
                                                 }
-                                                        let mut pkey = pname;
+                                                        let mut pkey: String = str_slice(pname, 0, chars_len(pname));
                                                         if cur_fn != "" { pkey = cur_fn + "." + pname;
                                                         }
                                                         lit_env = lit_env + pkey + ":" + pty + "\t" + pname + ":" + pty + "\t";
@@ -129,7 +129,7 @@ if n > 1000000 { return "";
                                         }
                                     }
                                 }
-                                let mut vkey = vname;
+                                let mut vkey: String = str_slice(vname, 0, chars_len(vname));
                                 if cur_fn != "" { vkey = cur_fn + "." + vname;
                                 }
                                 if ann != "" {

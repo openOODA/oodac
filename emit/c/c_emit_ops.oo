@@ -89,7 +89,7 @@ pub fn c_binop_apply(left: String, opk: String, opt: String, right: String, env:
         }
         return "(!oo_res_eq(" + left + ", " + right + "))";
     }
-    let mut op = opt;
+    let mut op: String = str_slice(opt, 0, chars_len(opt));
     if opk == "PLUS" { op = "+";
     }
     if opk == "MINUS" { op = "-";

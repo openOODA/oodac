@@ -157,8 +157,10 @@ pub fn ty_to_c_typedef(ty: String) -> String {
 }
 
 pub fn ty_list_op_name(elem_ty: String, op: String) -> String {
-    let mut op_suf: String = op; if chars_len(op) >= 5 && str_slice(op, 0, 5) == "list_" { op_suf = str_slice(op, 5, chars_len(op));
-}
+    let mut op_suf: String = str_slice(op, 0, chars_len(op));
+    if chars_len(op) >= 5 && str_slice(op, 0, 5) == "list_" {
+        op_suf = str_slice(op, 5, chars_len(op));
+    }
     if elem_ty == "TyInt" || elem_ty == "I" || elem_ty == "Int" {
         return "oo_ilist_" + op_suf;
     }

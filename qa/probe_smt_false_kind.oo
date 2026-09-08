@@ -22,7 +22,7 @@ pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
         println("ERR\tcheck must fail");
         process_exit(1);
     }
-    let ct: String = ca.val;
+    let ct: String = match ca { Ok(s) => s, Err(e) => e };
     if str_index_of(ct, "ERR") < 0 {
         println("ERR\tcheck silent");
         process_exit(1);
@@ -32,7 +32,7 @@ pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
         println("ERR\tbuild must fail");
         process_exit(1);
     }
-    let bt: String = ba.val;
+    let bt: String = match ba { Ok(s) => s, Err(e) => e };
     if str_index_of(bt, "ERR") < 0 {
         println("ERR\tbuild silent");
         process_exit(1);

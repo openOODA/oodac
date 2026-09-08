@@ -18,7 +18,7 @@ import "check/check_typestate_item.oo";
 
 // Strip wrapping parens so __ptr__cap_ref matches recv "(cap_ref)".
 fn c_recv_base(recv: String) -> String {
-    let mut s: String = recv;
+    let mut s: String = str_slice(recv, 0, chars_len(recv));
     let mut guard: Int = 0;
     while guard < 8 {
         let n: Int = chars_len(s);
@@ -203,7 +203,7 @@ pub fn c_emit_method(toks: List[String], pos: Int, n: Int, env: String, recv: St
             let mangled: String = c_env_get(env, "__cname__" + mname);
             let has_fn: Bool = mangled != "" || c_env_get(env, "__fr__" + mname) != "";
             if has_fn {
-                let mut fn_tgt: String = mname;
+                let mut fn_tgt: String = str_slice(mname, 0, chars_len(mname));
                 if mangled != "" { fn_tgt = mangled;
                 }
                 if margs == "" { call = fn_tgt + "(" + recv + ")";
