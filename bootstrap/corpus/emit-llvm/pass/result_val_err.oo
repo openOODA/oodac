@@ -1,0 +1,15 @@
+// # llvm result val err
+//
+// Logline: LLVM pass fixture for direct .val and .err payload access.
+//
+// Beats:
+//   1. main binds an Ok and an Err.
+//   2. .val and .err lower to payload field loads by kind.
+//   3. Output is 42 boom.
+
+pub fn main() {
+    let o: Result[Int, String] = Ok(42);
+    println(o.val);
+    let e: Result[Int, String] = Err("boom");
+    println(e.err);
+}

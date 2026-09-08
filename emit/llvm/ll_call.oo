@@ -8,12 +8,53 @@
 //   1. String concat and eq. Integer icmp including GTE/LTE.
 //   2. is_some/is_ok load field 0. to_string uses oo_int_to_str.
 //   3. Option Some/None as %OoOptI.
+//   4. .val/.err load payload fields by kind. println(i1) prints 0/1 like C.
 
 import "ll_tok.oo";
 import "ll_ty.oo";
 import "types/types_core.oo";
 
+fn ll_field_idx(kind: String, m: String) -> Int {
+    if kind == "resi" && m == "val" { return 1; }
+    if kind == "resi" && m == "err" { return 2; }
+    if kind == "ress" && m == "val" { return 1; }
+    if kind == "ress" && m == "err" { return 1; }
+    if kind == "opti" && m == "val" { return 1; }
+    if kind == "opts" && m == "val" { return 1; }
+    return 0 - 1;
+}
+
+fn ll_field_kind(kind: String, m: String) -> String {
+    if m == "val" && kind == "resi" { return "i64"; }
+    if m == "val" && kind == "opti" { return "i64"; }
+    if m == "val" && kind == "ress" { return "str"; }
+    if m == "val" && kind == "opts" { return "str"; }
+    if m == "err" && kind == "resi" { return "str"; }
+    if m == "err" && kind == "ress" { return "str"; }
+    return "";
+}
+
+fn ll_field_load(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int) -> String {
+    let idx: Int = ll_field_idx(kind, m);
+    let fk: String = ll_field_kind(kind, m);
+    if idx < 0 || fk == "" {
+        println("ERR\tllvm\tmethod " + m + " kind " + kind);
+        process_exit(1);
+    }
+    let base: String = ll_ensure_ptr(ll_pack(0, ssa, kind, ptr), ssa0);
+    let s: Int = ll_pssa(base) + 1;
+    println("  " + ll_ssa(s) + " = getelementptr " + ll_ir_alloc(kind) + ", ptr " + ll_pptr(base) + ", i32 0, i32 " + idx.to_string());
+    let s2: Int = s + 1;
+    println("  " + ll_ssa(s2) + " = load " + ll_ir_val(fk) + ", ptr " + ll_ssa(s));
+    return ll_pack(0, s2, fk, "");
+}
+
 pub fn ll_print_val(kind: String, ssa: Int, ptr: String, ssa0: Int) -> Int {
+    if kind == "i1" {
+        let n2: Int = ssa0 + 1;
+        println("  " + ll_ssa(n2) + " = zext i1 " + ll_ssa(ssa) + " to i64");
+        return ll_print_val("i64", n2, "", n2);
+    }
     if kind == "str" {
         let mut s: Int = ssa;
         if ptr != "" {
@@ -157,6 +198,9 @@ pub fn ll_method(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, env:
         let s3: Int = s2 + 1;
         println("  " + ll_ssa(s3) + " = icmp ne i32 " + ll_ssa(s2) + ", 0");
         return ll_pack(0, s3, "i1", "");
+    }
+    if m == "val" || m == "err" {
+        return ll_field_load(kind, ssa, ptr, m, ssa0);
     }
     if m == "is_none" || m == "is_err" {
         let s: Int = ssa0 + 1;

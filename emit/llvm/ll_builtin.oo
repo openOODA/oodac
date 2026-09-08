@@ -99,6 +99,15 @@ pub fn ll_builtin(name: String, args: List[String], ssa0: Int, expect: String) -
         println("  " + ll_ssa(s) + " = call { ptr, i64 } @oo_char_at({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ", i64 " + ll_ssa(ll_pssa(ll_arg(args, 1))) + ")");
         return ll_pack(0, s, "str", "");
     }
+    if name == "str_starts_with" && na >= 2 {
+        let a0: String = ll_as_val(ll_arg(args, 0), ssa0);
+        let a1: String = ll_as_val(ll_arg(args, 1), ll_pssa(a0));
+        let s: Int = ll_pssa(a1) + 1;
+        println("  " + ll_ssa(s) + " = call i32 @oo_str_starts_with({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ")");
+        let s2: Int = s + 1;
+        println("  " + ll_ssa(s2) + " = icmp ne i32 " + ll_ssa(s) + ", 0");
+        return ll_pack(0, s2, "i1", "");
+    }
     if name == "str_ends_with" && na >= 2 {
         let a0: String = ll_as_val(ll_arg(args, 0), ssa0);
         let a1: String = ll_as_val(ll_arg(args, 1), ll_pssa(a0));

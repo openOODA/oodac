@@ -1,0 +1,16 @@
+// # llvm bool print
+//
+// Logline: LLVM pass fixture that prints Bool values and short-circuit results.
+//
+// Beats:
+//   1. main prints false then true as 0 then 1, matching the C backend.
+//   2. && and || lower through short-circuit phi nodes.
+//   3. Output is 0 1 1.
+
+pub fn main() {
+    println(false);
+    println(true);
+    if 1 < 2 && 3 < 4 {
+        println(1);
+    }
+}

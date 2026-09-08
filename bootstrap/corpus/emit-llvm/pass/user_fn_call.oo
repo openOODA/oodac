@@ -1,0 +1,29 @@
+// # llvm user fn call
+//
+// Logline: LLVM pass fixture for user calls, void fns, and recursion.
+//
+// Beats:
+//   1. add and shout lower through the reachable-fn walker.
+//   2. fib recurses through user-call dispatch.
+//   3. Output is 42 hi 55.
+
+fn add(a: Int, b: Int) -> Int {
+    return a + b;
+}
+
+fn shout(s: String) {
+    println(s);
+}
+
+fn fib(n: Int) -> Int {
+    if n < 2 {
+        return n;
+    }
+    return fib(n - 1) + fib(n - 2);
+}
+
+pub fn main() {
+    println(add(20, 22));
+    shout("hi");
+    println(fib(10));
+}

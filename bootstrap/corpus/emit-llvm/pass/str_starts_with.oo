@@ -1,0 +1,22 @@
+// # llvm str starts with
+//
+// Logline: LLVM pass fixture for the str_starts_with builtin.
+//
+// Beats:
+//   1. main binds c to foobar.
+//   2. starts_with lowers to oo_str_starts_with like ends_with.
+//   3. Output is 1 1.
+
+pub fn main() {
+    let c: String = "foobar";
+    if str_starts_with(c, "foo") {
+        println(1);
+    } else {
+        println(0);
+    }
+    if str_ends_with(c, "bar") {
+        println(1);
+    } else {
+        println(0);
+    }
+}

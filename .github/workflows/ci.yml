@@ -180,6 +180,10 @@ jobs:
           llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/list_get.oo 7
           llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/match_ok.oo ok
           llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/bool_print.oo "$(printf '0\n1\n1')"
+          llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/result_val_err.oo "$(printf '42\nboom')"
+          llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/str_starts_with.oo "$(printf '1\n1')"
+          llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/user_fn_call.oo "$(printf '42\nhi\n55')"
+          llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/bool_print.oo "$(printf '0\n1\n1')"
           llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/str_starts_with.oo "$(printf '1\n1')"
           llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/result_val_err.oo "$(printf '42\nboom')"
           llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/user_fn_call.oo "$(printf '42\nhi\n55')"
