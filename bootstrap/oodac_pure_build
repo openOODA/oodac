@@ -622,8 +622,12 @@ __attribute__((constructor)) void oo_jail_landlock_ctor(void) {
   if (!rd || !rd[0] || !wd || !wd[0]) {
     const char *off = getenv("OODA_NO_JAIL");
     if (off && off[0] == '1' && off[1] == 0) return;
-    fprintf(stderr, "ERR\tlandlock\tOODA_FS_READDIR and OODA_FS_WRITEDIR required (or OODA_NO_JAIL=1)\n");
-    _exit(1);
+    static char cwd[PATH_MAX];
+    if (!getcwd(cwd, sizeof cwd)) {
+      fprintf(stderr, "ERR\tlandlock\tOODA_FS_READDIR/WRITEDIR unset and getcwd failed (or OODA_NO_JAIL=1)\n");
+      _exit(1);
+    }
+    rd = cwd; wd = cwd;
   }
   if (prctl(PR_GET_NO_NEW_PRIVS, 0, 0, 0, 0) == 1) return;
   if (!oo_landlock_is_available()) {
