@@ -2,7 +2,7 @@
 //
 // Logline: check then emit-llvm (default) via ProcessCap argv, write IR/C under jail, clang -O2.
 //
-// Setup: Host is OODA_COMPILER, OODAC_BIN, or OODA_TOOLCHAIN layout. Links oodar.c. No sh -c. Resolves gcc via PATH (execvp) so any toolchain layout works; the jail still confines reads/writes.
+// Setup: Host is OODA_COMPILER, OODAC_BIN, or OODA_TOOLCHAIN layout. Links oodar.c. No sh -c. Resolves gcc via PATH (execvp) so any toolchain layout works; the jail still confines reads/writes. clang likewise via PATH, gated to major >= 15 for opaque-pointer IR.
 //
 // Beats:
 //   1. Refuse residual backends, compiler-main concat, -o a directory, and no main.
@@ -10,7 +10,19 @@
 //   3. mkdir; emit-llvm (default, clang -O2) or emit-c; oodar.c plus host_rt.
 
 import "lex/token_fmt.oo";
+import "lex/token_parse_int.oo";
 import "cli_oodar.oo";
+
+// Probe mirrors the link invocation: --no-default-config keeps distro
+// /etc configs (unreadable under the jail) from failing the version check.
+fn clang_major(sys: &ProcessCap) -> Int {
+    let vr: Result[String, String] = sys_exec(sys, "clang", "--no-default-config", "--version");
+    if vr.is_err() { return 0 - 1; }
+    let v: String = match vr { Ok(s) => s, Err(_) => "" };
+    let at: Int = str_index_of(v, "clang version ");
+    if at < 0 { return 0 - 1; }
+    return parse_int(str_slice(v, at + 14, chars_len(v)));
+}
 
 fn compiler_host(fs_r: &FsReadCap, env: &EnvCap) -> String {
     let oc: Result[String, String] = env_get(env, "OODA_COMPILER");
@@ -143,7 +155,12 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
             println(ct);
             process_exit(1);
         }
-        let r: Result[String, String] = sys_exec(sys, "/usr/bin/clang", "--no-default-config", "-O2", "-g0", "-fno-ident", "-Wno-override-module", "-I" + od, obj, hr, tmp_ll, "-frandom-seed=0", "-Wl,--build-id=none", "-Wl,--strip-debug", "-lm", "-ldl", "-lpthread", "-o", out);
+        let cm: Int = clang_major(sys);
+        if cm < 15 {
+            println("ERR\tbuild\tclang >= 15 required for LLVM IR (opaque pointers); got major " + cm.to_string() + " via PATH");
+            process_exit(1);
+        }
+        let r: Result[String, String] = sys_exec(sys, "clang", "--no-default-config", "-O2", "-g0", "-fno-ident", "-Wno-override-module", "-I" + od, obj, hr, tmp_ll, "-frandom-seed=0", "-Wl,--build-id=none", "-Wl,--strip-debug", "-lm", "-ldl", "-lpthread", "-o", out);
         if !r.is_ok() {
             println("ERR\tbuild\tclang llvm failed");
             let gtxt: String = match r { Ok(s) => s, Err(e) => e };

@@ -1,0 +1,17 @@
+// # llvm string escapes
+//
+// Logline: LLVM pass fixture for control-byte string literals.
+//
+// Setup: String holds tab, newline, quote, backslash, and CR bytes;
+//   prints its length then itself.
+//
+// Beats:
+//   1. Length counts every byte (11).
+//   2. Every control byte round-trips through IR emission byte-exact.
+//   3. Output matches the C backend byte for byte (differential parity).
+
+pub fn main() {
+    let s: String = "a\tb\nc\"d\\e\rf";
+    println(bytes_len(s).to_string());
+    println(s);
+}

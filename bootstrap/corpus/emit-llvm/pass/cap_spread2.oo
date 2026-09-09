@@ -1,0 +1,19 @@
+// # llvm cap spread 2: peripheral grants
+//
+// Logline: LLVM pass fixture granting seven peripheral cap kinds.
+//
+// Setup: main takes Sign, Audio, Camera, Usb, Hid, Window, Frame caps;
+//   grants mint at entry and forward as i64 handles to a helper.
+//
+// Beats:
+//   1. Seven cap types map and grant (ll_cap_grant covered them after cap_spread).
+//   2. Helper receives every handle.
+//   3. Output is 7.
+
+fn use7(s: &SignCap, a: &AudioCap, c: &CameraCap, u: &UsbCap, h: &HidCap, w: &WindowCap, f: &FrameCap) -> Int {
+    return 7;
+}
+
+pub fn main(s: &SignCap, a: &AudioCap, c: &CameraCap, u: &UsbCap, h: &HidCap, w: &WindowCap, f: &FrameCap) {
+    println(use7(s, a, c, u, h, w, f));
+}

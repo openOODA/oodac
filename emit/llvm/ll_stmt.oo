@@ -16,8 +16,10 @@ import "ll_call.oo";
 import "ll_ctor.oo";
 import "types/types_core.oo";
 
-fn ll_store(name: String, kind: String, v: String, ssa0: Int) -> Int {
-    let dst: String = ll_var(name);
+fn ll_store(name: String, kind: String, v: String, ssa0: Int, env: String) -> Int {
+    let mut dst: String = ll_var(name);
+    let loc: String = type_env_get(env, "__l__" + name);
+    if loc != "" { dst = loc; }
     if ll_is_agg(kind) {
         if ll_pptr(v) != "" {
             let s: Int = ssa0 + 1;
@@ -51,6 +53,10 @@ pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String, env
             if p < n && ll_k(toks, p) == "KW_MUT" { p = p + 1; }
             let name: String = ll_t(toks, p);
             p = p + 1;
+            if type_env_get(env, "__l__" + name) != "" {
+                println("ERR\tllvm\tlet shadows loop or match binding " + name);
+                process_exit(1);
+            }
             let mut ty: String = "i64";
             if p < n && ll_k(toks, p) == "COLON" {
                 p = p + 1;
@@ -64,7 +70,7 @@ pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String, env
             ssa = ll_pssa(v);
             if ll_pk(v) != "" && ll_pk(v) != "void" { ty = ll_pk(v); }
             println("  " + ll_var(name) + " = alloca " + ll_ir_alloc(ty) + ", align 8");
-            ssa = ll_store(name, ty, v, ssa);
+            ssa = ll_store(name, ty, v, ssa, env);
             env = type_env_put(env, name, ty);
             if p < n && ll_k(toks, p) == "SEMI" { p = p + 1; }
         } else if k == "KW_IF" {
@@ -165,13 +171,14 @@ pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String, env
                 his = ssa;
             }
             let fid: Int = ssa + 1;
-            println("  " + ll_var(fname) + " = alloca i64, align 8");
-            println("  store i64 " + ll_ssa(los) + ", ptr " + ll_var(fname));
-            let envf: String = type_env_put(env, fname, "i64");
+            let fvar: String = ll_var(fname) + "_" + fid.to_string();
+            println("  " + fvar + " = alloca i64, align 8");
+            println("  store i64 " + ll_ssa(los) + ", ptr " + fvar);
+            let envf: String = type_env_put(type_env_put(env, fname, "i64"), "__l__" + fname, fvar);
             println("  br label %fcond" + fid.to_string());
             println("fcond" + fid.to_string() + ":");
             ssa = ssa + 1;
-            println("  " + ll_ssa(ssa) + " = load i64, ptr " + ll_var(fname));
+            println("  " + ll_ssa(ssa) + " = load i64, ptr " + fvar);
             ssa = ssa + 1;
             println("  " + ll_ssa(ssa) + " = icmp slt i64 " + ll_ssa(ssa - 1) + ", " + ll_ssa(his));
             println("  br i1 " + ll_ssa(ssa) + ", label %fbody" + fid.to_string() + ", label %fend" + fid.to_string());
@@ -183,10 +190,10 @@ pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String, env
             if p < n && ll_k(toks, p) == "RBRACE" { p = p + 1; }
             if ll_pterm(fb) == 0 {
                 ssa = ssa + 1;
-                println("  " + ll_ssa(ssa) + " = load i64, ptr " + ll_var(fname));
+                println("  " + ll_ssa(ssa) + " = load i64, ptr " + fvar);
                 ssa = ssa + 1;
                 println("  " + ll_ssa(ssa) + " = add i64 " + ll_ssa(ssa - 1) + ", 1");
-                println("  store i64 " + ll_ssa(ssa) + ", ptr " + ll_var(fname));
+                println("  store i64 " + ll_ssa(ssa) + ", ptr " + fvar);
                 println("  br label %fcond" + fid.to_string());
             }
             println("fend" + fid.to_string() + ":");
@@ -229,7 +236,7 @@ pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String, env
             let ty: String = type_env_get(env, name);
             let v: String = ll_expr(toks, p + 2, n, ssa, type_env_put("", "__e__", ty) + env);
             p = ll_ppos(v);
-            ssa = ll_store(name, ty, v, ll_pssa(v));
+            ssa = ll_store(name, ty, v, ll_pssa(v), env);
             if p < n && ll_k(toks, p) == "SEMI" { p = p + 1; }
         } else {
             let v: String = ll_expr(toks, p, n, ssa, env);

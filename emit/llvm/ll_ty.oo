@@ -81,6 +81,13 @@ pub fn ll_cap_grant(ty: String) -> String {
     if ty == "ThreadCap" { return "thread"; }
     if ty == "GpuCap" { return "gpu"; }
     if ty == "CompilerReadCap" { return "compiler_read"; }
+    if ty == "SignCap" { return "sign"; }
+    if ty == "AudioCap" { return "audio"; }
+    if ty == "CameraCap" { return "camera"; }
+    if ty == "UsbCap" { return "usb"; }
+    if ty == "HidCap" { return "hid"; }
+    if ty == "WindowCap" { return "window"; }
+    if ty == "FrameCap" { return "frame"; }
     return "";
 }
 

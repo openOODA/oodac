@@ -26,7 +26,20 @@ pub fn ll_c_esc(s: String) -> String {
         } else if c == "\t" {
             o = o + "\\09";
         } else {
-            o = o + c;
+            let b: Int = byte_at(c, 0);
+            if b == 13 {
+                o = o + "\\0D";
+            } else if b == 8 {
+                o = o + "\\08";
+            } else if b == 12 {
+                o = o + "\\0C";
+            } else if b == 11 {
+                o = o + "\\0B";
+            } else if b == 0 {
+                o = o + "\\00";
+            } else {
+                o = o + c;
+            }
         }
         i = i + 1;
     }
@@ -55,6 +68,7 @@ pub fn ll_rt_header(toks: List[String]) {
     println("declare void @oo_print_str(ptr, i64)");
     println("declare void @oo_println()");
     println("declare i64 @oo_chars_len({ ptr, i64 })");
+    println("declare i64 @oo_bytes_len({ ptr, i64 })");
     println("declare i32 @oo_str_eq({ ptr, i64 }, { ptr, i64 })");
     println("declare i32 @oo_str_ends_with({ ptr, i64 }, { ptr, i64 })");
     println("declare i32 @oo_str_starts_with({ ptr, i64 }, { ptr, i64 })");
@@ -83,6 +97,13 @@ pub fn ll_rt_header(toks: List[String]) {
     println("declare i64 @oo_cap_grant_thread()");
     println("declare i64 @oo_cap_grant_gpu()");
     println("declare i64 @oo_cap_grant_compiler_read()");
+    println("declare i64 @oo_cap_grant_sign()");
+    println("declare i64 @oo_cap_grant_audio()");
+    println("declare i64 @oo_cap_grant_camera()");
+    println("declare i64 @oo_cap_grant_usb()");
+    println("declare i64 @oo_cap_grant_hid()");
+    println("declare i64 @oo_cap_grant_window()");
+    println("declare i64 @oo_cap_grant_frame()");
     println("declare void @oo_slist_push(ptr sret(%OoSList) align 8, ptr byval(%OoSList) align 8, { ptr, i64 })");
     println("declare { ptr, i64 } @oo_slist_get(ptr byval(%OoSList) align 8, i64)");
     println("declare void @oo_slist_slice(ptr sret(%OoSList) align 8, ptr byval(%OoSList) align 8, i64, i64)");

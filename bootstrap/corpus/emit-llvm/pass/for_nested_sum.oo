@@ -1,0 +1,21 @@
+// # llvm nested for loops
+//
+// Logline: LLVM pass fixture for nested for-range loops with distinct vars.
+//
+// Setup: Outer i and inner j each accumulate into s;
+//   prints the double sum.
+//
+// Beats:
+//   1. Each loop level gets a unique alloca (no duplicate %v_i).
+//   2. Nested accumulation is exact (48).
+//   3. Same-shape C divergence (if any) is item-5 ratchet fuel, not this gate.
+
+pub fn main() {
+    let mut s: Int = 0;
+    for i in 0..4 {
+        for j in 0..4 {
+            s = s + i + j;
+        }
+    }
+    println(s);
+}

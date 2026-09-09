@@ -93,6 +93,12 @@ pub fn ll_builtin(name: String, args: List[String], ssa0: Int, expect: String) -
         println("  " + ll_ssa(s) + " = call i64 @oo_chars_len({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ")");
         return ll_pack(0, s, "i64", "");
     }
+    if name == "bytes_len" && na >= 1 {
+        let a0: String = ll_as_val(ll_arg(args, 0), ssa0);
+        let s: Int = ll_pssa(a0) + 1;
+        println("  " + ll_ssa(s) + " = call i64 @oo_bytes_len({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ")");
+        return ll_pack(0, s, "i64", "");
+    }
     if name == "char_at" && na >= 2 {
         let a0: String = ll_as_val(ll_arg(args, 0), ssa0);
         let s: Int = ll_pssa(a0) + 1;

@@ -202,6 +202,7 @@ jobs:
           llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/if_else.oo big
           llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/while_sum.oo 10
           llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/for_range_sum.oo 10
+          llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/for_nested_sum.oo 48
           llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/str_concat.oo foobar
           llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/list_get.oo 7
           llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/match_ok.oo ok
@@ -211,6 +212,8 @@ jobs:
           llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/user_fn_call.oo "$(printf '42\nhi\n55')"
           llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/multi_diamond.oo 112
           llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/cap_spread.oo 7
+          llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/cap_spread2.oo 7
+          llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/str_escapes.oo "$(printf '11\na\tb\nc\"d\\e\rf')"
           llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/method_calls.oo "$(printf '1\n0\n6\n2\n42')"
           echo "=== compiler not concat ==="
           "$HOST" build --backend c oodac/qa/probe_compiler_not_concat.oo -o .ooda-cache/ooda-tmp/ci_nocat.bin
