@@ -56,6 +56,8 @@ pub fn is_known_name(name: String) -> Bool {
     }
     if name == "write_file" { return true;
     }
+    if name == "file_append_sync" { return true;
+    }
     if name == "path_exists" { return true;
     }
     if name == "file_size" { return true;

@@ -180,7 +180,7 @@ pub fn c_emit_preamble() {
     println("int oo_meta_is_path_a(void);");
     println("void oo_meta_decoy_touch(void);");
     println("void oo_cap_require(long long,long long,const char*);");
-    println("OoResS oo_read_file(long long,OoStr); OoResV oo_write_file(long long,OoStr,OoStr);");
+    println("OoResS oo_read_file(long long,OoStr); OoResV oo_write_file(long long,OoStr,OoStr); OoResV oo_file_append_sync(long long,OoStr,OoStr);");
     println("int oo_path_exists(long long,OoStr); long long oo_file_size(long long,OoStr); OoResS oo_env_get(long long,OoStr);");
     println("OoResS oo_sys_exec(long long,int,OoStr*); OoResI oo_sys_exec_wait(long long,OoStr,OoSList);");
     println("OoSList oo_sys_args(long long);");

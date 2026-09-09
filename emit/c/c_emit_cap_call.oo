@@ -28,6 +28,13 @@ pub fn c_emit_cap_call(t: String, a0: String, a1: String, a2g: String, args: Str
         }
         return "oo_write_file(" + args + ")";
     }
+    if t == "file_append_sync" {
+        if !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tfile_append_sync requires &FsWriteCap as first arg (not int/lit)");
+            process_exit(1);
+        }
+        return "oo_file_append_sync(" + args + ")";
+    }
     if t == "path_exists" {
         if a1 == "" || !c_arg_is_cap_ident(a0) {
             println("ERR\tc_emit\tpath_exists requires &FsReadCap as first arg (not int/lit)");

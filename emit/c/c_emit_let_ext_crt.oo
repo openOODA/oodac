@@ -63,7 +63,7 @@ if cnm == "field_at" || cnm == "field_decode3" || cnm == "tok_line" || cnm == "k
     if crt == "" && chars_len(rhs) >= 10 && rhs.contains("oo_read_file") {
         crt = "OoResS";
     }
-    if cnm == "write_file" || cnm == "oo_write_file" {
+    if cnm == "write_file" || cnm == "oo_write_file" || cnm == "file_append_sync" {
         crt = "OoResV";
     }
     if cnm == "load_source_with_imports" || cnm == "bc_emit_program" || cnm == "wasm_emit_program"

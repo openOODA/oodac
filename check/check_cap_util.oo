@@ -46,7 +46,7 @@ pub fn is_sealed_net(name: String) -> Bool {
 pub fn sealed_fs_kind_of(name: String) -> String {
     if name == "read_file" || name == "fs_read" || name == "path_exists" || name == "file_size" || name == "oo_file_stamp" || name == "file_stamp" || name == "oo_read_stdin" || name == "oo_read_stdin_chunk" || name == "read_stdin" || name == "read_stdin_chunk" { return "FsReadCap";
 }
-    if name == "write_file" || name == "fs_write" {
+    if name == "write_file" || name == "fs_write" || name == "file_append_sync" {
         return "FsWriteCap";
     }
     return "";
