@@ -1,0 +1,63 @@
+// # Probe: struct field bind ARC balance
+//
+// Logline: Bind heap structs from fields at scale and verify values survive.
+//
+// Setup: Needs &FsReadCap. Exit 0 with SOAK-OK iff every tag verifies.
+//
+// Beats:
+//   1. Bind Inner structs from Outer fields in a 20000 round loop.
+//   2. Verify each tag length every round.
+//   3. Reassign a struct var from another field and verify.
+//   4. Print SOAK-OK only when all checks hold.
+
+type Inner = struct { s: String };
+type Outer = struct { inner: Inner, n: Int };
+
+pub fn mk(n: Int) -> Outer {
+    let inner: Inner = Inner { s: "tag" };
+    return Outer { inner: inner, n: n };
+}
+
+pub fn soak_rounds(rounds: Int) -> Int {
+    let mut bad: Int = 0;
+    let mut i: Int = 0;
+    while i < rounds {
+        let o: Outer = mk(i);
+        let x: Inner = o.inner;
+        if chars_len(x.s) != 3 {
+            bad = bad + 1;
+        }
+        i = i + 1;
+    }
+    return bad;
+}
+
+pub fn reassign_check() -> Int {
+    let mut o: Outer = mk(1);
+    let t: Outer = mk(2);
+    let mut x: Inner = t.inner;
+    x = o.inner;
+    if chars_len(x.s) != 3 {
+        return 1;
+    }
+    return 0;
+}
+
+pub fn main() {
+    let mut num_errors: Int = 0;
+    let soak_bad: Int = soak_rounds(20000);
+    if soak_bad != 0 {
+        println("FAIL: struct field soak");
+        num_errors = num_errors + 1;
+    }
+    if reassign_check() != 0 {
+        println("FAIL: struct field reassign");
+        num_errors = num_errors + 1;
+    }
+    if num_errors == 0 {
+        println("probe_struct_field_arc: PASSED");
+    } else {
+        println("probe_struct_field_arc: FAILED");
+        process_exit(1);
+    }
+}

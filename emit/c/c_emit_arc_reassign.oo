@@ -130,7 +130,7 @@ pub fn c_emit_reassign_arc(name: String, rhs: String, env: String) {
         println(out);
     } else if c_is_ll_kind(k) {
         c_reassign_nested_kind(name, rhs, k);
-    } else if c_is_managed_type(k) {
+    } else if c_is_managed_type(k) || c_env_get(env, "__arc_struct__" + name) != "" {
         let mut out = "  ";
         let is_struct_lit: Bool = chars_len(rhs) >= 2 && str_slice(rhs, 0, 2) == "((";
         let mut need_retain: Bool = (rk != "" || (c_expr_is_c_ident(rhs) && rk != "") || (rhs.contains(".") && !rhs.contains("(")) || is_struct_lit);
@@ -151,7 +151,7 @@ pub fn c_emit_reassign_arc(name: String, rhs: String, env: String) {
 }
 
 pub fn c_emit_let_alias_retain(name: String, rhs: String, lty: String, env: String) {
-    if !c_is_managed_type(lty) || (chars_len(rhs) >= 3 && str_slice(rhs, 0, 3) == "oo_") { return; }
+    if c_env_get(env, "__arc_struct__" + name) == "" && (!c_is_managed_type(lty) || (chars_len(rhs) >= 3 && str_slice(rhs, 0, 3) == "oo_")) { return; }
     let rk: String = c_env_get(env, rhs);
     let mut need: Bool = rk != "" || (c_expr_is_c_ident(rhs) && rk != "");
     let rn: Int = chars_len(rhs);

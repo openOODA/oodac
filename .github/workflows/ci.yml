@@ -159,6 +159,10 @@ jobs:
           echo "=== attach contract ==="
           "$HOST" build --backend c oodac/qa/probe_attach_contract.oo -o .ooda-cache/ooda-tmp/ci_attach.bin
           .ooda-cache/ooda-tmp/ci_attach.bin
+          echo "=== struct field arc ==="
+          "$HOST" build --backend c oodac/qa/probe_struct_field_arc.oo -o .ooda-cache/ooda-tmp/ci_struct_arc.bin
+          .ooda-cache/ooda-tmp/ci_struct_arc.bin
+          .ooda-cache/ooda-tmp/ci_struct_arc.bin
           echo "=== llvm unique bar ==="
           command -v clang >/dev/null
           "$HOST" build --backend c oodac/qa/probe_llvm_bar.oo -o .ooda-cache/ooda-tmp/ci_llvm.bin

@@ -10,6 +10,7 @@
 //   3. Bind type in environment and emit C declaration / assignment.
 
 import "c_emit_env.oo";
+import "check/tc_struct_field_table.oo";
 import "c_emit_list_ty.oo";
 import "c_emit_ty.oo";
 import "c_emit_ty_ext.oo";
@@ -113,7 +114,16 @@ pub fn c_emit_let_stmt(toks: List[String], pos: Int, n: Int, env: String) -> Lis
         else if chars_len(lty) > 5 && str_slice(lty, 0, 5) == "OoRes" { bind_kind = lty; }
         else if lty == "double" { bind_kind = "F"; }
         else if bind_kind == "" && c_is_managed_type(lty) { bind_kind = lty; }
+        let stab_if: String = build_struct_field_table(toks);
+        let mut heap_if: Bool = false;
+        if struct_fields_blob(stab_if, lty) != "" { heap_if = true; }
+        if chars_len(lty) > 4 && str_slice(lty, 0, 4) == "OoL_" { heap_if = true; }
+        if heap_if && bind_kind == "" { bind_kind = lty; }
         if bind_kind != "" { e = c_env_put(e, c_var_if, bind_kind); }
+        if heap_if {
+            e = c_env_put(e, "__arc_struct__" + c_var_if, "1");
+            e = c_env_put(e, "__arc_struct__" + name, "1");
+        }
         e = c_env_put(e, "__ty__" + c_var_if, lty);
         e = c_env_put(e, "__ty__" + name, lty);
         if p < n && c_tokk(toks, p) == "SEMI" { p = p + 1; }
@@ -206,6 +216,13 @@ pub fn c_emit_let_stmt(toks: List[String], pos: Int, n: Int, env: String) -> Lis
     else if chars_len(lty) > 5 && str_slice(lty, 0, 5) == "OoRes" { bind_kind = lty; }
     else if lty == "double" { bind_kind = "F"; }
     else if bind_kind == "" && c_is_managed_type(lty) { bind_kind = lty; }
+    // Heap structs and struct-element lists are managed even though the
+    // predicate only names builtins. Mark them so bind and epilogue ARC apply.
+    let stab: String = build_struct_field_table(toks);
+    let mut is_heap_obj: Bool = false;
+    if struct_fields_blob(stab, lty) != "" { is_heap_obj = true; }
+    if chars_len(lty) > 4 && str_slice(lty, 0, 4) == "OoL_" { is_heap_obj = true; }
+    if is_heap_obj && bind_kind == "" { bind_kind = lty; }
 
     let mut depth: Int = (0 + c_env_scope_depth(e)) - 1;
     if depth < 0 { depth = 0; }
@@ -226,6 +243,10 @@ pub fn c_emit_let_stmt(toks: List[String], pos: Int, n: Int, env: String) -> Lis
     if chars_len(lty) > 1 && char_at(lty, chars_len(lty) - 1) == "*" {
         e = c_env_put(e, "__ptr__" + c_var, "1");
         e = c_env_put(e, "__ptr__" + name, "1");
+    }
+    if is_heap_obj {
+        e = c_env_put(e, "__arc_struct__" + c_var, "1");
+        e = c_env_put(e, "__arc_struct__" + name, "1");
     }
     c_emit_let_alias_retain(c_var, rhs, lty, e);
     if p < n && c_tokk(toks, p) == "SEMI" { p = p + 1; }
