@@ -7,9 +7,11 @@
 // Beats:
 //   1. host_rt_c returns one C translation unit.
 //   2. oo_emit_tmp_* match the emit-c builtins.
-//   3. Jail ctor scopes to OODA_FS_READDIR/WRITEDIR, defaulting both to
-//      getcwd() when unset (exported, so the fs layer agrees with the
-//      kernel jail; still Landlocked); or OODA_NO_JAIL=1 skips.
+//   3. Jail ctor scopes to OODA_FS_READDIR/WRITEDIR, defaulting WRITEDIR to
+//      getcwd() and READDIR to getcwd() plus the toolchain dir (parent of
+//      bin/) when unset, exported so the fs layer agrees with the kernel
+//      jail (still Landlocked); or OODA_NO_JAIL=1 skips. Reads stay public
+//      (toolchain binaries/sources); writes stay in the project dir.
 //   4. Ctor allowlists the binary's own dir (+ parent when dir is "bin")
 //      for reads and exports it as OODA_TOOLCHAIN when unset.
 
@@ -58,8 +60,26 @@ pub fn host_rt_c() -> String {
     s = s + "      _exit(1);\n";
     s = s + "    }\n";
     s = s + "    rd = cwd; wd = cwd;\n";
-    s = s + "    setenv(\"OODA_FS_READDIR\", cwd, 0);\n";
-    s = s + "    setenv(\"OODA_FS_WRITEDIR\", cwd, 0);\n";
+    s = s + "    { static char rddef[PATH_MAX * 2 + 8]; static char thexe[PATH_MAX];\n";
+    s = s + "      ssize_t el = readlink(\"/proc/self/exe\", thexe, sizeof thexe - 1);\n";
+    s = s + "      if (el > 0) { size_t i = (size_t)el; thexe[i] = 0;\n";
+    s = s + "        while (i > 0 && thexe[i - 1] != '/') i--;\n";
+    s = s + "        if (i > 1) { size_t de = i - 1;\n";
+    s = s + "          if ((de == 3 && memcmp(thexe + de - 3, \"bin\", 3) == 0) ||\n";
+    s = s + "              (de > 4 && thexe[de - 4] == '/' && memcmp(thexe + de - 3, \"bin\", 3) == 0)) {\n";
+    s = s + "            size_t pe = de - 4;\n";
+    s = s + "            if (pe > 0 && pe < sizeof rddef) {\n";
+    s = s + "              int w = snprintf(rddef, sizeof rddef, \"%s:%.*s\", cwd, (int)pe, thexe);\n";
+    s = s + "              if (w > 0 && (size_t)w < sizeof rddef) rd = rddef;\n";
+    s = s + "            }\n";
+    s = s + "          }\n";
+    s = s + "        }\n";
+    s = s + "      }\n";
+    s = s + "    }\n";
+    s = s + "    setenv(\"OODA_FS_READDIR\", rd, 0);\n";
+    s = s + "    setenv(\"OODA_FS_WRITEDIR\", wd, 0);\n";
+    s = s + "    rd = getenv(\"OODA_FS_READDIR\"); wd = getenv(\"OODA_FS_WRITEDIR\");\n";
+    s = s + "    if (!rd) rd = cwd; if (!wd) wd = cwd;\n";
     s = s + "  }\n";
     s = s + "  if (prctl(PR_GET_NO_NEW_PRIVS, 0, 0, 0, 0) == 1) return;\n";
     s = s + "  if (!oo_landlock_is_available()) {\n";

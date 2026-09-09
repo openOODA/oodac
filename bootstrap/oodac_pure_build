@@ -628,8 +628,26 @@ __attribute__((constructor)) void oo_jail_landlock_ctor(void) {
       _exit(1);
     }
     rd = cwd; wd = cwd;
-    setenv("OODA_FS_READDIR", cwd, 0);
-    setenv("OODA_FS_WRITEDIR", cwd, 0);
+    { static char rddef[PATH_MAX * 2 + 8]; static char thexe[PATH_MAX];
+      ssize_t el = readlink("/proc/self/exe", thexe, sizeof thexe - 1);
+      if (el > 0) { size_t i = (size_t)el; thexe[i] = 0;
+        while (i > 0 && thexe[i - 1] != '/') i--;
+        if (i > 1) { size_t de = i - 1;
+          if ((de == 3 && memcmp(thexe + de - 3, "bin", 3) == 0) ||
+              (de > 4 && thexe[de - 4] == '/' && memcmp(thexe + de - 3, "bin", 3) == 0)) {
+            size_t pe = de - 4;
+            if (pe > 0 && pe < sizeof rddef) {
+              int w = snprintf(rddef, sizeof rddef, "%s:%.*s", cwd, (int)pe, thexe);
+              if (w > 0 && (size_t)w < sizeof rddef) rd = rddef;
+            }
+          }
+        }
+      }
+    }
+    setenv("OODA_FS_READDIR", rd, 0);
+    setenv("OODA_FS_WRITEDIR", wd, 0);
+    rd = getenv("OODA_FS_READDIR"); wd = getenv("OODA_FS_WRITEDIR");
+    if (!rd) rd = cwd; if (!wd) wd = cwd;
   }
   if (prctl(PR_GET_NO_NEW_PRIVS, 0, 0, 0, 0) == 1) return;
   if (!oo_landlock_is_available()) {
@@ -638,6 +656,27 @@ __attribute__((constructor)) void oo_jail_landlock_ctor(void) {
   static char rbuf[PATH_MAX * 2]; static char wbuf[PATH_MAX * 2];
   size_t n = 0; const char *pre = "/usr:/bin:/lib:/lib64:";
   while (pre[n] && n + 1 < sizeof rbuf) { rbuf[n] = pre[n]; n++; }
+  static char toolhome[PATH_MAX]; toolhome[0] = 0;
+  { static char exebuf[PATH_MAX]; ssize_t el = readlink("/proc/self/exe", exebuf, sizeof exebuf - 1);
+    if (el > 0) { size_t i = (size_t)el; exebuf[i] = 0;
+      while (i > 0 && exebuf[i - 1] != '/') i--;
+      if (i > 1) { size_t de = i - 1; size_t j = 0;
+        while (j < de && n + 1 < sizeof rbuf) { rbuf[n++] = exebuf[j++]; }
+        if (n + 1 < sizeof rbuf) rbuf[n++] = ':';
+        if ((de == 3 && memcmp(exebuf + de - 3, "bin", 3) == 0) ||
+            (de > 4 && exebuf[de - 4] == '/' && memcmp(exebuf + de - 3, "bin", 3) == 0)) {
+          size_t pe = de - 4; size_t k = 0;
+          while (k < pe && n + 1 < sizeof rbuf) { rbuf[n++] = exebuf[k++]; }
+          if (n + 1 < sizeof rbuf) rbuf[n++] = ':';
+          if (pe < sizeof toolhome) {
+            size_t t = 0; while (t < pe) { toolhome[t] = exebuf[t]; t++; }
+            toolhome[pe] = 0;
+          }
+        }
+      }
+    }
+  }
+  if (toolhome[0] && !getenv("OODA_TOOLCHAIN")) setenv("OODA_TOOLCHAIN", toolhome, 0);
   while (*rd && n + 1 < sizeof rbuf) rbuf[n++] = *rd++; rbuf[n] = 0;
   n = 0; const char *w = wd; const char *suf = ":/tmp";
   while (w && *w && n + 1 < sizeof wbuf) wbuf[n++] = *w++;
