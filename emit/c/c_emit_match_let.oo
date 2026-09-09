@@ -1,4 +1,10 @@
-// # Lower match-let to C: Ok/Some/Err/None + String-lit arms.
+// # Match-let to C
+// Logline: Emit C for match-let.
+// Setup: Pure emit helper.
+// Beats:
+//   1. String arms.
+//   2. Ok/Some path.
+//   3. Err/None path.
 
 import "c_emit_env.oo";
 
