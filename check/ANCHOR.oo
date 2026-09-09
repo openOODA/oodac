@@ -81,6 +81,7 @@ import "tc_ops_cmp.oo";
 import "tc_ops_logic.oo";
 import "tc_ops_unary.oo";
 import "lex/token_parse_int.oo";
+import "lex/ANCHOR.oo";
 import "tc_read_result.oo";
 import "tc_refine.oo";
 import "tc_refine_bind.oo";
@@ -121,16 +122,18 @@ pub fn types_type_env(env: String, name: String, ty: String) -> String {
     return type_env(env, name, ty);
 }
 
-pub fn check_run_src(src: String) -> Int {
-    return run_check_from_src(src);
+pub fn check_run_src(sys: &ProcessCap, src: String) -> Int {
+    return run_check_from_src(sys, src);
 }
 
-pub fn check_run_modules(fs: &FsReadCap, entry: String) -> Int {
-    return check_modules(fs, entry);
+pub fn check_run_modules(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, entry: String) -> Int {
+    run_check_path(fs_r, fs_w, sys, entry);
+    return 0;
 }
 
 pub fn check_run_typestate(src: String) -> Int {
-    return check_typestate(src);
+    check_typestate(src, lex_tokenize(src));
+    return 0;
 }
 
 pub fn check_run_smt(toks: List[String]) -> Int {

@@ -46,6 +46,12 @@ fn tc_imp_allow(path: String) -> Bool {
     if tc_imp_ends(path, "test_harness.oo") {
         return true;
     }
+    // Module indexes are load-bearing: the build discovers modules by
+    // import-DFS from the entry point, so importing an index IS the use.
+    // A stale index path still fails at import resolution.
+    if tc_imp_ends(path, "ANCHOR.oo") {
+        return true;
+    }
     return false;
 }
 
