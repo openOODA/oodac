@@ -5,9 +5,8 @@
 //
 // Setup: ProcessCap + EnvCap + FsReadCap. Host is OODA_COMPILER. Run from
 // the workspace root (paths below are workspace-relative).
-// STAGING: dormant until the fixed compiler ships (needs the import-arity
-// table); do NOT wire into ci.yml before then — with the old host this
-// probe correctly reports HOLE instead of OK.
+// Wired into ci.yml (Unique C bar, ecap stanza) since the import-arity
+// compiler shipped: with older hosts this probe reports HOLE instead of OK.
 //
 // Beats:
 //   1. check of the evil fixture is ERR (refused).

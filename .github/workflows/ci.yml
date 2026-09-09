@@ -175,6 +175,9 @@ jobs:
           echo "=== four product mains ==="
           "$HOST" build --backend c oodac/qa/probe_four_mains.oo -o .ooda-cache/ooda-tmp/ci_four.bin
           .ooda-cache/ooda-tmp/ci_four.bin
+          echo "=== ecap capless-net refuse (Task 2a) ==="
+          "$HOST" build --backend c oodac/qa/probe_ecap_capless_net.oo -o .ooda-cache/ooda-tmp/ci_ecap.bin
+          .ooda-cache/ooda-tmp/ci_ecap.bin
           echo "=== attach contract ==="
           "$HOST" build --backend c oodac/qa/probe_attach_contract.oo -o .ooda-cache/ooda-tmp/ci_attach.bin
           .ooda-cache/ooda-tmp/ci_attach.bin
