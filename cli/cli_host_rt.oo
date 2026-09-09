@@ -7,7 +7,10 @@
 // Beats:
 //   1. host_rt_c returns one C translation unit.
 //   2. oo_emit_tmp_* match the emit-c builtins.
-//   3. Jail ctor requires OODA_FS_READDIR and OODA_FS_WRITEDIR, or OODA_NO_JAIL=1.
+//   3. Jail ctor scopes to OODA_FS_READDIR/WRITEDIR, defaulting both to
+//      getcwd() when unset (still Landlocked); or OODA_NO_JAIL=1 skips.
+//   4. Ctor allowlists the binary's own dir (+ parent when dir is "bin")
+//      for reads and exports it as OODA_TOOLCHAIN when unset.
 
 pub fn host_rt_c() -> String {
     let mut s: String = "#define _GNU_SOURCE 1\n";
@@ -48,8 +51,12 @@ pub fn host_rt_c() -> String {
     s = s + "  if (!rd || !rd[0] || !wd || !wd[0]) {\n";
     s = s + "    const char *off = getenv(\"OODA_NO_JAIL\");\n";
     s = s + "    if (off && off[0] == '1' && off[1] == 0) return;\n";
-    s = s + "    fprintf(stderr, \"ERR\\tlandlock\\tOODA_FS_READDIR and OODA_FS_WRITEDIR required (or OODA_NO_JAIL=1)\\n\");\n";
-    s = s + "    _exit(1);\n";
+    s = s + "    static char cwd[PATH_MAX];\n";
+    s = s + "    if (!getcwd(cwd, sizeof cwd)) {\n";
+    s = s + "      fprintf(stderr, \"ERR\\tlandlock\\tOODA_FS_READDIR/WRITEDIR unset and getcwd failed (or OODA_NO_JAIL=1)\\n\");\n";
+    s = s + "      _exit(1);\n";
+    s = s + "    }\n";
+    s = s + "    rd = cwd; wd = cwd;\n";
     s = s + "  }\n";
     s = s + "  if (prctl(PR_GET_NO_NEW_PRIVS, 0, 0, 0, 0) == 1) return;\n";
     s = s + "  if (!oo_landlock_is_available()) {\n";
@@ -58,6 +65,27 @@ pub fn host_rt_c() -> String {
     s = s + "  static char rbuf[PATH_MAX * 2]; static char wbuf[PATH_MAX * 2];\n";
     s = s + "  size_t n = 0; const char *pre = \"/usr:/bin:/lib:/lib64:\";\n";
     s = s + "  while (pre[n] && n + 1 < sizeof rbuf) { rbuf[n] = pre[n]; n++; }\n";
+    s = s + "  static char toolhome[PATH_MAX]; toolhome[0] = 0;\n";
+    s = s + "  { static char exebuf[PATH_MAX]; ssize_t el = readlink(\"/proc/self/exe\", exebuf, sizeof exebuf - 1);\n";
+    s = s + "    if (el > 0) { size_t i = (size_t)el; exebuf[i] = 0;\n";
+    s = s + "      while (i > 0 && exebuf[i - 1] != '/') i--;\n";
+    s = s + "      if (i > 1) { size_t de = i - 1; size_t j = 0;\n";
+    s = s + "        while (j < de && n + 1 < sizeof rbuf) { rbuf[n++] = exebuf[j++]; }\n";
+    s = s + "        if (n + 1 < sizeof rbuf) rbuf[n++] = ':';\n";
+    s = s + "        if ((de == 3 && memcmp(exebuf + de - 3, \"bin\", 3) == 0) ||\n";
+    s = s + "            (de > 4 && exebuf[de - 4] == '/' && memcmp(exebuf + de - 3, \"bin\", 3) == 0)) {\n";
+    s = s + "          size_t pe = de - 4; size_t k = 0;\n";
+    s = s + "          while (k < pe && n + 1 < sizeof rbuf) { rbuf[n++] = exebuf[k++]; }\n";
+    s = s + "          if (n + 1 < sizeof rbuf) rbuf[n++] = ':';\n";
+    s = s + "          if (pe < sizeof toolhome) {\n";
+    s = s + "            size_t t = 0; while (t < pe) { toolhome[t] = exebuf[t]; t++; }\n";
+    s = s + "            toolhome[pe] = 0;\n";
+    s = s + "          }\n";
+    s = s + "        }\n";
+    s = s + "      }\n";
+    s = s + "    }\n";
+    s = s + "  }\n";
+    s = s + "  if (toolhome[0] && !getenv(\"OODA_TOOLCHAIN\")) setenv(\"OODA_TOOLCHAIN\", toolhome, 0);\n";
     s = s + "  while (*rd && n + 1 < sizeof rbuf) rbuf[n++] = *rd++; rbuf[n] = 0;\n";
     s = s + "  n = 0; const char *w = wd; const char *suf = \":/tmp\";\n";
     s = s + "  while (w && *w && n + 1 < sizeof wbuf) wbuf[n++] = *w++;\n";

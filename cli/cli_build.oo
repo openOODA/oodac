@@ -2,7 +2,7 @@
 //
 // Logline: check then emit-llvm (default) via ProcessCap argv, write IR/C under jail, clang -O2.
 //
-// Setup: Host is OODA_COMPILER or OODAC_BIN only. Links oodar.c. No sh -c.
+// Setup: Host is OODA_COMPILER, OODAC_BIN, or OODA_TOOLCHAIN layout. Links oodar.c. No sh -c.
 //
 // Beats:
 //   1. Refuse residual backends, compiler-main concat, -o a directory, and no main.
@@ -12,16 +12,28 @@
 import "lex/token_fmt.oo";
 import "cli_oodar.oo";
 
-fn compiler_host(env: &EnvCap) -> String {
+fn compiler_host(fs_r: &FsReadCap, env: &EnvCap) -> String {
     let oc: Result[String, String] = env_get(env, "OODA_COMPILER");
     if oc.is_ok() {
-        if oc.val != "" { return oc.val; }
+        if oc.val != "" {
+            if path_exists(fs_r, oc.val) { return oc.val; }
+            println("ERR\tbuild\tno oodac at OODA_COMPILER");
+            process_exit(1);
+        }
     }
     let ob: Result[String, String] = env_get(env, "OODAC_BIN");
     if ob.is_ok() {
-        if ob.val != "" { return ob.val; }
+        if ob.val != "" {
+            if path_exists(fs_r, ob.val) { return ob.val; }
+            println("ERR\tbuild\tno oodac at OODAC_BIN");
+            process_exit(1);
+        }
     }
-    println("ERR\tbuild\tOODA_COMPILER or OODAC_BIN required");
+    let tc: Result[String, String] = env_get(env, "OODA_TOOLCHAIN");
+    if tc.is_ok() {
+        if tc.val != "" && path_exists(fs_r, tc.val + "/bin/oodac") { return tc.val + "/bin/oodac"; }
+    }
+    println("ERR\tbuild\tOODA_COMPILER or OODAC_BIN required (or OODA_TOOLCHAIN layout)");
     process_exit(1);
     return "";
 }
@@ -91,7 +103,7 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
         println("ERR\tbuild\tno main");
         process_exit(1);
     }
-    let host: String = compiler_host(env);
+    let host: String = compiler_host(fs_r, env);
     let od: String = oodar_root(fs_r, host);
     let tmp_dir: String = cache_dir(env);
     let tmp_h: String = crypto_sha256_internal(path);
