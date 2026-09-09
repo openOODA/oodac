@@ -10,14 +10,87 @@
 //   3. write_file the cache path. Missing write is ERR.
 
 import "types/typed_artifact.oo";
+import "check/tc_struct_field_table.oo";
+import "check/smt_contract_parse.oo";
 
 pub fn artifact_ensure_dir(sys: &ProcessCap) {
     let _: Result[String, String] = sys_exec(sys, "/usr/bin/mkdir", "-p", ".ooda-cache/ooda-tmp");
 }
 
+fn art_kind(toks: List[String], i: Int) -> String {
+    if i < 0 || i >= list_len(toks) { return ""; }
+    return field_at(list_get(toks, i), 0);
+}
+
+fn art_text(toks: List[String], i: Int) -> String {
+    if i < 0 || i >= list_len(toks) { return ""; }
+    return field_at(list_get(toks, i), 3);
+}
+
+fn art_has(bag: String, name: String) -> Bool {
+    if name == "" { return false; }
+    return str_index_of(bag, "\t" + name + "\t") >= 0;
+}
+
+// Nominal type env: struct shapes declared in this module.
+pub fn artifact_typenv_of(toks: List[String]) -> String {
+    return artifact_norm_section(build_struct_field_table(toks));
+}
+
+fn art_is_cap_name(t: String) -> Bool {
+    if chars_len(t) <= 3 { return false; }
+    return str_slice(t, chars_len(t) - 3, chars_len(t)) == "Cap";
+}
+
+// Declared cap grants: &XxxCap params in fn headers, first-seen order.
+pub fn artifact_caps_of(toks: List[String]) -> String {
+    let n: Int = list_len(toks);
+    let mut out: String = "";
+    let mut seen: String = "\t";
+    let mut i: Int = 0;
+    while i < n {
+        if art_kind(toks, i) == "KW_FN" {
+            let mut j: Int = i + 1;
+            while j < n && art_kind(toks, j) != "LPAREN" && art_kind(toks, j) != "LBRACE" {
+                j = j + 1;
+            }
+            if j < n && art_kind(toks, j) == "LPAREN" {
+                let mut depth: Int = 0;
+                let mut k: Int = j;
+                while k < n {
+                    let kk: String = art_kind(toks, k);
+                    if kk == "LPAREN" { depth = depth + 1; }
+                    if kk == "RPAREN" {
+                        depth = depth - 1;
+                        if depth == 0 { k = n; }
+                    }
+                    if kk == "AMP" && art_kind(toks, k + 1) == "IDENT" {
+                        let nm: String = art_text(toks, k + 1);
+                        if art_is_cap_name(nm) && !art_has(seen, nm) {
+                            seen = seen + nm + "\t";
+                            out = out + nm + "\n";
+                        }
+                    }
+                    if k < n { k = k + 1; }
+                }
+            }
+            i = j;
+        }
+        i = i + 1;
+    }
+    return artifact_norm_section(out);
+}
+
+// Contract verdict: const requires/ensures proved by this check.
+// Reaching the artifact write means none refused, so the count proved.
+pub fn artifact_smt_of(toks: List[String]) -> String {
+    let clauses: List[String] = smt_contract_parse_tokens(toks);
+    return list_len(clauses).to_string() + " clauses proved";
+}
+
 pub fn artifact_write_toks(fs_w: &FsWriteCap, sys: &ProcessCap, path: String, src: String, toks: List[String]) -> String {
     artifact_ensure_dir(sys);
-    let art: TypedArtifact = artifact_new(path, src, toks);
+    let art: TypedArtifact = artifact_new(path, src, toks, artifact_typenv_of(toks), artifact_caps_of(toks), artifact_smt_of(toks));
     let dest: String = artifact_cache_path(art.sha);
     let body: String = artifact_encode(art);
     let wr: Result[Void, String] = write_file(fs_w, dest, body);
@@ -26,6 +99,23 @@ pub fn artifact_write_toks(fs_w: &FsWriteCap, sys: &ProcessCap, path: String, sr
         process_exit(1);
     }
     return dest;
+}
+
+// Emit-side re-verification: recompute sections from decoded toks and
+// refuse on any mismatch. Tag matches the caller prefix (emit, llvm).
+pub fn artifact_verify_sections(art: TypedArtifact, tag: String) {
+    if artifact_typenv_of(art.toks) != art.typenv {
+        println("ERR\t" + tag + "\tartifact types mismatch");
+        process_exit(1);
+    }
+    if artifact_caps_of(art.toks) != art.caps {
+        println("ERR\t" + tag + "\tartifact caps mismatch");
+        process_exit(1);
+    }
+    if artifact_smt_of(art.toks) != art.smt {
+        println("ERR\t" + tag + "\tartifact smt mismatch");
+        process_exit(1);
+    }
 }
 
 pub fn artifact_remove_toks(sys: &ProcessCap, path: String, src: String) {

@@ -1,18 +1,24 @@
 // # Typed compile artifact
 //
-// Logline: Token rows and source coords for one file. Check writes it. Emit consumes toks.
+// Logline: Token rows plus type env, granted caps, and SMT verdict. Check writes it. Emit verifies it.
 //
 // Setup: TSV token rows. SHA is content_hash of path plus source. No second lex.
+//        Sections record what check computed: struct shapes, declared cap
+//        grants, and the proved contract count. Emit recomputes and refuses
+//        on mismatch. Old OODAART2 files are stale and refused.
 //
 // Beats:
-//   1. Pack path, sha, and token rows. No unused env or caps fields.
-//   2. Encode and decode OODAART2 text for the cache.
+//   1. Pack path, sha, token rows, typenv, caps, and smt verdict.
+//   2. Encode and decode OODAART3 text for the cache.
 //   3. Cache path is .ooda-cache/ooda-tmp/art_<sha>.art.
 
 pub type TypedArtifact = struct {
     path: String,
     sha: String,
-    toks: List[String]
+    toks: List[String],
+    typenv: String,
+    caps: String,
+    smt: String
 };
 
 pub fn artifact_sha(path: String, src: String) -> String {
@@ -30,18 +36,38 @@ pub fn artifact_cache_path(sha: String) -> String {
     return ".ooda-cache/ooda-tmp/art_" + sha + ".art";
 }
 
-pub fn artifact_new(path: String, src: String, toks: List[String]) -> TypedArtifact {
+pub fn artifact_new(path: String, src: String, toks: List[String], typenv: String, caps: String, smt: String) -> TypedArtifact {
     return TypedArtifact {
         path: path,
         sha: artifact_sha(path, src),
-        toks: toks
+        toks: toks,
+        typenv: artifact_norm_section(typenv),
+        caps: artifact_norm_section(caps),
+        smt: artifact_norm_section(smt)
     };
 }
 
+fn artifact_emit_section(out: String, body: String) -> String {
+    let mut acc: String = out;
+    if body != "" {
+        acc = acc + body;
+        if char_at(body, chars_len(body) - 1) != "\n" {
+            acc = acc + "\n";
+        }
+    }
+    return acc;
+}
+
 pub fn artifact_encode(art: TypedArtifact) -> String {
-    let mut out: String = "OODAART2\n";
+    let mut out: String = "OODAART3\n";
     out = out + art.path + "\n";
     out = out + art.sha + "\n";
+    out = out + "types:\n";
+    out = artifact_emit_section(out, art.typenv);
+    out = out + "caps:\n";
+    out = artifact_emit_section(out, art.caps);
+    out = out + "smt:\n";
+    out = artifact_emit_section(out, art.smt);
     out = out + "--\n";
     let n: Int = list_len(art.toks);
     let mut i: Int = 0;
@@ -62,12 +88,30 @@ fn art_line_end(s: String, start: Int) -> Int {
     return n;
 }
 
+pub fn artifact_norm_section(body: String) -> String {
+    let mut out: String = body;
+    while chars_len(out) > 0 && char_at(out, chars_len(out) - 1) == "\n" {
+        out = str_slice(out, 0, chars_len(out) - 1);
+    }
+    return out;
+}
+
+fn artifact_push_row(buf: String, line: String) -> String {
+    if buf == "" {
+        return line;
+    }
+    return buf + "\n" + line;
+}
+
 pub fn artifact_decode(text: String) -> TypedArtifact {
     let n: Int = chars_len(text);
     let mut i: Int = 0;
     let mut field: Int = 0;
     let mut path: String = "";
     let mut sha: String = "";
+    let mut typenv: String = "";
+    let mut caps: String = "";
+    let mut smt: String = "";
     let mut toks: List[String] = list_new();
     let mut in_toks: Bool = false;
     while i < n {
@@ -78,7 +122,11 @@ pub fn artifact_decode(text: String) -> TypedArtifact {
                 toks = list_push(toks, line);
             }
         } else if field == 0 {
-            if line != "OODAART2" {
+            if line == "OODAART2" {
+                println("ERR\tartifact\tstale v2, re-run check");
+                process_exit(1);
+            }
+            if line != "OODAART3" {
                 println("ERR\tartifact\tbad magic");
                 process_exit(1);
             }
@@ -90,11 +138,29 @@ pub fn artifact_decode(text: String) -> TypedArtifact {
             sha = line;
             field = 3;
         } else if field == 3 {
-            if line != "--" {
-                println("ERR\tartifact\tbad sep");
+            if line != "types:" {
+                println("ERR\tartifact\tbad types header");
                 process_exit(1);
             }
-            in_toks = true;
+            field = 4;
+        } else if field == 4 {
+            if line == "caps:" {
+                field = 5;
+            } else {
+                typenv = artifact_push_row(typenv, line);
+            }
+        } else if field == 5 {
+            if line == "smt:" {
+                field = 6;
+            } else {
+                caps = artifact_push_row(caps, line);
+            }
+        } else if field == 6 {
+            if line == "--" {
+                in_toks = true;
+            } else {
+                smt = artifact_push_row(smt, line);
+            }
         }
         if e >= n {
             i = n;
@@ -106,5 +172,5 @@ pub fn artifact_decode(text: String) -> TypedArtifact {
         println("ERR\tartifact\ttruncated");
         process_exit(1);
     }
-    return TypedArtifact { path: path, sha: sha, toks: toks };
+    return TypedArtifact { path: path, sha: sha, toks: toks, typenv: typenv, caps: caps, smt: smt };
 }

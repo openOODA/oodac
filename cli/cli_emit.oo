@@ -11,6 +11,7 @@
 
 import "lex/token_fmt.oo";
 import "check/check_collect.oo";
+import "check/check_artifact.oo";
 import "emit/c/c_emit.oo";
 import "types/typed_artifact.oo";
 
@@ -46,6 +47,7 @@ fn emit_toks_for_file(fs: &FsReadCap, path: String, src: String) -> List[String]
         println("ERR\temit\tartifact sha mismatch");
         process_exit(1);
     }
+    artifact_verify_sections(art, "emit");
     return art.toks;
 }
 
