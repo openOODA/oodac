@@ -62,6 +62,7 @@ pub fn c_emit_match_let_core(name: String, toks: List[String], pos: Int, n: Int,
     }
     if p < n && c_tokk(toks, p) == "FATARROW" { p = p + 1; }
     let is_some = (arm1 == "Some");
+    let mut is_opt: Bool = is_some && chars_len(rkind) > 6 && str_slice(rkind, 0, 6) == "OoOpt_";
     let mut use_res = true;
     if is_some {
         if rkind != "RI" && rkind != "R" && rkind != "RB" && rkind != "RF" && rkind != "RLI" && rkind != "RLS" && rkind != "RLF" && rkind != "RII" && rkind != "V" {
@@ -80,11 +81,13 @@ pub fn c_emit_match_let_core(name: String, toks: List[String], pos: Int, n: Int,
             if str_slice(rkind, 0, 6) == "OoRes_" { println("  " + str_slice(rkind, 6, chars_len(rkind)) + " " + name + ";"); }
             else if chars_len(rkind) > 7 && str_slice(rkind, 0, 7) == "OoResL_" { println("  OoL_" + str_slice(rkind, 7, chars_len(rkind)) + " " + name + ";"); }
             else { println("  OoStr " + name + ";"); }
-        } else if is_some { println("  long long " + name + ";"); }
+        } else if is_opt { println("  " + c_opt_payload_ty(rkind) + " " + name + ";"); }
+        else if is_some { println("  long long " + name + ";"); }
         else { println("  OoStr " + name + ";"); }
     }
     println("  {");
-    if !use_res { println("  long long __ml = " + scrut + ";"); println("  if (__ml != 0) {"); println("    long long " + ok_bind + " = __ml;"); } else {
+    let mut eok: String = str_slice(e, 0, chars_len(e));
+    if is_opt { eok = c_emit_opt_some_bind(rkind, scrut, ok_bind, eok); } else if !use_res { println("  long long __ml = " + scrut + ";"); println("  if (__ml != 0) {"); println("    long long " + ok_bind + " = __ml;"); } else {
         if rkind == "V" { println("  OoResV __ml = " + scrut + ";"); }
         else if rkind == "RI" { println("  OoResI __ml = " + scrut + ";"); }
         else if rkind == "RII" { println("  OoResII __ml = " + scrut + ";"); }
@@ -97,7 +100,6 @@ pub fn c_emit_match_let_core(name: String, toks: List[String], pos: Int, n: Int,
         else { println("  OoResS __ml = " + scrut + ";"); }
         println("  if (__ml.ok) {");
     }
-    let mut eok: String = str_slice(e, 0, chars_len(e));
     if use_res {
         if rkind == "RI" || rkind == "RII" { println("    long long " + ok_bind + " = __ml.val;"); }
         else if rkind == "RLI" { println("    OoIList " + ok_bind + " = __ml.val;"); c_emit_arm_retain("OoIList", ok_bind); }
@@ -229,6 +231,7 @@ pub fn c_emit_match_let_core(name: String, toks: List[String], pos: Int, n: Int,
     if p < n && c_tokk(toks, p) == "RBRACE" { p = p + 1; }
     let mut nk = "T";
     if is_some { nk = "I"; }
+    if is_opt { nk = c_opt_release_nk(rkind); }
     if rkind == "R" { nk = "T"; }
     if rkind == "RI" || rkind == "RII" || rkind == "RB" { nk = ""; }
     if rkind == "RLI" { nk = "I"; }

@@ -1,0 +1,46 @@
+// # Probe: Option[String] value operations must compile and run
+//
+// Logline: is_some, is_none, and match extraction on Option[String] hit and miss must build, run, and print OK.
+//
+// Setup: No caps. Fails closed with ERR plus process_exit(1) on any wrong value.
+//
+// Beats:
+//   1. Some hit answers is_some, refuses is_none, and match-extracts its value.
+//   2. None miss answers is_none, refuses is_some, and match-falls to the default.
+//   3. Print OK only when all six assertions hold.
+
+fn no_hit() -> Option[String] {
+    return None;
+}
+
+pub fn main() {
+    let hit: Option[String] = Some("v1");
+    if !hit.is_some() {
+        println("ERR\tis_some hit");
+        process_exit(1);
+    }
+    if hit.is_none() {
+        println("ERR\tis_none hit");
+        process_exit(1);
+    }
+    let hv: String = match hit { Some(v) => v, None => "" };
+    if hv != "v1" {
+        println("ERR\tmatch hit");
+        process_exit(1);
+    }
+    let miss: Option[String] = no_hit();
+    if miss.is_some() {
+        println("ERR\tis_some miss");
+        process_exit(1);
+    }
+    if !miss.is_none() {
+        println("ERR\tis_none miss");
+        process_exit(1);
+    }
+    let mv: String = match miss { Some(v) => v, None => "dflt" };
+    if mv != "dflt" {
+        println("ERR\tmatch miss");
+        process_exit(1);
+    }
+    println("OK");
+}

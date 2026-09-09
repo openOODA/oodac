@@ -41,6 +41,41 @@ pub fn c_match_rkind(env: String, scrut: String) -> String {
     return "R";
 }
 
+// Map an OoOpt_ rkind to its payload C type. Fail closed on unknown suffix.
+pub fn c_opt_payload_ty(rkind: String) -> String {
+    if rkind == "OoOpt_S" { return "OoStr"; }
+    if rkind == "OoOpt_I" { return "long long"; }
+    if rkind == "OoOpt_B" { return "int"; }
+    if rkind == "OoOpt_F" { return "double"; }
+    if rkind == "OoOpt_LI" { return "OoIList"; }
+    if rkind == "OoOpt_LS" { return "OoSList"; }
+    if rkind == "OoOpt_LF" { return "OoFList"; }
+    println("ERR\tc_emit\tunknown option kind " + rkind);
+    process_exit(1);
+    return "";
+}
+
+// Release kind letter for an OoOpt_ name binding. Mirrors the RLI/RLS/RLF/RF rows.
+pub fn c_opt_release_nk(rkind: String) -> String {
+    if rkind == "OoOpt_S" { return "T"; }
+    if rkind == "OoOpt_LI" { return "I"; }
+    if rkind == "OoOpt_LS" { return "S"; }
+    if rkind == "OoOpt_LF" { return "LF"; }
+    if rkind == "OoOpt_F" { return "F"; }
+    return "";
+}
+
+// Emit the Some-arm discriminate plus payload bind for an OoOpt_
+// scrutinee. Returns the env with the payload kind recorded.
+pub fn c_emit_opt_some_bind(rkind: String, scrut: String, ok_bind: String, eok: String) -> String {
+    let opty: String = c_opt_payload_ty(rkind);
+    println("  " + rkind + " __ml = " + scrut + ";");
+    println("  if (__ml.has_val) {");
+    println("    " + opty + " " + ok_bind + " = __ml.val;");
+    c_emit_arm_retain(opty, ok_bind);
+    return c_env_put(eok, ok_bind, opty);
+}
+
 pub fn c_emit_arm_retain(ty: String, name: String) {
     if ty == "OoStr" { println("    oo_str_retain(" + name + ");"); }
     else if ty == "OoSList" || ty == "OoL_S" { println("    oo_slist_retain(" + name + ");"); }
