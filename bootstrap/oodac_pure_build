@@ -628,6 +628,8 @@ __attribute__((constructor)) void oo_jail_landlock_ctor(void) {
       _exit(1);
     }
     rd = cwd; wd = cwd;
+    setenv("OODA_FS_READDIR", cwd, 0);
+    setenv("OODA_FS_WRITEDIR", cwd, 0);
   }
   if (prctl(PR_GET_NO_NEW_PRIVS, 0, 0, 0, 0) == 1) return;
   if (!oo_landlock_is_available()) {

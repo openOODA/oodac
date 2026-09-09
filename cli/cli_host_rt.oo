@@ -8,7 +8,8 @@
 //   1. host_rt_c returns one C translation unit.
 //   2. oo_emit_tmp_* match the emit-c builtins.
 //   3. Jail ctor scopes to OODA_FS_READDIR/WRITEDIR, defaulting both to
-//      getcwd() when unset (still Landlocked); or OODA_NO_JAIL=1 skips.
+//      getcwd() when unset (exported, so the fs layer agrees with the
+//      kernel jail; still Landlocked); or OODA_NO_JAIL=1 skips.
 //   4. Ctor allowlists the binary's own dir (+ parent when dir is "bin")
 //      for reads and exports it as OODA_TOOLCHAIN when unset.
 
@@ -57,6 +58,8 @@ pub fn host_rt_c() -> String {
     s = s + "      _exit(1);\n";
     s = s + "    }\n";
     s = s + "    rd = cwd; wd = cwd;\n";
+    s = s + "    setenv(\"OODA_FS_READDIR\", cwd, 0);\n";
+    s = s + "    setenv(\"OODA_FS_WRITEDIR\", cwd, 0);\n";
     s = s + "  }\n";
     s = s + "  if (prctl(PR_GET_NO_NEW_PRIVS, 0, 0, 0, 0) == 1) return;\n";
     s = s + "  if (!oo_landlock_is_available()) {\n";
