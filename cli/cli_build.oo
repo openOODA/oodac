@@ -2,7 +2,7 @@
 //
 // Logline: check then emit-llvm (default) via ProcessCap argv, write IR/C under jail, clang -O2.
 //
-// Setup: Host is OODA_COMPILER, OODAC_BIN, or OODA_TOOLCHAIN layout. Links oodar.c. No sh -c.
+// Setup: Host is OODA_COMPILER, OODAC_BIN, or OODA_TOOLCHAIN layout. Links oodar.c. No sh -c. Resolves gcc via PATH (execvp) so any toolchain layout works; the jail still confines reads/writes.
 //
 // Beats:
 //   1. Refuse residual backends, compiler-main concat, -o a directory, and no main.
@@ -136,7 +136,7 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
             process_exit(1);
         }
         let obj: String = tmp_dir + "/oodar.o";
-        let co: Result[String, String] = sys_exec(sys, "/usr/bin/gcc", "-c", "-O2", "-g0", "-fno-ident", "-I" + od, od + "/oodar.c", "-o", obj);
+        let co: Result[String, String] = sys_exec(sys, "gcc", "-c", "-O2", "-g0", "-fno-ident", "-I" + od, od + "/oodar.c", "-o", obj);
         if !co.is_ok() {
             println("ERR\tbuild\toodar.o failed");
             let ct: String = match co { Ok(s) => s, Err(e) => e };
@@ -164,14 +164,14 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
             process_exit(1);
         }
         let obj: String = tmp_dir + "/oodar.o";
-        let co: Result[String, String] = sys_exec(sys, "/usr/bin/gcc", "-c", "-O2", "-g0", "-fno-ident", "-I" + od, od + "/oodar.c", "-o", obj);
+        let co: Result[String, String] = sys_exec(sys, "gcc", "-c", "-O2", "-g0", "-fno-ident", "-I" + od, od + "/oodar.c", "-o", obj);
         if !co.is_ok() {
             println("ERR\tbuild\toodar.o failed");
             let ct: String = match co { Ok(s) => s, Err(e) => e };
             println(ct);
             process_exit(1);
         }
-        let r: Result[String, String] = sys_exec(sys, "/usr/bin/gcc", "-O2", "-g0", "-fno-ident", "-I" + od, obj, hr, tmp_c, "-frandom-seed=0", "-Wl,--build-id=none", "-Wl,--strip-debug", "-lm", "-ldl", "-lpthread", "-o", out);
+        let r: Result[String, String] = sys_exec(sys, "gcc", "-O2", "-g0", "-fno-ident", "-I" + od, obj, hr, tmp_c, "-frandom-seed=0", "-Wl,--build-id=none", "-Wl,--strip-debug", "-lm", "-ldl", "-lpthread", "-o", out);
         if !r.is_ok() {
             println("ERR\tbuild\tgcc failed");
             let gtxt: String = match r { Ok(s) => s, Err(e) => e };
