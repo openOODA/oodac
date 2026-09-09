@@ -1,0 +1,50 @@
+// # Probe: list_len on match-bound primitive lists
+//
+// Logline: Discriminate whether match-bound kind loss hits all lists or struct lists only.
+//
+// Setup: Self-contained. Fails closed.
+//
+// Beats:
+//   1. Match-bound List[Int] len reads 2.
+//   2. Match-bound List[String] len reads 1.
+
+fn make_ints() -> Result[List[Int], String] {
+    let mut xs: List[Int] = list_new();
+    xs = list_push(xs, 1);
+    xs = list_push(xs, 2);
+    return Ok(xs);
+}
+
+fn make_strs() -> Result[List[String], String] {
+    let mut xs: List[String] = list_new();
+    xs = list_push(xs, "a");
+    return Ok(xs);
+}
+
+pub fn main() {
+    let r: Result[List[Int], String] = make_ints();
+    if r.is_err() {
+        println("ERR\tmake ints");
+        process_exit(1);
+    }
+    let no_ints: List[Int] = list_new();
+    let gi: List[Int] = match r { Ok(v) => v, Err(_) => no_ints };
+    let ni: Int = list_len(gi);
+    if ni != 2 {
+        println("ERR\tint len");
+        process_exit(1);
+    }
+    let s: Result[List[String], String] = make_strs();
+    if s.is_err() {
+        println("ERR\tmake strs");
+        process_exit(1);
+    }
+    let no_strs: List[String] = list_new();
+    let gs: List[String] = match s { Ok(v) => v, Err(_) => no_strs };
+    let ns: Int = list_len(gs);
+    if ns != 1 {
+        println("ERR\tstr len");
+        process_exit(1);
+    }
+    println("OK");
+}

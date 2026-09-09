@@ -1,0 +1,33 @@
+// # Probe: Ok() of a struct field types as the field
+//
+// Logline: return Ok(rec.num) where num: Int must check as Result[Int, String].
+//
+// Setup: Self-contained struct. Fails closed.
+//
+// Beats:
+//   1. Checker accepts Ok(field) with the field type, not the receiver type.
+//   2. Runtime extracts the field value through the Result.
+
+type OkfRec = struct {
+    num: Int,
+    name: String
+};
+
+fn okf_num(r: OkfRec) -> Result[Int, String] {
+    return Ok(r.num);
+}
+
+pub fn main() {
+    let rec: OkfRec = OkfRec { num: 7, name: "seven" };
+    let got: Result[Int, String] = okf_num(rec);
+    if got.is_err() {
+        println("ERR\tok field err");
+        process_exit(1);
+    }
+    let v: Int = match got { Ok(x) => x, Err(_) => 0 - 1 };
+    if v != 7 {
+        println("ERR\tok field val");
+        process_exit(1);
+    }
+    println("OK");
+}

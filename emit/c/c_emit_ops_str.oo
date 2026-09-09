@@ -109,6 +109,37 @@ if cnm != "" { if c_call_result_ty(cnm) == "OoStr" { return true;
     return false;
 }
 
+fn c_fldty_is_string(env: String, recv: String, fld: String) -> Bool {
+    let mut sty: String = c_env_get(env, "__ty__" + recv);
+    if sty == "" { sty = c_env_get(env, recv); }
+    if sty == "" { return false; }
+    return c_env_get(env, "__fldty__" + sty + "." + fld) == "String";
+}
+
+fn c_recv_base_name(recv: String) -> String {
+    let rn: Int = chars_len(recv);
+    let mut cut: Int = 0 - 1;
+    let mut q: Int = 0;
+    while q + 4 < rn {
+        if char_at(recv, q) == "_" && char_at(recv, q + 1) == "l" && char_at(recv, q + 2) == "v" && char_at(recv, q + 3) == "l" {
+            cut = q;
+        }
+        q = q + 1;
+    }
+    if cut > 0 {
+        let mut digits: Bool = true;
+        let mut w: Int = cut + 4;
+        if w >= rn { digits = false; }
+        while w < rn {
+            let b: Int = byte_at(recv, w);
+            if b < 48 || b > 57 { digits = false; }
+            w = w + 1;
+        }
+        if digits { return str_slice(recv, 0, cut); }
+    }
+    return recv;
+}
+
 pub fn c_expr_is_str_env(e: String, env: String) -> Bool {
     if c_expr_is_emit_tmp(e) { return true;
 }
@@ -120,6 +151,18 @@ pub fn c_expr_is_str_env(e: String, env: String) -> Bool {
     if pty == "OoStr" || pty == "T" { return true;
     }
     if pty == "long long" || pty == "int" || pty == "double" || pty == "I" || pty == "F" || pty == "B" { return false;
+    }
+    // FIX: field-vs-field String compare (ins.name != t.name) emitted raw C
+    // != because bare fields carry no env kind. Resolve recv.struct.field
+    // through the seeded field table; only exact String evidence counts.
+    let fld: String = c_expr_last_field(e);
+    if fld != "" {
+        let recv: String = c_expr_field_recv(e);
+        if recv != "" {
+            if c_fldty_is_string(env, recv, fld) { return true; }
+            let base: String = c_recv_base_name(recv);
+            if base != recv && c_fldty_is_string(env, base, fld) { return true; }
+        }
     }
     if c_env_get(env, e) == "T" {
         return true;

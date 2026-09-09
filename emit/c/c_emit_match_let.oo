@@ -1,6 +1,4 @@
-// # Lower match-let to C (Result/Option + String literal arms)
-// Logline: Ok/Some/Err/None plus String "lit" arms via oo_str_eq.
-// Setup: c_emit_expr_c etc + string-match delegate.
+// # Lower match-let to C: Ok/Some/Err/None + String-lit arms.
 
 import "c_emit_env.oo";
 
@@ -21,17 +19,17 @@ pub fn c_emit_match_assign(name: String, toks: List[String], pos: Int, n: Int, e
 pub fn c_emit_match_let(name: String, toks: List[String], pos: Int, n: Int, env: String) -> List[String] {
     return c_emit_match_let_core(name, toks, pos, n, env, 1, false, "long long");
 }
-// FIX: typed variant. The non-typed c_emit_match_let defaults the variable
-// type to OoStr for OoResS scrutinees, which loses the user's `: Int`
-// annotation on `let len1: Int = match read1 { ... }`. Pass
-// has_ann=true and the C-level type explicitly so the declaration
-// matches the annotation when has_ann is true.
+// FIX: typed variant keeps the user's `: T` annotation (else OoStr default
+// loses it for OoResS scrutinees); has_ann=true + explicit C type.
 pub fn c_emit_match_let_typed(name: String, toks: List[String], pos: Int, n: Int, env: String, has_ann: Bool, lty: String) -> List[String] {
     return c_emit_match_let_core(name, toks, pos, n, env, 1, has_ann, lty);
 }
 pub fn c_emit_match_let_core(name: String, toks: List[String], pos: Int, n: Int, env: String, decl: Int, has_ann: Bool, lty: String) -> List[String] {
     let mut p = pos + 1;
     let mut e: String = str_slice(env, 0, chars_len(env));
+    // FIX: anchor enclosed C to the match line. Without this, gcc errors
+    // inside match arms inherit a later #line (lookahead pos ran ahead).
+    c_emit_src_line(toks, p, e);
     let pr_m: List[String] = c_emit_expr_c(toks, p, n, e);
     p = parse_int(list_get(pr_m, 0));
     let scrut = list_get(pr_m, 1);
@@ -122,11 +120,10 @@ pub fn c_emit_match_let_core(name: String, toks: List[String], pos: Int, n: Int,
             eok = c_env_put(e, ok_bind, "T");
         }
     }
+    // FIX: per-arm #line so gcc errors land on the arm body, not the match head.
+    if p < n { c_emit_src_line(toks, p, eok); }
     if p < n && c_tokk(toks, p) == "LBRACE" {
-        // FIX: when the match-let arm is a block `{ stmts; expr }`, capture
-        // the trailing expression as the arm's value and assign it to `name`.
-        // The previous c_emit_block path dropped the value, leaving `name`
-        // uninitialized and tripping `-Werror=uninitialized`.
+        // FIX: block arm `{ stmts; expr }`: capture trailing expr as value.
         let split: List[String] = c_block_arm_split(toks, p, n);
         let split_kind: String = list_get(split, 0);
         let expr_start: Int = parse_int(list_get(split, 1));
@@ -188,6 +185,7 @@ pub fn c_emit_match_let_core(name: String, toks: List[String], pos: Int, n: Int,
     }
     let mut eerr: String = c_env_put(e, err_bind, "T");
     if rkind == "RII" { eerr = e; }
+    if p < n { c_emit_src_line(toks, p, eerr); }
     if p < n && c_tokk(toks, p) == "LBRACE" {
         // FIX: same block-arm split for the err arm.
         let split: List[String] = c_block_arm_split(toks, p, n);
@@ -238,15 +236,12 @@ pub fn c_emit_match_let_core(name: String, toks: List[String], pos: Int, n: Int,
     if rkind == "RLS" { nk = "S"; }
     if rkind == "RLF" { nk = "LF"; }
     if rkind == "RF" { nk = "F"; }
-    if chars_len(rkind) > 7 && str_slice(rkind, 0, 7) == "OoResL_" { nk = str_slice(rkind, 7, chars_len(rkind)); }
+    if chars_len(rkind) > 7 && str_slice(rkind, 0, 7) == "OoResL_" { nk = "OoL_" + str_slice(rkind, 7, chars_len(rkind)); }
     if chars_len(rkind) > 6 && str_slice(rkind, 0, 6) == "OoRes_" { nk = ""; }
+    if chars_len(rkind) > 10 && str_slice(rkind, 0, 10) == "OoRes_OoL_" { nk = "OoL_" + str_slice(rkind, 10, chars_len(rkind)); }
     if decl == 1 { e = c_env_put(e, name, nk); } else { e = c_env_put_last(e, name, nk); }
-    // FIX: when the user wrote `let name: LTY = match ...`, record the precise
-    // type under `__ty__<name>` so the scope-exit cleanup in c_emit_arc
-    // (c_emit_env_releases) picks the right release function. Without this,
-    // a `let len1: Int = match ...` over an OoResS scrutinee would still
-    // emit `oo_str_release(len1)` because the rkind-derived nk="T" wins.
-    // has_ann=1 + lty set by c_emit_match_let_typed guarantees the type.
+    // FIX: record `: LTY` under `__ty__<name>` so scope-exit cleanup picks
+    // the right release fn (else rkind nk="T" mis-releases annotated lets).
     if has_ann && decl == 1 { e = c_env_put(e, "__ty__" + name, lty); }
     if p < n && c_tokk(toks, p) == "SEMI" { p = p + 1; }
     return c_pack_pos_env(p, e);

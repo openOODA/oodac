@@ -127,17 +127,40 @@ pub fn c_list_field_env(toks: List[String], env0: String) -> String {
 let mut e: String = str_slice(env0, 0, chars_len(env0));
 let mut i: Int = 0;
 let mut sname: String = "";
+let mut in_struct: Bool = false;
+let mut brace_depth: Int = 0;
 while i + 4 < n { let k0: String = c_tokk(toks, i);
 if k0 == "KW_TYPE" { if i + 1 < n { if c_tokk(toks, i + 1) == "IDENT" { sname = c_tokt(toks, i + 1);
 }
         }
         }
+if k0 == "LBRACE" { brace_depth = brace_depth + 1;
+    // Enter struct scope only on the exact `type X = struct {` shape, so a
+    // later fn-body brace after a type alias cannot pollute field tables.
+    if sname != "" && !in_struct && i >= 4 && c_tokk(toks, i - 1) == "IDENT"
+        && c_tokt(toks, i - 1) == "struct" && c_tokk(toks, i - 2) == "EQ" {
+        in_struct = true;
+    }
+}
+if k0 == "RBRACE" { brace_depth = brace_depth - 1;
+    if brace_depth < 0 { brace_depth = 0; }
+    if in_struct && brace_depth == 0 { in_struct = false; sname = ""; }
+}
 if k0 == "IDENT" { if c_tokk(toks, i + 1) == "COLON" { if c_tokk(toks, i + 2) == "IDENT" { if c_tokt(toks, i + 2) == "List" { if c_tokk(toks, i + 3) == "LBRACKET" { if c_tokk(toks, i + 4) == "IDENT" { let fname: String = c_tokt(toks, i);
 let kind: String = c_peek_list_elem2(toks, i + 2, n);
 if sname != "" { e = c_env_put(e, "__fldelem__" + sname + "." + fname, kind);
 }
 e = c_env_put(e, "__fldelem__" + fname, kind);
 }
+                        }
+                    } else {
+                        // FIX: record scalar field source types so ==/!= can tell
+                        // String fields (oo_str_eq) from Int fields (raw C op).
+                        // List fields stay on __fldelem__; never double-record.
+                        let sfname: String = c_tokt(toks, i);
+                        let styp: String = c_tokt(toks, i + 2);
+                        if in_struct && sname != "" && sfname != "" && styp != "" {
+                            e = c_env_put(e, "__fldty__" + sname + "." + sfname, styp);
                         }
                     }
                 }

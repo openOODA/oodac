@@ -12,6 +12,7 @@
 
 import "tc_infer.oo";
 import "tc_read_result.oo";
+import "tc_struct_field_table.oo";
 
 
 pub fn tc_infer_ok_err_ty(toks: List[String], pos: Int, lit_env: String, expected: String, err_idx: Int) -> String {
@@ -39,6 +40,15 @@ pub fn tc_infer_ok_err_ty(toks: List[String], pos: Int, lit_env: String, expecte
             pty = resolve_type_alias(lit_env, pn);
             if pty == pn { pty = "";
             }
+        }
+        // FIX: Ok(recv.field) must type as the FIELD, not the receiver.
+        // Descend one DOT into the struct table; unresolvable chains stay
+        // unknown (no false fail) instead of inheriting the receiver type.
+        if pty != "" && pos + 4 < n && field_at(list_get(toks, pos + 3), 0) == "DOT"
+            && field_at(list_get(toks, pos + 4), 0) == "IDENT" {
+            let fn2: String = field_at(list_get(toks, pos + 4), 3);
+            let fty: String = struct_field_type(build_struct_field_table(toks), pty, fn2);
+            if fty != "" { pty = fty; } else { pty = ""; }
         }
     }
     if tag == "Ok" && pty != "" {

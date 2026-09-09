@@ -1,0 +1,28 @@
+// # Probe: field-vs-field string comparison lowers to oo_str_eq
+//
+// Logline: rec.a != rec.b on String fields must compile and compare by value.
+//
+// Setup: Self-contained struct. Fails closed.
+//
+// Beats:
+//   1. Equal fields do not take the != branch.
+//   2. Unequal fields do not take the == branch.
+
+type SeqRec = struct {
+    a: String,
+    b: String
+};
+
+pub fn main() {
+    let x: SeqRec = SeqRec { a: "k", b: "v" };
+    let y: SeqRec = SeqRec { a: "k", b: "w" };
+    if x.a != y.a {
+        println("ERR\tfield eq");
+        process_exit(1);
+    }
+    if x.b == y.b {
+        println("ERR\tfield ne");
+        process_exit(1);
+    }
+    println("OK");
+}

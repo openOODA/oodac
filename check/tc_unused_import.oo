@@ -143,6 +143,11 @@ pub fn typecheck_unused_imports(toks: List[String]) {
     if srcp.contains("oodac/") {
         return;
     }
+    // ANCHOR.oo files are module indexes: the import list IS the content.
+    // A stale path still fails at import resolution, so nothing is hidden.
+    if chars_len(srcp) >= 9 && str_slice(srcp, chars_len(srcp) - 9, chars_len(srcp)) == "ANCHOR.oo" {
+        return;
+    }
     let mut i: Int = 0;
     while i < n { if field_at(list_get(toks, i), 0) == "KW_IMPORT" { let mut path: String = "";
     let mut p: Int = i + 1;

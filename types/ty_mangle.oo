@@ -191,6 +191,9 @@ pub fn ty_list_op_name(elem_ty: String, op: String) -> String {
     if elem_ty == "LLLL_I" || elem_ty == "OoLLLL_I" || elem_ty == "TyList(TyList(TyList(TyInt)))" {
         return "oo_llll_I_" + op_suf;
     }
+    if chars_len(elem_ty) > 4 && str_slice(elem_ty, 0, 4) == "OoL_" {
+        return "oo_l_" + str_slice(elem_ty, 4, chars_len(elem_ty)) + "_" + op_suf;
+    }
     if elem_ty == "LLLL_S" || elem_ty == "OoLLLL_S" || elem_ty == "TyList(TyList(TyList(TyStr)))" {
         return "oo_llll_S_" + op_suf;
     }

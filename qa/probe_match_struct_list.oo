@@ -1,0 +1,47 @@
+// # Probe: list_len on a match-bound struct list
+//
+// Logline: A List[Struct] bound by match must keep a kind later uses resolve.
+//
+// Setup: Self-contained. make_items returns an Ok list. Fails closed.
+//
+// Beats:
+//   1. Immediate list_len on the match-bound ident reads 2.
+//   2. list_len after an intervening statement still reads 2 (env threading).
+
+type MitmItem = struct {
+    key: String,
+    num: Int
+};
+
+fn make_items() -> Result[List[MitmItem], String] {
+    let mut xs: List[MitmItem] = list_new();
+    xs = list_push(xs, MitmItem { key: "a", num: 1 });
+    xs = list_push(xs, MitmItem { key: "b", num: 2 });
+    return Ok(xs);
+}
+
+pub fn main() {
+    let r: Result[List[MitmItem], String] = make_items();
+    if r.is_err() {
+        println("ERR\tmake");
+        process_exit(1);
+    }
+    let none_items: List[MitmItem] = list_new();
+    let got: List[MitmItem] = match r { Ok(v) => v, Err(_) => none_items };
+    let n0: Int = list_len(got);
+    if n0 != 2 {
+        println("ERR\timmediate len");
+        process_exit(1);
+    }
+    let fill: Int = n0 + 40;
+    if fill != 42 {
+        println("ERR\tintervening");
+        process_exit(1);
+    }
+    let n1: Int = list_len(got);
+    if n1 != 2 {
+        println("ERR\tlater len");
+        process_exit(1);
+    }
+    println("OK");
+}

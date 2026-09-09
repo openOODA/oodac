@@ -1,0 +1,30 @@
+// # Probe: struct-list builtins on bare identifiers
+//
+// Logline: list_len/list_get/list_push on a bare List[Struct] ident must use struct-list helpers.
+//
+// Setup: Self-contained struct. No imports. Fails closed with ERR plus process_exit(1) on any wrong value.
+//
+// Beats:
+//   1. Bare-ident push then len reads back 1 through the struct-list helper.
+//   2. Bare-ident get returns the pushed struct fields.
+
+type BareItem = struct {
+    key: String,
+    num: Int
+};
+
+pub fn main() {
+    let mut xs: List[BareItem] = list_new();
+    xs = list_push(xs, BareItem { key: "k", num: 7 });
+    let n: Int = list_len(xs);
+    if n != 1 {
+        println("ERR\tbare len");
+        process_exit(1);
+    }
+    let e: BareItem = list_get(xs, 0);
+    if e.key != "k" || e.num != 7 {
+        println("ERR\tbare get");
+        process_exit(1);
+    }
+    println("OK");
+}

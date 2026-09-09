@@ -1,0 +1,13 @@
+pub fn main() {
+    let r: Result[Int, String] = Ok(1);
+    if r.is_err() {
+        println("early");
+        process_exit(1);
+    }
+    let v: Int = match r { Ok(x) => x, Err(_) => process_exit(1) };
+    if v != 1 {
+        println("ERR");
+        process_exit(1);
+    }
+    println("OK");
+}
