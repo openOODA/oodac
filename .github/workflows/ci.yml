@@ -215,6 +215,9 @@ jobs:
           llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/cap_spread2.oo 7
           llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/str_escapes.oo "$(printf '11\na\tb\nc\"d\\e\rf')"
           llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/method_calls.oo "$(printf '1\n0\n6\n2\n42')"
+          echo "=== differential C-vs-LLVM ratchet ==="
+          oodac/bootstrap/corpus/differential/diffrun.sh "$HOST"
+          echo "DIFF_RATCHET_OK"
           echo "=== compiler not concat ==="
           "$HOST" build --backend c oodac/qa/probe_compiler_not_concat.oo -o .ooda-cache/ooda-tmp/ci_nocat.bin
           .ooda-cache/ooda-tmp/ci_nocat.bin

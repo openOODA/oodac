@@ -1,0 +1,29 @@
+# Differential C-vs-LLVM ledger. One line per case:
+#   <relpath-from-oodac> <class> <llvm_stdout_sha16|c-> <c_stdout_sha16|->  # <reason>
+# class: parity (same rc and bytes) | diverge (both run, differ) |
+#        llvm-fail (LLVM build fails, C runs) | c-fail (mirror) | both-fail.
+# A `-` sha marks the failed side. Rule: the ledger only shrinks toward all-parity;
+# diffrun.sh fails on unlisted files, stale pins, drift, and tightening.
+bootstrap/corpus/differential/cases/arith_star.oo llvm-fail - 9efe5a55840d37eb  # LLVM has no STAR arm; C prints 144 (true sum 36 x C nested-loop x4 factor)
+bootstrap/corpus/differential/cases/for_let_shadow.oo llvm-fail - 3a3070eb11fca782  # LLVM refuses let-shadows-loop-binding; C runs C-scoping, prints 5/5/5
+bootstrap/corpus/emit-llvm/pass/bool_print.oo parity 76fe9f61152f4c08 76fe9f61152f4c08  # prints 0/1/1
+bootstrap/corpus/emit-llvm/pass/cap_spread2.oo parity 10159baf262b43a9 10159baf262b43a9  # seven peripheral grants, prints 7
+bootstrap/corpus/emit-llvm/pass/cap_spread.oo parity 10159baf262b43a9 10159baf262b43a9  # prints 7
+bootstrap/corpus/emit-llvm/pass/fn_ret_int.oo parity 084c799cd551dd1d 084c799cd551dd1d  # prints 42
+bootstrap/corpus/emit-llvm/pass/for_nested_sum.oo diverge 654ee9da442fa353 49d7ac459790bd26  # LLVM 48 correct; C 192, nested-loop iteration x4 defect
+bootstrap/corpus/emit-llvm/pass/for_range_sum.oo parity 917df3320d778ddb 917df3320d778ddb  # prints 10
+bootstrap/corpus/emit-llvm/pass/if_else.oo parity 5e46266be5fda850 5e46266be5fda850  # prints big
+bootstrap/corpus/emit-llvm/pass/list_get.oo parity 10159baf262b43a9 10159baf262b43a9  # prints 7
+bootstrap/corpus/emit-llvm/pass/match_ok.oo parity dc51b8c96c2d745d dc51b8c96c2d745d  # prints ok
+bootstrap/corpus/emit-llvm/pass/method_calls.oo parity bdc13372471f4e64 bdc13372471f4e64  # prints 1/0/6/2/42
+bootstrap/corpus/emit-llvm/pass/multi_base_lib.oo both-fail - -  # library module, no main entry
+bootstrap/corpus/emit-llvm/pass/multi_diamond.oo c-fail f7dbab4769334b25 -  # C emits undeclared __v2_buf; LLVM prints 112
+bootstrap/corpus/emit-llvm/pass/multi_left_lib.oo both-fail - -  # library module, no main entry
+bootstrap/corpus/emit-llvm/pass/multi_right_lib.oo both-fail - -  # library module, no main entry
+bootstrap/corpus/emit-llvm/pass/println_str.oo parity d65f6e8549443223 d65f6e8549443223  # prints hello llvm
+bootstrap/corpus/emit-llvm/pass/result_val_err.oo c-fail def9d6bd7c0e0627 -  # C emits oo_print_int with wrong arg type; LLVM prints 42/boom
+bootstrap/corpus/emit-llvm/pass/str_concat.oo parity aec070645fe53ee3 aec070645fe53ee3  # prints foobar
+bootstrap/corpus/emit-llvm/pass/str_escapes.oo parity 616cb1e7ef1b7a62 616cb1e7ef1b7a62  # 11 plus control bytes, exact
+bootstrap/corpus/emit-llvm/pass/str_starts_with.oo parity ad0fadf63cc7cd77 ad0fadf63cc7cd77  # prints 1/1
+bootstrap/corpus/emit-llvm/pass/user_fn_call.oo parity 4358298b6bb27f48 4358298b6bb27f48  # prints 42/hi/55
+bootstrap/corpus/emit-llvm/pass/while_sum.oo parity 917df3320d778ddb 917df3320d778ddb  # prints 10
