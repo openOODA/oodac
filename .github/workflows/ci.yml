@@ -17,6 +17,17 @@ permissions:
   contents: write
 
 jobs:
+  # 8-Gate enforcement map (practices/8d-red-team.oot). Each gate names its
+  # CI stanza below; gaps are recorded, not hidden:
+  # G1 lowering integrity: compiler-not-concat, emit-needs-check, tokenize-once, no-chs-rt
+  # G2 bounds: cap-sealed, borrowck must-fail, json-errors, 256-line-cap step
+  # G3 wiring: build-is-check, std-import, four-mains, elf-hash, isolated-check
+  # G4 isolation: landlock-jail, cap-sealed
+  # G5 replay: double-run sealed x2, smt const-false x2, smt unproven x2, struct-arc x2
+  # G6 drag: tokenize-once, struct-arc soak, 256-line-cap step
+  # G7 contracts: attach-contract, smt const-false, smt unproven
+  # G8 crypto timing: NOT oodac scope (oodar challenger harness per RFC-0001)
+  # Recorded gap: mutation kill-rate (G7 full) has no harness yet.
   test:
     runs-on: ubuntu-latest
     defaults:
@@ -53,6 +64,14 @@ jobs:
           n=$(grep -c '^import "' oodac/ANCHOR.oo)
           echo "ANCHOR imports: $n"
           test "$n" = "6"
+      - name: 256-line cap (Gates 2/6)
+        # tests/fixtures holds deliberate invalid inputs (boundary_257_lines.oo
+        # must exceed the cap to test the boundary); everything else must comply.
+        run: |
+          over=$(cd oodac && find . -name '*.oo' -not -path './.ooda-cache/*' -not -path './tests/fixtures/*' | xargs wc -l 2>/dev/null | awk '$1 > 256 && $2 != "total"')
+          test -z "$over"
+          oot_over=$(cd oodac && find . -name '*.oot' | xargs wc -l 2>/dev/null | awk '$1 > 256 && $2 != "total"')
+          test -z "$oot_over"
       - name: Unique C bar
         env:
           OODA_COMPILER: ${{ github.workspace }}/oodac/bin/oodac
@@ -201,6 +220,7 @@ jobs:
           .ooda-cache/ooda-tmp/ci_iso.bin
           echo "=== double-run sealed ==="
           "$HOST" build --backend c oodac/qa/oodac_break_smoke.oo -o .ooda-cache/ooda-tmp/ci_dbl.bin
+          .ooda-cache/ooda-tmp/ci_dbl.bin
           .ooda-cache/ooda-tmp/ci_dbl.bin
           echo "=== smt const-false ==="
           "$HOST" build --backend c oodac/qa/probe_smt_false_kind.oo -o .ooda-cache/ooda-tmp/ci_smt_false.bin
