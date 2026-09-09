@@ -28,12 +28,13 @@ pub fn run_check_core(sys: &ProcessCap, src: String) {
 }
 
 pub fn run_check_core_binds_path(sys: &ProcessCap, src: String, extra_binds: String, path: String) -> List[String] {
-    return run_check_core_binds_at(sys, src, extra_binds, path);
+    return run_check_core_binds_at(sys, src, extra_binds, path, "\t");
 }
 
 // extra_binds: imported fn names as "\tfoo@0\t" (P7 modular large graphs).
+// import_arity: "\tfname=argc\t" table over the import graph (E_CAP: cross-module arity).
 pub fn run_check_core_binds(sys: &ProcessCap, src: String, extra_binds: String) -> List[String] {
-    return run_check_core_binds_at(sys, src, extra_binds, "");
+    return run_check_core_binds_at(sys, src, extra_binds, "", "\t");
 }
 
 fn toks_with_src_path(toks: List[String], path: String) -> List[String] {
@@ -50,7 +51,7 @@ fn toks_with_src_path(toks: List[String], path: String) -> List[String] {
     return out;
 }
 
-pub fn run_check_core_binds_at(sys: &ProcessCap, src: String, extra_binds: String, path: String) -> List[String] {
+pub fn run_check_core_binds_at(sys: &ProcessCap, src: String, extra_binds: String, path: String, import_arity: String) -> List[String] {
     if chars_len(src) == 0 { println("ERR\tcheck\tempty");
     process_exit(1);
     }
@@ -118,7 +119,8 @@ pub fn run_check_core_binds_at(sys: &ProcessCap, src: String, extra_binds: Strin
     typecheck_unused_lets(toks);
     typecheck_unused_imports(toks);
     // R1 expand: call arity vs declared params; assign to immutable let.
-    typecheck_call_arity(toks);
+    // E_CAP: cross-module calls checked against the import-arity table.
+    typecheck_call_arity_with_imports(toks, import_arity);
     typecheck_immut_assign(toks);
     // R1: mut assign pure-lit RHS must match annotated/init type (was silent OK).
     typecheck_mut_assign_types(toks);

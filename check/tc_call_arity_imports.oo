@@ -1,0 +1,126 @@
+// # Check call arity (import table)
+//
+// Logline: String-level fn-header scan for cross-module arity checks.
+//
+// Setup: Produces "\tfname=argc\t" entries shaped for arity_get.
+//
+// Beats:
+//   1. Skip line comments and string literals.
+//   2. Count IDENT-before-COLON params at paren depth 1, brace-guarded.
+//   3. Local table always wins; unknown names still skip.
+
+// scan_import_arity: string-level header scan for cross-module calls.
+// Returns "\tfname=argc\t" entries (same shape arity_get reads). Counts a
+// param exactly like Pass 1: an IDENT followed by COLON at paren depth 1.
+// Skips line comments and string literals so commented-out headers cannot
+// poison the table. Local table always wins (consulted first at use sites).
+pub fn scan_import_arity(src: String) -> String {
+    let mut table = "\t";
+    let n = chars_len(src);
+    let mut i = 0;
+    while i < n {
+        let c: String = char_at(src, i);
+        if c == "/" {
+            if i + 1 < n && char_at(src, i + 1) == "/" {
+                i = i + 2;
+                while i < n && char_at(src, i) != "\n" { i = i + 1; }
+            } else {
+                i = i + 1;
+            }
+        } else if c == "\"" {
+            i = i + 1;
+            while i < n {
+                if char_at(src, i) == "\\" { i = i + 2; }
+                else if char_at(src, i) == "\"" { i = i + 1; break; }
+                else { i = i + 1; }
+            }
+        } else if c == "f" && i + 1 < n && char_at(src, i + 1) == "n" {
+            let mut prev_ok = true;
+            if i > 0 {
+                let pc: String = char_at(src, i - 1);
+                if char_is_alpha(pc) || char_is_digit(pc) || pc == "_" { prev_ok = false; }
+            }
+            let mut next_ok = true;
+            if i + 2 < n {
+                let nc: String = char_at(src, i + 2);
+                if char_is_alpha(nc) || char_is_digit(nc) || nc == "_" { next_ok = false; }
+            }
+            if !prev_ok || !next_ok {
+                i = i + 1;
+            } else {
+                let mut j = i + 2;
+                while j < n && (char_at(src, j) == " " || char_at(src, j) == "\t") { j = j + 1; }
+                let mut name = "";
+                while j < n {
+                    let nc2: String = char_at(src, j);
+                    if char_is_alpha(nc2) || char_is_digit(nc2) || nc2 == "_" { name = name + nc2; j = j + 1; }
+                    else { break; }
+                }
+                while j < n && (char_at(src, j) == " " || char_at(src, j) == "\t") { j = j + 1; }
+                if name == "" || j >= n || char_at(src, j) != "(" {
+                    i = i + 1;
+                } else {
+                    let mut argc = 0;
+                    let mut depth = 1;
+                    let mut nest = 0;
+                    let mut in_name = true;
+                    j = j + 1;
+                    let mut word = "";
+                    while j < n && depth > 0 {
+                        let dc: String = char_at(src, j);
+                        if dc == "{" || dc == "[" {
+                            word = "";
+                            nest = nest + 1;
+                            j = j + 1;
+                        } else if (dc == "}" || dc == "]") && nest > 0 {
+                            word = "";
+                            nest = nest - 1;
+                            j = j + 1;
+                        } else if dc == "\"" {
+                            word = "";
+                            j = j + 1;
+                            while j < n {
+                                if char_at(src, j) == "\\" { j = j + 2; }
+                                else if char_at(src, j) == "\"" { j = j + 1; break; }
+                                else { j = j + 1; }
+                            }
+                        } else if dc == "(" {
+                            word = "";
+                            depth = depth + 1;
+                            j = j + 1;
+                        } else if dc == ")" {
+                            word = "";
+                            in_name = false;
+                            depth = depth - 1;
+                            j = j + 1;
+                        } else if dc == "," && depth == 1 && nest == 0 {
+                            word = "";
+                            in_name = true;
+                            j = j + 1;
+                        } else if dc == ":" && depth == 1 && nest == 0 {
+                            if in_name && word != "" { argc = argc + 1; }
+                            word = "";
+                            in_name = false;
+                            j = j + 1;
+                        } else if dc == " " || dc == "\t" || dc == "\n" {
+                            word = "";
+                            j = j + 1;
+                        } else if char_is_alpha(dc) || char_is_digit(dc) || dc == "_" {
+                            word = word + dc;
+                            j = j + 1;
+                        } else {
+                            if dc != "&" && dc != "*" { word = ""; }
+                            j = j + 1;
+                        }
+                    }
+                    table = table + name + "=" + argc.to_string() + "\t";
+                    i = j;
+                }
+            }
+        } else {
+            i = i + 1;
+        }
+    }
+    return table;
+}
+

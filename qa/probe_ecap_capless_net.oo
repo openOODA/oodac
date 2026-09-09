@@ -1,0 +1,35 @@
+// # Probe: capless network call fails check (E_CAP demo, part a)
+//
+// Logline: Host compiler must refuse fixture_ecap_evil.oo: a TCP connect
+// with no &TcpCap held is a fatal arity error, not a silent OK.
+//
+// Setup: ProcessCap + EnvCap + FsReadCap. Host is OODA_COMPILER. Run from
+// the workspace root (paths below are workspace-relative).
+// STAGING: dormant until the fixed compiler ships (needs the import-arity
+// table); do NOT wire into ci.yml before then — with the old host this
+// probe correctly reports HOLE instead of OK.
+//
+// Beats:
+//   1. check of the evil fixture is ERR (refused).
+//   2. The refusal names the missing capability argument.
+
+pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
+    let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
+    let host: String = match hr { Ok(s) => s, Err(_) => "" };
+    if host == "" {
+        println("ERR\tOODA_COMPILER required");
+        process_exit(1);
+    }
+    let victim: String = "oodac/qa/fixture_ecap_evil.oo";
+    let ck: Result[String, String] = sys_exec(p, host, "check", victim);
+    if ck.is_ok() {
+        println("HOLE\tecap\tcheck passed a capless net call (needs fixed compiler)");
+        process_exit(1);
+    }
+    let msg: String = match ck { Ok(_) => "", Err(e) => e };
+    if str_index_of(msg, "expects 3 argument(s) but got 2") < 0 {
+        println("ERR\tecap\twrong refusal (expected arity error): " + msg);
+        process_exit(1);
+    }
+    println("OK\tecap\tcapless net call refused at check");
+}

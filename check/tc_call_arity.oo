@@ -8,6 +8,8 @@
 //   1. Seed CHS builtin arities so list_get and list_push cannot silent-OK.
 //   2. Pass 1 counts IDENT: params on each KW_FN header and appends fname=argc.
 //   3. Pass 2 counts args on IDENT( that is not a method or def and exits on a mismatch.
+//   4. Cross-module calls fall back to the import-arity table (scan_import_arity
+//      over the import graph); local table always wins. Unknown names still skip.
 
 pub fn arity_get(table: String, fname: String) -> Int {
     let mut i = 0;
@@ -64,6 +66,10 @@ j = kn;
 }
 
 pub fn typecheck_call_arity(toks: List[String]) {
+    typecheck_call_arity_with_imports(toks, "\t");
+}
+
+pub fn typecheck_call_arity_with_imports(toks: List[String], import_arity: String) {
     let n = list_len(toks);
     // Seed CHS builtins so list_get(xs) / list_push arity cannot silent-OK.
     let mut table = "\tlist_new=0\tlist_push=2\tlist_get=2\tlist_len=1\tlist_slice=3\t"
@@ -151,7 +157,9 @@ pub fn typecheck_call_arity(toks: List[String]) {
                     let line: String = field_at(list_get(toks, i), 1);
                     let col: String = field_at(list_get(toks, i), 2);
                     let expect = 0 + arity_get(table, fname);
-                    if expect >= 0 { let mut p = i + 1;
+                    let mut expect2 = expect;
+                    if expect2 < 0 { expect2 = 0 + arity_get(import_arity, fname); }
+                    if expect2 >= 0 { let mut p = i + 1;
                     let mut depth = 0;
                     let mut brace = 0;
                     let mut argc = 0;
@@ -193,7 +201,7 @@ pub fn typecheck_call_arity(toks: List[String]) {
                                 if fname == "println" {
                                     if argc < 1 { tc_err_at(toks, i, "function 'println' expects at least 1 argument");
                                     }
-                                } else if argc != expect { let exp_s: String = expect.to_string();
+                                } else if argc != expect2 { let exp_s: String = expect2.to_string();
                                 let got_s: String = argc.to_string();
                                 tc_err_at( toks, i, "function '" + fname + "' expects " + exp_s + " argument(s) but got " + got_s );
                                 }

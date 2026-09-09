@@ -56,6 +56,7 @@ import "tc_assign_mut.oo";
 import "tc_call_arg_lits.oo";
 import "tc_call_arg_prep.oo";
 import "tc_call_arity.oo";
+import "tc_call_arity_imports.oo";
 import "tc_call_binop.oo";
 import "tc_call_eq.oo";
 import "tc_call_let.oo";
