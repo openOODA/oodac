@@ -1,0 +1,12 @@
+// # Reject self recursive struct
+//
+// Logline: A struct holding itself must fail the cycle check.
+//
+// Setup: oodac check must reject this program.
+//
+// Beats:
+//   1. Declare N holding N.
+//   2. Fail the struct type cycle.
+
+type N = struct { n: N };
+pub fn main() {}

@@ -1,0 +1,17 @@
+// # Accept acyclic struct diamond
+//
+// Logline: A diamond of structs with no loop must typecheck.
+//
+// Setup: oodac check must accept this program.
+//
+// Beats:
+//   1. Declare A with plain fields.
+//   2. Declare B and C holding A.
+//   3. Declare D holding B and C.
+//   4. Accept the acyclic graph.
+
+type A = struct { x: Int };
+type B = struct { a: A };
+type C = struct { a: A };
+type D = struct { b: B, c: C };
+pub fn main() {}

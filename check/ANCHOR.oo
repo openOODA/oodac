@@ -90,6 +90,7 @@ import "tc_refine_smt.oo";
 import "tc_scope.oo";
 import "tc_struct_assign.oo";
 import "tc_struct_chain.oo";
+import "tc_struct_cycle.oo";
 import "tc_struct_field_table.oo";
 import "tc_struct_lit.oo";
 import "tc_struct_method.oo";

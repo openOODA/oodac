@@ -1,0 +1,14 @@
+// # Accept acyclic Box chain
+//
+// Logline: A one way Box chain with no loop must typecheck.
+//
+// Setup: oodac check must accept this program.
+//
+// Beats:
+//   1. Declare B with a plain field.
+//   2. Declare A holding Box of B.
+//   3. Accept the acyclic chain.
+
+type B = struct { x: Int };
+type A = struct { bx: Box[B] };
+pub fn main() {}

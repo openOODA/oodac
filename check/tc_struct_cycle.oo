@@ -1,0 +1,208 @@
+// # Struct type cycle check
+//
+// Logline: Reject struct declarations that close a reference loop.
+//
+// Setup: Token rows are kind, line, col, text. Runs on the check path over raw toks.
+//
+// Beats:
+//   1. Collect declared struct names.
+//   2. Record edges from fields naming other structs, through wrappers.
+//   3. Fail closed when a struct reaches itself.
+
+fn sc_kind(toks: List[String], i: Int) -> String {
+    if i < 0 || i >= list_len(toks) { return ""; }
+    return field_at(list_get(toks, i), 0);
+}
+
+fn sc_text(toks: List[String], i: Int) -> String {
+    if i < 0 || i >= list_len(toks) { return ""; }
+    return field_at(list_get(toks, i), 3);
+}
+
+fn sc_has(bag: String, name: String) -> Bool {
+    if name == "" { return false; }
+    return str_index_of(bag, "\t" + name + "\t") >= 0;
+}
+
+// "\tA\tB\t" of declared struct names. Allows a KW_PUB prefix.
+fn sc_struct_names(toks: List[String]) -> String {
+    let n: Int = list_len(toks);
+    let mut bag: String = "\t";
+    let mut i: Int = 0;
+    while i < n {
+        let mut j: Int = i;
+        if sc_kind(toks, j) == "KW_PUB" { j = j + 1; }
+        if j + 3 < n && sc_kind(toks, j) == "KW_TYPE" && sc_kind(toks, j + 1) == "IDENT" && sc_kind(toks, j + 2) == "EQ" && sc_kind(toks, j + 3) == "IDENT" && sc_text(toks, j + 3) == "struct" {
+            let nm: String = sc_text(toks, j + 1);
+            if !sc_has(bag, nm) { bag = bag + nm + "\t"; }
+        }
+        i = i + 1;
+    }
+    return bag;
+}
+
+// Body end: index of the RBRACE closing the LBRACE at open.
+fn sc_body_end(toks: List[String], open: Int, n: Int) -> Int {
+    let mut depth: Int = 0;
+    let mut i: Int = open;
+    while i < n {
+        let k: String = sc_kind(toks, i);
+        if k == "LBRACE" { depth = depth + 1; }
+        if k == "RBRACE" {
+            depth = depth - 1;
+            if depth == 0 { return i; }
+        }
+        i = i + 1;
+    }
+    return n;
+}
+
+// "A>B\t" rows for fields of owner naming known structs.
+fn sc_edges(toks: List[String], names: String) -> String {
+    let n: Int = list_len(toks);
+    let mut edges: String = "";
+    let mut i: Int = 0;
+    while i < n {
+        let mut j: Int = i;
+        if sc_kind(toks, j) == "KW_PUB" { j = j + 1; }
+        if j + 4 < n && sc_kind(toks, j) == "KW_TYPE" && sc_kind(toks, j + 1) == "IDENT" && sc_kind(toks, j + 2) == "EQ" && sc_kind(toks, j + 3) == "IDENT" && sc_text(toks, j + 3) == "struct" && sc_kind(toks, j + 4) == "LBRACE" {
+            let owner: String = sc_text(toks, j + 1);
+            let end: Int = sc_body_end(toks, j + 4, n);
+            let mut p: Int = j + 5;
+            while p < end {
+                if sc_kind(toks, p) == "IDENT" && sc_kind(toks, p + 1) == "COLON" {
+                    let mut q: Int = p + 2;
+                    let mut depth: Int = 0;
+                    let mut resume: Int = end;
+                    let mut scanning: Bool = true;
+                    while scanning && q < end {
+                        let k: String = sc_kind(toks, q);
+                        if k == "LBRACKET" || k == "LT" { depth = depth + 1; q = q + 1; }
+                        else {
+                            if k == "RBRACKET" || k == "GT" { depth = depth - 1; q = q + 1; }
+                            else {
+                                if k == "COMMA" || k == "RBRACE" || k == "SEMI" {
+                                    if depth == 0 { resume = q + 1; scanning = false; }
+                                    else { q = q + 1; }
+                                }
+                                else {
+                                    if k == "LBRACE" { scanning = false; }
+                                    else {
+                                        if k == "IDENT" && sc_has(names, sc_text(toks, q)) {
+                                            edges = edges + owner + ">" + sc_text(toks, q) + "\t";
+                                        }
+                                        q = q + 1;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    p = resume;
+                }
+                else { p = p + 1; }
+            }
+            i = end;
+        }
+        i = i + 1;
+    }
+    return edges;
+}
+
+// Successors of node from "A>B\t" rows.
+fn sc_succ(edges: String, node: String) -> List[String] {
+    let mut out: List[String] = list_new();
+    let want: String = node + ">";
+    let wl: Int = chars_len(want);
+    let n: Int = chars_len(edges);
+    let mut cur: String = "";
+    let mut i: Int = 0;
+    while i <= n {
+        let mut c: String = "";
+        if i < n { c = char_at(edges, i); }
+        if c == "\t" || i == n {
+            if chars_len(cur) > wl && str_slice(cur, 0, wl) == want {
+                out = list_push(out, str_slice(cur, wl, chars_len(cur)));
+            }
+            cur = "";
+        }
+        else { cur = cur + c; }
+        i = i + 1;
+    }
+    return out;
+}
+
+fn sc_split_pipe(entry: String) -> List[String] {
+    let mut out: List[String] = list_new();
+    let n: Int = chars_len(entry);
+    let mut i: Int = 0;
+    while i < n {
+        if char_at(entry, i) == "|" {
+            out = list_push(out, str_slice(entry, 0, i));
+            out = list_push(out, str_slice(entry, i + 1, n));
+            return out;
+        }
+        i = i + 1;
+    }
+    out = list_push(out, entry);
+    out = list_push(out, "");
+    return out;
+}
+
+// "" or the "A>B>A" path proving start reaches itself.
+// The stack only grows; sp addresses the live top. Stale tail entries
+// past sp are never read, so no removal primitive is needed.
+fn sc_reaches_self(edges: String, start: String) -> String {
+    let mut stack: List[String] = list_new();
+    stack = list_push(stack, start + "|" + start + ">");
+    let mut sp: Int = 0;
+    let mut visited: String = "\t";
+    let mut guard: Int = 0;
+    while sp >= 0 {
+        guard = guard + 1;
+        if guard > 100000 { return "GUARD"; }
+        let parts: List[String] = sc_split_pipe(list_get(stack, sp));
+        sp = sp - 1;
+        let node: String = list_get(parts, 0);
+        let path: String = list_get(parts, 1);
+        let succs: List[String] = sc_succ(edges, node);
+        let m: Int = list_len(succs);
+        let mut s: Int = 0;
+        while s < m {
+            let nx: String = list_get(succs, s);
+            if nx == start { return path + start; }
+            if !sc_has(visited, nx) {
+                visited = visited + nx + "\t";
+                stack = list_push(stack, nx + "|" + path + nx + ">");
+                sp = list_len(stack) - 1;
+            }
+            s = s + 1;
+        }
+    }
+    return "";
+}
+
+pub fn typecheck_struct_cycles(toks: List[String]) {
+    let names: String = sc_struct_names(toks);
+    if names == "\t" { return; }
+    let edges: String = sc_edges(toks, names);
+    if edges == "" { return; }
+    let n: Int = chars_len(names);
+    let mut cur: String = "";
+    let mut i: Int = 0;
+    while i <= n {
+        let mut c: String = "";
+        if i < n { c = char_at(names, i); }
+        if c == "\t" || i == n {
+            if cur != "" {
+                let hit: String = sc_reaches_self(edges, cur);
+                if hit != "" {
+                    println("ERR\tcycle\tstruct type cycle " + hit);
+                    process_exit(1);
+                }
+            }
+            cur = "";
+        }
+        else { cur = cur + c; }
+        i = i + 1;
+    }
+}

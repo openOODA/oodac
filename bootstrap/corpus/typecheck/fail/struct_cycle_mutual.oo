@@ -1,0 +1,14 @@
+// # Reject mutual struct recursion
+//
+// Logline: Two structs naming each other must fail the cycle check.
+//
+// Setup: oodac check must reject this program.
+//
+// Beats:
+//   1. Declare A holding B.
+//   2. Declare B holding A.
+//   3. Fail the struct type cycle.
+
+type A = struct { b: B };
+type B = struct { a: A };
+pub fn main() {}

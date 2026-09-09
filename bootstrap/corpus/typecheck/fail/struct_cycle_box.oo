@@ -1,0 +1,14 @@
+// # Reject Box indirection struct cycle
+//
+// Logline: A Box mediated struct loop must fail the cycle check.
+//
+// Setup: oodac check must reject this program. Boxed cycles leak under ARC.
+//
+// Beats:
+//   1. Declare A holding Box of B.
+//   2. Declare B holding Box of A.
+//   3. Fail the struct type cycle.
+
+type A = struct { bx: Box[B] };
+type B = struct { bx: Box[A] };
+pub fn main() {}
