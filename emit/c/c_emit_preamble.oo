@@ -138,6 +138,7 @@ pub fn c_emit_preamble() {
     println("long long oo_cap_grant_usb(void); long long oo_cap_grant_hid(void); long long oo_cap_grant_window(void); long long oo_cap_grant_frame(void);");
     println("OoResS oo_dlopen(long long,OoStr); OoResS oo_dlsym(long long,OoStr,OoStr);");
     println("OoResS oo_dlclose(long long,OoStr);");
+    println("OoResS oo_ffi_call(long long,OoStr,OoStr,OoStr,OoStr);");
     println("OoStr crypto_md5_internal(OoStr); OoStr crypto_sha1_internal(OoStr);");
     println("OoStr crypto_aes_encrypt_internal(OoStr,OoStr);");
     println("long long oo_byte_at(OoStr,long long); long long oo_str_byte_at(OoStr,long long); long long oo_bytes_len(OoStr);");

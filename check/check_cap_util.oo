@@ -144,7 +144,7 @@ pub fn is_sealed_alloc(name: String) -> Bool {
 
 // M152 Cap vs FFI path A: raw dlopen / host-FFI free names need &FfiCap
 pub fn is_sealed_ffi(name: String) -> Bool {
-    return name == "dlopen" || name == "dlsym" || name == "dlclose" || name == "chs_build" || name == "host_ast_dump" || name == "host_check" || name == "host_token_dump" || name == "host_free" || name == "ooda_host_ast_dump" || name == "ooda_host_check" || name == "ooda_host_token_dump" || name == "ooda_host_chs_build" || name == "ooda_host_free" || name == "import_c" || name == "oo_import_c" || name == "ffi_gen" || name == "oo_ffi_gen";
+    return name == "dlopen" || name == "dlsym" || name == "dlclose" || name == "chs_build" || name == "host_ast_dump" || name == "host_check" || name == "host_token_dump" || name == "host_free" || name == "ooda_host_ast_dump" || name == "ooda_host_check" || name == "ooda_host_token_dump" || name == "ooda_host_chs_build" || name == "ooda_host_free" || name == "import_c" || name == "oo_import_c" || name == "ffi_gen" || name == "oo_ffi_gen" || name == "ffi_call" || name == "oo_ffi_call";
 }
 
 // Cap type names accepted after COLON+AMP in param lists.

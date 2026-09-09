@@ -1,0 +1,16 @@
+// # ok unsafe ffi call
+//
+// Logline: Check-pass fixture that calls ffi_call through an FfiCap first argument.
+//
+// Beats:
+//   1. ok takes ffi: &FfiCap.
+//   2. ffi_call is invoked with sym, rspec, aspec, and argv.
+//   3. Check must accept the FFI call grant (null sym fails at runtime, not check).
+
+pub fn ok(ffi: &FfiCap) {
+    let r = ffi_call(ffi, "sym:0x0", "i", "", "");
+    if r.is_ok() {
+        println("unexpected");
+    }
+}
+pub fn main() {}

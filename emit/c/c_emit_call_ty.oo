@@ -56,7 +56,7 @@ pub fn c_is_res_s_call(name: String) -> Bool {
     }
     if name == "oo_actor_restart" || name == "oo_otp_supervise" || name == "oo_cap_rpc_send" || name == "oo_cap_rpc_recv" { return true;
     }
-    if name == "parse" || name == "load_model" || name == "dlopen" || name == "oo_dlopen" || name == "dlsym" || name == "oo_dlsym" || name == "dlclose" || name == "oo_dlclose" { return true;
+    if name == "parse" || name == "load_model" || name == "dlopen" || name == "oo_dlopen" || name == "dlsym" || name == "oo_dlsym" || name == "dlclose" || name == "oo_dlclose" || name == "ffi_call" || name == "oo_ffi_call" { return true;
     }
     return false;
 }

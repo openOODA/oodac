@@ -128,6 +128,13 @@ if netio != "" { return netio;
         }
         return "oo_dlclose(" + a0 + ", " + a1 + ")";
     }
+    if t == "ffi_call" {
+        if a1 == "" || !c_arg_is_cap_ident(a0) {
+            println("ERR\tc_emit\tffi_call requires &FfiCap as first arg (not int/lit)");
+            process_exit(1);
+        }
+        return "oo_ffi_call(" + args + ")";
+    }
     if t == "crypto_md5_internal" {
         return "crypto_md5_internal(" + args + ")";
     }

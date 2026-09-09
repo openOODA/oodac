@@ -471,6 +471,7 @@ echo "OoResS oo_dns_resolve(long long,OoStr); OoResS oo_dns_resolve_ipv4(long lo
 echo "OoResS oo_fetch(long long,OoStr);" >> "$TMP/preamble.c"
 echo "OoResS oo_dlopen(long long,OoStr); OoResS oo_dlsym(long long,OoStr,OoStr);" >> "$TMP/preamble.c"
 echo "OoResS oo_dlclose(long long,OoStr);" >> "$TMP/preamble.c"
+echo "OoResS oo_ffi_call(long long,OoStr,OoStr,OoStr,OoStr);" >> "$TMP/preamble.c"
 echo "OoStr crypto_md5_internal(OoStr); OoStr crypto_sha1_internal(OoStr);" >> "$TMP/preamble.c"
 echo "OoStr crypto_aes_encrypt_internal(OoStr,OoStr);" >> "$TMP/preamble.c"
 echo "OoStr crypto_sha256_internal(OoStr); OoStr crypto_hmac_sha256_internal(OoStr,OoStr);" >> "$TMP/preamble.c"
