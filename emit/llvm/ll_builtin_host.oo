@@ -1,0 +1,120 @@
+// # LLVM host-primitive builtin lowering
+//
+// Logline: Lower bytes, file, str, and crypto free calls to oo_* IR. Fail closed on bad arity.
+//
+// Setup: Args are packed expr results. Aggregates use sret/byval. No emit/c import.
+//
+// Beats:
+//   1. byte_at and byte_slice mirror the char_at and str_slice SSA idiom.
+//   2. read_file and write_file take an explicit i64 cap as the first arg.
+//   3. bytes_new, bytes_push, and bytes_to_str use the ilist ABI.
+
+import "ll_tok.oo";
+import "ll_ty.oo";
+
+pub fn ll_builtin_host(name: String, args: List[String], ssa0: Int, expect: String) -> String {
+    let na: Int = list_len(args);
+    if name == "byte_at" && na >= 2 {
+        let a0: String = ll_as_val(list_get(args, 0), ssa0);
+        let s: Int = ll_pssa(a0) + 1;
+        println("  " + ll_ssa(s) + " = call i64 @oo_byte_at({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ", i64 " + ll_ssa(ll_pssa(list_get(args, 1))) + ")");
+        return ll_pack(0, s, "i64", "");
+    }
+    if name == "byte_slice" && na >= 3 {
+        let a0: String = ll_as_val(list_get(args, 0), ssa0);
+        let s: Int = ll_pssa(a0) + 1;
+        println("  " + ll_ssa(s) + " = call { ptr, i64 } @oo_byte_slice({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ", i64 " + ll_ssa(ll_pssa(list_get(args, 1))) + ", i64 " + ll_ssa(ll_pssa(list_get(args, 2))) + ")");
+        return ll_pack(0, s, "str", "");
+    }
+    if (name == "char_is_digit" || name == "char_is_alpha") && na >= 1 {
+        let mut callee: String = "oo_char_is_digit";
+        if name == "char_is_alpha" { callee = "oo_char_is_alpha"; }
+        let a0: String = ll_as_val(list_get(args, 0), ssa0);
+        let s: Int = ll_pssa(a0) + 1;
+        println("  " + ll_ssa(s) + " = call i32 @" + callee + "({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ")");
+        let s2: Int = s + 1;
+        println("  " + ll_ssa(s2) + " = icmp ne i32 " + ll_ssa(s) + ", 0");
+        return ll_pack(0, s2, "i1", "");
+    }
+    if name == "str_contains" && na >= 2 {
+        let a0: String = ll_as_val(list_get(args, 0), ssa0);
+        let a1: String = ll_as_val(list_get(args, 1), ll_pssa(a0));
+        let s: Int = ll_pssa(a1) + 1;
+        println("  " + ll_ssa(s) + " = call i32 @oo_str_contains({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ")");
+        let s2: Int = s + 1;
+        println("  " + ll_ssa(s2) + " = icmp ne i32 " + ll_ssa(s) + ", 0");
+        return ll_pack(0, s2, "i1", "");
+    }
+    if name == "str_split" && na >= 2 {
+        let a0: String = ll_as_val(list_get(args, 0), ssa0);
+        let a1: String = ll_as_val(list_get(args, 1), ll_pssa(a0));
+        let s: Int = ll_pssa(a1) + 1;
+        let out: String = ll_tmpa(s);
+        println("  " + out + " = alloca " + ll_ir_alloc("slist") + ", align 8");
+        println("  call void @str_split(ptr sret(%OoSList) align 8 " + out + ", { ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ")");
+        return ll_pack(0, s, "slist", out);
+    }
+    if name == "str_trim" && na >= 1 {
+        let a0: String = ll_as_val(list_get(args, 0), ssa0);
+        let s: Int = ll_pssa(a0) + 1;
+        println("  " + ll_ssa(s) + " = call { ptr, i64 } @oo_str_trim({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ")");
+        return ll_pack(0, s, "str", "");
+    }
+    if name == "crypto_sha256_internal" && na >= 1 {
+        let a0: String = ll_as_val(list_get(args, 0), ssa0);
+        let s: Int = ll_pssa(a0) + 1;
+        println("  " + ll_ssa(s) + " = call { ptr, i64 } @crypto_sha256_internal({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ")");
+        return ll_pack(0, s, "str", "");
+    }
+    if name == "bytes_new" {
+        if na != 0 {
+            println("ERR\tllvm\tbytes_new takes no args");
+            process_exit(1);
+        }
+        let a: String = ll_tmpa(ssa0 + 1);
+        println("  " + a + " = alloca " + ll_ir_alloc("ilist") + ", align 8");
+        println("  call void @oo_bytes_new(ptr sret(%OoIList) align 8 " + a + ")");
+        return ll_pack(0, ssa0 + 1, "ilist", a);
+    }
+    if name == "bytes_push" && na >= 2 {
+        let a0: String = ll_ensure_ptr(list_get(args, 0), ssa0);
+        if ll_pk(a0) != "ilist" {
+            println("ERR\tllvm\tbytes_push needs List[Int]");
+            process_exit(1);
+        }
+        let s: Int = ll_pssa(a0) + 1;
+        let out: String = ll_tmpa(s);
+        println("  " + out + " = alloca " + ll_ir_alloc("ilist") + ", align 8");
+        println("  call void @oo_bytes_push(ptr sret(%OoIList) align 8 " + out + ", ptr byval(%OoIList) align 8 " + ll_pptr(a0) + ", i64 " + ll_ssa(ll_pssa(list_get(args, 1))) + ")");
+        return ll_pack(0, s, "ilist", out);
+    }
+    if name == "bytes_to_str" && na >= 1 {
+        let a0: String = ll_ensure_ptr(list_get(args, 0), ssa0);
+        if ll_pk(a0) != "ilist" {
+            println("ERR\tllvm\tbytes_to_str needs List[Int]");
+            process_exit(1);
+        }
+        let s: Int = ll_pssa(a0) + 1;
+        println("  " + ll_ssa(s) + " = call { ptr, i64 } @oo_bytes_to_str(ptr byval(%OoIList) align 8 " + ll_pptr(a0) + ")");
+        return ll_pack(0, s, "str", "");
+    }
+    if name == "read_file" && na >= 2 {
+        let a1: String = ll_as_val(list_get(args, 1), ssa0);
+        let a: String = ll_tmpa(ll_pssa(a1) + 1);
+        let s: Int = ll_pssa(a1) + 1;
+        println("  " + a + " = alloca %OoResS, align 8");
+        println("  call void @oo_read_file(ptr sret(%OoResS) align 8 " + a + ", i64 " + ll_ssa(ll_pssa(list_get(args, 0))) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ")");
+        return ll_pack(0, s, "ress", a);
+    }
+    if name == "write_file" && na >= 3 {
+        // OoResV shares the { i32, OoStr } layout with OoResS, so kind ress flows on.
+        let a1: String = ll_as_val(list_get(args, 1), ssa0);
+        let a2: String = ll_as_val(list_get(args, 2), ll_pssa(a1));
+        let a: String = ll_tmpa(ll_pssa(a2) + 1);
+        let s: Int = ll_pssa(a2) + 1;
+        println("  " + a + " = alloca %OoResV, align 8");
+        println("  call void @oo_write_file(ptr sret(%OoResV) align 8 " + a + ", i64 " + ll_ssa(ll_pssa(list_get(args, 0))) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a2)) + ")");
+        return ll_pack(0, s, "ress", a);
+    }
+    return "";
+}

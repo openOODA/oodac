@@ -109,6 +109,39 @@ pub fn ll_method(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, env:
         let lv: String = ll_field_load(kind, ssa, bp, "val", pe);
         return ll_pack(0, ll_pssa(lv), ll_pk(lv), "");
     }
+    if m == "unwrap_or" {
+        if kind != "resi" && kind != "ress" && kind != "opti" && kind != "opts" {
+            println("ERR\tllvm\tunwrap_or needs Result or Option");
+            process_exit(1);
+        }
+        if ll_pk(arg) == "" || ll_pk(arg) == "empty" {
+            println("ERR\tllvm\tunwrap_or needs a default");
+            process_exit(1);
+        }
+        let mut vk: String = "i64";
+        if kind == "ress" || kind == "opts" { vk = "str"; }
+        if ll_pk(arg) != vk {
+            println("ERR\tllvm\tunwrap_or default kind");
+            process_exit(1);
+        }
+        let base: String = ll_ensure_ptr(ll_pack(0, ssa, kind, ptr), ssa0);
+        let bp: String = ll_pptr(base);
+        let tag: Int = ll_match_tag(kind, bp, ll_pssa(base));
+        let dv: Int = ll_arm_val(arg, tag);
+        let top: Int = ll_hw(tag, dv);
+        let id: Int = top + 1;
+        println("  br i1 " + ll_ssa(tag) + ", label %wok" + id.to_string() + ", label %werr" + id.to_string());
+        println("wok" + id.to_string() + ":");
+        let lv: String = ll_field_load(kind, ssa, bp, "val", top);
+        let vs: Int = ll_pssa(lv);
+        println("  br label %wmerge" + id.to_string());
+        println("werr" + id.to_string() + ":");
+        println("  br label %wmerge" + id.to_string());
+        println("wmerge" + id.to_string() + ":");
+        let ph: Int = vs + 1;
+        println("  " + ll_ssa(ph) + " = phi " + ll_ir_val(ll_pk(lv)) + " [ " + ll_ssa(vs) + ", %wok" + id.to_string() + " ], [ " + ll_ssa(dv) + ", %werr" + id.to_string() + " ]");
+        return ll_pack(0, ph, ll_pk(lv), "");
+    }
     println("ERR\tllvm\tunsupported method " + m);
     process_exit(1);
     return ll_pack(0, ssa0, "i64", "");

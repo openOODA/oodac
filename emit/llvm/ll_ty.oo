@@ -46,6 +46,7 @@ pub fn ll_ty_at(toks: List[String], pos: Int, n: Int) -> String {
             let e: String = ll_t(toks, p + 2);
             if e == "String" { return "ress"; }
             if e == "Int" { return "resi"; }
+            if e == "Void" { return "ress"; }
             if ll_ty_struct_rich(toks, e, n) != "" { return "resSt_" + e; }
         }
         println("ERR\tllvm\tresult kind");

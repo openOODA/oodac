@@ -14,6 +14,7 @@ import "ll_ty.oo";
 import "ll_call.oo";
 import "ll_ctor.oo";
 import "ll_struct_list.oo";
+import "ll_builtin_host.oo";
 
 pub fn ll_arg(args: List[String], i: Int) -> String {
     return list_get(args, i);
@@ -157,6 +158,8 @@ pub fn ll_builtin(name: String, args: List[String], ssa0: Int, expect: String) -
     if name == "sys_exec" && na >= 2 {
         return ll_sys_exec(args, ssa0);
     }
+    let host: String = ll_builtin_host(name, args, ssa0, expect);
+    if host != "" { return host; }
     if name == "Some" || name == "None" || name == "Ok" || name == "Err" {
         let mut dummy: String = ll_pack(0, ssa0, "i64", "");
         if na >= 1 { dummy = ll_arg(args, 0); }

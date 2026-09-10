@@ -33,6 +33,19 @@ pub fn ll_ret_resi(v: String, ssa0: Int) -> Int {
     return s;
 }
 
+pub fn ll_ret_opt(v: String, kind: String, ssa0: Int) -> Int {
+    if ll_pk(v) != kind {
+        println("ERR\tllvm\tOption return must match fn kind");
+        process_exit(1);
+    }
+    let p: String = ll_ensure_ptr(v, ssa0);
+    let s: Int = ll_pssa(p) + 1;
+    println("  " + ll_ssa(s) + " = load " + ll_ir_alloc(kind) + ", ptr " + ll_pptr(p));
+    println("  store " + ll_ir_alloc(kind) + " " + ll_ssa(s) + ", ptr %ret");
+    println("  ret void");
+    return s;
+}
+
 pub fn ll_ret_resim(v: String, ssa0: Int) -> Int {
     if ll_pk(v) != "resi" {
         println("ERR\tllvm\tResult main must return Ok or Err");

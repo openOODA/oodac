@@ -181,8 +181,7 @@ pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String, env
         } else if k == "KW_RETURN" {
             let envx: String = type_env_put("", "__e__", ret_kind) + env;
             let v: String = ll_expr(toks, p + 1, n, ssa, envx);
-            p = ll_ppos(v);
-            ssa = ll_pssa(v);
+            p = ll_ppos(v); ssa = ll_pssa(v);
             if p < n && ll_k(toks, p) == "SEMI" { p = p + 1; }
             if ret_kind == "resim" {
                 ssa = ll_ret_resim(v, ssa);
@@ -190,7 +189,9 @@ pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String, env
                 ssa = ll_ret_resi(v, ssa);
             } else if ret_kind == "void" {
                 println("  ret void");
-            } else if ret_kind == "i32" || ret_kind == "opti" || ret_kind == "opts" {
+            } else if ret_kind == "opti" || ret_kind == "opts" {
+                ssa = ll_ret_opt(v, ret_kind, ssa);
+            } else if ret_kind == "i32" {
                 println("  ret i32 0");
             } else if ll_pptr(v) != "" {
                 ssa = ssa + 1;
@@ -226,8 +227,7 @@ pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String, env
             if bloc != "" { bptr = bloc; }
             let fp: String = ll_struct_field_ptr(bk, bptr, ll_t(toks, p + 2), ssa);
             let rhs: String = ll_expr(toks, p + 4, n, ll_pssa(fp), type_env_put("", "__e__", fk) + env);
-            p = ll_ppos(rhs);
-            ssa = ll_pssa(rhs);
+            p = ll_ppos(rhs); ssa = ll_pssa(rhs);
             if ll_pptr(rhs) != "" {
                 ssa = ssa + 1;
                 println("  " + ll_ssa(ssa) + " = load " + ll_ir_val(fk) + ", ptr " + ll_pptr(rhs));
