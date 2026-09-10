@@ -63,15 +63,6 @@ pub fn ll_ty_at(toks: List[String], pos: Int, n: Int) -> String {
     process_exit(1);
     return "i64";
 }
-fn ll_ty_esc(s: String) -> String {
-    let n: Int = chars_len(s); let mut o: String = ""; let mut i: Int = 0;
-    while i < n {
-        let c: String = char_at(s, i);
-        if c == "," { o = o + "|"; } else { o = o + c; }
-        i = i + 1;
-    }
-    return o;
-}
 fn ll_ty_struct_rich(toks: List[String], t: String, n: Int) -> String {
     let mut i: Int = 0;
     while i < n {
@@ -94,7 +85,7 @@ fn ll_ty_struct_rich(toks: List[String], t: String, n: Int) -> String {
                                 q = q + 1;
                                 let fk: String = ll_ty_at(toks, q, n);
                                 if !first { rich = rich + ","; }
-                                rich = rich + fld + ":" + ll_ty_esc(fk); first = false;
+                                rich = rich + fld + ":" + ll_st_map(fk, ",", "|"); first = false;
                                 q = ll_skip_type(toks, q, n);
                             }
                             if q >= n || ll_k(toks, q) != "RBRACE" { println("ERR\tllvm\tstruct rbrace"); process_exit(1); }

@@ -43,23 +43,6 @@ pub fn ll_skip_type(toks: List[String], pos: Int, n: Int) -> Int {
     return p;
 }
 
-pub fn ll_skip_paren(toks: List[String], pos: Int, n: Int) -> Int {
-    let mut p: Int = pos;
-    if p >= n || ll_k(toks, p) != "LPAREN" { return p; }
-    let mut d: Int = 0;
-    while p < n {
-        if ll_k(toks, p) == "LPAREN" { d = d + 1; }
-        if ll_k(toks, p) == "RPAREN" {
-            d = d - 1;
-            p = p + 1;
-            if d == 0 { return p; }
-        } else {
-            p = p + 1;
-        }
-    }
-    return p;
-}
-
 pub fn ll_skip_fn(toks: List[String], pos: Int, n: Int) -> Int {
     let mut p: Int = pos;
     if ll_k(toks, p) == "KW_PUB" { p = p + 1; }
@@ -111,6 +94,16 @@ pub fn ll_tmpa(n: Int) -> String {
 pub fn ll_hw(a: Int, b: Int) -> Int {
     if a > b { return a; }
     return b;
+}
+
+pub fn ll_st_map(s: String, a: String, b: String) -> String {
+    let n: Int = chars_len(s); let mut o: String = ""; let mut i: Int = 0;
+    while i < n {
+        let c: String = char_at(s, i);
+        if c == a { o = o + b; } else { o = o + c; }
+        i = i + 1;
+    }
+    return o;
 }
 
 pub fn ll_pterm(r: String) -> Int {

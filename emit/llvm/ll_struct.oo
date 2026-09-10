@@ -14,15 +14,6 @@ pub fn ll_is_struct(kind: String) -> Bool {
     if str_slice(kind, 0, 3) != "St_" { return false; }
     return true;
 }
-fn ll_st_map(s: String, a: String, b: String) -> String {
-    let n: Int = chars_len(s); let mut o: String = ""; let mut i: Int = 0;
-    while i < n {
-        let c: String = char_at(s, i);
-        if c == a { o = o + b; } else { o = o + c; }
-        i = i + 1;
-    }
-    return o;
-}
 fn ll_st_basek(kind: String) -> String {
     if !ll_is_struct(kind) { println("ERR\tllvm\tstruct kind " + kind); process_exit(1); }
     let h: Int = str_index_of(kind, "#");
@@ -63,15 +54,11 @@ pub fn ll_struct_field_ptr(kind: String, ptr: String, field: String, ssa0: Int) 
     return ll_pack(0, s, fk, ll_ssa(s));
 }
 pub fn ll_struct_field_load(kind: String, ssa: Int, ptr: String, field: String, ssa0: Int) -> String {
-    let fi: String = ll_struct_field(kind, field);
-    if fi == "" || str_index_of(fi, ":") < 0 { println("ERR\tllvm\tunknown field " + field); process_exit(1); }
-    let ci: Int = str_index_of(fi, ":");
-    let idx: String = str_slice(fi, 0, ci); let fk: String = str_slice(fi, ci + 1, chars_len(fi));
     if ptr == "" { println("ERR\tllvm\tstruct load no ptr"); process_exit(1); }
-    let s: Int = ssa0 + 1;
-    println("  " + ll_ssa(s) + " = getelementptr %" + ll_st_basek(kind) + ", ptr " + ptr + ", i32 0, i32 " + idx);
-    let t: Int = s + 1;
-    println("  " + ll_ssa(t) + " = load " + ll_ir_val(fk) + ", ptr " + ll_ssa(s));
+    let fp: String = ll_struct_field_ptr(kind, ptr, field, ssa0);
+    let fk: String = ll_pk(fp);
+    let t: Int = ll_pssa(fp) + 1;
+    println("  " + ll_ssa(t) + " = load " + ll_ir_val(fk) + ", ptr " + ll_pptr(fp));
     return ll_pack(0, t, fk, "");
 }
 pub fn ll_struct_declare(toks: List[String]) -> String {
@@ -161,42 +148,37 @@ pub fn ll_struct_emit_types(env: String) {
     }
 }
 fn ll_st_rr(fl: String, nm: String, is_ret: Int) {
+    let mut op: String = "retain";
+    if is_ret == 0 { op = "release"; }
     let n: Int = chars_len(fl); let mut i: Int = 0; let mut idx: Int = 0; let mut cur: String = ""; let mut s: Int = 10;
     while i <= n {
         let e: Bool = i == n || char_at(fl, i) == ",";
         if e {
             if cur != "" {
-                let fk: String = ll_st_map(cur, "|", ","); ll_st_one(nm, idx, fk, s, is_ret);
+                let fk: String = ll_st_map(cur, "|", ",");
+                if fk != "i64" && fk != "i1" && fk != "opti" {
+                    println("  " + ll_ssa(s) + " = getelementptr %St_" + nm + ", ptr %p, i32 0, i32 " + idx.to_string());
+                    if fk == "str" {
+                        println("  " + ll_ssa(s + 1) + " = load { ptr, i64 }, ptr " + ll_ssa(s));
+                        println("  call void @oo_str_" + op + "({ ptr, i64 } " + ll_ssa(s + 1) + ")");
+                    } else if fk == "slist" || fk == "ilist" {
+                        println("  call void @oo_" + fk + "_" + op + "(ptr byval(" + ll_ir_alloc(fk) + ") align 8 " + ll_ssa(s) + ")");
+                    } else if ll_is_struct(fk) {
+                        println("  call void @oo_" + op + "_" + ll_st_basek(fk) + "(ptr " + ll_ssa(s) + ")");
+                    } else {
+                        let mut inner: Int = 1;
+                        if fk == "resi" { inner = 2; }
+                        println("  " + ll_ssa(s + 1) + " = getelementptr " + ll_ir_alloc(fk) + ", ptr " + ll_ssa(s) + ", i32 0, i32 " + inner.to_string());
+                        println("  " + ll_ssa(s + 2) + " = load { ptr, i64 }, ptr " + ll_ssa(s + 1));
+                        println("  call void @oo_str_" + op + "({ ptr, i64 } " + ll_ssa(s + 2) + ")");
+                    }
+                }
                 if fk == "slist" || fk == "ilist" || ll_is_struct(fk) { s = s + 1; } else if fk == "i64" || fk == "i1" || fk == "opti" { s = s; } else { s = s + 2; }
                 idx = idx + 1; cur = "";
             }
             i = i + 1;
         } else { cur = cur + char_at(fl, i); i = i + 1; }
     }
-}
-fn ll_st_one(nm: String, idx: Int, fk: String, s: Int, is_ret: Int) {
-    let mut op: String = "retain";
-    if is_ret == 0 { op = "release"; }
-    if fk == "i64" || fk == "i1" || fk == "opti" { return; }
-    println("  " + ll_ssa(s) + " = getelementptr %St_" + nm + ", ptr %p, i32 0, i32 " + idx.to_string());
-    if fk == "str" {
-        println("  " + ll_ssa(s + 1) + " = load { ptr, i64 }, ptr " + ll_ssa(s));
-        println("  call void @oo_str_" + op + "({ ptr, i64 } " + ll_ssa(s + 1) + ")");
-        return;
-    }
-    if fk == "slist" || fk == "ilist" {
-        println("  call void @oo_" + fk + "_" + op + "(ptr byval(" + ll_ir_alloc(fk) + ") align 8 " + ll_ssa(s) + ")");
-        return;
-    }
-    if ll_is_struct(fk) {
-        println("  call void @oo_" + op + "_" + ll_st_basek(fk) + "(ptr " + ll_ssa(s) + ")");
-        return;
-    }
-    let mut inner: Int = 1;
-    if fk == "resi" { inner = 2; }
-    println("  " + ll_ssa(s + 1) + " = getelementptr " + ll_ir_alloc(fk) + ", ptr " + ll_ssa(s) + ", i32 0, i32 " + inner.to_string());
-    println("  " + ll_ssa(s + 2) + " = load { ptr, i64 }, ptr " + ll_ssa(s + 1));
-    println("  call void @oo_str_" + op + "({ ptr, i64 } " + ll_ssa(s + 2) + ")");
 }
 pub fn ll_struct_lit_at(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> String {
     let nm: String = ll_t(toks, pos);
@@ -235,7 +217,7 @@ pub fn ll_struct_lit_at(toks: List[String], pos: Int, n: Int, ssa0: Int, env: St
         if p >= n || ll_k(toks, p) != "COLON" { println("ERR\tllvm\tstruct lit colon"); process_exit(1); }
         p = p + 1;
         let v: String = ll_expr(toks, p, n, s, env); p = ll_ppos(v); s = ll_pssa(v);
-        if ll_pk(v) != fk && ll_st_basek(ll_pk(v) + "#") != ll_st_basek(fk + "#") && ll_pk(v) != fk { println("ERR\tllvm\tfield type " + fld2); process_exit(1); }
+        if ll_pk(v) != fk && ll_st_basek(ll_pk(v) + "#") != ll_st_basek(fk + "#") { println("ERR\tllvm\tfield type " + fld2); process_exit(1); }
         let fi: String = ll_struct_field(rich, fld2); let idx: String = str_slice(fi, 0, str_index_of(fi, ":"));
         s = s + 1;
         println("  " + ll_ssa(s) + " = getelementptr %St_" + nm + ", ptr " + a + ", i32 0, i32 " + idx);

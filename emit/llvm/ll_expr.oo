@@ -196,7 +196,7 @@ fn ll_primary(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> S
     }
     if k == "IDENT" {
         let nm: String = ll_t(toks, pos);
-        if pos + 1 < n && ll_k(toks, pos + 1) == "LBRACE" && type_env_get(env, "__st__" + nm) != "" && ll_is_struct(ll_struct_kind(nm)) {
+        if pos + 1 < n && ll_k(toks, pos + 1) == "LBRACE" && type_env_get(env, "__st__" + nm) != "" {
             return ll_struct_lit_at(toks, pos, n, ssa0, env);
         }
         if pos + 1 < n && ll_k(toks, pos + 1) == "LPAREN" {

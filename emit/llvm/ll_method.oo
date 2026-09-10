@@ -38,27 +38,15 @@ pub fn ll_method(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, env:
         println("  " + ll_ssa(s) + " = call { ptr, i64 } @oo_int_to_str(i64 " + ll_ssa(ssa) + ")");
         return ll_pack(0, s, "str", "");
     }
-    if m == "is_some" || m == "is_ok" {
-        let p: String = str_slice(ptr, 0, chars_len(ptr));
-        let s: Int = ssa0 + 1;
-        println("  " + ll_ssa(s) + " = getelementptr " + ll_ir_alloc(kind) + ", ptr " + p + ", i32 0, i32 0");
-        let s2: Int = s + 1;
-        println("  " + ll_ssa(s2) + " = load i32, ptr " + ll_ssa(s));
-        let s3: Int = s2 + 1;
-        println("  " + ll_ssa(s3) + " = icmp ne i32 " + ll_ssa(s2) + ", 0");
-        return ll_pack(0, s3, "i1", "");
+    if m == "is_some" || m == "is_ok" || m == "is_none" || m == "is_err" {
+        let s3: Int = ll_match_tag(kind, ptr, ssa0);
+        if m == "is_some" || m == "is_ok" { return ll_pack(0, s3, "i1", ""); }
+        let nz: Int = s3 + 1;
+        println("  " + ll_ssa(nz) + " = xor i1 " + ll_ssa(s3) + ", true");
+        return ll_pack(0, nz, "i1", "");
     }
     if m == "val" || m == "err" {
         return ll_field_load(kind, ssa, ptr, m, ssa0);
-    }
-    if m == "is_none" || m == "is_err" {
-        let s: Int = ssa0 + 1;
-        println("  " + ll_ssa(s) + " = getelementptr " + ll_ir_alloc(kind) + ", ptr " + ptr + ", i32 0, i32 0");
-        let s2: Int = s + 1;
-        println("  " + ll_ssa(s2) + " = load i32, ptr " + ll_ssa(s));
-        let s3: Int = s2 + 1;
-        println("  " + ll_ssa(s3) + " = icmp eq i32 " + ll_ssa(s2) + ", 0");
-        return ll_pack(0, s3, "i1", "");
     }
     if m == "contains" {
         if ll_pk(arg) == "" || ll_pk(arg) == "empty" {

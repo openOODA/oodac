@@ -87,16 +87,12 @@ pub fn ll_builtin(name: String, args: List[String], ssa0: Int, expect: String) -
         println("  call void @oo_slist_slice(ptr sret(%OoSList) align 8 " + out + ", ptr byval(%OoSList) align 8 " + ll_pptr(a0) + ", i64 " + a + ", i64 " + b + ")");
         return ll_pack(0, s, "slist", out);
     }
-    if name == "chars_len" && na >= 1 {
+    if (name == "chars_len" || name == "bytes_len") && na >= 1 {
+        let mut callee: String = "oo_chars_len";
+        if name == "bytes_len" { callee = "oo_bytes_len"; }
         let a0: String = ll_as_val(ll_arg(args, 0), ssa0);
         let s: Int = ll_pssa(a0) + 1;
-        println("  " + ll_ssa(s) + " = call i64 @oo_chars_len({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ")");
-        return ll_pack(0, s, "i64", "");
-    }
-    if name == "bytes_len" && na >= 1 {
-        let a0: String = ll_as_val(ll_arg(args, 0), ssa0);
-        let s: Int = ll_pssa(a0) + 1;
-        println("  " + ll_ssa(s) + " = call i64 @oo_bytes_len({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ")");
+        println("  " + ll_ssa(s) + " = call i64 @" + callee + "({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ")");
         return ll_pack(0, s, "i64", "");
     }
     if name == "char_at" && na >= 2 {
@@ -105,20 +101,13 @@ pub fn ll_builtin(name: String, args: List[String], ssa0: Int, expect: String) -
         println("  " + ll_ssa(s) + " = call { ptr, i64 } @oo_char_at({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ", i64 " + ll_ssa(ll_pssa(ll_arg(args, 1))) + ")");
         return ll_pack(0, s, "str", "");
     }
-    if name == "str_starts_with" && na >= 2 {
+    if (name == "str_starts_with" || name == "str_ends_with") && na >= 2 {
+        let mut callee: String = "oo_str_starts_with";
+        if name == "str_ends_with" { callee = "oo_str_ends_with"; }
         let a0: String = ll_as_val(ll_arg(args, 0), ssa0);
         let a1: String = ll_as_val(ll_arg(args, 1), ll_pssa(a0));
         let s: Int = ll_pssa(a1) + 1;
-        println("  " + ll_ssa(s) + " = call i32 @oo_str_starts_with({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ")");
-        let s2: Int = s + 1;
-        println("  " + ll_ssa(s2) + " = icmp ne i32 " + ll_ssa(s) + ", 0");
-        return ll_pack(0, s2, "i1", "");
-    }
-    if name == "str_ends_with" && na >= 2 {
-        let a0: String = ll_as_val(ll_arg(args, 0), ssa0);
-        let a1: String = ll_as_val(ll_arg(args, 1), ll_pssa(a0));
-        let s: Int = ll_pssa(a1) + 1;
-        println("  " + ll_ssa(s) + " = call i32 @oo_str_ends_with({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ")");
+        println("  " + ll_ssa(s) + " = call i32 @" + callee + "({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ")");
         let s2: Int = s + 1;
         println("  " + ll_ssa(s2) + " = icmp ne i32 " + ll_ssa(s) + ", 0");
         return ll_pack(0, s2, "i1", "");
