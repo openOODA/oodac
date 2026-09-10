@@ -1,0 +1,169 @@
+// # LLVM struct lists and struct results
+//
+// Logline: Lower List[Struct] to OoL helpers and Result[Struct] ctors.
+//
+// Setup: Kinds olist_Name and resSt_Name. Per-module IR defines. No emit/c import.
+//
+// Beats:
+//   1. olist kinds plus OoL type and new/len/get/push defines.
+//   2. Retain cascade on get and push copy.
+//   3. Builtin dispatch helpers for list ops.
+//   4. resSt types for struct payload results.
+import "ll_tok.oo";
+import "ll_ty.oo";
+
+pub fn ll_is_olist(kind: String) -> Bool {
+    if chars_len(kind) < 6 { return false; }
+    if str_slice(kind, 0, 6) != "olist_" { return false; }
+    return true;
+}
+
+pub fn ll_is_resst(kind: String) -> Bool {
+    if chars_len(kind) < 6 { return false; }
+    if str_slice(kind, 0, 6) != "resSt_" { return false; }
+    return true;
+}
+
+fn ll_olist_nm(kind: String) -> String {
+    return str_slice(kind, 6, chars_len(kind));
+}
+
+pub fn ll_olist_emit_one(nm: String) {
+    println("%OoL_" + nm + " = type { ptr, i64, i64 }");
+    println("%OoRes_St_" + nm + " = type { i32, %St_" + nm + ", %OoStr }");
+    println("define void @oo_l_" + nm + "_new(ptr sret(%OoL_" + nm + ") align 8 %out) {");
+    println("  store %OoL_" + nm + " { ptr null, i64 0, i64 0 }, ptr %out");
+    println("  ret void");
+    println("}");
+    println("define i64 @oo_l_" + nm + "_len(ptr %l) {");
+    println("  %lp = getelementptr %OoL_" + nm + ", ptr %l, i32 0, i32 1");
+    println("  %lv = load i64, ptr %lp");
+    println("  ret i64 %lv");
+    println("}");
+    println("define %St_" + nm + " @oo_l_" + nm + "_get(ptr %l, i64 %i) {");
+    println("  %lp = getelementptr %OoL_" + nm + ", ptr %l, i32 0, i32 1");
+    println("  %len = load i64, ptr %lp");
+    println("  %ok = icmp ult i64 %i, %len");
+    println("  br i1 %ok, label %gok_" + nm + ", label %gbad_" + nm);
+    println("gbad_" + nm + ":");
+    println("  call void @oo_process_exit(i64 1)");
+    println("  unreachable");
+    println("gok_" + nm + ":");
+    println("  %dp = getelementptr %OoL_" + nm + ", ptr %l, i32 0, i32 0");
+    println("  %data = load ptr, ptr %dp");
+    println("  %ep = getelementptr %St_" + nm + ", ptr %data, i64 %i");
+    println("  %v = load %St_" + nm + ", ptr %ep");
+    println("  call void @oo_retain_St_" + nm + "(ptr %ep)");
+    println("  ret %St_" + nm + " %v");
+    println("}");
+    println("define void @oo_l_" + nm + "_push(ptr sret(%OoL_" + nm + ") align 8 %out, ptr %l, ptr %vp) {");
+    println("  %lenp = getelementptr %OoL_" + nm + ", ptr %l, i32 0, i32 1");
+    println("  %len = load i64, ptr %lenp");
+    println("  %capp = getelementptr %OoL_" + nm + ", ptr %l, i32 0, i32 2");
+    println("  %cap = load i64, ptr %capp");
+    println("  %dp0 = getelementptr %OoL_" + nm + ", ptr %l, i32 0, i32 0");
+    println("  %data0 = load ptr, ptr %dp0");
+    println("  %hascap = icmp ne i64 %cap, 0");
+    println("  %ncap0 = select i1 %hascap, i64 %cap, i64 8");
+    println("  %ncap = alloca i64, align 8");
+    println("  store i64 %ncap0, ptr %ncap");
+    println("  br label %pgrow_" + nm);
+    println("pgrow_" + nm + ":");
+    println("  %nc = load i64, ptr %ncap");
+    println("  %need = add i64 %len, 1");
+    println("  %enough = icmp uge i64 %nc, %need");
+    println("  br i1 %enough, label %palloc_" + nm + ", label %pdouble_" + nm);
+    println("pdouble_" + nm + ":");
+    println("  %nd = mul i64 %nc, 2");
+    println("  store i64 %nd, ptr %ncap");
+    println("  br label %pgrow_" + nm);
+    println("palloc_" + nm + ":");
+    println("  %ncapf = load i64, ptr %ncap");
+    println("  %szp = getelementptr %St_" + nm + ", ptr null, i32 1");
+    println("  %esz = ptrtoint ptr %szp to i64");
+    println("  %ndata = call ptr @oo_list_alloc_payload(i64 %esz, i64 %ncapf)");
+    println("  %ci = alloca i64, align 8");
+    println("  store i64 0, ptr %ci");
+    println("  br label %pcopy_" + nm);
+    println("pcopy_" + nm + ":");
+    println("  %iv = load i64, ptr %ci");
+    println("  %more = icmp ult i64 %iv, %len");
+    println("  br i1 %more, label %pstep_" + nm + ", label %papp_" + nm);
+    println("pstep_" + nm + ":");
+    println("  %sp = getelementptr %St_" + nm + ", ptr %data0, i64 %iv");
+    println("  %sv = load %St_" + nm + ", ptr %sp");
+    println("  call void @oo_retain_St_" + nm + "(ptr %sp)");
+    println("  %dp2 = getelementptr %St_" + nm + ", ptr %ndata, i64 %iv");
+    println("  store %St_" + nm + " %sv, ptr %dp2");
+    println("  %iv2 = add i64 %iv, 1");
+    println("  store i64 %iv2, ptr %ci");
+    println("  br label %pcopy_" + nm);
+    println("papp_" + nm + ":");
+    println("  %v = load %St_" + nm + ", ptr %vp");
+    println("  call void @oo_retain_St_" + nm + "(ptr %vp)");
+    println("  %ap = getelementptr %St_" + nm + ", ptr %ndata, i64 %len");
+    println("  store %St_" + nm + " %v, ptr %ap");
+    println("  %nl = add i64 %len, 1");
+    println("  %r0 = insertvalue %OoL_" + nm + " { ptr null, i64 0, i64 0 }, ptr %ndata, 0");
+    println("  %r1 = insertvalue %OoL_" + nm + " %r0, i64 %nl, 1");
+    println("  %r2 = insertvalue %OoL_" + nm + " %r1, i64 %ncapf, 2");
+    println("  store %OoL_" + nm + " %r2, ptr %out");
+    println("  ret void");
+    println("}");
+}
+
+pub fn ll_olist_new(expect: String, ssa0: Int) -> String {
+    let nm: String = ll_olist_nm(expect);
+    let a: String = ll_tmpa(ssa0 + 1);
+    println("  " + a + " = alloca %OoL_" + nm + ", align 8");
+    println("  call void @oo_l_" + nm + "_new(ptr sret(%OoL_" + nm + ") align 8 " + a + ")");
+    return ll_pack(0, ssa0 + 1, expect, a);
+}
+
+pub fn ll_olist_len(arg: String, ssa0: Int) -> String {
+    let nm: String = ll_olist_nm(ll_pk(arg));
+    let a0: String = ll_ensure_ptr(arg, ssa0);
+    let s: Int = ll_pssa(a0) + 1;
+    println("  " + ll_ssa(s) + " = call i64 @oo_l_" + nm + "_len(ptr " + ll_pptr(a0) + ")");
+    return ll_pack(0, s, "i64", "");
+}
+
+pub fn ll_olist_get(arg: String, idx: String, ssa0: Int, expect: String) -> String {
+    let nm: String = ll_olist_nm(ll_pk(arg));
+    let a0: String = ll_ensure_ptr(arg, ssa0);
+    let s: Int = ll_pssa(a0) + 1;
+    println("  " + ll_ssa(s) + " = call %St_" + nm + " @oo_l_" + nm + "_get(ptr " + ll_pptr(a0) + ", i64 " + ll_ssa(ll_pssa(idx)) + ")");
+    let mut rk: String = "St_" + nm;
+    if ll_is_struct(expect) { rk = expect; }
+    return ll_pack(0, s, rk, "");
+}
+
+pub fn ll_olist_push(arg: String, val: String, ssa0: Int) -> String {
+    let nm: String = ll_olist_nm(ll_pk(arg));
+    let a0: String = ll_ensure_ptr(arg, ssa0);
+    let vp: String = ll_ensure_ptr(val, ll_pssa(a0));
+    let s: Int = ll_pssa(vp) + 1;
+    let out: String = ll_tmpa(s);
+    println("  " + out + " = alloca %OoL_" + nm + ", align 8");
+    println("  call void @oo_l_" + nm + "_push(ptr sret(%OoL_" + nm + ") align 8 " + out + ", ptr " + ll_pptr(a0) + ", ptr " + ll_pptr(vp) + ")");
+    return ll_pack(0, s, ll_pk(arg), out);
+}
+
+pub fn ll_olist_builtin(name: String, args: List[String], ssa0: Int, expect: String) -> String {
+    if name == "list_new" && ll_is_olist(expect) {
+        return ll_olist_new(expect, ssa0);
+    }
+    let na: Int = list_len(args);
+    if na < 1 { return ""; }
+    if !ll_is_olist(ll_pk(list_get(args, 0))) { return ""; }
+    if name == "list_len" && na >= 1 {
+        return ll_olist_len(list_get(args, 0), ssa0);
+    }
+    if name == "list_get" && na >= 2 {
+        return ll_olist_get(list_get(args, 0), list_get(args, 1), ssa0, expect);
+    }
+    if name == "list_push" && na >= 2 {
+        return ll_olist_push(list_get(args, 0), list_get(args, 1), ssa0);
+    }
+    return "";
+}

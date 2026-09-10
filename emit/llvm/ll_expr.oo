@@ -20,6 +20,14 @@ pub fn ll_expr(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> 
     return ll_binop(toks, pos, n, ssa0, env);
 }
 fn ll_unary(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> String {
+    if pos < n && ll_k(toks, pos) == "AMP" {
+        if pos + 1 >= n || ll_k(toks, pos + 1) != "IDENT" {
+            println("ERR\tllvm\taddress of non-ident");
+            process_exit(1);
+        }
+        let ad: String = ll_addr_ident(ll_t(toks, pos + 1), env, ssa0);
+        return ll_pack(pos + 2, ll_pssa(ad), ll_pk(ad), ll_pptr(ad));
+    }
     if pos < n && ll_k(toks, pos) == "BANG" {
         let r: String = ll_unary(toks, pos + 1, n, ssa0, env);
         let s: Int = ll_pssa(r) + 1;

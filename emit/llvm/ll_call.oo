@@ -79,6 +79,18 @@ pub fn ll_str_gep(toks: List[String], pos: Int, ssa0: Int) -> String {
     return ll_pack(pos + 1, n2, "str", "");
 }
 
+pub fn ll_addr_ident(name: String, env: String, ssa0: Int) -> String {
+    let k: String = type_env_get(env, name);
+    if k == "" {
+        println("ERR\tllvm\tundefined " + name);
+        process_exit(1);
+    }
+    let mut ptr: String = ll_var(name);
+    let loc: String = type_env_get(env, "__l__" + name);
+    if loc != "" { ptr = loc; }
+    return ll_pack(0, ssa0, k, ptr);
+}
+
 pub fn ll_load_ident(name: String, env: String, ssa0: Int) -> String {
     let k: String = type_env_get(env, name);
     if k == "" {

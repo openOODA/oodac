@@ -4,6 +4,7 @@
 // Beats: St kinds plus rich tables; %St types plus retain/release; literals fail closed.
 import "ll_tok.oo";
 import "ll_ty.oo";
+import "ll_struct_list.oo";
 import "types/types_core.oo";
 import "lex/token_parse_int.oo";
 pub fn ll_struct_kind(name: String) -> String {
@@ -106,6 +107,7 @@ pub fn ll_struct_emit_types(env: String) {
     println("declare void @oo_slist_release(ptr byval(%OoSList) align 8)");
     println("declare void @oo_ilist_retain(ptr byval(%OoIList) align 8)");
     println("declare void @oo_ilist_release(ptr byval(%OoIList) align 8)");
+    println("declare ptr @oo_list_alloc_payload(i64, i64)");
     let n: Int = chars_len(env); let mut i: Int = 0;
     while i < n {
         if i + 6 <= n && str_slice(env, i, i + 6) == "__st__" {
@@ -142,6 +144,7 @@ pub fn ll_struct_emit_types(env: String) {
             ll_st_rr(fl, nm, 0);
             println("  ret void");
             println("}");
+            ll_olist_emit_one(nm);
             i = c;
         }
         i = i + 1;

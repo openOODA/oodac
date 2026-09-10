@@ -68,6 +68,7 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String) -> Int {
     let mut caps: String = "";
     let mut form: String = "";
     let mut plist: String = "";
+    let mut refs: String = ";";
     while p < n && ll_k(toks, p) != "RPAREN" {
         if ll_k(toks, p) == "COMMA" { p = p + 1; continue; }
         if ll_k(toks, p) == "IDENT" {
@@ -77,8 +78,10 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String) -> Int {
                 p = p + 1;
                 let cn: String = ll_peek_cap_name(toks, p, n);
                 let g: String = ll_cap_grant(cn);
+                let isref: Bool = p < n && ll_k(toks, p) == "AMP";
                 let k: String = ll_ty_at(toks, p, n);
                 env = type_env_put(env, pn, k);
+                if isref { refs = refs + pn + ";"; }
                 if g != "" { caps = caps + pn + "=" + g + ";"; }
                 if form != "" { form = form + "\t"; }
                 form = form + pn + ":" + k;
@@ -173,13 +176,17 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String) -> Int {
                 let col: Int = str_index_of(pair, ":");
                 let pn: String = str_slice(pair, 0, col);
                 let k: String = str_slice(pair, col + 1, chars_len(pair));
-                println("  " + ll_var(pn) + " = alloca " + ll_ir_alloc(k) + ", align 8");
-                if ll_is_mem(k) {
-                    ssa = ssa + 1;
-                    println("  " + ll_ssa(ssa) + " = load " + ll_ir_val(k) + ", ptr %p_" + pn);
-                    println("  store " + ll_ir_val(k) + " " + ll_ssa(ssa) + ", ptr " + ll_var(pn));
+                if str_index_of(refs, ";" + pn + ";") >= 0 && ll_is_mem(k) {
+                    env = type_env_put(env, "__l__" + pn, "%p_" + pn);
                 } else {
-                    println("  store " + ll_ir_val(k) + " %p_" + pn + ", ptr " + ll_var(pn));
+                    println("  " + ll_var(pn) + " = alloca " + ll_ir_alloc(k) + ", align 8");
+                    if ll_is_mem(k) {
+                        ssa = ssa + 1;
+                        println("  " + ll_ssa(ssa) + " = load " + ll_ir_val(k) + ", ptr %p_" + pn);
+                        println("  store " + ll_ir_val(k) + " " + ll_ssa(ssa) + ", ptr " + ll_var(pn));
+                    } else {
+                        println("  store " + ll_ir_val(k) + " %p_" + pn + ", ptr " + ll_var(pn));
+                    }
                 }
             }
             start = fi + 1;

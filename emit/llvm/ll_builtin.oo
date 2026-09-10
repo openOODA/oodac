@@ -13,6 +13,7 @@ import "ll_tok.oo";
 import "ll_ty.oo";
 import "ll_call.oo";
 import "ll_ctor.oo";
+import "ll_struct_list.oo";
 
 pub fn ll_arg(args: List[String], i: Int) -> String {
     return list_get(args, i);
@@ -32,10 +33,17 @@ pub fn ll_list_new(expect: String, ssa0: Int) -> String {
 }
 
 pub fn ll_builtin(name: String, args: List[String], ssa0: Int, expect: String) -> String {
+    if name == "list_new" && ll_is_olist(expect) {
+        return ll_olist_new(expect, ssa0);
+    }
     if name == "list_new" {
         return ll_list_new(expect, ssa0);
     }
     let na: Int = list_len(args);
+    if name == "list_len" || name == "list_get" || name == "list_push" {
+        let ob: String = ll_olist_builtin(name, args, ssa0, expect);
+        if ob != "" { return ob; }
+    }
     if name == "list_len" && na >= 1 {
         let a0: String = ll_ensure_ptr(ll_arg(args, 0), ssa0);
         let k: String = ll_pk(a0);

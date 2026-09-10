@@ -11,6 +11,14 @@
 
 import "ll_tok.oo";
 import "ll_ty.oo";
+import "ll_struct.oo";
+
+fn ll_resst_base(expect: String) -> String {
+    if chars_len(expect) >= 6 && str_slice(expect, 0, 6) == "resSt_" {
+        return str_slice(expect, 6, chars_len(expect));
+    }
+    return "";
+}
 
 pub fn ll_ret_resi(v: String, ssa0: Int) -> Int {
     if ll_pk(v) != "resi" {
@@ -124,6 +132,24 @@ fn ll_ctor_ok(arg: String, ssa0: Int, expect: String) -> String {
         println("  store %OoResS " + ll_ssa(s2) + ", ptr " + a);
         return ll_pack(0, s2, "ress", a);
     }
+    if ll_is_struct(ll_pk(arg)) {
+        let mut rb: String = ll_resst_base(expect);
+        if rb == "" {
+            let ak: String = ll_pk(arg);
+            let hh: Int = str_index_of(ak, "#");
+            if hh < 0 { rb = str_slice(ak, 3, chars_len(ak)); }
+            else { rb = str_slice(ak, 3, hh); }
+        }
+        if rb != "" {
+            let av: String = ll_as_val(arg, ssa0);
+            let a: String = ll_tmpa(ll_pssa(av) + 1);
+            println("  " + a + " = alloca %OoRes_St_" + rb + ", align 8");
+            let os: Int = ll_pssa(av) + 1;
+            println("  " + ll_ssa(os) + " = insertvalue %OoRes_St_" + rb + " { i32 1, %St_" + rb + " zeroinitializer, %OoStr { ptr null, i64 0 } }, %St_" + rb + " " + ll_ssa(ll_pssa(av)) + ", 1");
+            println("  store %OoRes_St_" + rb + " " + ll_ssa(os) + ", ptr " + a);
+            return ll_pack(0, os, "resSt_" + rb, a);
+        }
+    }
     println("ERR\tllvm\tOk kind");
     process_exit(1);
     return arg;
@@ -135,6 +161,16 @@ fn ll_ctor_err(arg: String, ssa0: Int, expect: String) -> String {
         process_exit(1);
     }
     let av: String = ll_as_val(arg, ssa0);
+    if ll_resst_base(expect) != "" {
+        let rb: String = ll_resst_base(expect);
+        let a: String = ll_tmpa(ll_pssa(av) + 1);
+        println("  " + a + " = alloca %OoRes_St_" + rb + ", align 8");
+        let os: Int = ll_oostr_from_pair(ll_pssa(av));
+        let s2: Int = os + 1;
+        println("  " + ll_ssa(s2) + " = insertvalue %OoRes_St_" + rb + " { i32 0, %St_" + rb + " zeroinitializer, %OoStr { ptr null, i64 0 } }, %OoStr " + ll_ssa(os) + ", 2");
+        println("  store %OoRes_St_" + rb + " " + ll_ssa(s2) + ", ptr " + a);
+        return ll_pack(0, s2, expect, a);
+    }
     if expect == "ress" {
         let a: String = ll_tmpa(ll_pssa(av) + 1);
         println("  " + a + " = alloca %OoResS, align 8");

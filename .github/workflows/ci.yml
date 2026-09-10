@@ -210,6 +210,7 @@ jobs:
           llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/result_val_err.oo "$(printf '42\nboom')"
           llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/str_starts_with.oo "$(printf '1\n1')"
           llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/struct_field.oo "$(printf '41\nmdef\n7\n41\n100\n101')"
+          llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/struct_list.oo "$(printf '2\nx\n1\n2\n2\n2\n3')"
           llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/user_fn_call.oo "$(printf '42\nhi\n55')"
           llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/multi_diamond.oo 112
           llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/cap_spread.oo 7

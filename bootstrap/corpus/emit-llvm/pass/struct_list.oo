@@ -1,0 +1,41 @@
+// # Probe struct list hostile
+// Logline: List of structs must fail today, pass after WS5.
+// Setup: No caps. Uses MacroDef-shaped flow with borrow param.
+// Beats:
+//   1. Decl item table with List field.
+//   2. new push get len iterate plus borrowed count.
+type Item = struct {
+    name: String,
+    val: Int
+};
+type Table = struct {
+    defs: List[Item],
+    count: Int
+};
+pub fn table_count(tab: &Table) -> Int {
+    return tab.count;
+}
+pub fn main() {
+    let empty: List[Item] = list_new();
+    let a = Item { name: "x", val: 1 };
+    let b = Item { name: "y", val: 2 };
+    let l1 = list_push(empty, a);
+    let l2 = list_push(l1, b);
+    println(list_len(l2));
+    let f: Item = list_get(l2, 0);
+    println(f.name);
+    println(f.val);
+    let g: Item = list_get(l2, 1);
+    println(g.val);
+    let mut t = Table { defs: l2, count: 2 };
+    println(table_count(t));
+    println(t.count);
+    let mut i: Int = 0;
+    let mut s: Int = 0;
+    while i < list_len(t.defs) {
+        let e: Item = list_get(t.defs, i);
+        s = s + e.val;
+        i = i + 1;
+    }
+    println(s);
+}

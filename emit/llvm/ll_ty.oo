@@ -14,6 +14,7 @@ import "ll_tok.oo";
 pub fn ll_ty_at(toks: List[String], pos: Int, n: Int) -> String {
     let mut p: Int = pos;
     if p < n && ll_k(toks, p) == "AMP" { p = p + 1; }
+    if p < n && ll_k(toks, p) == "KW_MUT" { p = p + 1; }
     if p >= n || ll_k(toks, p) != "IDENT" {
         println("ERR\tllvm\ttype token");
         process_exit(1);
@@ -35,6 +36,7 @@ pub fn ll_ty_at(toks: List[String], pos: Int, n: Int) -> String {
             let e: String = ll_t(toks, p + 2);
             if e == "String" { return "slist"; }
             if e == "Int" { return "ilist"; }
+            if ll_ty_struct_rich(toks, e, n) != "" { return "olist_" + e; }
         }
         println("ERR\tllvm\tlist kind");
         process_exit(1);
@@ -44,6 +46,7 @@ pub fn ll_ty_at(toks: List[String], pos: Int, n: Int) -> String {
             let e: String = ll_t(toks, p + 2);
             if e == "String" { return "ress"; }
             if e == "Int" { return "resi"; }
+            if ll_ty_struct_rich(toks, e, n) != "" { return "resSt_" + e; }
         }
         println("ERR\tllvm\tresult kind");
         process_exit(1);
@@ -150,6 +153,12 @@ pub fn ll_ir_alloc(kind: String) -> String {
         if h < 0 { return "%" + kind; }
         return "%" + str_slice(kind, 0, h);
     }
+    if chars_len(kind) >= 6 && str_slice(kind, 0, 6) == "olist_" {
+        return "%OoL_" + str_slice(kind, 6, chars_len(kind));
+    }
+    if chars_len(kind) >= 6 && str_slice(kind, 0, 6) == "resSt_" {
+        return "%OoRes_St_" + str_slice(kind, 6, chars_len(kind));
+    }
     return "i64";
 }
 
@@ -167,6 +176,7 @@ pub fn ll_is_agg(kind: String) -> Bool {
     if kind == "ress" { return true; }
     if kind == "resi" { return true; }
     if chars_len(kind) >= 3 && str_slice(kind, 0, 3) == "St_" { return true; }
+    if chars_len(kind) >= 6 && (str_slice(kind, 0, 6) == "olist_" || str_slice(kind, 0, 6) == "resSt_") { return true; }
     return false;
 }
 pub fn ll_is_mem(kind: String) -> Bool {
@@ -177,10 +187,13 @@ pub fn ll_is_mem(kind: String) -> Bool {
     if kind == "opti" { return true; }
     if kind == "opts" { return true; }
     if chars_len(kind) >= 3 && str_slice(kind, 0, 3) == "St_" { return true; }
+    if chars_len(kind) >= 6 && (str_slice(kind, 0, 6) == "olist_" || str_slice(kind, 0, 6) == "resSt_") { return true; }
     return false;
 }
 
 pub fn ll_pass(kind: String) -> String {
+    if chars_len(kind) >= 3 && str_slice(kind, 0, 3) == "St_" { return "ptr"; }
+    if chars_len(kind) >= 6 && (str_slice(kind, 0, 6) == "olist_" || str_slice(kind, 0, 6) == "resSt_") { return "ptr"; }
     if ll_is_mem(kind) {
         return "ptr byval(" + ll_ir_alloc(kind) + ") align 8";
     }
