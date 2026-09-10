@@ -14,8 +14,24 @@
 
 import "ll_tok.oo";
 import "ll_ty.oo";
+import "ll_struct.oo";
 
 pub fn ll_method(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, env: String, arg: String) -> String {
+    if ll_is_struct(kind) {
+        let fi: String = ll_struct_field(kind, m);
+        if fi == "" {
+            println("ERR\tllvm\tunknown field " + m);
+            process_exit(1);
+        }
+        let fr: String = ll_struct_field_load(kind, ssa, ptr, m, ssa0);
+        if ll_pptr(fr) == "" && ll_is_struct(ll_pk(fr)) {
+            let a: String = ll_tmpa(ll_pssa(fr) + 1);
+            println("  " + a + " = alloca " + ll_ir_alloc(ll_pk(fr)) + ", align 8");
+            println("  store " + ll_ir_val(ll_pk(fr)) + " " + ll_ssa(ll_pssa(fr)) + ", ptr " + a);
+            return ll_pack(0, ll_pssa(fr) + 1, ll_pk(fr), a);
+        }
+        return fr;
+    }
     if m == "to_string" {
         if kind == "str" { return ll_pack(0, ssa, "str", ptr); }
         let s: Int = ssa0 + 1;

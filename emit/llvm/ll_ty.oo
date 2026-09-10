@@ -57,9 +57,56 @@ pub fn ll_ty_at(toks: List[String], pos: Int, n: Int) -> String {
         println("ERR\tllvm\toption kind");
         process_exit(1);
     }
+    let sr: String = ll_ty_struct_rich(toks, t, n);
+    if sr != "" { return sr; }
     println("ERR\tllvm\tunknown type " + t);
     process_exit(1);
     return "i64";
+}
+fn ll_ty_esc(s: String) -> String {
+    let n: Int = chars_len(s); let mut o: String = ""; let mut i: Int = 0;
+    while i < n {
+        let c: String = char_at(s, i);
+        if c == "," { o = o + "|"; } else { o = o + c; }
+        i = i + 1;
+    }
+    return o;
+}
+fn ll_ty_struct_rich(toks: List[String], t: String, n: Int) -> String {
+    let mut i: Int = 0;
+    while i < n {
+        if ll_k(toks, i) == "KW_TYPE" {
+            let mut q: Int = i + 1;
+            if q < n && ll_k(toks, q) == "IDENT" && ll_t(toks, q) == t {
+                q = q + 1;
+                if q < n && ll_k(toks, q) == "EQ" {
+                    q = q + 1;
+                    if q < n && ll_k(toks, q) == "IDENT" && ll_t(toks, q) == "struct" {
+                        q = q + 1;
+                        if q < n && ll_k(toks, q) == "LBRACE" {
+                            q = q + 1;
+                            let mut rich: String = "St_" + t + "#"; let mut first: Bool = true;
+                            while q < n && ll_k(toks, q) != "RBRACE" {
+                                if ll_k(toks, q) == "COMMA" { q = q + 1; continue; }
+                                if ll_k(toks, q) != "IDENT" { println("ERR\tllvm\tstruct field"); process_exit(1); }
+                                let fld: String = ll_t(toks, q); q = q + 1;
+                                if q >= n || ll_k(toks, q) != "COLON" { println("ERR\tllvm\tstruct colon"); process_exit(1); }
+                                q = q + 1;
+                                let fk: String = ll_ty_at(toks, q, n);
+                                if !first { rich = rich + ","; }
+                                rich = rich + fld + ":" + ll_ty_esc(fk); first = false;
+                                q = ll_skip_type(toks, q, n);
+                            }
+                            if q >= n || ll_k(toks, q) != "RBRACE" { println("ERR\tllvm\tstruct rbrace"); process_exit(1); }
+                            return rich;
+                        }
+                    }
+                }
+            }
+        }
+        i = i + 1;
+    }
+    return "";
 }
 
 pub fn ll_cap_grant(ty: String) -> String {
@@ -107,6 +154,11 @@ pub fn ll_ir_alloc(kind: String) -> String {
     if kind == "ress" { return "%OoResS"; }
     if kind == "resi" { return "%OoResI"; }
     if kind == "i1" { return "i1"; }
+    if chars_len(kind) >= 3 && str_slice(kind, 0, 3) == "St_" {
+        let h: Int = str_index_of(kind, "#");
+        if h < 0 { return "%" + kind; }
+        return "%" + str_slice(kind, 0, h);
+    }
     return "i64";
 }
 
@@ -123,9 +175,9 @@ pub fn ll_is_agg(kind: String) -> Bool {
     if kind == "opts" { return true; }
     if kind == "ress" { return true; }
     if kind == "resi" { return true; }
+    if chars_len(kind) >= 3 && str_slice(kind, 0, 3) == "St_" { return true; }
     return false;
 }
-
 pub fn ll_is_mem(kind: String) -> Bool {
     if kind == "slist" { return true; }
     if kind == "ilist" { return true; }
@@ -133,6 +185,7 @@ pub fn ll_is_mem(kind: String) -> Bool {
     if kind == "resi" { return true; }
     if kind == "opti" { return true; }
     if kind == "opts" { return true; }
+    if chars_len(kind) >= 3 && str_slice(kind, 0, 3) == "St_" { return true; }
     return false;
 }
 

@@ -26,5 +26,6 @@ bootstrap/corpus/emit-llvm/pass/result_val_err.oo c-fail def9d6bd7c0e0627 -  # C
 bootstrap/corpus/emit-llvm/pass/str_concat.oo parity aec070645fe53ee3 aec070645fe53ee3  # prints foobar
 bootstrap/corpus/emit-llvm/pass/str_escapes.oo parity 616cb1e7ef1b7a62 616cb1e7ef1b7a62  # 11 plus control bytes, exact
 bootstrap/corpus/emit-llvm/pass/str_starts_with.oo parity ad0fadf63cc7cd77 ad0fadf63cc7cd77  # prints 1/1
+bootstrap/corpus/emit-llvm/pass/struct_field.oo parity f4b907e89b1eca6d f4b907e89b1eca6d  # prints 41/mdef/7/41/100/101; decl+literal+chain+store+call-arg
 bootstrap/corpus/emit-llvm/pass/user_fn_call.oo parity 4358298b6bb27f48 4358298b6bb27f48  # prints 42/hi/55
 bootstrap/corpus/emit-llvm/pass/while_sum.oo parity 917df3320d778ddb 917df3320d778ddb  # prints 10

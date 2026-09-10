@@ -12,6 +12,7 @@
 import "ll_tok.oo";
 import "ll_rt.oo";
 import "ll_fn.oo";
+import "ll_struct.oo";
 import "types/token_search.oo";
 import "types/types_core.oo";
 
@@ -100,7 +101,9 @@ pub fn ll_emit_stream_toks(toks: List[String]) {
         process_exit(1);
     }
     ll_rt_header(toks);
-    let sigs: String = ll_collect_sigs(toks);
+    let stenv: String = ll_struct_declare(toks);
+    ll_struct_emit_types(stenv);
+    let sigs: String = ll_collect_sigs(toks) + stenv;
     let keep: String = ll_reachable(toks, sigs);
     let n: Int = list_len(toks);
     let mut pos: Int = 0;

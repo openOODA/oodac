@@ -1,0 +1,46 @@
+// # LLVM struct field probe, Agent B slice
+//
+// Logline: Field read, chain, paren, store, call-arg pass after A+B land; fail closed before.
+//
+// Setup: check stays green on the active code at all times; emit-llvm fails
+//   closed until Agent A lands. Hostile unknown-field case is commented at the
+//   bottom: activating it must fail check with has no field, and past check,
+//   emit-llvm with ERR llvm unknown field. Expect run output 41 mdef 7 41 100 101.
+//
+// Beats:
+//   1. tab.count reads through the ll_method struct dispatch.
+//   2. tab.inner.val chains and (tab).count parens reuse the same path.
+//   3. tab.count = v stores through the ll_stmt IDENT DOT IDENT EQ arm.
+//   4. bump(tab.count) passes a loaded field as a call argument.
+
+pub type Inner = struct {
+    val: Int
+};
+
+pub type Rec = struct {
+    count: Int,
+    name: String,
+    inner: Inner
+};
+
+pub fn bump(c: Int) -> Int {
+    return c + 1;
+}
+
+pub fn main() {
+    let mut tab = Rec { count: 41, name: "mdef", inner: Inner { val: 7 } };
+    println(tab.count);
+    println(tab.name);
+    println(tab.inner.val);
+    println((tab).count);
+    tab.count = 100;
+    println(tab.count);
+    println(bump(tab.count));
+}
+
+// HOSTILE (must fail closed): uncomment the fn below to verify refuse.
+// check must reject with: struct 'Rec' has no field 'nope'.
+// The ll_method struct arm mirrors this at emit stage: ERR llvm unknown field nope.
+// pub fn hostile_unknown_field(r: Rec) -> Int {
+//     return r.nope;
+// }
