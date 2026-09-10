@@ -1,13 +1,13 @@
 // # differential case: let shadowing a loop binding
 //
-// Logline: C accepts, LLVM refuses; the ledger pins the split.
+// Logline: Both backends accept; LLVM shadow alloca matches C-scoping.
 //
 // Setup: Loop var i, then let i inside the body.
 //
 // Beats:
-//   1. LLVM fails closed with shadowing refusal.
+//   1. LLVM binds a fresh shadow alloca and prints 5 three times.
 //   2. C runs C-scoping and prints 5 three times.
-//   3. Ledger class c-only pins both facts; unifying is item-5 fix work.
+//   3. Ledger class parity pins the agreement.
 
 pub fn main() {
     for i in 0..3 {

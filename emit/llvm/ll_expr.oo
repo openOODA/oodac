@@ -7,7 +7,7 @@
 // Beats:
 //   1. INT/STRING/IDENT load, user calls, and builtins.
 //   2. .to_string .is_some .is_none .is_ok .is_err .val .err methods.
-//   3. + == != and string concat via oo_str_concat / oo_str_eq.
+//   3. C-like precedence: || < && < compare < + - < * / % via ll_binop/ll_cmp/ll_add/ll_mul.
 import "ll_tok.oo";
 import "ll_ty.oo";
 import "types/types_core.oo";
@@ -72,11 +72,45 @@ fn ll_postfix(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> S
 }
 
 fn ll_cmp(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> String {
+    let mut r: String = ll_add(toks, pos, n, ssa0, env);
+    let mut p: Int = ll_ppos(r);
+    while p < n {
+        let op: String = ll_k(toks, p);
+        if op != "EQEQ" && op != "NEQ" && op != "LT" && op != "GT" && op != "LTE" && op != "GTE" {
+            return r;
+        }
+        p = p + 1;
+        let rhs: String = ll_add(toks, p, n, ll_pssa(r), env);
+        r = ll_apply_binop(op, r, rhs);
+        p = ll_ppos(rhs);
+        r = ll_pack(p, ll_pssa(r), ll_pk(r), ll_pptr(r));
+    }
+    return r;
+}
+
+fn ll_add(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> String {
+    let mut r: String = ll_mul(toks, pos, n, ssa0, env);
+    let mut p: Int = ll_ppos(r);
+    while p < n {
+        let op: String = ll_k(toks, p);
+        if op != "PLUS" && op != "MINUS" {
+            return r;
+        }
+        p = p + 1;
+        let rhs: String = ll_mul(toks, p, n, ll_pssa(r), env);
+        r = ll_apply_binop(op, r, rhs);
+        p = ll_ppos(rhs);
+        r = ll_pack(p, ll_pssa(r), ll_pk(r), ll_pptr(r));
+    }
+    return r;
+}
+
+fn ll_mul(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> String {
     let mut r: String = ll_unary(toks, pos, n, ssa0, env);
     let mut p: Int = ll_ppos(r);
     while p < n {
         let op: String = ll_k(toks, p);
-        if op != "PLUS" && op != "MINUS" && op != "EQEQ" && op != "NEQ" && op != "LT" && op != "GT" && op != "LTE" && op != "GTE" {
+        if op != "STAR" && op != "SLASH" && op != "PERCENT" {
             return r;
         }
         p = p + 1;

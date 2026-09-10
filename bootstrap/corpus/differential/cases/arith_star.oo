@@ -1,14 +1,14 @@
 // # differential case: integer multiplication
 //
-// Logline: C lowers STAR, LLVM has no STAR arm; the ledger pins the split.
+// Logline: LLVM mul matches C op; nested-loop count still diverges; ledger pins it.
 //
 // Setup: Multiply loop accumulators; print the product sum.
 //
 // Beats:
-//   1. LLVM fails closed with unsupported expr STAR.
+//   1. LLVM lowers STAR and prints the true sum 36.
 //   2. C prints 144: the true product sum is 36, and the extra x4 is the
 //      known C nested-loop iteration factor (see for_nested_sum.oo).
-//   3. Ledger class llvm-fail pins both facts; an LLVM STAR arm is growth work.
+//   3. Ledger class diverge pins both facts; the C x4 factor is C-side work.
 
 pub fn main() {
     let mut s: Int = 0;

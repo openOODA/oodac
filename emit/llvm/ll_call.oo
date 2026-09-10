@@ -157,6 +157,21 @@ pub fn ll_apply_binop(op: String, lhs: String, rhs: String) -> String {
         println("  " + ll_ssa(s) + " = sub i64 " + ll_ssa(ll_pssa(lhs)) + ", " + ll_ssa(ll_pssa(rhs)));
         return ll_pack(ll_ppos(rhs), s, "i64", "");
     }
+    if op == "STAR" {
+        let s: Int = s0 + 1;
+        println("  " + ll_ssa(s) + " = mul i64 " + ll_ssa(ll_pssa(lhs)) + ", " + ll_ssa(ll_pssa(rhs)));
+        return ll_pack(ll_ppos(rhs), s, "i64", "");
+    }
+    if op == "SLASH" {
+        let s: Int = s0 + 1;
+        println("  " + ll_ssa(s) + " = sdiv i64 " + ll_ssa(ll_pssa(lhs)) + ", " + ll_ssa(ll_pssa(rhs)));
+        return ll_pack(ll_ppos(rhs), s, "i64", "");
+    }
+    if op == "PERCENT" {
+        let s: Int = s0 + 1;
+        println("  " + ll_ssa(s) + " = srem i64 " + ll_ssa(ll_pssa(lhs)) + ", " + ll_ssa(ll_pssa(rhs)));
+        return ll_pack(ll_ppos(rhs), s, "i64", "");
+    }
     if (op == "EQEQ" || op == "NEQ") && lk == "str" {
         let la: String = ll_as_val(lhs, s0);
         let ra: String = ll_as_val(rhs, ll_pssa(la));
@@ -180,4 +195,29 @@ pub fn ll_apply_binop(op: String, lhs: String, rhs: String) -> String {
     let s: Int = s0 + 1;
     println("  " + ll_ssa(s) + " = icmp " + pred + " i64 " + ll_ssa(ll_pssa(lhs)) + ", " + ll_ssa(ll_pssa(rhs)));
     return ll_pack(ll_ppos(rhs), s, "i1", "");
+}
+
+pub fn ll_store(name: String, kind: String, v: String, ssa0: Int, env: String) -> Int {
+    let mut dst: String = ll_var(name);
+    let loc: String = type_env_get(env, "__l__" + name);
+    if loc != "" { dst = loc; }
+    if ll_is_agg(kind) {
+        if ll_pptr(v) != "" {
+            let s: Int = ssa0 + 1;
+            println("  " + ll_ssa(s) + " = load " + ll_ir_val(kind) + ", ptr " + ll_pptr(v));
+            println("  store " + ll_ir_val(kind) + " " + ll_ssa(s) + ", ptr " + dst);
+            return s;
+        }
+        println("  store " + ll_ir_val(kind) + " " + ll_ssa(ll_pssa(v)) + ", ptr " + dst);
+        return ssa0;
+    }
+    println("  store " + ll_ir_val(kind) + " " + ll_ssa(ll_pssa(v)) + ", ptr " + dst);
+    return ssa0;
+}
+
+pub fn ll_cond_i1(v: String, ssa0: Int) -> Int {
+    if ll_pk(v) == "i1" { return ll_pssa(v); }
+    let s: Int = ssa0 + 1;
+    println("  " + ll_ssa(s) + " = icmp ne i64 " + ll_ssa(ll_pssa(v)) + ", 0");
+    return s;
 }

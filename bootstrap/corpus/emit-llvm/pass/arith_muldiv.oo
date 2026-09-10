@@ -1,0 +1,16 @@
+// # llvm mul div mod precedence
+//
+// Logline: LLVM pass fixture for STAR SLASH PERCENT with C-like precedence.
+//
+// Beats:
+//   1. main prints mul div mod and mixed-precedence values.
+//   2. STAR binds tighter than PLUS and MINUS.
+//   3. Output is 7 4 9 6 2.
+
+pub fn main() {
+    println(1 + 2 * 3);
+    println(10 - 2 * 3);
+    println((1 + 2) * 3);
+    println(20 / 4 + 1);
+    println(20 % 6);
+}

@@ -4,8 +4,9 @@
 #        llvm-fail (LLVM build fails, C runs) | c-fail (mirror) | both-fail.
 # A `-` sha marks the failed side. Rule: the ledger only shrinks toward all-parity;
 # diffrun.sh fails on unlisted files, stale pins, drift, and tightening.
-bootstrap/corpus/differential/cases/arith_star.oo llvm-fail - 9efe5a55840d37eb  # LLVM has no STAR arm; C prints 144 (true sum 36 x C nested-loop x4 factor)
-bootstrap/corpus/differential/cases/for_let_shadow.oo llvm-fail - 3a3070eb11fca782  # LLVM refuses let-shadows-loop-binding; C runs C-scoping, prints 5/5/5
+bootstrap/corpus/differential/cases/arith_star.oo diverge a4b2c5db15348c29 9efe5a55840d37eb  # LLVM mul prints true sum 36; C prints 144 (true sum 36 x C nested-loop x4 factor)
+bootstrap/corpus/differential/cases/for_let_shadow.oo parity 3a3070eb11fca782 3a3070eb11fca782  # both print 5/5/5; LLVM shadow alloca matches C-scoping
+bootstrap/corpus/emit-llvm/pass/arith_muldiv.oo parity 26d88f4df812e7df 26d88f4df812e7df  # prints 7/4/9/6/2; STAR SLASH PERCENT with C precedence
 bootstrap/corpus/emit-llvm/pass/bool_print.oo parity 76fe9f61152f4c08 76fe9f61152f4c08  # prints 0/1/1
 bootstrap/corpus/emit-llvm/pass/cap_spread2.oo parity 10159baf262b43a9 10159baf262b43a9  # seven peripheral grants, prints 7
 bootstrap/corpus/emit-llvm/pass/cap_spread.oo parity 10159baf262b43a9 10159baf262b43a9  # prints 7
