@@ -106,3 +106,17 @@
 //    object step or fail with a named stage (the current
 //    "emit-llvm failed" after printing full IR conflates emit and
 //    link failures).
+
+// ## 7. New finding (cross-repo, found during std fix pass)
+
+//   C-NEW (CRITICAL): functions defined in files named ANCHOR.oo
+//   typecheck but never reach the C emitter. `oodac check` resolves
+//   them; `oodac build` emits bare unprefixed call sites with no
+//   definition (gcc: implicit declaration). Controlled repro in
+//   std/scratch: identical wrapper fn in hub/ANCHOR.oo fails emit
+//   while hub/hub.oo emits fine — the basename is the trigger, not
+//   re-export structure. Impact: every X_mod_* wrapper convention
+//   across std (net_mod_*, agent_mod_*, test_mod_*, sec_mod_*…) is
+//   unbuildable for consumers; probe_repl_m1_audit is blocked by it.
+//   The emitter likely special-cases ANCHOR.oo as index-only and
+//   skips its function bodies. Fix in the emit pass, not in std.
