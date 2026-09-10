@@ -1,0 +1,108 @@
+// # 2026-09-11 Focused Audit — oodac/
+//
+// Logline: Focused audit of the compiler repo on 2026-09-11.
+//          10 dirty files — an in-flight LLVM-emit repair touching
+//          emit/llvm/ll_*.oo (9 files), types/types_core.oo,
+//          scripts/anti_cheat_linter.oo, plus new qa/suite.oo.
+//          Executed checks on the release binary; file law; drift.
+//
+// Setup:  Authored 2026-09-11 by Devin. Parent sweep:
+//         openOODA/docs/audit-history/2026-09-11-polyrepo-sweep.oot.
+//         Known issue carried from 2026-09-10 (mcp AGENT.md): the
+//         host-compiled oodac print-in-LLVM-emit path is broken —
+//         verified still broken below.
+//
+// Beats:
+//   1. Per-pass verdict.
+//   2. Pass-1 file law (corpus carve-out analysis).
+//   3. Pass-2 structure.
+//   4. Pass-3 zero-trust execution (check/emit-c/emit-llvm/build).
+//   5. Findings by severity.
+//   6. Recommended repairs.
+
+// ## 1. Per-pass verdict
+
+// | Pass | Verdict | Note |
+// |------|---------|------|
+// | 0 Pre-flight | WIP | 10 modified + 1 untracked (qa/suite.oo). Last commit 6586419 2026-09-10. |
+// | 1 File law | 1 FAIL | qa/scratch_lineno.oo unheaded scratch file. Corpus fixtures analyzed below — not violations. |
+// | 2 Structure | OK | lex/ ast/ check/ emit/ cli/ bootstrap/ qa/ docs/ all anchored; 16 ANCHOR.oo. |
+// | 3 Execution | MIXED | check/emit-c/emit-llvm all produce real output on release binary; `build --backend llvm` fails (known). |
+// | 4 Drift | MINOR | 3 File: lines declare wrong repo paths. |
+
+// ## 2. Pass-1 — File law
+
+// | Check | Result | Evidence |
+// |-------|--------|----------|
+// | 256-line cap | PASS | Only over-cap file is tests/fixtures/boundary_257_lines.oo:257 — deliberate boundary fixture probing the cap itself. |
+// | Academy header | 105 raw misses → 1 real FAIL | 104 are bootstrap/corpus/{check,emit-c,emit-llvm}/pass|fail/*.oo — minimal compiler test INPUTS (fixtures, not modules; cf. boundary_257). Real violation: qa/scratch_lineno.oo — committed scratch probe, no header, in the qa lane. |
+// | Corpus anchoring | GAP | bootstrap/corpus/{check,emit-c,emit-llvm,import,lex,parse,typecheck,differential}/ — no ANCHOR.oo anywhere under corpus/. The fixture exemption is real but undocumented on disk. |
+// | .sh carve-outs | PASS | bootstrap/oodac_pure_build + bootstrap/corpus/differential/diffrun.sh — both on the §1.14 permitted list. |
+// | File: truth | **3 drifts** | docs/TOKEN_OPT.oot declares `ooda/docs/…`; docs/CAP_LEGACY_SUPERSEDE_REMOVAL_TODO.oot declares `openOODA/oodac/docs/…` (extra prefix); bootstrap/seed/{README,SIGNING}.oot declare `ooda/bootstrap/…`. Split-era residue. |
+
+// ## 3. Pass-2 — Structure
+
+// 672 .oo files: check/ is the mass center (~2,970 blocks across its
+// subtree). emit/{c,llvm}/ are the live backends. bootstrap/{corpus,
+// seed}/ + oodac_pure_build = self-host lane. bin/oodac symlink +
+// oodac_bin.core present. All 16 ANCHOR.oo are 4-element ALLCAPS.
+// qa/ holds the probe suite; qa/suite.oo is NEW (untracked) and
+// typechecks on the release binary.
+
+// ## 4. Pass-3 — Zero-trust execution (~/.openooda/bin/oodac)
+
+// | Command | Result |
+// |---------|--------|
+// | check corpus/check/pass/ok_main.oo | OK |
+// | check emit/llvm/ll_emit.oo (modified) | OK |
+// | check emit/llvm/ll_stmt.oo (modified) | OK |
+// | check emit/llvm/ll_tok.oo (modified) | OK |
+// | check types/types_core.oo (modified) | OK |
+// | check qa/suite.oo (new) | OK |
+// | emit-c corpus/emit-c/pass/fn_ret_int.oo | real C preamble+decls emitted |
+// | emit-llvm corpus/emit-llvm/pass/fn_ret_int.oo | real LLVM IR emitted |
+// | emit-llvm corpus/emit-llvm/pass/println_str.oo | IR emitted incl. @oo_print_str/@oo_println calls |
+// | build --backend c std/qa/probe_cap_fs.oo | OK_PURE_NATIVE, runs + passes |
+// | build --backend llvm std/qa/probe_cap_fs.oo | **FAIL** `ERR build emit-llvm failed` — prints IR then errors; no object-link step on this path |
+// | build /tmp/t.oo (outside workspace) | `ERR build unreadable file` — capability-bounded read refuses out-of-scope path (fail-closed, correct) |
+
+// The LLVM repair WIP is internally consistent: every modified file
+// still typechecks. The failure is confined to the llvm BUILD path
+// (emit works, link/object step does not) — matches the 2026-09-10
+// known-broken note; still open on today's installed binary.
+
+// ## 5. Findings by severity
+
+// MAJOR (0): none new. The emit-llvm build failure is a carried
+//   known-issue with an owner (compiler lane, mcp AGENT.md 2026-09-10).
+
+// MINOR (3):
+//   m1. qa/scratch_lineno.oo — committed scratch file, no Academy
+//       header, name says "scratch" (§1.11, P10). Either delete or
+//       promote to a real probe with header + suite wiring.
+//   m2. File: drift ×3 (TOKEN_OPT.oot, CAP_LEGACY_SUPERSEDE_REMOVAL_
+//       TODO.oot, bootstrap/seed/{README,SIGNING}.oot) — §1.4.
+//   m3. bootstrap/corpus/ has no ANCHOR.oo — 104 headerless fixtures
+//       are defensible, but nothing on disk documents the fixture
+//       exemption; a header checker's only signal is path shape.
+
+// NOTE (2):
+//   n1. `oodac build` fails closed on out-of-workspace paths
+//       ("unreadable file") — capability-bounded fs reads working as
+//       specified; message could name the cap denial for debuggability.
+//   n2. `oodac version` → `ERR cmd residual: version` — no version
+//       subcommand while ooda(1) has one; asymmetric UX, and §1.21
+//       wants versions derived — consider `oodac version` reading the
+//       tag/env like ooda does.
+
+// ## 6. Recommended repairs (oodac lane)
+
+// 1. Delete qa/scratch_lineno.oo (its lineno-scratch purpose is
+//    served by corpus) or header it and wire into qa/suite.oo (m1).
+// 2. Fix the 3 File: lines to their real repo paths (m2).
+// 3. Add bootstrap/corpus/ANCHOR.oo stating the fixture-header
+//    exemption explicitly (m3).
+// 4. Land the LLVM repair: `build --backend llvm` must reach an
+//    object step or fail with a named stage (the current
+//    "emit-llvm failed" after printing full IR conflates emit and
+//    link failures).
