@@ -11,7 +11,7 @@
 
 import "ll_tok.oo";
 
-pub fn ll_ty_at(toks: List[String], pos: Int, n: Int) -> String {
+pub fn ll_ty_at(toks: List[String], pos: Int, n: Int, stab: String) -> String {
     let mut p: Int = pos;
     if p < n && ll_k(toks, p) == "AMP" { p = p + 1; }
     if p < n && ll_k(toks, p) == "KW_MUT" { p = p + 1; }
@@ -36,7 +36,8 @@ pub fn ll_ty_at(toks: List[String], pos: Int, n: Int) -> String {
             let e: String = ll_t(toks, p + 2);
             if e == "String" { return "slist"; }
             if e == "Int" { return "ilist"; }
-            if ll_ty_struct_rich(toks, e, n) != "" { return "olist_" + e; }
+            if ll_stab_rich(stab, e) != "" { return "olist_" + e; }
+            if ll_ty_struct_rich(toks, e, n, stab) != "" { return "olist_" + e; }
         }
         println("ERR\tllvm\tlist kind");
         process_exit(1);
@@ -47,7 +48,8 @@ pub fn ll_ty_at(toks: List[String], pos: Int, n: Int) -> String {
             if e == "String" { return "ress"; }
             if e == "Int" { return "resi"; }
             if e == "Void" { return "ress"; }
-            if ll_ty_struct_rich(toks, e, n) != "" { return "resSt_" + e; }
+            if ll_stab_rich(stab, e) != "" { return "resSt_" + e; }
+            if ll_ty_struct_rich(toks, e, n, stab) != "" { return "resSt_" + e; }
         }
         println("ERR\tllvm\tresult kind");
         process_exit(1);
@@ -61,13 +63,15 @@ pub fn ll_ty_at(toks: List[String], pos: Int, n: Int) -> String {
         println("ERR\tllvm\toption kind");
         process_exit(1);
     }
-    let sr: String = ll_ty_struct_rich(toks, t, n);
+    let sr: String = ll_stab_rich(stab, t);
     if sr != "" { return sr; }
+    let sc: String = ll_ty_struct_rich(toks, t, n, stab);
+    if sc != "" { return sc; }
     println("ERR\tllvm\tunknown type " + t);
     process_exit(1);
     return "i64";
 }
-fn ll_ty_struct_rich(toks: List[String], t: String, n: Int) -> String {
+fn ll_ty_struct_rich(toks: List[String], t: String, n: Int, stab: String) -> String {
     let mut i: Int = 0;
     while i < n {
         if ll_k(toks, i) == "KW_TYPE" {
@@ -87,7 +91,7 @@ fn ll_ty_struct_rich(toks: List[String], t: String, n: Int) -> String {
                                 let fld: String = ll_t(toks, q); q = q + 1;
                                 if q >= n || ll_k(toks, q) != "COLON" { println("ERR\tllvm\tstruct colon"); process_exit(1); }
                                 q = q + 1;
-                                let fk: String = ll_ty_at(toks, q, n);
+                                let fk: String = ll_ty_at(toks, q, n, stab);
                                 if !first { rich = rich + ","; }
                                 rich = rich + fld + ":" + ll_st_map(fk, ",", "|"); first = false;
                                 q = ll_skip_type(toks, q, n);

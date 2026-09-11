@@ -12,6 +12,7 @@
 import "ll_tok.oo";
 import "ll_ty.oo";
 import "ll_stmt.oo";
+import "ll_ifexpr.oo";
 import "types/types_core.oo";
 
 pub fn ll_fn_name_at(toks: List[String], pos: Int, n: Int) -> String {
@@ -22,7 +23,7 @@ pub fn ll_fn_name_at(toks: List[String], pos: Int, n: Int) -> String {
     return "";
 }
 
-pub fn ll_parse_sig(toks: List[String], pos: Int, n: Int) -> String {
+pub fn ll_parse_sig(toks: List[String], pos: Int, n: Int, stab: String) -> String {
     let mut p: Int = pos;
     if ll_k(toks, p) == "KW_PUB" { p = p + 1; }
     if ll_k(toks, p) != "KW_FN" { return ""; }
@@ -37,7 +38,7 @@ pub fn ll_parse_sig(toks: List[String], pos: Int, n: Int) -> String {
             p = p + 1;
             if p < n && ll_k(toks, p) == "COLON" {
                 p = p + 1;
-                let k: String = ll_ty_at(toks, p, n);
+                let k: String = ll_ty_at(toks, p, n, stab);
                 if aks != "" { aks = aks + ","; }
                 aks = aks + k;
                 p = ll_skip_type(toks, p, n);
@@ -50,13 +51,13 @@ pub fn ll_parse_sig(toks: List[String], pos: Int, n: Int) -> String {
     let mut rk: String = "void";
     if p < n && ll_k(toks, p) == "ARROW" {
         p = p + 1;
-        rk = ll_ty_at(toks, p, n);
+        rk = ll_ty_at(toks, p, n, stab);
     }
     if name == "main" { rk = "i32"; }
     return name + "=" + aks + ">" + rk;
 }
 
-pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String) -> Int {
+pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String, stab: String) -> Int {
     let mut p: Int = pos;
     if ll_k(toks, p) == "KW_PUB" { p = p + 1; }
     if ll_k(toks, p) != "KW_FN" { return ll_skip_fn(toks, pos, n); }
@@ -64,7 +65,7 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String) -> Int {
     let name: String = ll_t(toks, p);
     p = p + 1;
     if p < n && ll_k(toks, p) == "LPAREN" { p = p + 1; }
-    let mut env: String = str_slice(fenv, 0, chars_len(fenv));
+    let mut env: String = fenv;
     let mut caps: String = "";
     let mut form: String = "";
     let mut plist: String = "";
@@ -79,7 +80,7 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String) -> Int {
                 let cn: String = ll_peek_cap_name(toks, p, n);
                 let g: String = ll_cap_grant(cn);
                 let isref: Bool = p < n && ll_k(toks, p) == "AMP";
-                let k: String = ll_ty_at(toks, p, n);
+                let k: String = ll_ty_at(toks, p, n, stab);
                 env = type_env_put(env, pn, k);
                 if isref { refs = refs + pn + ";"; }
                 if g != "" { caps = caps + pn + "=" + g + ";"; }
@@ -99,7 +100,7 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String) -> Int {
     let mut rk: String = "void";
     if p < n && ll_k(toks, p) == "ARROW" {
         p = p + 1;
-        rk = ll_ty_at(toks, p, n);
+        rk = ll_ty_at(toks, p, n, stab);
         p = ll_skip_type(toks, p, n);
     }
     while p < n && ll_k(toks, p) != "LBRACE" {
@@ -149,7 +150,7 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String) -> Int {
         let mut mrk: String = "i32";
         if rk == "resi" { mrk = "resim"; }
         if rk == "opti" || rk == "opts" { mrk = rk; }
-        let mb: String = ll_emit_stmts(toks, p, n, mrk, env, 10);
+        let mb: String = ll_emit_stmts(toks, p, n, mrk, env, 10, stab);
         if ll_pterm(mb) == 0 { println("  ret i32 0"); }
         println("}");
         return ll_skip_fn(toks, pos, n);
@@ -193,7 +194,7 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String) -> Int {
         }
         fi = fi + 1;
     }
-    let fb: String = ll_emit_stmts(toks, p, n, rk, env, ssa + 1);
+    let fb: String = ll_emit_stmts(toks, p, n, rk, env, ssa + 1, stab);
     if ll_pterm(fb) == 0 {
         if rk == "void" || ll_is_mem(rk) { println("  ret void"); }
         else { println("  unreachable"); }

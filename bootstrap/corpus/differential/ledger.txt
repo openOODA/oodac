@@ -14,6 +14,7 @@ bootstrap/corpus/emit-llvm/pass/fn_ret_int.oo parity 084c799cd551dd1d 084c799cd5
 bootstrap/corpus/emit-llvm/pass/for_nested_sum.oo diverge 654ee9da442fa353 49d7ac459790bd26  # LLVM 48 correct; C 192, nested-loop iteration x4 defect
 bootstrap/corpus/emit-llvm/pass/for_range_sum.oo parity 917df3320d778ddb 917df3320d778ddb  # prints 10
 bootstrap/corpus/emit-llvm/pass/if_else.oo parity 5e46266be5fda850 5e46266be5fda850  # prints big
+bootstrap/corpus/emit-llvm/pass/ifexpr.oo parity 357a37e5df4991c5 357a37e5df4991c5  # prints 7/9/3/2/1; if-expr values plus else-if chain
 bootstrap/corpus/emit-llvm/pass/list_get.oo parity 10159baf262b43a9 10159baf262b43a9  # prints 7
 bootstrap/corpus/emit-llvm/pass/match_ok.oo parity dc51b8c96c2d745d dc51b8c96c2d745d  # prints ok
 bootstrap/corpus/emit-llvm/pass/method_calls.oo parity bdc13372471f4e64 bdc13372471f4e64  # prints 1/0/6/2/42

@@ -14,7 +14,7 @@ pub fn main(p: &ProcessCap) {
     println("=== Anti-Cheat Honesty Linter ===");
     let cmd: String = "src_root=\"${OODA_REPO_ROOT:-$(pwd -P)}\"; "
         + "cd \"$src_root\" 2>/dev/null || exit 1; "
-        + "bad=$(find . -name '.agents' -prune -o -name 'anti_cheat_linter.oo' -prune -o -type f -name '*.oo' -print 2>/dev/null | xargs grep -nE 'CH[E]AT_BYPASS|MOCK_PASS_ALL|FAKE_SUCCESS' || true); "
+        + "bad=$(find . -name '.agents' -prune -o -name 'anti_cheat_linter.oo' -prune -o -type f -name '*.oo' -print 2>/dev/null | xargs grep -nE 'CH[E]AT_BYPASS|MOCK_PASS_ALL|FAKE_SUCCESS|DUMMY_ASSERT_TRUE|VACUOUS_PASS|TODO_SKIP_VERIFY' || true); "
         + "if [ -n \"$bad\" ]; then echo '[CHEAT FAIL] Found prohibited mock bypasses:'; echo \"$bad\"; exit 1; fi; "
         + "echo 'Anti-Cheat Audit: 0 cheat bypasses found. Integrity verified.'; "
         + "exit 0;";

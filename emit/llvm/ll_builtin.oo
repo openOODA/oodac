@@ -215,13 +215,16 @@ pub fn ll_user_call(name: String, sig: String, args: List[String], ssa0: Int) ->
             if call != "" { call = call + ", "; }
             call = call + ll_pass(ll_pk(ap)) + " " + ll_pptr(ap);
         } else {
-            let mut av: String = str_slice(a, 0, chars_len(a));
-            if ll_pk(a) == "str" {
-                av = ll_as_val(a, s);
+            let k: String = ll_pk(a);
+            if k == "str" {
+                let av: String = ll_as_val(a, s);
                 s = ll_pssa(av);
+                if call != "" { call = call + ", "; }
+                call = call + ll_ir_val(k) + " " + ll_ssa(ll_pssa(av));
+            } else {
+                if call != "" { call = call + ", "; }
+                call = call + ll_ir_val(k) + " " + ll_ssa(ll_pssa(a));
             }
-            if call != "" { call = call + ", "; }
-            call = call + ll_ir_val(ll_pk(av)) + " " + ll_ssa(ll_pssa(av));
         }
         i = i + 1;
     }

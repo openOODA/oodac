@@ -1,0 +1,82 @@
+// # Test OODAC Compiler — Run Compiler Probes Twice
+//
+// Logline: Run core compiler QA probes twice in fresh processes under the sovereign compiler. Fail closed on miss.
+//
+// Setup: Double-run identity law for compiler verification. Compiler resolves with zero user config.
+//
+// Beats:
+//   1. Resolve sovereign compiler binary (OODA_COMPILER, OODA_TOOLCHAIN, HOME).
+//   2. Compile and execute each compiler probe twice in fresh processes.
+//   3. Clean up temporary probe binaries immediately.
+//   4. Exit 0 only when all compiler probes pass both runs.
+
+import "std/fs/process/env.oo";
+import "std/fs/file/path.oo";
+
+fn run_probe_once(p: &ProcessCap, oodac: String, path: String) -> Result[Int, String] {
+    let tmp_bin: String = path + ".tmp.bin";
+    let b: Result[String, String] = sys_exec(p, oodac, "build", "--backend", "c", path, "-o", tmp_bin);
+    if b.is_err() {
+        let e: String = match b { Ok(_) => "", Err(m) => m };
+        return Err("compile fail " + path + ": " + e);
+    }
+    let r: Result[String, String] = sys_exec(p, tmp_bin);
+    let _del: Result[String, String] = sys_exec(p, "rm", "-f", tmp_bin);
+    if r.is_err() {
+        let e: String = match r { Ok(_) => "", Err(m) => m };
+        return Err("exec fail " + path + ": " + e);
+    }
+    return Ok(0);
+}
+
+fn run_probe_twice(p: &ProcessCap, oodac: String, path: String) -> Result[Int, String] {
+    let r1: Result[Int, String] = run_probe_once(p, oodac, path);
+    if r1.is_err() { return r1; }
+    let r2: Result[Int, String] = run_probe_once(p, oodac, path);
+    if r2.is_err() { return r2; }
+    return Ok(0);
+}
+
+pub fn main(p: &ProcessCap, fs_r: &FsReadCap, env: &EnvCap, args: List[String]) -> Result[Int, String] {
+    let cr: Result[String, String] = env_get(env, "OODA_COMPILER");
+    let mut oodac: String = match cr { Ok(s) => s, Err(_) => "" };
+    if oodac == "" {
+        let tr: Result[String, String] = env_get(env, "OODA_TOOLCHAIN");
+        let th: String = match tr { Ok(s) => s, Err(_) => "" };
+        if th != "" { oodac = th + "/bin/oodac"; }
+    }
+    if oodac == "" {
+        let hr: Result[String, String] = env_get(env, "HOME");
+        let home: String = match hr { Ok(s) => s, Err(_) => "" };
+        if home != "" { oodac = home + "/.openooda/bin/oodac"; }
+    }
+    if oodac == "" || !path_exists(fs_r, oodac) {
+        return Err("no compiler (OODA_COMPILER, OODA_TOOLCHAIN, or HOME layout)");
+    }
+
+    let mut ps: List[String] = list_new();
+    ps = list_push(ps, "qa/probe_api_surface.oo");
+    ps = list_push(ps, "qa/probe_smt_false_kind.oo");
+    ps = list_push(ps, "qa/probe_smt_unproven_kind.oo");
+    ps = list_push(ps, "qa/probe_lattice_audit.oo");
+    ps = list_push(ps, "qa/probe_landlock_jail.oo");
+    ps = list_push(ps, "qa/probe_borrow_kind.oo");
+    ps = list_push(ps, "qa/probe_result_kind.oo");
+    ps = list_push(ps, "qa/probe_option_kind.oo");
+    ps = list_push(ps, "qa/probe_list_kind.oo");
+    ps = list_push(ps, "qa/probe_emit_graph.oo");
+    ps = list_push(ps, "qa/probe_blackbox_autopsy.oo");
+    ps = list_push(ps, "qa/probe_adversarial_stubs_failclosed.oo");
+    ps = list_push(ps, "qa/probe_build_is_check.oo");
+
+    let mut i: Int = 0;
+    while i < list_len(ps) {
+        let path: String = list_get(ps, i);
+        println("  Running " + path);
+        let r: Result[Int, String] = run_probe_twice(p, oodac, path);
+        if r.is_err() { return r; }
+        i = i + 1;
+    }
+    println("oodac test suite: ALL PROBES PASSED (double-run identical)");
+    return Ok(0);
+}

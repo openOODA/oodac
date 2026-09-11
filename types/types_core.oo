@@ -34,9 +34,8 @@ pub fn type_env_get(env: String, name: String) -> String {
     let key: String = name + "=";
 let kn: Int = chars_len(key);
 let en: Int = chars_len(env);
-let mut found: String = "";
-let mut i: Int = 0;
-while i + kn <= en { let at: Bool = i == 0 || (char_at(env, i - 1) == ";");
+let mut i: Int = en - kn;
+while i >= 0 { let at: Bool = i == 0 || (char_at(env, i - 1) == ";");
 if at { let mut ok: Bool = true;
 let mut j: Int = 0;
 while j < kn { if !(char_at(env, i + j) == char_at(key, j)) { ok = false;
@@ -48,12 +47,12 @@ j = kn;
       let mut k: Int = s;
       while k < en && !(char_at(env, k) == ";") { k = k + 1;
       }
-        found = str_slice(env, s, k);
+        return str_slice(env, s, k);
       }
     }
-    i = i + 1;
+    i = i - 1;
   }
-  return found;
+  return "";
 }
 
 pub fn type_env(env: String, name: String, ty: String) -> String {

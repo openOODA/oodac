@@ -63,8 +63,7 @@ fn ll_postfix(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> S
                 p = p + 1;
             } else {
                 let av: String = ll_expr(toks, p, n, ssa, env);
-                p = ll_ppos(av);
-                ssa = ll_pssa(av);
+                p = ll_ppos(av); ssa = ll_pssa(av);
                 if p >= n || ll_k(toks, p) != "RPAREN" {
                     println("ERR\tllvm\tmethod args residual");
                     process_exit(1);
@@ -202,6 +201,10 @@ fn ll_primary(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> S
     if k == "KW_MATCH" {
         return ll_match_expr(toks, pos, n, ssa0, env);
     }
+    if k == "KW_IF" {
+        let iv: String = ll_if_value_at(toks, pos, n, ssa0, env);
+        return ll_pack(ll_ppos(iv), ll_pssa(iv), ll_pk(iv), "");
+    }
     if k == "IDENT" {
         let nm: String = ll_t(toks, pos);
         if pos + 1 < n && ll_k(toks, pos + 1) == "LBRACE" && type_env_get(env, "__st__" + nm) != "" {
@@ -236,8 +239,7 @@ fn ll_call_at(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> S
         if ll_k(toks, p) == "COMMA" { p = p + 1; continue; }
         let a: String = ll_expr(toks, p, n, ssa, env);
         args = list_push(args, a);
-        p = ll_ppos(a);
-        ssa = ll_pssa(a);
+        p = ll_ppos(a); ssa = ll_pssa(a);
     }
     if p < n && ll_k(toks, p) == "RPAREN" { p = p + 1; }
     let b: String = ll_builtin(nm, args, ssa, type_env_get(env, "__e__"));

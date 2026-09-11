@@ -123,4 +123,5 @@ pub fn ll_rt_header(toks: List[String]) {
     println("declare { ptr, i64 } @oo_bytes_to_str(ptr byval(%OoIList) align 8)");
     println("declare void @oo_read_file(ptr sret(%OoResS) align 8, i64, { ptr, i64 })");
     println("declare void @oo_write_file(ptr sret(%OoResV) align 8, i64, { ptr, i64 }, { ptr, i64 })");
+    println("declare { ptr, i64 } @oo_file_stamp(i64, { ptr, i64 })");
 }

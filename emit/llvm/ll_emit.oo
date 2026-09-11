@@ -13,10 +13,12 @@ import "ll_tok.oo";
 import "ll_rt.oo";
 import "ll_fn.oo";
 import "ll_struct.oo";
+import "ll_expr.oo";
+import "ll_ty.oo";
 import "types/token_search.oo";
 import "types/types_core.oo";
 
-fn ll_collect_sigs(toks: List[String]) -> String {
+fn ll_collect_sigs(toks: List[String], stab: String) -> String {
     let n: Int = list_len(toks);
     let mut pos: Int = 0;
     let mut env: String = "";
@@ -24,7 +26,7 @@ fn ll_collect_sigs(toks: List[String]) -> String {
         let k: String = ll_k(toks, pos);
         if k == "EOF" { return env; }
         if k == "KW_PUB" || k == "KW_FN" {
-            let sig: String = ll_parse_sig(toks, pos, n);
+            let sig: String = ll_parse_sig(toks, pos, n, stab);
             if sig != "" {
                 let eq: Int = str_index_of(sig, "=");
                 let nm: String = str_slice(sig, 0, eq);
@@ -43,8 +45,46 @@ fn ll_in_set(set: String, name: String) -> Bool {
     return str_index_of(set, "\t" + name + "\t") >= 0;
 }
 
-fn ll_reachable(toks: List[String], sigs: String) -> String {
-    let n: Int = list_len(toks);
+fn ll_known_fns(sigs: String) -> String {    let n: Int = chars_len(sigs); let mut o: String = "\t"; let mut i: Int = 0;
+    while i < n {
+        let at: Bool = i == 0 || char_at(sigs, i - 1) == ";";
+        if at && i + 6 <= n && str_slice(sigs, i, i + 6) == "__fn__" {
+            let mut k: Int = i + 6;
+            while k < n && char_at(sigs, k) != "=" { k = k + 1; }
+            o = o + str_slice(sigs, i + 6, k) + "\t";
+            i = k;
+        }
+        i = i + 1;
+    }
+    return o;
+}
+
+pub fn ll_store_field_stmt(toks: List[String], p0: Int, n: Int, ssa0: Int, env: String, stab: String) -> String {
+    let p: Int = p0;
+    let bk: String = type_env_get(env, ll_t(toks, p));
+    let fi: String = ll_struct_field(bk, ll_t(toks, p + 2));
+    if fi == "" || str_index_of(fi, ":") < 0 {
+        println("ERR\tllvm\tunknown field " + ll_t(toks, p + 2));
+        process_exit(1);
+    }
+    let ck: Int = str_index_of(fi, ":");
+    let fk: String = str_slice(fi, ck + 1, chars_len(fi));
+    let mut bptr: String = ll_var(ll_t(toks, p));
+    let bloc: String = type_env_get(env, "__l__" + ll_t(toks, p));
+    if bloc != "" { bptr = bloc; }
+    let fp: String = ll_struct_field_ptr(bk, bptr, ll_t(toks, p + 2), ssa0);
+    let rhs: String = ll_expr(toks, p + 4, n, ll_pssa(fp), type_env_put("", "__e__", fk) + env);
+    let mut np: Int = ll_ppos(rhs); let mut ns: Int = ll_pssa(rhs);
+    if ll_pptr(rhs) != "" {
+        ns = ns + 1;
+        println("  " + ll_ssa(ns) + " = load " + ll_ir_val(fk) + ", ptr " + ll_pptr(rhs));
+    }
+    println("  store " + ll_ir_val(fk) + " " + ll_ssa(ns) + ", ptr " + ll_pptr(fp));
+    if np < n && ll_k(toks, np) == "SEMI" { np = np + 1; }
+    return ll_pack(np, ns, fk, "");
+}
+
+fn ll_reachable(toks: List[String], known: String) -> String {    let n: Int = list_len(toks);
     let mut set: String = "\tmain\t";
     let mut added: Bool = true;
     while added {
@@ -63,7 +103,7 @@ fn ll_reachable(toks: List[String], sigs: String) -> String {
                                 i = i + 1;
                                 continue;
                             }
-                            if type_env_get(sigs, "__fn__" + cal) != "" {
+                            if ll_in_set(known, cal) {
                                 if !ll_in_set(set, cal) {
                                     set = set + cal + "\t";
                                     added = true;
@@ -95,6 +135,39 @@ fn ll_emit_fn_strings(toks: List[String], pos: Int, n: Int) {
     }
 }
 
+fn ll_callee_set(toks: List[String], pos: Int, n: Int) -> String {
+    let end: Int = ll_skip_fn(toks, pos, n);
+    let mut o: String = "\t"; let mut i: Int = pos;
+    while i < end {
+        if ll_k(toks, i) == "IDENT" && i + 1 < end && ll_k(toks, i + 1) == "LPAREN" {
+            if !(i > pos && ll_k(toks, i - 1) == "DOT") {
+                o = o + ll_t(toks, i) + "\t";
+            }
+        }
+        i = i + 1;
+    }
+    return o;
+}
+
+fn ll_prune_sigs(sigs: String, stenv: String, want: String) -> String {
+    let n: Int = chars_len(sigs); let mut o: String = ""; let mut i: Int = 0;
+    while i < n {
+        let at: Bool = i == 0 || char_at(sigs, i - 1) == ";";
+        if at && i + 6 <= n && str_slice(sigs, i, i + 6) == "__fn__" {
+            let mut k: Int = i + 6;
+            while k < n && char_at(sigs, k) != "=" { k = k + 1; }
+            if ll_in_set(want, str_slice(sigs, i + 6, k)) {
+                let mut m: Int = k;
+                while m < n && char_at(sigs, m) != ";" { m = m + 1; }
+                o = o + str_slice(sigs, i, m) + ";";
+                i = m;
+            }
+        }
+        i = i + 1;
+    }
+    return o + stenv;
+}
+
 pub fn ll_emit_stream_toks(toks: List[String]) {
     if list_len(toks) < 1 {
         println("ERR\tllvm\tempty artifact");
@@ -103,8 +176,9 @@ pub fn ll_emit_stream_toks(toks: List[String]) {
     ll_rt_header(toks);
     let stenv: String = ll_struct_declare(toks);
     ll_struct_emit_types(stenv);
-    let sigs: String = ll_collect_sigs(toks) + stenv;
-    let keep: String = ll_reachable(toks, sigs);
+    let stab: String = ll_struct_tab_of(stenv);
+    let sigs: String = ll_collect_sigs(toks, stab) + stenv;
+    let keep: String = ll_reachable(toks, ll_known_fns(sigs));
     let n: Int = list_len(toks);
     let mut pos: Int = 0;
     while pos < n {
@@ -118,8 +192,10 @@ pub fn ll_emit_stream_toks(toks: List[String]) {
         } else if k == "KW_PUB" || k == "KW_FN" {
             let nm: String = ll_fn_name_at(toks, pos, n);
             if ll_in_set(keep, nm) {
+                println("; FN " + nm);
                 ll_emit_fn_strings(toks, pos, n);
-                pos = ll_emit_fn(toks, pos, n, sigs);
+                let penv: String = ll_prune_sigs(sigs, stenv, ll_callee_set(toks, pos, n));
+                pos = ll_emit_fn(toks, pos, n, penv, stab);
             } else {
                 pos = ll_skip_fn(toks, pos, n);
             }

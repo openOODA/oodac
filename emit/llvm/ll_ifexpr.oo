@@ -1,0 +1,72 @@
+// # LLVM if expressions as values
+//
+// Logline: Lower single-expression if else arms with a phi merge.
+//
+// Setup: Called tree-wide from ll_primary. Arms hold one expr only.
+//
+// Beats:
+//   1. Condition branches to then else labels.
+//   2. Each arm lowers one expression.
+//   3. Equal arm kinds merge through phi.
+import "ll_tok.oo";
+import "ll_ty.oo";
+import "ll_expr.oo";
+import "ll_call.oo";
+import "types/types_core.oo";
+
+pub fn ll_if_value_at(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> String {
+    let c: String = ll_expr(toks, pos + 1, n, ssa0, env);
+    let p: Int = ll_ppos(c);
+    let s: Int = ll_pssa(c);
+    let cid: Int = s;
+    let cv: Int = ll_cond_i1(c, s);
+    println("  br i1 " + ll_ssa(cv) + ", label %vthen" + cid.to_string() + ", label %velse" + cid.to_string());
+    if p >= n || ll_k(toks, p) != "LBRACE" {
+        println("ERR\tllvm\tif-expr needs brace");
+        process_exit(1);
+    }
+    println("vthen" + cid.to_string() + ":");
+    let th: String = ll_expr(toks, p + 1, n, cv, env);
+    let tp: Int = ll_ppos(th);
+    if tp >= n || ll_k(toks, tp) != "RBRACE" {
+        println("ERR\tllvm\tif-expr arm must be single expression");
+        process_exit(1);
+    }
+    let ts: Int = ll_pssa(th);
+    println("  br label %vend" + cid.to_string());
+    println("velse" + cid.to_string() + ":");
+    let ep: Int = tp + 1;
+    if ep >= n || ll_k(toks, ep) != "KW_ELSE" {
+        println("ERR\tllvm\tif-expr needs else");
+        process_exit(1);
+    }
+    let eq: Int = ep + 1;
+    let er: String = ll_if_else_arm(toks, eq, n, ts, env, cid);
+    let fp: Int = ll_ppos(er);
+    let mut pred: String = "velse" + cid.to_string();
+    if ll_pptr(er) != "" { pred = ll_pptr(er); }
+    println("vend" + cid.to_string() + ":");
+    let ph: Int = ll_pssa(er) + 1;
+    println("  " + ll_ssa(ph) + " = phi " + ll_ir_val(ll_pk(th)) + " [ " + ll_ssa(ts) + ", %vthen" + cid.to_string() + " ], [ " + ll_ssa(ll_pssa(er)) + ", %" + pred + " ]");
+    return ll_pack(fp, ph, ll_pk(th), "vend" + cid.to_string());
+}
+
+fn ll_if_else_arm(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String, cid: Int) -> String {
+    if pos < n && ll_k(toks, pos) == "KW_IF" {
+        let r: String = ll_if_value_at(toks, pos, n, ssa0, env);
+        println("  br label %vend" + cid.to_string());
+        return r;
+    }
+    if pos >= n || ll_k(toks, pos) != "LBRACE" {
+        println("ERR\tllvm\tif-expr needs brace");
+        process_exit(1);
+    }
+    let er: String = ll_expr(toks, pos + 1, n, ssa0, env);
+    let fp: Int = ll_ppos(er);
+    if fp >= n || ll_k(toks, fp) != "RBRACE" {
+        println("ERR\tllvm\tif-expr arm must be single expression");
+        process_exit(1);
+    }
+    println("  br label %vend" + cid.to_string());
+    return ll_pack(fp + 1, ll_pssa(er), ll_pk(er), "");
+}

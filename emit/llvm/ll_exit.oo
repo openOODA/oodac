@@ -1,0 +1,70 @@
+// # LLVM terminator statements
+//
+// Logline: Lower return, break, and continue with block-end skipping.
+//
+// Setup: Called from ll_emit_stmts dispatch. Terminators mark packs done.
+//
+// Beats:
+//   1. Bare return in void fns emits ret void.
+//   2. Value returns follow resi/void/opt/mem kinds.
+//   3. break and continue target loop labels or refuse.
+import "ll_tok.oo";
+import "ll_ty.oo";
+import "ll_expr.oo";
+import "ll_ctor.oo";
+import "types/types_core.oo";
+
+pub fn ll_return_stmt(toks: List[String], p: Int, n: Int, ssa: Int, env: String, ret_kind: String, stab: String) -> String {
+    if p + 1 < n && ll_k(toks, p + 1) == "SEMI" {
+        if ret_kind != "void" {
+            println("ERR\tllvm\tbare return needs void");
+            process_exit(1);
+        }
+        println("  ret void");
+        let q: Int = ll_skip_to_rbrace(toks, p + 1, n);
+        return ll_pack(q, ssa, ret_kind, env) + "\t1";
+    }
+    let envx: String = type_env_put("", "__e__", ret_kind) + env;
+    let v: String = ll_expr(toks, p + 1, n, ssa, envx);
+    let mut np: Int = ll_ppos(v); let mut ns: Int = ll_pssa(v);
+    if np < n && ll_k(toks, np) == "SEMI" { np = np + 1; }
+    if ret_kind == "resim" {
+        ns = ll_ret_resim(v, ns);
+    } else if ret_kind == "resi" {
+        ns = ll_ret_resi(v, ns);
+    } else if ret_kind == "void" {
+        println("  ret void");
+    } else if ret_kind == "opti" || ret_kind == "opts" {
+        ns = ll_ret_opt(v, ret_kind, ns);
+    } else if ret_kind == "i32" {
+        println("  ret i32 0");
+    } else if ll_pptr(v) != "" {
+        ns = ns + 1;
+        println("  " + ll_ssa(ns) + " = load " + ll_ir_val(ret_kind) + ", ptr " + ll_pptr(v));
+        if ll_is_mem(ret_kind) {
+            println("  store " + ll_ir_val(ret_kind) + " " + ll_ssa(ns) + ", ptr %ret");
+            println("  ret void");
+        } else {
+            println("  ret " + ll_ir_val(ret_kind) + " " + ll_ssa(ns));
+        }
+    } else {
+        println("  ret " + ll_ir_val(ret_kind) + " " + ll_ssa(ll_pssa(v)));
+    }
+    let rp: Int = ll_skip_to_rbrace(toks, np, n);
+    return ll_pack(rp, ns, ret_kind, env) + "\t1";
+}
+
+pub fn ll_break_stmt(toks: List[String], p: Int, n: Int, ssa: Int, env: String, ret_kind: String) -> String {
+    let is_brk: Bool = ll_t(toks, p) == "break";
+    let mut dst: String = type_env_get(env, "__brk__");
+    if !is_brk { dst = type_env_get(env, "__cont__"); }
+    if dst == "" {
+        println("ERR\tllvm\tbreak outside loop");
+        process_exit(1);
+    }
+    println("  br label %" + dst);
+    let mut np: Int = p + 1;
+    if np < n && ll_k(toks, np) == "SEMI" { np = np + 1; }
+    let rp: Int = ll_skip_to_rbrace(toks, np, n);
+    return ll_pack(rp, ssa, ret_kind, env) + "\t1";
+}

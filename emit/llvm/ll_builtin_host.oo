@@ -8,6 +8,7 @@
 //   1. byte_at and byte_slice mirror the char_at and str_slice SSA idiom.
 //   2. read_file and write_file take an explicit i64 cap as the first arg.
 //   3. bytes_new, bytes_push, and bytes_to_str use the ilist ABI.
+//   4. oo_emit_tmp_* lower as no-ops (bind is identity); LLVM keeps no C temps.
 
 import "ll_tok.oo";
 import "ll_ty.oo";
@@ -106,8 +107,7 @@ pub fn ll_builtin_host(name: String, args: List[String], ssa0: Int, expect: Stri
         println("  call void @oo_read_file(ptr sret(%OoResS) align 8 " + a + ", i64 " + ll_ssa(ll_pssa(list_get(args, 0))) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ")");
         return ll_pack(0, s, "ress", a);
     }
-    if name == "write_file" && na >= 3 {
-        // OoResV shares the { i32, OoStr } layout with OoResS, so kind ress flows on.
+    if name == "write_file" && na >= 3 {        // OoResV shares the { i32, OoStr } layout with OoResS, so kind ress flows on.
         let a1: String = ll_as_val(list_get(args, 1), ssa0);
         let a2: String = ll_as_val(list_get(args, 2), ll_pssa(a1));
         let a: String = ll_tmpa(ll_pssa(a2) + 1);
@@ -115,6 +115,18 @@ pub fn ll_builtin_host(name: String, args: List[String], ssa0: Int, expect: Stri
         println("  " + a + " = alloca %OoResV, align 8");
         println("  call void @oo_write_file(ptr sret(%OoResV) align 8 " + a + ", i64 " + ll_ssa(ll_pssa(list_get(args, 0))) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a2)) + ")");
         return ll_pack(0, s, "ress", a);
+    }
+    if name == "oo_file_stamp" && na >= 2 {
+        let a1: String = ll_as_val(list_get(args, 1), ssa0);
+        let s: Int = ll_pssa(a1) + 1;
+        println("  " + ll_ssa(s) + " = call { ptr, i64 } @oo_file_stamp(i64 " + ll_ssa(ll_pssa(list_get(args, 0))) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ")");
+        return ll_pack(0, s, "str", "");
+    }
+    if name == "oo_emit_tmp_reset" || name == "oo_emit_tmp_enter" || name == "oo_emit_tmp_leave" || name == "oo_emit_tmp_release_print" || name == "oo_emit_tmp_release_all_print" || name == "oo_emit_tmp_own" {
+        return ll_pack(0, ssa0, "void", "");
+    }
+    if name == "oo_emit_tmp_bind" && na >= 1 {
+        return list_get(args, 0);
     }
     return "";
 }

@@ -200,6 +200,7 @@ jobs:
           llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/fn_ret_int.oo 42
           llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/println_str.oo "hello llvm"
           llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/if_else.oo big
+          llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/ifexpr.oo "$(printf '7\n9\n3\n2\n1')"
           llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/while_sum.oo 10
           llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/for_range_sum.oo 10
           llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/for_nested_sum.oo 48

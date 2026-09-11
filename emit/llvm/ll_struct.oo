@@ -86,7 +86,7 @@ pub fn ll_struct_declare(toks: List[String]) -> String {
                                 q = q + 1;
                                 if q >= n || ll_k(toks, q) != "COLON" { println("ERR\tllvm\tstruct colon"); process_exit(1); }
                                 q = q + 1;
-                                let fk: String = ll_ty_at(toks, q, n); env = type_env_put(env, "__stf__" + nm + "." + fld, idx.to_string() + ":" + fk);
+                                let fk: String = ll_ty_at(toks, q, n, ll_struct_tab_of(env)); env = type_env_put(env, "__stf__" + nm + "." + fld, idx.to_string() + ":" + fk);
                                 idx = idx + 1; q = ll_skip_type(toks, q, n);
                             }
                             if q >= n || ll_k(toks, q) != "RBRACE" { println("ERR\tllvm\tstruct rbrace"); process_exit(1); }
