@@ -15,11 +15,16 @@ import "parse_skip.oo";
 
 pub fn parse_fn_item(toks: List[String], pos0: Int, item_idx: Int) -> Int {
     let n = list_len(toks);
-let mut pos = pos0;
-let mut is_pub = false;
-if field_at(list_get(toks, pos), 0) == "KW_PUB" { is_pub = true;
-pos = pos + 1;
-}
+    let mut pos = pos0;
+    let mut is_pub = false;
+    let mut is_export = false;
+    let mut cont_mod = true;
+    while cont_mod && pos < n {
+        let mk: String = field_at(list_get(toks, pos), 0);
+        if mk == "KW_PUB" { is_pub = true; pos = pos + 1; }
+        else if mk == "KW_EXPORT" { is_export = true; pos = pos + 1; }
+        else { cont_mod = false; }
+    }
     // KW_FN
     if field_at(list_get(toks, pos), 0) != "KW_FN" {
         println("ERR\tparse\texpected fn");

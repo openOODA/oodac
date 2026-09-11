@@ -46,6 +46,9 @@ pub fn typecheck_call_order_lits(toks: List[String]) {
                                     if gty == "Int" { if rty == "Int" { ok = true;
                                     }
                                         }
+                                        if gty == rty { if is_int_type(gty) { ok = true;
+                                        }
+                                        }
                                         if gty == "Float" {
                                             if rty == "Float" {
                                                 ok = true;
@@ -70,6 +73,9 @@ pub fn typecheck_call_order_lits(toks: List[String]) {
                                     let mut ok = false;
                                     if lty == "Int" { if gty == "Int" { ok = true;
                                     }
+                                        }
+                                        if lty == gty { if is_int_type(lty) { ok = true;
+                                        }
                                         }
                                         if lty == "Float" {
                                             if gty == "Float" {

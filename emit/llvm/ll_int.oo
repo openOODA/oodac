@@ -1,0 +1,235 @@
+// # LLVM integer kind lattice
+//
+// Logline: i32/u32/i64/u64 kinds with C-exact conversions. No emit/c import.
+//
+// Setup: Kinds flow in env strings and packs. ll_ty maps spellings; this file
+//   owns extension, truncation, common kinds, int binops, and user calls.
+//
+// Beats:
+//   1. zext unsigned, sext signed on widen; trunc on narrow (matches C).
+//   2. Common kind follows C promotions; mixed-width arm merge is lossless only.
+//   3. User-call args convert to sig param kinds for int pairs and inherit
+//      sig param kinds as __e__ so ctors build the callee's aggregate kind.
+
+import "ll_tok.oo";
+import "ll_ty.oo";
+
+pub fn ll_is_int(kind: String) -> Bool {
+    if kind == "i32" || kind == "u32" || kind == "i64" || kind == "u64" { return true; }
+    return false;
+}
+
+pub fn ll_is_uint(kind: String) -> Bool {
+    if kind == "u32" || kind == "u64" { return true; }
+    return false;
+}
+
+pub fn ll_int_wide(kind: String) -> String {
+    if kind == "i64" || kind == "u64" { return "i64"; }
+    return "i32";
+}
+
+pub fn ll_int_common(a: String, b: String) -> String {
+    if a == "u64" || b == "u64" { return "u64"; }
+    if a == "i64" || b == "i64" { return "i64"; }
+    if a == "u32" || b == "u32" { return "u32"; }
+    return "i32";
+}
+
+pub fn ll_int_convert(v: String, ssa0: Int, target: String) -> String {
+    let fk: String = ll_pk(v);
+    if fk == target { return v; }
+    if !ll_is_int(fk) || !ll_is_int(target) { return v; }
+    let mut s: Int = ll_hw(ssa0, ll_pssa(v));
+    let mut val: Int = ll_pssa(v);
+    if ll_pptr(v) != "" {
+        s = s + 1;
+        println("  " + ll_ssa(s) + " = load " + ll_ir_alloc(fk) + ", ptr " + ll_pptr(v));
+        val = s;
+    }
+    if ll_int_wide(fk) == ll_int_wide(target) {
+        return ll_pack(ll_ppos(v), val, target, "");
+    }
+    s = s + 1;
+    if ll_int_wide(fk) == "i64" {
+        println("  " + ll_ssa(s) + " = trunc i64 " + ll_ssa(val) + " to i32");
+    } else if ll_is_uint(fk) {
+        println("  " + ll_ssa(s) + " = zext i32 " + ll_ssa(val) + " to i64");
+    } else {
+        println("  " + ll_ssa(s) + " = sext i32 " + ll_ssa(val) + " to i64");
+    }
+    return ll_pack(ll_ppos(v), s, target, "");
+}
+
+pub fn ll_i64arg(args: List[String], i: Int, ssa0: Int) -> String {
+    let a: String = list_get(args, i);
+    if !ll_is_int(ll_pk(a)) { return a; }
+    return ll_int_convert(a, ssa0, "i64");
+}
+
+pub fn ll_neg_int(r: String) -> String {
+    let k: String = ll_pk(r);
+    if k == "f64" {
+        return ll_pack(ll_ppos(r), ll_neg_float(r), "f64", "");
+    }
+    if !ll_is_int(k) || k == "i64" {
+        println("  " + ll_ssa(ll_pssa(r) + 1) + " = sub i64 0, " + ll_ssa(ll_pssa(r)));
+        return ll_pack(ll_ppos(r), ll_pssa(r) + 1, "i64", "");
+    }
+    let s: Int = ll_pssa(r) + 1;
+    println("  " + ll_ssa(s) + " = sub i32 0, " + ll_ssa(ll_pssa(r)));
+    return ll_pack(ll_ppos(r), s, k, "");
+}
+
+pub fn ll_apply_intop(op: String, lhs: String, rhs: String) -> String {
+    let lk: String = ll_pk(lhs);
+    let rk: String = ll_pk(rhs);
+    if !ll_is_int(lk) || !ll_is_int(rk) {
+        println("ERR\tllvm\tintop kind");
+        process_exit(1);
+    }
+    let ck: String = ll_int_common(lk, rk);
+    let s0: Int = ll_hw(ll_pssa(lhs), ll_pssa(rhs));
+    let le: String = ll_int_convert(lhs, s0, ck);
+    let re: String = ll_int_convert(rhs, ll_pssa(le), ck);
+    let s: Int = ll_hw(ll_pssa(le), ll_pssa(re)) + 1;
+    let mut t: String = "i64";
+    if ll_int_wide(ck) == "i32" { t = "i32"; }
+    let uns: Bool = ll_is_uint(ck);
+    let mut inst: String = "";
+    if op == "PLUS" { inst = "add"; }
+    else if op == "MINUS" { inst = "sub"; }
+    else if op == "STAR" { inst = "mul"; }
+    else if op == "SLASH" { if uns { inst = "udiv"; } else { inst = "sdiv"; } }
+    else if op == "PERCENT" { if uns { inst = "urem"; } else { inst = "srem"; } }
+    else if op == "EQEQ" { inst = "icmp eq"; }
+    else if op == "NEQ" { inst = "icmp ne"; }
+    else if op == "LT" { if uns { inst = "icmp ult"; } else { inst = "icmp slt"; } }
+    else if op == "GT" { if uns { inst = "icmp ugt"; } else { inst = "icmp sgt"; } }
+    else if op == "LTE" { if uns { inst = "icmp ule"; } else { inst = "icmp sle"; } }
+    else if op == "GTE" { if uns { inst = "icmp uge"; } else { inst = "icmp sge"; } }
+    else { println("ERR\tllvm\tintop " + op); process_exit(1); }
+    if op == "EQEQ" || op == "NEQ" || op == "LT" || op == "GT" || op == "LTE" || op == "GTE" {
+        println("  " + ll_ssa(s) + " = " + inst + " " + t + " " + ll_ssa(ll_pssa(le)) + ", " + ll_ssa(ll_pssa(re)));
+        return ll_pack(ll_ppos(rhs), s, "i1", "");
+    }
+    println("  " + ll_ssa(s) + " = " + inst + " " + t + " " + ll_ssa(ll_pssa(le)) + ", " + ll_ssa(ll_pssa(re)));
+    return ll_pack(ll_ppos(rhs), s, ck, "");
+}
+
+pub fn ll_sig_param(sig: String, i: Int) -> String {
+    let gt: Int = str_index_of(sig, ">");
+    if gt < 0 { return ""; }
+    let body: String = str_slice(sig, 0, gt);
+    let n: Int = chars_len(body);
+    let mut idx: Int = 0;
+    let mut start: Int = 0;
+    let mut p: Int = 0;
+    while p <= n {
+        if p == n || char_at(body, p) == "," {
+            if idx == i { return str_slice(body, start, p); }
+            idx = idx + 1;
+            start = p + 1;
+        }
+        p = p + 1;
+    }
+    return "";
+}
+
+pub fn ll_user_call(name: String, sig: String, args: List[String], ssa0: Int) -> String {
+    let gt: Int = str_index_of(sig, ">");
+    if gt < 0 {
+        println("ERR\tllvm\tbad sig " + name);
+        process_exit(1);
+    }
+    let ret: String = str_slice(sig, gt + 1, chars_len(sig));
+    let na: Int = list_len(args);
+    let mut call: String = "";
+    let mut i: Int = 0;
+    let mut s: Int = ssa0;
+    while i < na {
+        let a: String = list_get(args, i);
+        if ll_is_mem(ll_pk(a)) {
+            let ap: String = ll_ensure_ptr(a, s);
+            s = ll_pssa(ap);
+            if call != "" { call = call + ", "; }
+            call = call + ll_pass(ll_pk(ap)) + " " + ll_pptr(ap);
+        } else {
+            let k: String = ll_pk(a);
+            if k == "str" {
+                let av: String = ll_as_val(a, s);
+                s = ll_pssa(av);
+                if call != "" { call = call + ", "; }
+                call = call + ll_ir_val(k) + " " + ll_ssa(ll_pssa(av));
+            } else {
+                let pk: String = ll_sig_param(sig, i);
+                if pk != "" && ll_is_int(k) && ll_is_int(pk) && k != pk {
+                    let av: String = ll_int_convert(a, ll_hw(s, ll_pssa(a)), pk);
+                    s = ll_pssa(av);
+                    if call != "" { call = call + ", "; }
+                    call = call + ll_ir_val(ll_pk(av)) + " " + ll_ssa(ll_pssa(av));
+                } else {
+                    if call != "" { call = call + ", "; }
+                    call = call + ll_ir_val(k) + " " + ll_ssa(ll_pssa(a));
+                }
+            }
+        }
+        i = i + 1;
+    }
+    if ret == "void" || ret == "" {
+        println("  call void @" + name + "(" + call + ")");
+        return ll_pack(0, s, "void", "");
+    }
+    if ll_is_mem(ret) {
+        let a: String = ll_tmpa(s + 1);
+        s = s + 1;
+        println("  " + a + " = alloca " + ll_ir_alloc(ret) + ", align 8");
+        if call != "" {
+            println("  call void @" + name + "(ptr sret(" + ll_ir_alloc(ret) + ") align 8 " + a + ", " + call + ")");
+        } else {
+            println("  call void @" + name + "(ptr sret(" + ll_ir_alloc(ret) + ") align 8 " + a + ")");
+        }
+        return ll_pack(0, s, ret, a);
+    }
+    let s2: Int = s + 1;
+    println("  " + ll_ssa(s2) + " = call " + ll_ir_val(ret) + " @" + name + "(" + call + ")");
+    return ll_pack(0, s2, ret, "");
+}
+
+pub fn ll_call_at(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> String {
+    let nm: String = ll_t(toks, pos);
+    let mut p: Int = pos + 1;
+    if p >= n || ll_k(toks, p) != "LPAREN" {
+        println("ERR\tllvm\tcall");
+        process_exit(1);
+    }
+    p = p + 1;
+    let sig0: String = type_env_get(env, "__fn__" + nm);
+    let mut args: List[String] = list_new();
+    let mut ssa: Int = ssa0;
+    let mut ai: Int = 0;
+    while p < n && ll_k(toks, p) != "RPAREN" {
+        if ll_k(toks, p) == "COMMA" { p = p + 1; continue; }
+        let mut aenv: String = str_slice(env, 0, chars_len(env));
+        if sig0 != "" {
+            let pk: String = ll_sig_param(sig0, ai);
+            if pk != "" { aenv = type_env_put(aenv, "__e__", pk); }
+        }
+        let a: String = ll_expr(toks, p, n, ssa, aenv);
+        args = list_push(args, a);
+        p = ll_ppos(a); ssa = ll_pssa(a);
+        ai = ai + 1;
+    }
+    if p < n && ll_k(toks, p) == "RPAREN" { p = p + 1; }
+    let b: String = ll_builtin(nm, args, ssa, type_env_get(env, "__e__"));
+    if b != "" {
+        return ll_pack(p, ll_pssa(b), ll_pk(b), ll_pptr(b));
+    }
+    let sig: String = type_env_get(env, "__fn__" + nm);
+    if sig == "" {
+        println("ERR\tllvm\tunknown call " + nm);
+        process_exit(1);
+    }
+    let u: String = ll_user_call(nm, sig, args, ssa);
+    return ll_pack(p, ll_pssa(u), ll_pk(u), ll_pptr(u));
+}

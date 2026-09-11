@@ -14,6 +14,7 @@
 
 import "ll_tok.oo";
 import "ll_ty.oo";
+import "ll_int.oo";
 import "ll_struct.oo";
 
 pub fn ll_method(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, env: String, arg: String) -> String {
@@ -34,8 +35,16 @@ pub fn ll_method(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, env:
     }
     if m == "to_string" {
         if kind == "str" { return ll_pack(0, ssa, "str", ptr); }
-        let s: Int = ssa0 + 1;
-        println("  " + ll_ssa(s) + " = call { ptr, i64 } @oo_int_to_str(i64 " + ll_ssa(ssa) + ")");
+        if kind == "f64" {
+            println("ERR\tllvm\tfloat to_string needs a runtime helper");
+            process_exit(1);
+        }
+        let mut tk: String = ll_pack(0, ssa, kind, ptr);
+        if ll_is_int(kind) && kind != "i64" {
+            tk = ll_int_convert(tk, ssa0, "i64");
+        }
+        let s: Int = ll_hw(ssa0, ll_pssa(tk)) + 1;
+        println("  " + ll_ssa(s) + " = call { ptr, i64 } @oo_int_to_str(i64 " + ll_ssa(ll_pssa(tk)) + ")");
         return ll_pack(0, s, "str", "");
     }
     if m == "is_some" || m == "is_ok" || m == "is_none" || m == "is_err" {
@@ -46,7 +55,7 @@ pub fn ll_method(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, env:
         return ll_pack(0, nz, "i1", "");
     }
     if m == "val" || m == "err" {
-        return ll_field_load(kind, ssa, ptr, m, ssa0);
+        return ll_field_load(kind, ssa, ptr, m, ssa0, env);
     }
     if m == "contains" {
         if ll_pk(arg) == "" || ll_pk(arg) == "empty" {
@@ -86,7 +95,7 @@ pub fn ll_method(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, env:
         process_exit(1);
     }
     if m == "unwrap" {
-        if kind != "resi" && kind != "ress" && kind != "opti" && kind != "opts" {
+        if kind != "resi" && kind != "ress" && kind != "opti" && kind != "opts" && !ll_is_resst(kind) && !ll_is_optst(kind) {
             println("ERR\tllvm\tunwrap needs Result or Option");
             process_exit(1);
         }
@@ -106,11 +115,11 @@ pub fn ll_method(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, env:
         println("  call void @oo_process_exit(i64 1)");
         println("  unreachable");
         println("umerge" + id.to_string() + ":");
-        let lv: String = ll_field_load(kind, ssa, bp, "val", pe);
-        return ll_pack(0, ll_pssa(lv), ll_pk(lv), "");
+        let lv: String = ll_field_load(kind, ssa, bp, "val", pe, env);
+        return ll_pack(0, ll_pssa(lv), ll_pk(lv), ll_pptr(lv));
     }
     if m == "unwrap_or" {
-        if kind != "resi" && kind != "ress" && kind != "opti" && kind != "opts" {
+        if kind != "resi" && kind != "ress" && kind != "opti" && kind != "opts" && !ll_is_resst(kind) && !ll_is_optst(kind) {
             println("ERR\tllvm\tunwrap_or needs Result or Option");
             process_exit(1);
         }
@@ -120,7 +129,15 @@ pub fn ll_method(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, env:
         }
         let mut vk: String = "i64";
         if kind == "ress" || kind == "opts" { vk = "str"; }
-        if ll_pk(arg) != vk {
+        if ll_is_resst(kind) || ll_is_optst(kind) {
+            vk = "St_" + str_slice(kind, 6, chars_len(kind));
+            let mut ak: String = ll_pk(arg);
+            if ll_is_struct(ak) { ak = ll_st_basek(ak + "#"); }
+            if ak != vk {
+                println("ERR\tllvm\tunwrap_or default kind");
+                process_exit(1);
+            }
+        } else if ll_pk(arg) != vk {
             println("ERR\tllvm\tunwrap_or default kind");
             process_exit(1);
         }
@@ -132,14 +149,24 @@ pub fn ll_method(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, env:
         let id: Int = top + 1;
         println("  br i1 " + ll_ssa(tag) + ", label %wok" + id.to_string() + ", label %werr" + id.to_string());
         println("wok" + id.to_string() + ":");
-        let lv: String = ll_field_load(kind, ssa, bp, "val", top);
-        let vs: Int = ll_pssa(lv);
+        let lv: String = ll_field_load(kind, ssa, bp, "val", top, env);
+        let mut vs: Int = ll_pssa(lv);
+        if ll_is_struct(ll_pk(lv)) && ll_pptr(lv) != "" {
+            vs = vs + 1;
+            println("  " + ll_ssa(vs) + " = load " + ll_ir_val(ll_pk(lv)) + ", ptr " + ll_pptr(lv));
+        }
         println("  br label %wmerge" + id.to_string());
         println("werr" + id.to_string() + ":");
         println("  br label %wmerge" + id.to_string());
         println("wmerge" + id.to_string() + ":");
-        let ph: Int = vs + 1;
+        let ph: Int = ll_hw(vs, dv) + 1;
         println("  " + ll_ssa(ph) + " = phi " + ll_ir_val(ll_pk(lv)) + " [ " + ll_ssa(vs) + ", %wok" + id.to_string() + " ], [ " + ll_ssa(dv) + ", %werr" + id.to_string() + " ]");
+        if ll_is_struct(ll_pk(lv)) {
+            let wa: String = ll_tmpa(ph + 1);
+            println("  " + wa + " = alloca " + ll_ir_alloc(ll_pk(lv)) + ", align 8");
+            println("  store " + ll_ir_val(ll_pk(lv)) + " " + ll_ssa(ph) + ", ptr " + wa);
+            return ll_pack(0, ph + 1, ll_pk(lv), wa);
+        }
         return ll_pack(0, ph, ll_pk(lv), "");
     }
     println("ERR\tllvm\tunsupported method " + m);
@@ -147,14 +174,14 @@ pub fn ll_method(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, env:
     return ll_pack(0, ssa0, "i64", "");
 }
 
-fn ll_arm_val(arm: String, ssa0: Int) -> Int {
+pub fn ll_arm_val(arm: String, ssa0: Int) -> Int {
     if ll_pptr(arm) == "" { return ll_pssa(arm); }
     let s: Int = ll_hw(ll_pssa(arm), ssa0) + 1;
     println("  " + ll_ssa(s) + " = load " + ll_ir_val(ll_pk(arm)) + ", ptr " + ll_pptr(arm));
     return s;
 }
 
-fn ll_match_expr(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> String {
+pub fn ll_match_expr(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> String {
     let scr: String = ll_expr(toks, pos + 1, n, ssa0, env);
     let mut p: Int = ll_ppos(scr);
     if p < n && ll_k(toks, p) == "LBRACE" { p = p + 1; }
@@ -174,7 +201,11 @@ fn ll_match_expr(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -
     let b: String = ll_match_bind(sk, ll_pptr(sp), bn, 1, id, cmp);
     let mut env2: String = str_slice(env, 0, chars_len(env));
     if ll_pptr(b) != "" {
-        env2 = type_env_put(type_env_put(env, bn, ll_pk(b)), "__l__" + bn, ll_pptr(b));
+        let mut bk2: String = ll_pk(b);
+        if ll_is_struct(bk2) && str_index_of(bk2, "#") < 0 {
+            bk2 = ll_rich_of(env, str_slice(bk2, 3, chars_len(bk2)));
+        }
+        env2 = type_env_put(type_env_put(env, bn, bk2), "__l__" + bn, ll_pptr(b));
     }
     let okarm: String = ll_expr(toks, p, n, ll_pssa(b) + 1, env2);
     p = ll_ppos(okarm);
@@ -191,16 +222,35 @@ fn ll_match_expr(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -
     let eb: String = ll_match_bind(sk, ll_pptr(sp), ebn, 0, id, oks);
     let mut env3: String = str_slice(env, 0, chars_len(env));
     if ll_pptr(eb) != "" {
-        env3 = type_env_put(type_env_put(env, ebn, ll_pk(eb)), "__l__" + ebn, ll_pptr(eb));
+        let mut bk3: String = ll_pk(eb);
+        if ll_is_struct(bk3) && str_index_of(bk3, "#") < 0 {
+            bk3 = ll_rich_of(env, str_slice(bk3, 3, chars_len(bk3)));
+        }
+        env3 = type_env_put(type_env_put(env, ebn, bk3), "__l__" + ebn, ll_pptr(eb));
     }
     let erarm: String = ll_expr(toks, p, n, ll_pssa(eb) + 1, env3);
     p = ll_ppos(erarm);
-    let ers: Int = ll_arm_val(erarm, ll_pssa(erarm));
+    let ers0: Int = ll_arm_val(erarm, ll_pssa(erarm));
+    let pk: String = ll_pk(okarm);
+    let ek: String = ll_pk(erarm);
+    let mut ers2: Int = ers0;
+    if ll_is_int(pk) && ll_is_int(ek) && pk != ek {
+        let pkw: String = ll_int_wide(pk);
+        let ekw: String = ll_int_wide(ek);
+        if pkw == "i64" {
+            if ekw == "i32" {
+                let ec: String = ll_int_convert(ll_pack(ll_ppos(erarm), ers0, ek, ""), ers0, pk);
+                ers2 = ll_pssa(ec);
+            }
+        } else if ekw == "i64" {
+            println("ERR\tllvm\tmixed-width match arms need same kind");
+            process_exit(1);
+        }
+    }
     if p < n && ll_k(toks, p) == "RBRACE" { p = p + 1; }
     println("  br label %mend" + id.to_string());
     println("mend" + id.to_string() + ":");
-    let ph: Int = ll_hw(oks, ers) + 1;
-    let pk: String = ll_pk(okarm);
-    println("  " + ll_ssa(ph) + " = phi " + ll_ir_val(pk) + " [ " + ll_ssa(oks) + ", %mok" + id.to_string() + " ], [ " + ll_ssa(ers) + ", %merr" + id.to_string() + " ]");
+    let ph: Int = ll_hw(oks, ers2) + 1;
+    println("  " + ll_ssa(ph) + " = phi " + ll_ir_val(pk) + " [ " + ll_ssa(oks) + ", %mok" + id.to_string() + " ], [ " + ll_ssa(ers2) + ", %merr" + id.to_string() + " ]");
     return ll_pack(p, ph, pk, "");
 }

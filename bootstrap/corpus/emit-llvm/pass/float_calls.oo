@@ -1,0 +1,30 @@
+// # LLVM float calls parity probe
+//
+// Logline: Float params and returns cross user calls intact; C used to print
+//   call results through oo_print_int (1.5 became 1). The __frty__ table now
+//   records mangled names so println sees the double.
+//
+// Setup: ident takes and returns Float; constf returns a literal. Expect
+//   1.5/2.5/-1.5/1 on both backends. to_string on Float stays out: LLVM fails
+//   closed (no double-to-string runtime helper) and C truncates via int.
+//
+// Beats:
+//   1. Float argument and return survive a user call.
+//   2. Zero-arg Float call prints correctly.
+//   3. Float subtraction and <= comparison through calls.
+
+fn ident(x: Float) -> Float {
+    return x;
+}
+
+fn constf() -> Float {
+    return 2.5;
+}
+
+pub fn main() {
+    println(ident(1.5));
+    println(constf());
+    let v: Float = 1.5;
+    println(0.0 - v);
+    println(v <= 1.5);
+}

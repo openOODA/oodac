@@ -12,6 +12,8 @@
 
 import "ll_tok.oo";
 import "ll_ty.oo";
+import "ll_int.oo";
+import "ll_float.oo";
 import "types/types_core.oo";
 
 fn ll_field_tab(kind: String, m: String) -> String {
@@ -20,53 +22,40 @@ fn ll_field_tab(kind: String, m: String) -> String {
     if kind == "ress" && (m == "val" || m == "err") { return "1:str"; }
     if kind == "opti" && m == "val" { return "1:i64"; }
     if kind == "opts" && m == "val" { return "1:str"; }
+    if chars_len(kind) >= 6 && str_slice(kind, 0, 6) == "resSt_" && m == "val" {
+        return "1:St_" + str_slice(kind, 6, chars_len(kind));
+    }
+    if chars_len(kind) >= 6 && str_slice(kind, 0, 6) == "resSt_" && m == "err" { return "2:str"; }
+    if chars_len(kind) >= 6 && str_slice(kind, 0, 6) == "optSt_" && m == "val" {
+        return "1:St_" + str_slice(kind, 6, chars_len(kind));
+    }
     return "";
 }
 
-fn ll_field_load(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int) -> String {
+pub fn ll_field_load(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, env: String) -> String {
     let tab: String = ll_field_tab(kind, m);
     if tab == "" {
         println("ERR\tllvm\tmethod " + m + " kind " + kind);
         process_exit(1);
     }
     let ci: Int = str_index_of(tab, ":");
-    let idx: String = str_slice(tab, 0, ci); let fk: String = str_slice(tab, ci + 1, chars_len(tab));
+    let idx: String = str_slice(tab, 0, ci);
+    let mut fk: String = str_slice(tab, ci + 1, chars_len(tab));
+    if ll_is_struct(fk) && str_index_of(fk, "#") < 0 {
+        fk = ll_rich_of(env, str_slice(fk, 3, chars_len(fk)));
+    }
     let base: String = ll_ensure_ptr(ll_pack(0, ssa, kind, ptr), ssa0);
     let s: Int = ll_pssa(base) + 1;
     println("  " + ll_ssa(s) + " = getelementptr " + ll_ir_alloc(kind) + ", ptr " + ll_pptr(base) + ", i32 0, i32 " + idx);
     let s2: Int = s + 1;
     println("  " + ll_ssa(s2) + " = load " + ll_ir_val(fk) + ", ptr " + ll_ssa(s));
+    if ll_is_struct(fk) {
+        let a: String = ll_tmpa(s2 + 1);
+        println("  " + a + " = alloca " + ll_ir_alloc(fk) + ", align 8");
+        println("  store " + ll_ir_val(fk) + " " + ll_ssa(s2) + ", ptr " + a);
+        return ll_pack(0, s2 + 1, fk, a);
+    }
     return ll_pack(0, s2, fk, "");
-}
-
-pub fn ll_print_val(kind: String, ssa: Int, ptr: String, ssa0: Int) -> Int {
-    if kind == "i1" {
-        let n2: Int = ssa0 + 1;
-        println("  " + ll_ssa(n2) + " = zext i1 " + ll_ssa(ssa) + " to i64");
-        return ll_print_val("i64", n2, "", n2);
-    }
-    if kind == "str" {
-        let mut s: Int = ssa;
-        if ptr != "" {
-            s = ssa0 + 1;
-            println("  " + ll_ssa(s) + " = load { ptr, i64 }, ptr " + ptr);
-        }
-        let p: Int = s + 1;
-        let l: Int = s + 2;
-        println("  " + ll_ssa(p) + " = extractvalue { ptr, i64 } " + ll_ssa(s) + ", 0");
-        println("  " + ll_ssa(l) + " = extractvalue { ptr, i64 } " + ll_ssa(s) + ", 1");
-        println("  call void @oo_print_str(ptr " + ll_ssa(p) + ", i64 " + ll_ssa(l) + ")");
-        println("  call void @oo_println()");
-        return l;
-    }
-    if kind == "i64" {
-        let n2: Int = ssa0 + 1;
-        println("  " + ll_ssa(n2) + " = call { ptr, i64 } @oo_int_to_str(i64 " + ll_ssa(ssa) + ")");
-        return ll_print_val("str", n2, "", n2);
-    }
-    println("ERR\tllvm\tprint kind " + kind);
-    process_exit(1);
-    return ssa0;
 }
 
 pub fn ll_str_gep(toks: List[String], pos: Int, ssa0: Int) -> String {
@@ -125,7 +114,10 @@ pub fn ll_match_bind(sk: String, ptr: String, bn: String, ok: Int, id: Int, ssa0
     if sk == "opts" { bk = "str"; }
     if sk == "resi" && ok == 1 { bk = "i64"; }
     if sk == "resi" && ok == 0 { bk = "str"; fi = "2"; }
-    if bn == "_" || ((sk == "opti" || sk == "opts") && ok == 0) {
+    if ll_is_resst(sk) && ok == 1 { bk = "St_" + str_slice(sk, 6, chars_len(sk)); }
+    if ll_is_resst(sk) && ok == 0 { bk = "str"; fi = "2"; }
+    if ll_is_optst(sk) && ok == 1 { bk = "St_" + str_slice(sk, 6, chars_len(sk)); }
+    if bn == "_" || ((sk == "opti" || sk == "opts" || ll_is_optst(sk)) && ok == 0) {
         return ll_pack(0, ssa0, bk, "");
     }
     let locn: String = "%v_" + bn + "_" + id.to_string();
@@ -142,6 +134,17 @@ pub fn ll_apply_binop(op: String, lhs: String, rhs: String) -> String {
     let lk: String = ll_pk(lhs);
     let rk: String = ll_pk(rhs);
     let s0: Int = ll_hw(ll_pssa(lhs), ll_pssa(rhs));
+    if ll_is_int(lk) && ll_is_int(rk) {
+        return ll_apply_intop(op, lhs, rhs);
+    }
+    if lk == "f64" && rk == "f64" {
+        return ll_apply_floatop(op, lhs, rhs);
+    }
+    if lk == "f64" || rk == "f64" {
+        println("ERR\tllvm\tfloat-int mismatch");
+        process_exit(1);
+        return ll_pack(ll_ppos(rhs), s0, "f64", "");
+    }
     if op == "PLUS" && lk == "str" && rk == "str" {
         let la: String = ll_as_val(lhs, s0);
         let ra: String = ll_as_val(rhs, ll_pssa(la));
@@ -213,12 +216,22 @@ pub fn ll_store(name: String, kind: String, v: String, ssa0: Int, env: String) -
         println("  store " + ll_ir_val(kind) + " " + ll_ssa(ll_pssa(v)) + ", ptr " + dst);
         return ssa0;
     }
+    if ll_is_int(kind) && ll_is_int(ll_pk(v)) && ll_pk(v) != kind {
+        let cv: String = ll_int_convert(v, ll_hw(ssa0, ll_pssa(v)), kind);
+        println("  store " + ll_ir_val(kind) + " " + ll_ssa(ll_pssa(cv)) + ", ptr " + dst);
+        return ll_pssa(cv);
+    }
     println("  store " + ll_ir_val(kind) + " " + ll_ssa(ll_pssa(v)) + ", ptr " + dst);
     return ssa0;
 }
 
 pub fn ll_cond_i1(v: String, ssa0: Int) -> Int {
     if ll_pk(v) == "i1" { return ll_pssa(v); }
+    if ll_pk(v) == "f64" { return ll_float_cond(v, ssa0); }
+    if ll_is_int(ll_pk(v)) && ll_pk(v) != "i64" {
+        let e: String = ll_int_convert(v, ssa0, "i64");
+        return ll_cond_i1(e, ll_pssa(e));
+    }
     let s: Int = ssa0 + 1;
     println("  " + ll_ssa(s) + " = icmp ne i64 " + ll_ssa(ll_pssa(v)) + ", 0");
     return s;

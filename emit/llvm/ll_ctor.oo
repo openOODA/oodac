@@ -11,6 +11,7 @@
 
 import "ll_tok.oo";
 import "ll_ty.oo";
+import "ll_int.oo";
 import "ll_struct.oo";
 
 fn ll_resst_base(expect: String) -> String {
@@ -18,6 +19,19 @@ fn ll_resst_base(expect: String) -> String {
         return str_slice(expect, 6, chars_len(expect));
     }
     return "";
+}
+
+fn ll_optst_base(expect: String) -> String {
+    if chars_len(expect) >= 6 && str_slice(expect, 0, 6) == "optSt_" {
+        return str_slice(expect, 6, chars_len(expect));
+    }
+    return "";
+}
+
+fn ll_struct_base_of(ak: String) -> String {
+    let hh: Int = str_index_of(ak, "#");
+    if hh < 0 { return str_slice(ak, 3, chars_len(ak)); }
+    return str_slice(ak, 3, hh);
 }
 
 pub fn ll_ret_resi(v: String, ssa0: Int) -> Int {
@@ -66,6 +80,14 @@ pub fn ll_ret_resim(v: String, ssa0: Int) -> Int {
 
 pub fn ll_ctor(name: String, arg: String, ssa0: Int, expect: String) -> String {
     if name == "None" {
+        let nb: String = ll_optst_base(expect);
+        if nb != "" {
+            let a: String = ll_tmpa(ssa0 + 1);
+            let s: Int = ssa0 + 1;
+            println("  " + a + " = alloca %OoOpt_St_" + nb + ", align 8");
+            println("  store %OoOpt_St_" + nb + " { i32 0, %St_" + nb + " zeroinitializer }, ptr " + a);
+            return ll_pack(0, s, expect, a);
+        }
         if expect != "opti" && expect != "opts" {
             println("ERR\tllvm\tNone type");
             process_exit(1);
@@ -101,12 +123,14 @@ fn ll_oostr_from_pair(pair: Int) -> Int {
 }
 
 fn ll_ctor_some(arg: String, ssa0: Int, expect: String) -> String {
-    if ll_pk(arg) == "i64" && (expect == "opti" || expect == "") {
-        let a: String = ll_tmpa(ssa0 + 1);
-        let s: Int = ssa0 + 1;
+    let sav: String = ll_int_convert(arg, ssa0, "i64");
+    let sab: Int = ll_hw(ssa0, ll_pssa(sav));
+    if ll_pk(sav) == "i64" && (expect == "opti" || expect == "") {
+        let a: String = ll_tmpa(sab + 1);
+        let s: Int = sab + 1;
         println("  " + a + " = alloca %OoOptI, align 8");
         let s2: Int = s + 1;
-        println("  " + ll_ssa(s2) + " = insertvalue %OoOptI { i32 1, i64 0 }, i64 " + ll_ssa(ll_pssa(arg)) + ", 1");
+        println("  " + ll_ssa(s2) + " = insertvalue %OoOptI { i32 1, i64 0 }, i64 " + ll_ssa(ll_pssa(sav)) + ", 1");
         println("  store %OoOptI " + ll_ssa(s2) + ", ptr " + a);
         return ll_pack(0, s2, "opti", a);
     }
@@ -120,18 +144,33 @@ fn ll_ctor_some(arg: String, ssa0: Int, expect: String) -> String {
         println("  store %OoOptS " + ll_ssa(s2) + ", ptr " + a);
         return ll_pack(0, s2, "opts", a);
     }
+    if ll_is_struct(ll_pk(arg)) {
+        let mut rb: String = ll_optst_base(expect);
+        if rb == "" { rb = ll_struct_base_of(ll_pk(arg)); }
+        if rb != "" && (expect == "optSt_" + rb || expect == "") {
+            let av: String = ll_as_val(arg, ssa0);
+            let a: String = ll_tmpa(ll_pssa(av) + 1);
+            println("  " + a + " = alloca %OoOpt_St_" + rb + ", align 8");
+            let os: Int = ll_pssa(av) + 1;
+            println("  " + ll_ssa(os) + " = insertvalue %OoOpt_St_" + rb + " { i32 1, %St_" + rb + " zeroinitializer }, %St_" + rb + " " + ll_ssa(ll_pssa(av)) + ", 1");
+            println("  store %OoOpt_St_" + rb + " " + ll_ssa(os) + ", ptr " + a);
+            return ll_pack(0, os, "optSt_" + rb, a);
+        }
+    }
     println("ERR\tllvm\tSome kind");
     process_exit(1);
     return arg;
 }
 
 fn ll_ctor_ok(arg: String, ssa0: Int, expect: String) -> String {
-    if ll_pk(arg) == "i64" && (expect == "resi" || expect == "resim" || expect == "") {
-        let a: String = ll_tmpa(ssa0 + 1);
-        let s: Int = ssa0 + 1;
+    let oav: String = ll_int_convert(arg, ssa0, "i64");
+    let oab: Int = ll_hw(ssa0, ll_pssa(oav));
+    if ll_pk(oav) == "i64" && (expect == "resi" || expect == "resim" || expect == "") {
+        let a: String = ll_tmpa(oab + 1);
+        let s: Int = oab + 1;
         println("  " + a + " = alloca %OoResI, align 8");
         let s2: Int = s + 1;
-        println("  " + ll_ssa(s2) + " = insertvalue %OoResI { i32 1, i64 0, %OoStr { ptr null, i64 0 } }, i64 " + ll_ssa(ll_pssa(arg)) + ", 1");
+        println("  " + ll_ssa(s2) + " = insertvalue %OoResI { i32 1, i64 0, %OoStr { ptr null, i64 0 } }, i64 " + ll_ssa(ll_pssa(oav)) + ", 1");
         println("  store %OoResI " + ll_ssa(s2) + ", ptr " + a);
         return ll_pack(0, s2, "resi", a);
     }

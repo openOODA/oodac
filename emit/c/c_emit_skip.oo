@@ -39,18 +39,20 @@ pub fn c_ty_at(toks: List[String], pos: Int, n: Int) -> String {
         return "void";
     }
     let tn: String = field_at(list_get(toks, pos), 3);
-    if tn == "String" {
-        return "OoStr";
-    }
-    if tn == "Int" {
-        return "long long";
-    }
-    if tn == "Bool" {
-        return "int";
-    }
-    if tn == "Float" || tn == "f64" {
-        return "double";
-    }
+    if tn == "String" { return "OoStr"; }
+    if tn == "Int" { return "long long"; }
+    if tn == "Bool" { return "int"; }
+    if tn == "Float" || tn == "f64" { return "double"; }
+    if tn == "u32" { return "uint32_t"; }
+    if tn == "i32" { return "int32_t"; }
+    if tn == "u64" { return "uint64_t"; }
+    if tn == "i64" { return "int64_t"; }
+    if tn == "u8" { return "uint8_t"; }
+    if tn == "i8" { return "int8_t"; }
+    if tn == "u16" { return "uint16_t"; }
+    if tn == "i16" { return "int16_t"; }
+    if tn == "void" { return "void"; }
+    if tn == "Ptr" || tn == "raw" { return "void*"; }
     if tn == "List" {
         let e: String = c_peek_list_elem2(toks, pos, n);
         if e == "I" { return "OoIList";
@@ -223,8 +225,15 @@ if p >= n { return "long long";
     if tn == "MetricsCap" || tn == "CompilerReadCap" {
         return "long long";
     }
-    if tn == "List" {
-        return c_ty_at(toks, p, n);
-    }
+    if tn == "List" { return c_ty_at(toks, p, n); }
+    if tn == "u32" { return "uint32_t*"; }
+    if tn == "i32" { return "int32_t*"; }
+    if tn == "u64" { return "uint64_t*"; }
+    if tn == "i64" { return "int64_t*"; }
+    if tn == "u8" { return "uint8_t*"; }
+    if tn == "i8" { return "int8_t*"; }
+    if tn == "u16" { return "uint16_t*"; }
+    if tn == "i16" { return "int16_t*"; }
+    if tn == "void" || tn == "Ptr" || tn == "raw" { return "void*"; }
     return tn + "*";
 }

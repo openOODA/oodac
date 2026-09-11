@@ -10,8 +10,11 @@
 //   3. break and continue target loop labels or refuse.
 import "ll_tok.oo";
 import "ll_ty.oo";
+import "ll_int.oo";
 import "ll_expr.oo";
 import "ll_ctor.oo";
+import "ll_contract.oo";
+import "ll_call.oo";
 import "types/types_core.oo";
 
 pub fn ll_return_stmt(toks: List[String], p: Int, n: Int, ssa: Int, env: String, ret_kind: String, stab: String) -> String {
@@ -24,10 +27,14 @@ pub fn ll_return_stmt(toks: List[String], p: Int, n: Int, ssa: Int, env: String,
         let q: Int = ll_skip_to_rbrace(toks, p + 1, n);
         return ll_pack(q, ssa, ret_kind, env) + "\t1";
     }
-    let envx: String = type_env_put("", "__e__", ret_kind) + env;
-    let v: String = ll_expr(toks, p + 1, n, ssa, envx);
+    let envx: String = type_env_put(env, "__e__", ret_kind);
+    let v0: String = ll_expr(toks, p + 1, n, ssa, envx);
+    let v: String = ll_int_convert(v0, ll_pssa(v0), ret_kind);
     let mut np: Int = ll_ppos(v); let mut ns: Int = ll_pssa(v);
     if np < n && ll_k(toks, np) == "SEMI" { np = np + 1; }
+    if type_env_get(env, "__ens__") == "1" && ret_kind != "main_i32" && ret_kind != "void" {
+        ns = ll_contract_return(toks, v, env, ns, ret_kind, p);
+    }
     if ret_kind == "resim" {
         ns = ll_ret_resim(v, ns);
     } else if ret_kind == "resi" {
@@ -36,7 +43,7 @@ pub fn ll_return_stmt(toks: List[String], p: Int, n: Int, ssa: Int, env: String,
         println("  ret void");
     } else if ret_kind == "opti" || ret_kind == "opts" {
         ns = ll_ret_opt(v, ret_kind, ns);
-    } else if ret_kind == "i32" {
+    } else if ret_kind == "main_i32" {
         println("  ret i32 0");
     } else if ll_pptr(v) != "" {
         ns = ns + 1;
@@ -67,4 +74,24 @@ pub fn ll_break_stmt(toks: List[String], p: Int, n: Int, ssa: Int, env: String, 
     if np < n && ll_k(toks, np) == "SEMI" { np = np + 1; }
     let rp: Int = ll_skip_to_rbrace(toks, np, n);
     return ll_pack(rp, ssa, ret_kind, env) + "\t1";
+}
+
+pub fn ll_store_deref_stmt(toks: List[String], p0: Int, n: Int, ssa0: Int, env: String) -> String {
+    let name: String = ll_t(toks, p0 + 1);
+    let ty: String = type_env_get(env, name);
+    if ty == "" || ll_is_agg(ty) {
+        println("ERR\tllvm\tstore through bad ref");
+        process_exit(1);
+    }
+    let mut vv: String = ll_expr(toks, p0 + 3, n, ssa0, type_env_put(env, "__e__", ty));
+    if ll_is_int(ty) && ll_is_int(ll_pk(vv)) && ll_pk(vv) != ty {
+        vv = ll_int_convert(vv, ll_hw(ssa0, ll_pssa(vv)), ty);
+    }
+    let la: String = ll_load_ident(name, env, ll_pssa(vv));
+    let pa: Int = ll_pssa(la) + 1;
+    println("  " + ll_ssa(pa) + " = inttoptr " + ll_ir_val(ty) + " " + ll_ssa(ll_pssa(la)) + " to ptr");
+    println("  store " + ll_ir_val(ty) + " " + ll_ssa(ll_pssa(vv)) + ", ptr " + ll_ssa(pa));
+    let mut p: Int = ll_ppos(vv);
+    if p < n && ll_k(toks, p) == "SEMI" { p = p + 1; }
+    return ll_pack(p, pa, ty, "");
 }

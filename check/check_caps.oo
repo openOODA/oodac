@@ -22,13 +22,9 @@ fn check_fn_trunc() {
 pub fn check_function(toks: List[String], pos0: Int) -> Int {
     let n = list_len(toks);
 let mut pos = pos0;
-if pos < n { if c_tokk(toks, pos) == "KW_PUB" { pos = pos + 1;
-}
-    }
-    if pos < n { if c_tokk(toks, pos) != "KW_FN" { if pos == pos0 { check_fn_trunc();
-    }
-            return pos;
-        }
+while pos < n && (c_tokk(toks, pos) == "KW_PUB" || c_tokk(toks, pos) == "KW_EXPORT") { pos = pos + 1; }
+    if pos < n {
+        if c_tokk(toks, pos) != "KW_FN" { check_fn_trunc(); }
         pos = pos + 1;
     } else {
         check_fn_trunc();

@@ -1,0 +1,26 @@
+// # LLVM match-statement parity probe
+//
+// Logline: match as a statement on Result, ok-first and err-first, with
+//   single-call arms and block arms.
+//
+// Setup: Mirrors emit-c/pass/match_result_stmt.oo plus a reversed block-arm
+//   match. Both backends print hello then boom.
+//
+// Beats:
+//   1. Ok-first match with single println arms.
+//   2. Err-first match with a block arm and a single arm.
+
+pub fn main() {
+    let r: Result[String, String] = Ok("hello");
+    match r {
+        Ok(v) => println(v),
+        Err(e) => println(e),
+    }
+    let r2: Result[String, String] = Err("boom");
+    match r2 {
+        Err(e) => {
+            println(e);
+        },
+        Ok(v) => println(v),
+    }
+}

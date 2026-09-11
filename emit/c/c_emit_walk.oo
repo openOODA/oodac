@@ -92,7 +92,7 @@ process_exit(1);
                 pos = parse_int(list_get(fr, 0));
                 fn_env = list_get(fr, 1);
             }
-        } else if k == "KW_FN" {
+        } else if k == "KW_FN" || k == "KW_EXPORT" {
             let fr: List[String] = c_emit_fn_mode(toks, pos, n, fn_env, mode);
             pos = parse_int(list_get(fr, 0));
             fn_env = list_get(fr, 1);

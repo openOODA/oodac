@@ -1,0 +1,85 @@
+// # LLVM struct retain/release bodies
+//
+// Logline: Emit oo_retain_St and oo_release_St field cascades per struct.
+//
+// Setup: Called per struct from struct type emission. Field kinds come from
+// struct layout strings; optSt and resSt fields cascade conditionally.
+//
+// Beats:
+//   1. Scalar fields need no calls.
+//   2. Strings, lists, and structs cascade directly.
+//   3. Option/Result struct fields cascade on their tag bits.
+import "ll_tok.oo";
+import "ll_ty.oo";
+import "ll_int.oo";
+import "ll_struct_list.oo";
+
+pub fn ll_st_rr(fl: String, nm: String, is_ret: Int) {
+    let mut op: String = "retain";
+    if is_ret == 0 { op = "release"; }
+    let n: Int = chars_len(fl); let mut i: Int = 0; let mut idx: Int = 0; let mut cur: String = ""; let mut s: Int = 10;
+    while i <= n {
+        let e: Bool = i == n || char_at(fl, i) == ",";
+        if e {
+            if cur != "" {
+                let fk: String = ll_st_map(cur, "|", ",");
+                if fk != "i64" && fk != "i1" && fk != "opti" && !ll_is_int(fk) {
+                    println("  " + ll_ssa(s) + " = getelementptr %St_" + nm + ", ptr %p, i32 0, i32 " + idx.to_string());
+                    if fk == "str" {
+                        println("  " + ll_ssa(s + 1) + " = load { ptr, i64 }, ptr " + ll_ssa(s));
+                        println("  call void @oo_str_" + op + "({ ptr, i64 } " + ll_ssa(s + 1) + ")");
+                    } else if fk == "slist" || fk == "ilist" {
+                        println("  call void @oo_" + fk + "_" + op + "(ptr byval(" + ll_ir_alloc(fk) + ") align 8 " + ll_ssa(s) + ")");
+                    } else if chars_len(fk) >= 3 && str_slice(fk, 0, 3) == "St_" {
+                        let h: Int = str_index_of(fk, "#");
+                        if h < 0 {
+                            println("  call void @oo_" + op + "_" + fk + "(ptr " + ll_ssa(s) + ")");
+                        } else {
+                            println("  call void @oo_" + op + "_" + str_slice(fk, 0, h) + "(ptr " + ll_ssa(s) + ")");
+                        }
+                    } else if ll_is_optst(fk) {
+                        let onm: String = str_slice(fk, 6, chars_len(fk));
+                        let otag: String = "rr_" + op + "_" + nm + "_" + idx.to_string();
+                        println("  " + ll_ssa(s + 1) + " = getelementptr %OoOpt_St_" + onm + ", ptr " + ll_ssa(s) + ", i32 0, i32 0");
+                        println("  " + ll_ssa(s + 2) + " = load i32, ptr " + ll_ssa(s + 1));
+                        println("  " + ll_ssa(s + 3) + " = icmp ne i32 " + ll_ssa(s + 2) + ", 0");
+                        println("  br i1 " + ll_ssa(s + 3) + ", label %" + otag + "_has, label %" + otag + "_skip");
+                        println(otag + "_has:");
+                        println("  " + ll_ssa(s + 4) + " = getelementptr %OoOpt_St_" + onm + ", ptr " + ll_ssa(s) + ", i32 0, i32 1");
+                        println("  call void @oo_" + op + "_St_" + onm + "(ptr " + ll_ssa(s + 4) + ")");
+                        println("  br label %" + otag + "_skip");
+                        println(otag + "_skip:");
+                        s = s + 5;
+                    } else if ll_is_resst(fk) {
+                        let rnm: String = str_slice(fk, 6, chars_len(fk));
+                        let rtag: String = "rr_" + op + "_" + nm + "_" + idx.to_string();
+                        println("  " + ll_ssa(s + 1) + " = getelementptr %OoRes_St_" + rnm + ", ptr " + ll_ssa(s) + ", i32 0, i32 0");
+                        println("  " + ll_ssa(s + 2) + " = load i32, ptr " + ll_ssa(s + 1));
+                        println("  " + ll_ssa(s + 3) + " = icmp ne i32 " + ll_ssa(s + 2) + ", 0");
+                        println("  br i1 " + ll_ssa(s + 3) + ", label %" + rtag + "_ok, label %" + rtag + "_err");
+                        println(rtag + "_ok:");
+                        println("  " + ll_ssa(s + 4) + " = getelementptr %OoRes_St_" + rnm + ", ptr " + ll_ssa(s) + ", i32 0, i32 1");
+                        println("  call void @oo_" + op + "_St_" + rnm + "(ptr " + ll_ssa(s + 4) + ")");
+                        println("  br label %" + rtag + "_end");
+                        println(rtag + "_err:");
+                        println("  " + ll_ssa(s + 5) + " = getelementptr %OoRes_St_" + rnm + ", ptr " + ll_ssa(s) + ", i32 0, i32 2");
+                        println("  " + ll_ssa(s + 6) + " = load { ptr, i64 }, ptr " + ll_ssa(s + 5));
+                        println("  call void @oo_str_" + op + "({ ptr, i64 } " + ll_ssa(s + 6) + ")");
+                        println("  br label %" + rtag + "_end");
+                        println(rtag + "_end:");
+                        s = s + 7;
+                    } else {
+                        let mut inner: Int = 1;
+                        if fk == "resi" { inner = 2; }
+                        println("  " + ll_ssa(s + 1) + " = getelementptr " + ll_ir_alloc(fk) + ", ptr " + ll_ssa(s) + ", i32 0, i32 " + inner.to_string());
+                        println("  " + ll_ssa(s + 2) + " = load { ptr, i64 }, ptr " + ll_ssa(s + 1));
+                        println("  call void @oo_str_" + op + "({ ptr, i64 } " + ll_ssa(s + 2) + ")");
+                    }
+                }
+                if fk == "slist" || fk == "ilist" || (chars_len(fk) >= 3 && str_slice(fk, 0, 3) == "St_") { s = s + 1; } else if fk == "i64" || fk == "i1" || fk == "opti" || ll_is_int(fk) { s = s; } else { s = s + 2; }
+                idx = idx + 1; cur = "";
+            }
+            i = i + 1;
+        } else { cur = cur + char_at(fl, i); i = i + 1; }
+    }
+}

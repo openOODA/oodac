@@ -56,7 +56,11 @@ pub fn c_for_bound(toks: List[String], pos: Int, n: Int, env: String) -> List[St
             if depth > 0 { depth = depth - 1;
             }
         }
-        let tt: String = c_tokt(toks, p);
+        let mut tt: String = c_tokt(toks, p);
+        if tk == "IDENT" {
+            let rn: String = c_for_local_name(tt, env);
+            if rn != "" { tt = rn; }
+        }
         if expr == "" {
             expr = tt;
         } else {
@@ -87,6 +91,17 @@ pub fn c_for_bound(toks: List[String], pos: Int, n: Int, env: String) -> List[St
     o = list_push(o, p.to_string());
     o = list_push(o, expr);
     return o;
+}
+
+pub fn c_for_local_name(t: String, env: String) -> String {
+    let mut d: Int = (0 + c_env_scope_depth(env)) - 1;
+    if d > 6 { d = 6; }
+    while d >= 0 {
+        let cand: String = t + "_lvl" + d.to_string();
+        if c_env_get(env, "__decl__" + cand) == "1" { return cand; }
+        d = d - 1;
+    }
+    return "";
 }
 
 pub fn c_emit_for_in_list(toks: List[String], pos: Int, n: Int, env: String, v: String, xs: String) -> List[String] {

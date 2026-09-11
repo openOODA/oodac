@@ -31,6 +31,9 @@ pub fn typecheck_cmp_numeric_lits(toks: List[String]) {
         if lty == "Int" { if rty == "Int" { ok = true;
         }
                             }
+                            if lty == rty { if is_int_type(lty) { ok = true;
+                            }
+                            }
                             if lty == "Float" {
                                 if rty == "Float" {
                                     ok = true;

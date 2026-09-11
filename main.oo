@@ -5,7 +5,7 @@
 // Setup: Dispatch check, build, emit-c, emit-llvm, and tokens. C is the reference ISA; llvm is the default build.
 //
 // Beats:
-//   1. Unpack cmd/path/out/backend/json/plain.
+//   1. Unpack cmd/path/out/backend/json/plain/shared.
 //   2. Dispatch check, build, emit-c family, emit-llvm, or tokens.
 //   3. Unknown cmd exits 2.
 
@@ -33,9 +33,13 @@ pub fn main(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env: &EnvCap,
     if list_len(a) > 7 {
         art_path = list_get(a, 7);
     }
+    let mut is_shared: Bool = false;
+    if list_len(a) > 8 {
+        is_shared = list_get(a, 8) == "1";
+    }
 
     if cmd == "build" {
-        run_build_san(fs_r, fs_w, sys, env, path, out_arg, backend);
+        run_build_san(fs_r, fs_w, sys, env, path, out_arg, backend, is_shared);
         return;
     }
     if cmd == "emit-llvm" {

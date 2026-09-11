@@ -1,0 +1,253 @@
+// # LLVM match-statement lowering
+//
+// Logline: Lower match as a statement: Result/Option tag arms and String literal arms.
+//
+// Setup: Called from ll_emit_stmts on KW_MATCH. Sibling expr/stmt fns resolve
+//   through the emit closure (cf. ll_method.oo). No ll_stmt import (cycle).
+//
+// Beats:
+//   1. Result/Option arms in either order lower to a tag branch with scoped payload binds.
+//   2. String arms lower to an oo_str_eq chain with a wildcard else.
+//   3. Block arms run full statements; single arms run println, assign, or expr.
+//   4. Anything else fails closed with an explicit kind.
+
+import "ll_tok.oo";
+import "ll_ty.oo";
+import "ll_int.oo";
+import "ll_struct.oo";
+
+pub fn ll_match_stmt(toks: List[String], p0: Int, n: Int, ssa0: Int, env: String, ret_kind: String, stab: String) -> String {
+    let scr: String = ll_expr(toks, p0 + 1, n, ssa0, env);
+    let mut p: Int = ll_ppos(scr);
+    let sk: String = ll_pk(scr);
+    if sk == "str" {
+        return ll_str_match_stmt(toks, scr, p, n, env, ret_kind, stab);
+    }
+    if sk != "resi" && sk != "ress" && sk != "opti" && sk != "opts" && !ll_is_resst(sk) && !ll_is_optst(sk) {
+        println("ERR\tllvm\tmatch scrutinee kind " + sk);
+        process_exit(1);
+    }
+    if p >= n || ll_k(toks, p) != "LBRACE" {
+        println("ERR\tllvm\tmatch expected {");
+        process_exit(1);
+    }
+    p = p + 1;
+    let sp: String = ll_ensure_ptr(scr, ll_pssa(scr));
+    let ptr: String = ll_pptr(sp);
+    let id: Int = ll_pssa(sp) + 1;
+    let tag: Int = ll_match_tag(sk, ptr, ll_pssa(sp));
+    let a1: String = ll_match_arm_head(toks, p, n);
+    let tag1: String = field_at(a1, 0);
+    let bind1: String = field_at(a1, 1);
+    p = parse_int(field_at(a1, 2));
+    let ok1: Int = ll_match_ok_tag(tag1);
+    let mut cond: Int = tag;
+    if ok1 == 0 {
+        cond = tag + 1;
+        println("  " + ll_ssa(cond) + " = xor i1 " + ll_ssa(tag) + ", true");
+    }
+    println("  br i1 " + ll_ssa(cond) + ", label %marm1" + id.to_string() + ", label %marm2" + id.to_string());
+    println("marm1" + id.to_string() + ":");
+    let b1: String = ll_match_bind(sk, ptr, bind1, ok1, id, cond);
+    let e1: String = ll_match_arm_env(env, bind1, b1);
+    let r1: String = ll_match_arm_body(toks, p, n, ll_pssa(b1) + 1, e1, ret_kind, stab);
+    p = ll_ppos(r1);
+    let mut ssa: Int = ll_pssa(r1);
+    let t1: Int = ll_pterm(r1);
+    if t1 == 0 {
+        println("  br label %mend" + id.to_string());
+    }
+    if p < n && ll_k(toks, p) == "COMMA" { p = p + 1; }
+    let a2: String = ll_match_arm_head(toks, p, n);
+    let tag2: String = field_at(a2, 0);
+    let bind2: String = field_at(a2, 1);
+    p = parse_int(field_at(a2, 2));
+    let ok2: Int = ll_match_ok_tag(tag2);
+    if ok2 == ok1 {
+        println("ERR\tllvm\tmatch arms must pair ok with err");
+        process_exit(1);
+    }
+    println("marm2" + id.to_string() + ":");
+    let b2: String = ll_match_bind(sk, ptr, bind2, ok2, id, ssa);
+    let e2: String = ll_match_arm_env(env, bind2, b2);
+    let r2: String = ll_match_arm_body(toks, p, n, ll_pssa(b2) + 1, e2, ret_kind, stab);
+    p = ll_ppos(r2);
+    ssa = ll_pssa(r2);
+    let t2: Int = ll_pterm(r2);
+    if t2 == 0 {
+        println("  br label %mend" + id.to_string());
+    }
+    if p < n && ll_k(toks, p) == "COMMA" { p = p + 1; }
+    if p < n && ll_k(toks, p) == "RBRACE" { p = p + 1; }
+    println("mend" + id.to_string() + ":");
+    if t1 != 0 && t2 != 0 {
+        println("  unreachable");
+        p = ll_skip_to_rbrace(toks, p, n);
+        return ll_pack(p, ssa, ret_kind, env) + "\t1";
+    }
+    return ll_pack(p, ssa, ret_kind, env);
+}
+
+fn ll_match_ok_tag(tag: String) -> Int {
+    if tag == "Ok" || tag == "Some" { return 1; }
+    return 0;
+}
+
+fn ll_match_arm_head(toks: List[String], p: Int, n: Int) -> String {
+    if p >= n || ll_k(toks, p) != "IDENT" {
+        println("ERR\tllvm\tmatch expected arm");
+        process_exit(1);
+    }
+    let tag: String = ll_t(toks, p);
+    if tag != "Ok" && tag != "Err" && tag != "Some" && tag != "None" {
+        println("ERR\tllvm\tmatch arm tag " + tag);
+        process_exit(1);
+    }
+    let mut q: Int = p + 1;
+    let mut bn: String = "_";
+    if q < n && ll_k(toks, q) == "LPAREN" {
+        q = q + 1;
+        if q < n && ll_k(toks, q) == "IDENT" { bn = ll_t(toks, q); q = q + 1; }
+        if q < n && ll_k(toks, q) == "RPAREN" { q = q + 1; }
+    }
+    if q >= n || ll_k(toks, q) != "FATARROW" {
+        println("ERR\tllvm\tmatch expected =>");
+        process_exit(1);
+    }
+    let np: Int = q + 1;
+    return tag + "\t" + bn + "\t" + np.to_string();
+}
+
+fn ll_match_arm_env(env: String, bn: String, b: String) -> String {
+    let mut e: String = str_slice(env, 0, chars_len(env));
+    if ll_pptr(b) != "" {
+        let mut bk: String = ll_pk(b);
+        if ll_is_struct(bk) && str_index_of(bk, "#") < 0 {
+            bk = ll_rich_of(env, str_slice(bk, 3, chars_len(bk)));
+        }
+        e = type_env_put(type_env_put(env, bn, bk), "__l__" + bn, ll_pptr(b));
+    }
+    return e;
+}
+
+fn ll_match_arm_body(toks: List[String], p: Int, n: Int, ssa: Int, env: String, ret_kind: String, stab: String) -> String {
+    if p < n && ll_k(toks, p) == "LBRACE" {
+        let b: String = ll_emit_stmts(toks, p + 1, n, ret_kind, env, ssa, stab);
+        let mut q: Int = ll_ppos(b);
+        if q < n && ll_k(toks, q) == "RBRACE" { q = q + 1; }
+        if ll_pterm(b) != 0 {
+            return ll_pack(q, ll_pssa(b), ret_kind, env) + "\t1";
+        }
+        return ll_pack(q, ll_pssa(b), ret_kind, env);
+    }
+    return ll_match_single(toks, p, n, ssa, env, ret_kind);
+}
+
+fn ll_match_single(toks: List[String], p: Int, n: Int, ssa: Int, env: String, ret_kind: String) -> String {
+    if p < n && ll_k(toks, p) == "IDENT" && ll_t(toks, p) == "println" {
+        let v: String = ll_expr(toks, p + 2, n, ssa, env);
+        let mut q: Int = ll_ppos(v);
+        if q < n && ll_k(toks, q) == "RPAREN" { q = q + 1; }
+        if q < n && ll_k(toks, q) == "SEMI" { q = q + 1; }
+        let ns: Int = ll_print_val(ll_pk(v), ll_pssa(v), ll_pptr(v), ll_pssa(v));
+        return ll_pack(q, ns, ret_kind, env);
+    }
+    if p < n && ll_k(toks, p) == "KW_RETURN" {
+        println("ERR\tllvm\tmatch single arm needs block for return");
+        process_exit(1);
+    }
+    if p < n && ll_k(toks, p) == "IDENT" && (ll_t(toks, p) == "break" || ll_t(toks, p) == "continue") {
+        println("ERR\tllvm\tmatch single arm needs block for " + ll_t(toks, p));
+        process_exit(1);
+    }
+    if p < n && ll_k(toks, p) == "IDENT" && p + 1 < n && ll_k(toks, p + 1) == "EQ" {
+        let name: String = ll_t(toks, p);
+        let ty: String = type_env_get(env, name);
+        let v2: String = ll_expr(toks, p + 2, n, ssa, type_env_put(env, "__e__", ty));
+        let mut q2: Int = ll_ppos(v2);
+        let ns2: Int = ll_store(name, ty, v2, ll_pssa(v2), env);
+        if q2 < n && ll_k(toks, q2) == "SEMI" { q2 = q2 + 1; }
+        return ll_pack(q2, ns2, ret_kind, env);
+    }
+    let e: String = ll_expr(toks, p, n, ssa, env);
+    if ll_pk(e) == "noret" {
+        return ll_pack(ll_ppos(e), ll_pssa(e), ret_kind, env) + "\t1";
+    }
+    return ll_pack(ll_ppos(e), ll_pssa(e), ret_kind, env);
+}
+
+fn ll_str_match_stmt(toks: List[String], scr: String, p: Int, n: Int, env: String, ret_kind: String, stab: String) -> String {
+    if p >= n || ll_k(toks, p) != "LBRACE" {
+        println("ERR\tllvm\tstring-match expected {");
+        process_exit(1);
+    }
+    let sv: String = ll_as_val(scr, ll_pssa(scr));
+    let ssv: Int = ll_pssa(sv);
+    let id: Int = ssv + 1;
+    let mut q: Int = p + 1;
+    let mut arm: Int = 0;
+    let mut ssa: Int = ssv;
+    let mut all_term: Int = 1;
+    let mut last_wild: Int = 0;
+    let mut seen_wild: Int = 0;
+    while q < n && ll_k(toks, q) != "RBRACE" {
+        if seen_wild != 0 {
+            println("ERR\tllvm\tunreachable arm after wildcard");
+            process_exit(1);
+        }
+        let mut is_wild: Int = 0;
+        let mut litpos: Int = -1;
+        if ll_k(toks, q) == "STRING" {
+            litpos = q;
+            q = q + 1;
+        } else if ll_k(toks, q) == "IDENT" && ll_t(toks, q) == "_" {
+            is_wild = 1;
+            q = q + 1;
+        } else {
+            println("ERR\tllvm\tstring-match expected STRING or _");
+            process_exit(1);
+        }
+        if q >= n || ll_k(toks, q) != "FATARROW" {
+            println("ERR\tllvm\tstring-match expected =>");
+            process_exit(1);
+        }
+        q = q + 1;
+        if is_wild != 0 { seen_wild = 1; }
+        let an: String = id.to_string() + "_" + arm.to_string();
+        if is_wild == 0 {
+            let lp: String = ll_str_gep(toks, litpos, ssa);
+            ssa = ll_pssa(lp);
+            let eq: Int = ssa + 1;
+            println("  " + ll_ssa(eq) + " = call i32 @oo_str_eq({ ptr, i64 } " + ll_ssa(ssv) + ", { ptr, i64 } " + ll_ssa(ssa) + ")");
+            let c: Int = eq + 1;
+            println("  " + ll_ssa(c) + " = icmp ne i32 " + ll_ssa(eq) + ", 0");
+            ssa = c;
+            println("  br i1 " + ll_ssa(c) + ", label %smA" + an + ", label %smN" + an);
+            println("smA" + an + ":");
+        }
+        last_wild = is_wild;
+        let rb: String = ll_match_arm_body(toks, q, n, ssa, env, ret_kind, stab);
+        q = ll_ppos(rb);
+        ssa = ll_pssa(rb);
+        if ll_pterm(rb) == 0 {
+            all_term = 0;
+            println("  br label %smEnd" + id.to_string());
+        }
+        if is_wild == 0 {
+            println("smN" + an + ":");
+        }
+        if q < n && ll_k(toks, q) == "COMMA" { q = q + 1; }
+        arm = arm + 1;
+    }
+    if q < n && ll_k(toks, q) == "RBRACE" { q = q + 1; }
+    if last_wild == 0 {
+        println("  br label %smEnd" + id.to_string());
+    }
+    println("smEnd" + id.to_string() + ":");
+    if arm != 0 && all_term != 0 {
+        println("  unreachable");
+        q = ll_skip_to_rbrace(toks, q, n);
+        return ll_pack(q, ssa, ret_kind, env) + "\t1";
+    }
+    return ll_pack(q, ssa, ret_kind, env);
+}

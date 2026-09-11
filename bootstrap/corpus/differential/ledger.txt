@@ -9,7 +9,11 @@ bootstrap/corpus/differential/cases/for_let_shadow.oo parity 3a3070eb11fca782 3a
 bootstrap/corpus/emit-llvm/pass/arith_muldiv.oo parity 26d88f4df812e7df 26d88f4df812e7df  # prints 7/4/9/6/2; STAR SLASH PERCENT with C precedence
 bootstrap/corpus/emit-llvm/pass/bool_print.oo parity 76fe9f61152f4c08 76fe9f61152f4c08  # prints 0/1/1
 bootstrap/corpus/emit-llvm/pass/cap_spread2.oo parity 10159baf262b43a9 10159baf262b43a9  # seven peripheral grants, prints 7
+bootstrap/corpus/emit-llvm/pass/ensures_complex.oo parity 53c234e5e8472b6a 53c234e5e8472b6a  # prints 2; dynamic ensures result == x + 1 on LLVM and C
+bootstrap/corpus/emit-llvm/pass/export_fn.oo parity 54d668685174d41b 54d668685174d41b  # prints 42/42/112; export and pub-export lower with plain linkage
 bootstrap/corpus/emit-llvm/pass/cap_spread.oo parity 10159baf262b43a9 10159baf262b43a9  # prints 7
+bootstrap/corpus/emit-llvm/pass/float_arith.oo parity 2022fe667ef9ef10 2022fe667ef9ef10  # f64 arith/cmp/neg/lets print 4/5/3/3.5/-1.5/1/1/0/1/1/4/1; C println fixed to %g
+bootstrap/corpus/emit-llvm/pass/float_calls.oo parity 393228a4fc8c191f 393228a4fc8c191f  # Float params/returns print 1.5/2.5/-1.5/1; C __frty__ mangled names fixed
 bootstrap/corpus/emit-llvm/pass/fn_ret_int.oo parity 084c799cd551dd1d 084c799cd551dd1d  # prints 42
 bootstrap/corpus/emit-llvm/pass/for_nested_sum.oo diverge 654ee9da442fa353 49d7ac459790bd26  # LLVM 48 correct; C 192, nested-loop iteration x4 defect
 bootstrap/corpus/emit-llvm/pass/for_range_sum.oo parity 917df3320d778ddb 917df3320d778ddb  # prints 10
@@ -17,6 +21,7 @@ bootstrap/corpus/emit-llvm/pass/if_else.oo parity 5e46266be5fda850 5e46266be5fda
 bootstrap/corpus/emit-llvm/pass/ifexpr.oo parity 357a37e5df4991c5 357a37e5df4991c5  # prints 7/9/3/2/1; if-expr values plus else-if chain
 bootstrap/corpus/emit-llvm/pass/list_get.oo parity 10159baf262b43a9 10159baf262b43a9  # prints 7
 bootstrap/corpus/emit-llvm/pass/match_ok.oo parity dc51b8c96c2d745d dc51b8c96c2d745d  # prints ok
+bootstrap/corpus/emit-llvm/pass/match_stmt.oo parity 1bc2eff92ef59c52 1bc2eff92ef59c52  # prints hello/boom; match-stmt ok-first single arms plus err-first block arm
 bootstrap/corpus/emit-llvm/pass/method_calls.oo parity bdc13372471f4e64 bdc13372471f4e64  # prints 1/0/6/2/42
 bootstrap/corpus/emit-llvm/pass/multi_base_lib.oo both-fail - -  # library module, no main entry
 bootstrap/corpus/emit-llvm/pass/multi_diamond.oo c-fail f7dbab4769334b25 -  # C emits undeclared __v2_buf; LLVM prints 112
@@ -26,8 +31,16 @@ bootstrap/corpus/emit-llvm/pass/println_str.oo parity d65f6e8549443223 d65f6e854
 bootstrap/corpus/emit-llvm/pass/result_val_err.oo c-fail def9d6bd7c0e0627 -  # C emits oo_print_int with wrong arg type; LLVM prints 42/boom
 bootstrap/corpus/emit-llvm/pass/str_concat.oo parity aec070645fe53ee3 aec070645fe53ee3  # prints foobar
 bootstrap/corpus/emit-llvm/pass/str_escapes.oo parity 616cb1e7ef1b7a62 616cb1e7ef1b7a62  # 11 plus control bytes, exact
+bootstrap/corpus/emit-llvm/pass/str_match_stmt.oo parity 9e1bde90aecdf714 9e1bde90aecdf714  # prints B/wild; string-match literal/block/wild arms; fixed C need_close overcount
 bootstrap/corpus/emit-llvm/pass/str_starts_with.oo parity ad0fadf63cc7cd77 ad0fadf63cc7cd77  # prints 1/1
 bootstrap/corpus/emit-llvm/pass/struct_field.oo parity f4b907e89b1eca6d f4b907e89b1eca6d  # prints 41/mdef/7/41/100/101; decl+literal+chain+store+call-arg
 bootstrap/corpus/emit-llvm/pass/struct_list.oo c-fail 8300cf1ff6cc128b -  # LLVM prints 2/x/1/2/2/2/3; C mistypes List[Item] as OoIList
 bootstrap/corpus/emit-llvm/pass/user_fn_call.oo parity 4358298b6bb27f48 4358298b6bb27f48  # prints 42/hi/55
 bootstrap/corpus/emit-llvm/pass/while_sum.oo parity 917df3320d778ddb 917df3320d778ddb  # prints 10
+bootstrap/corpus/emit-llvm/pass/width_ints.oo parity 4332ee2c5f7ceb8c 4332ee2c5f7ceb8c  # u32 wrap/udiv/umod, i32 trunc div, u64 max prints -1, mixed if-expr arms
+bootstrap/corpus/emit-llvm/pass/width_struct_for.oo c-fail 5f9dfba6d1f9a524 -  # LLVM prints 3000000000/3; C emits raw u32 in struct decl, unrenamed for bound
+bootstrap/corpus/emit-llvm/pass/for_int_bound.oo parity bb48782e3799cb69 bb48782e3799cb69  # prints 10/3; Int and i32 variable for-bounds; both backends run clean
+bootstrap/corpus/emit-llvm/pass/ifexpr_break.oo c-fail fa360771c59a5ace -  # LLVM prints 7/7/7/3; break arm in value position exits loop; C splices break as expr, gcc rejects
+bootstrap/corpus/emit-llvm/pass/ifexpr_multi.oo parity 5b21fce85dd8bd56 5b21fce85dd8bd56  # int/str/opt if-expr merges via phi/select
+bootstrap/corpus/emit-llvm/pass/ifexpr_strnest.oo c-fail f90dff60e33f0260 -  # LLVM prints b/aaa; inline string if-expr in println; C routes ternary through oo_print_int, gcc rejects
+bootstrap/corpus/emit-llvm/pass/ifexpr_unit.oo parity 5e72493f87fb5f6b 5e72493f87fb5f6b  # unit if-expr arms

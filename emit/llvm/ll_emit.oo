@@ -12,6 +12,7 @@
 import "ll_tok.oo";
 import "ll_rt.oo";
 import "ll_fn.oo";
+import "ll_int.oo";
 import "ll_struct.oo";
 import "ll_expr.oo";
 import "ll_ty.oo";
@@ -25,7 +26,7 @@ fn ll_collect_sigs(toks: List[String], stab: String) -> String {
     while pos < n {
         let k: String = ll_k(toks, pos);
         if k == "EOF" { return env; }
-        if k == "KW_PUB" || k == "KW_FN" {
+        if k == "KW_PUB" || k == "KW_EXPORT" || k == "KW_FN" {
             let sig: String = ll_parse_sig(toks, pos, n, stab);
             if sig != "" {
                 let eq: Int = str_index_of(sig, "=");
@@ -73,7 +74,8 @@ pub fn ll_store_field_stmt(toks: List[String], p0: Int, n: Int, ssa0: Int, env: 
     let bloc: String = type_env_get(env, "__l__" + ll_t(toks, p));
     if bloc != "" { bptr = bloc; }
     let fp: String = ll_struct_field_ptr(bk, bptr, ll_t(toks, p + 2), ssa0);
-    let rhs: String = ll_expr(toks, p + 4, n, ll_pssa(fp), type_env_put("", "__e__", fk) + env);
+    let rhs0: String = ll_expr(toks, p + 4, n, ll_pssa(fp), type_env_put(env, "__e__", fk));
+    let rhs: String = ll_int_convert(rhs0, ll_pssa(rhs0), fk);
     let mut np: Int = ll_ppos(rhs); let mut ns: Int = ll_pssa(rhs);
     if ll_pptr(rhs) != "" {
         ns = ns + 1;
@@ -91,7 +93,7 @@ fn ll_reachable(toks: List[String], known: String) -> String {    let n: Int = l
         added = false;
         let mut pos: Int = 0;
         while pos < n {
-            if ll_k(toks, pos) == "KW_PUB" || ll_k(toks, pos) == "KW_FN" {
+            if ll_k(toks, pos) == "KW_PUB" || ll_k(toks, pos) == "KW_EXPORT" || ll_k(toks, pos) == "KW_FN" {
                 let nm: String = ll_fn_name_at(toks, pos, n);
                 let end: Int = ll_skip_fn(toks, pos, n);
                 if ll_in_set(set, nm) {
@@ -189,7 +191,7 @@ pub fn ll_emit_stream_toks(toks: List[String]) {
             pos = pos + 1;
         } else if k == "KW_IMPORT" || k == "KW_TYPE" {
             pos = skip_until_semi(toks, pos);
-        } else if k == "KW_PUB" || k == "KW_FN" {
+        } else if k == "KW_PUB" || k == "KW_EXPORT" || k == "KW_FN" {
             let nm: String = ll_fn_name_at(toks, pos, n);
             if ll_in_set(keep, nm) {
                 println("; FN " + nm);

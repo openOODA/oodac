@@ -82,7 +82,7 @@ fn pa_parse_item(p0: Int, n: Int, toks: List[String]) -> String {
         if p < n && c_tokk(toks, p) == "SEMI" { p = p + 1; }
         return pa_pack(p, mk_type(nm, fld));
     }
-    if k == "KW_PUB" && p + 1 < n && c_tokk(toks, p + 1) == "KW_FN" { return pa_parse_fn_item_ast(p + 2, n, toks); } if k == "KW_FN" { return pa_parse_fn_item_ast(p + 1, n, toks); }
+    if k == "KW_PUB" || k == "KW_EXPORT" || k == "KW_FN" { let mut mp: Int = p; while mp < n && (c_tokk(toks, mp) == "KW_PUB" || c_tokk(toks, mp) == "KW_EXPORT") { mp = mp + 1; } if mp < n && c_tokk(toks, mp) == "KW_FN" { return pa_parse_fn_item_ast(mp + 1, n, toks); } }
     if k == "KW_TRAIT" || k == "KW_IMPL" || k == "KW_VERIFY" {
         while p < n && c_tokk(toks, p) != "LBRACE" { p = p + 1; }
         if p < n && c_tokk(toks, p) == "LBRACE" {

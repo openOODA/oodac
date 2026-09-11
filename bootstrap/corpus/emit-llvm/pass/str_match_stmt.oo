@@ -1,0 +1,27 @@
+// # LLVM string-match statement parity probe
+//
+// Logline: match on a String with literal arms, a block arm, and a trailing
+//   wildcard. Arms after a wildcard fail closed (unlike C, which keeps
+//   checking them inside the else).
+//
+// Setup: Both backends compare with string equality; LLVM lowers through
+//   oo_str_eq, C through oo_str_eq. Expect B then wild.
+//
+// Beats:
+//   1. Literal arm hit with a block body.
+//   2. Wildcard hit on a second match with only a non-matching literal.
+
+pub fn main() {
+    let s: String = "b";
+    match s {
+        "a" => println("A"),
+        "b" => {
+            println("B");
+        },
+        _ => println("Z"),
+    }
+    match s {
+        "z" => println("no"),
+        _ => println("wild"),
+    }
+}

@@ -1,0 +1,205 @@
+// # LLVM contract lowering
+//
+// Logline: Lower requires/spec entry checks and ensures return checks with SMT elision.
+//
+// Setup: Same token rows as check; smt_clause_is_proven elides static clauses.
+// Dynamic clauses lower through ll_expr with params and result bound. Trap text
+// matches C byte-for-byte: ERR\tcontract\t<kind> then exit(1).
+//
+// Beats:
+//   1. Collect requires/spec/ensures ranges between signature and LBRACE.
+//   2. Entry traps for dynamic requires/spec with per-fn message globals.
+//   3. Return traps for dynamic ensures with a unique result slot per site.
+
+import "ll_tok.oo";
+import "ll_ty.oo";
+import "ll_int.oo";
+import "ll_expr.oo";
+import "ll_call.oo";
+import "types/types_core.oo";
+import "lex/token_parse_int.oo";
+import "check/smt_clause_query.oo";
+
+fn ll_con_end(toks: List[String], p: Int, n: Int) -> Int {
+    let mut q: Int = p;
+    while q < n {
+        let k: String = ll_k(toks, q);
+        if k == "KW_REQUIRES" || k == "KW_ENSURES" || k == "LBRACE" { return q; }
+        if k == "IDENT" && (ll_t(toks, q) == "spec" || ll_t(toks, q) == "caps") { return q; }
+        if k == "KW_FN" || k == "KW_PUB" || k == "KW_EXPORT" || k == "KW_VERIFY" || k == "KW_TYPE" || k == "EOF" { return q; }
+        q = q + 1;
+    }
+    return q;
+}
+
+pub fn ll_contract_collect(toks: List[String], p0: Int, n: Int, env0: String, name: String) -> String {
+    let mut p: Int = p0;
+    let mut env: String = env0;
+    let mut reqs: String = "";
+    let mut enss: String = "";
+    let mut ri: Int = 0;
+    let mut ei: Int = 0;
+    let mut done: Bool = false;
+    while !done {
+        if p >= n {
+            println("ERR\tllvm\tcontract: missing LBRACE after fn header");
+            process_exit(1);
+        }
+        let k: String = ll_k(toks, p);
+        if k == "LBRACE" {
+            done = true;
+        } else if k == "IDENT" && ll_t(toks, p) == "spec" {
+            let cs: Int = p + 1;
+            let ce: Int = ll_con_end(toks, cs, n);
+            if smt_clause_is_unsat(toks, cs, ce, "spec") { smt_clause_unsat_exit(toks, cs, "spec"); }
+            if !smt_clause_is_proven(toks, cs, ce, "spec") {
+                reqs = reqs + cs.to_string() + ":" + ce.to_string() + ":spec;";
+                ll_con_global(name, ri, "spec");
+                ri = ri + 1;
+            }
+            p = ce;
+        } else if k == "KW_REQUIRES" {
+            let cs: Int = p + 1;
+            let ce: Int = ll_con_end(toks, cs, n);
+            if smt_clause_is_unsat(toks, cs, ce, "requires") { smt_clause_unsat_exit(toks, cs, "requires"); }
+            if !smt_clause_is_proven(toks, cs, ce, "requires") {
+                reqs = reqs + cs.to_string() + ":" + ce.to_string() + ":requires;";
+                ll_con_global(name, ri, "requires");
+                ri = ri + 1;
+            }
+            p = ce;
+        } else if k == "KW_ENSURES" {
+            let cs: Int = p + 1;
+            let ce: Int = ll_con_end(toks, cs, n);
+            if smt_clause_is_unsat(toks, cs, ce, "ensures") { smt_clause_unsat_exit(toks, cs, "ensures"); }
+            if !smt_clause_is_proven(toks, cs, ce, "ensures") {
+                enss = enss + cs.to_string() + ":" + ce.to_string() + ":ensures;";
+                ll_con_global(name, 1000 + ei, "ensures");
+                ei = ei + 1;
+            }
+            p = ce;
+        } else if k == "SEMI" {
+            return ll_pack(p + 1, 0, "", env);
+        } else {
+            p = p + 1;
+        }
+    }
+    if reqs != "" { env = type_env_put(env, "__creq__", reqs); }
+    if enss != "" { env = type_env_put(env, "__cens__", enss); }
+    return ll_pack(p, 0, "", env);
+}
+
+fn ll_con_global(name: String, idx: Int, kind: String) {
+    let mut mlen: Int = 23;
+    if kind == "spec" { mlen = 19; }
+    if kind == "ensures" { mlen = 22; }
+    println("@.con_" + idx.to_string() + "_" + name + " = private unnamed_addr constant [" + mlen.to_string() + " x i8] c\"ERR\\09contract\\09" + kind + "\\0A\\00\"");
+}
+
+fn ll_con_trap(ssa0: Int, cond: Int, name: String, idx: Int, kind: String) -> Int {
+    let mut mlen: Int = 23;
+    if kind == "spec" { mlen = 19; }
+    if kind == "ensures" { mlen = 22; }
+    let tag: String = idx.to_string() + "_" + name;
+    println("  br i1 " + ll_ssa(cond) + ", label %ctok" + tag + ", label %ctrap" + tag);
+    println("ctrap" + tag + ":");
+    let mut s: Int = ssa0;
+    if cond > s { s = cond; }
+    s = s + 1;
+    println("  " + ll_ssa(s) + " = getelementptr [" + mlen.to_string() + " x i8], ptr @.con_" + tag + ", i64 0, i64 0");
+    s = s + 1;
+    println("  " + ll_ssa(s) + " = call { ptr, i64 } @oo_str_lit(ptr " + ll_ssa(s - 1) + ")");
+    s = s + 1;
+    println("  " + ll_ssa(s) + " = extractvalue { ptr, i64 } " + ll_ssa(s - 1) + ", 0");
+    s = s + 1;
+    println("  " + ll_ssa(s) + " = extractvalue { ptr, i64 } " + ll_ssa(s - 2) + ", 1");
+    println("  call void @oo_print_str(ptr " + ll_ssa(s - 1) + ", i64 " + ll_ssa(s) + ")");
+    println("  call void @oo_println()");
+    println("  call void @oo_process_exit(i64 1)");
+    println("  unreachable");
+    println("ctok" + tag + ":");
+    return s;
+}
+
+fn ll_con_check(toks: List[String], cs: Int, ce: Int, env: String, ssa0: Int, name: String, idx: Int, kind: String) -> Int {
+    let v: String = ll_expr(toks, cs, ce, ssa0, env);
+    if ll_pk(v) != "i1" && !ll_is_int(ll_pk(v)) && ll_pk(v) != "f64" {
+        println("ERR\tllvm\tcontract clause kind " + ll_pk(v));
+        process_exit(1);
+    }
+    let c: Int = ll_cond_i1(v, ll_pssa(v));
+    return ll_con_trap(c, c, name, idx, kind);
+}
+
+fn ll_con_walk(toks: List[String], spec: String, env: String, ssa0: Int, name: String, base: Int) -> Int {
+    let mut ssa: Int = ssa0;
+    let mut i: Int = 0;
+    let n: Int = chars_len(spec);
+    let mut p: Int = 0;
+    while p < n {
+        let mut q: Int = p;
+        while q < n && char_at(spec, q) != ";" { q = q + 1; }
+        if q > p {
+            let cl: String = str_slice(spec, p, q);
+            let c1: Int = ll_con_colon(cl, 0);
+            let c2: Int = ll_con_colon(cl, c1 + 1);
+            let cs: Int = parse_int(str_slice(cl, 0, c1));
+            let ce: Int = parse_int(str_slice(cl, c1 + 1, c2));
+            let kind: String = str_slice(cl, c2 + 1, chars_len(cl));
+            ssa = ll_con_check(toks, cs, ce, env, ssa, name, base + i, kind);
+            i = i + 1;
+        }
+        p = q + 1;
+    }
+    return ssa;
+}
+
+fn ll_con_colon(s: String, from: Int) -> Int {
+    let mut q: Int = from;
+    while q < chars_len(s) && char_at(s, q) != ":" { q = q + 1; }
+    return q;
+}
+
+pub fn ll_contract_entry(toks: List[String], env0: String, ssa0: Int, name: String) -> String {
+    let mut env: String = env0;
+    let mut ssa: Int = ssa0;
+    let reqs: String = type_env_get(env, "__creq__");
+    if reqs != "" { ssa = ll_con_walk(toks, reqs, env, ssa, name, 0); }
+    if type_env_get(env, "__cens__") != "" { env = type_env_put(env, "__ens__", "1"); }
+    return ll_pack(0, ssa, "", env);
+}
+
+pub fn ll_contract_return(toks: List[String], v: String, env0: String, ssa0: Int, ret_kind: String, site: Int) -> Int {
+    let enss: String = type_env_get(env0, "__cens__");
+    if enss == "" { return ssa0; }
+    let mut env: String = env0;
+    let mut ssa: Int = ssa0;
+    let slot: String = "%cres" + site.to_string();
+    if ret_kind == "str" {
+        let mut rv: Int = ll_pssa(v);
+        if ll_pptr(v) != "" {
+            ssa = ssa + 1;
+            println("  " + ll_ssa(ssa) + " = load { ptr, i64 }, ptr " + ll_pptr(v));
+            rv = ssa;
+        }
+        ssa = ssa + 1;
+        println("  " + ll_ssa(ssa) + " = call i64 @oo_chars_len({ ptr, i64 } " + ll_ssa(rv) + ")");
+        println("  " + slot + " = alloca i64, align 8");
+        println("  store i64 " + ll_ssa(ssa) + ", ptr " + slot);
+        env = type_env_put(env, "result", "i64");
+        env = type_env_put(env, "__l__result", slot);
+    } else if ll_is_int(ret_kind) || ret_kind == "f64" || ret_kind == "i1" {
+        println("  " + slot + " = alloca " + ll_ir_alloc(ret_kind) + ", align 8");
+        println("  store " + ll_ir_val(ret_kind) + " " + ll_ssa(ll_pssa(v)) + ", ptr " + slot);
+        env = type_env_put(env, "result", ret_kind);
+        env = type_env_put(env, "__l__result", slot);
+    } else {
+        println("ERR\tllvm\tensures on kind " + ret_kind);
+        process_exit(1);
+    }
+    return ll_con_walk(toks, enss, env, ssa, name_of(env), 1000);
+}
+
+fn name_of(env: String) -> String {
+    return type_env_get(env, "__fname__");
+}

@@ -1,6 +1,6 @@
 // # LLVM statement lowering
 //
-// Logline: Lower let, assign, if, while, return, println, and expression statements.
+// Logline: Lower let, assign, if, while, for, match, return, println, and expression statements.
 //
 // Setup: Env maps names to kinds. Aggregates in %v_name allocas. No emit/c import.
 //
@@ -11,20 +11,25 @@
 
 import "ll_tok.oo";
 import "ll_ty.oo";
+import "ll_int.oo";
 import "ll_expr.oo";
 import "ll_call.oo";
 import "ll_ctor.oo";
+import "ll_match.oo";
 import "ll_struct.oo";
 import "ll_exit.oo";
+import "ll_arc.oo";
 import "types/types_core.oo";
 
 pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String, env0: String, ssa0: Int, stab: String) -> String {
     let mut p: Int = pos;
     let mut ssa: Int = ssa0;
-    let mut env: String = env0;
+    let mut env: String = ll_arc_push(env0);
     while p < n {
         let k: String = ll_k(toks, p);
-        if k == "RBRACE" || k == "EOF" { return ll_pack(p, ssa, ret_kind, env); }
+        if k == "RBRACE" || k == "EOF" {
+            return ll_pack(p, ll_arc_exit(env, ssa), ret_kind, ll_arc_pop(env));
+        }
         if k == "KW_LET" {
             p = p + 1;
             if p < n && ll_k(toks, p) == "KW_MUT" { p = p + 1; }
@@ -36,17 +41,20 @@ pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String, env
                 shloc = ll_var(name) + "_s" + site.to_string();
             }
             let mut ty: String = "i64";
+            let mut ann: String = "";
             if p < n && ll_k(toks, p) == "COLON" {
                 p = p + 1;
                 ty = ll_ty_at(toks, p, n, stab);
+                ann = ty;
                 p = ll_skip_type(toks, p, n);
             }
             if p < n && ll_k(toks, p) == "EQ" { p = p + 1; }
-            let envx: String = type_env_put("", "__e__", ty) + env;
+            let envx: String = type_env_put(env, "__e__", ty);
             let v: String = ll_expr(toks, p, n, ssa, envx);
             p = ll_ppos(v);
             ssa = ll_pssa(v);
             if ll_pk(v) != "" && ll_pk(v) != "void" { ty = ll_pk(v); }
+            if ll_is_int(ann) && ll_is_int(ty) && ann != ty { ty = ann; }
             let mut dst: String = ll_var(name);
             if shloc != "" {
                 dst = shloc;
@@ -55,6 +63,7 @@ pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String, env
             println("  " + dst + " = alloca " + ll_ir_alloc(ty) + ", align 8");
             ssa = ll_store(name, ty, v, ssa, env);
             env = type_env_put(env, name, ty);
+            if ll_arc_owned(ty) && ll_pptr(v) != "" { ssa = ll_arc_keep(name, ty, env, ssa); }
             if p < n && ll_k(toks, p) == "SEMI" { p = p + 1; }
         } else if k == "KW_IF" {
             let c: String = ll_expr(toks, p + 1, n, ssa, env);
@@ -126,7 +135,7 @@ pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String, env
                 }
                 p = p + 1;
             }
-            let lo: String = ll_expr(toks, p, n, ssa, env);
+            let mut lo: String = ll_expr(toks, p, n, ssa, env);
             p = ll_ppos(lo);
             ssa = ll_pssa(lo);
             if p >= n || ll_k(toks, p) != "DOTDOT" {
@@ -134,9 +143,17 @@ pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String, env
                 process_exit(1);
             }
             p = p + 1;
-            let hi: String = ll_expr(toks, p, n, ssa, env);
+            let mut hi: String = ll_expr(toks, p, n, ssa, env);
             p = ll_ppos(hi);
             ssa = ll_pssa(hi);
+            if ll_is_int(ll_pk(lo)) && ll_pk(lo) != "i64" {
+                lo = ll_int_convert(lo, ssa, "i64");
+                ssa = ll_pssa(lo);
+            }
+            if ll_is_int(ll_pk(hi)) && ll_pk(hi) != "i64" {
+                hi = ll_int_convert(hi, ssa, "i64");
+                ssa = ll_pssa(hi);
+            }
             if ll_pk(lo) != "i64" || ll_pk(hi) != "i64" {
                 println("ERR\tllvm\tfor residual (i64 range bounds only)");
                 process_exit(1);
@@ -179,6 +196,12 @@ pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String, env
                 println("  br label %fcond" + fid.to_string());
             }
             println("fend" + fid.to_string() + ":");
+        } else if k == "KW_MATCH" {
+            let ms: String = ll_match_stmt(toks, p, n, ssa, env, ret_kind, stab);
+            p = ll_ppos(ms); ssa = ll_pssa(ms);
+            if ll_pterm(ms) != 0 {
+                return ms;
+            }
         } else if k == "KW_RETURN" {
             let rt: String = ll_return_stmt(toks, p, n, ssa, env, ret_kind, stab);
             return rt;
@@ -194,12 +217,20 @@ pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String, env
         } else if k == "IDENT" && p + 3 < n && ll_k(toks, p + 1) == "DOT" && ll_k(toks, p + 2) == "IDENT" && ll_k(toks, p + 3) == "EQ" && ll_is_struct(type_env_get(env, ll_t(toks, p))) {
             let sf: String = ll_store_field_stmt(toks, p, n, ssa, env, stab);
             p = ll_ppos(sf); ssa = ll_pssa(sf);
+        } else if k == "STAR" && p + 2 < n && ll_k(toks, p + 1) == "IDENT" && ll_k(toks, p + 2) == "EQ" {
+            let ds: String = ll_store_deref_stmt(toks, p, n, ssa, env);
+            p = ll_ppos(ds); ssa = ll_pssa(ds);
         } else if k == "IDENT" && p + 1 < n && ll_k(toks, p + 1) == "EQ" {
             let name: String = ll_t(toks, p);
             let ty: String = type_env_get(env, name);
-            let v: String = ll_expr(toks, p + 2, n, ssa, type_env_put("", "__e__", ty) + env);
+            let v: String = ll_expr(toks, p + 2, n, ssa, type_env_put(env, "__e__", ty));
             p = ll_ppos(v);
-            ssa = ll_store(name, ty, v, ll_pssa(v), env);
+            ssa = ll_pssa(v);
+            if ll_arc_owned(ty) {
+                if ll_pptr(v) != "" { ssa = ll_arc_keep_ptr(ty, ll_pptr(v), ssa); }
+                ssa = ll_arc_rel(name, ty, env, ssa);
+            }
+            ssa = ll_store(name, ty, v, ssa, env);
             if p < n && ll_k(toks, p) == "SEMI" { p = p + 1; }
         } else {
             let v: String = ll_expr(toks, p, n, ssa, env);
@@ -208,7 +239,7 @@ pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String, env
             if p < n && ll_k(toks, p) == "SEMI" { p = p + 1; }
             if ll_pk(v) == "noret" {
                 p = ll_skip_to_rbrace(toks, p, n);
-                return ll_pack(p, ssa, ret_kind, env) + "\t1";
+                return ll_pack(p, ll_arc_exit(env, ssa), ret_kind, ll_arc_pop(env)) + "\t1";
             }
         }
     }

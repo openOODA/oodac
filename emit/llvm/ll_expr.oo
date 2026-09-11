@@ -5,28 +5,53 @@
 // Setup: Locals in env name=kind. Aggregates live in allocas. STRING globals are @.s<pos>.
 //
 // Beats:
-//   1. INT/STRING/IDENT load, user calls, and builtins.
+//   1. INT/STRING/IDENT load and builtins (call-argument walk lives in ll_int.oo).
 //   2. .to_string .is_some .is_none .is_ok .is_err .val .err methods.
 //   3. C-like precedence: || < && < compare < + - < * / % via ll_binop/ll_cmp/ll_add/ll_mul.
 import "ll_tok.oo";
 import "ll_ty.oo";
+import "ll_int.oo";
 import "types/types_core.oo";
 import "ll_call.oo";
 import "ll_method.oo";
 import "ll_builtin.oo";
 import "ll_ctor.oo";
 import "ll_struct.oo";
+import "ll_float.oo";
 pub fn ll_expr(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> String {
     return ll_binop(toks, pos, n, ssa0, env);
 }
 fn ll_unary(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> String {
     if pos < n && ll_k(toks, pos) == "AMP" {
-        if pos + 1 >= n || ll_k(toks, pos + 1) != "IDENT" {
+        let mut ap: Int = pos + 1;
+        if ap < n && ll_k(toks, ap) == "KW_MUT" { ap = ap + 1; }
+        if ap >= n || ll_k(toks, ap) != "IDENT" {
             println("ERR\tllvm\taddress of non-ident");
             process_exit(1);
         }
-        let ad: String = ll_addr_ident(ll_t(toks, pos + 1), env, ssa0);
-        return ll_pack(pos + 2, ll_pssa(ad), ll_pk(ad), ll_pptr(ad));
+        let ad: String = ll_addr_ident(ll_t(toks, ap), env, ssa0);
+        if ll_is_agg(ll_pk(ad)) {
+            return ll_pack(ap + 1, ll_pssa(ad), ll_pk(ad), ll_pptr(ad));
+        }
+        if ll_pk(ad) != "i64" && ll_pk(ad) != "u64" {
+            println("ERR\tllvm\tborrow of narrow/float/bool not lowered");
+            process_exit(1);
+        }
+        let s: Int = ll_pssa(ad) + 1;
+        println("  " + ll_ssa(s) + " = ptrtoint ptr " + ll_pptr(ad) + " to " + ll_ir_val(ll_pk(ad)));
+        return ll_pack(ap + 1, s, ll_pk(ad), ll_pptr(ad));
+    }
+    if pos < n && ll_k(toks, pos) == "STAR" {
+        let r: String = ll_unary(toks, pos + 1, n, ssa0, env);
+        if ll_is_agg(ll_pk(r)) {
+            println("ERR\tllvm\tderef of aggregate ref");
+            process_exit(1);
+        }
+        let s1: Int = ll_pssa(r) + 1;
+        println("  " + ll_ssa(s1) + " = inttoptr " + ll_ir_val(ll_pk(r)) + " " + ll_ssa(ll_pssa(r)) + " to ptr");
+        let s2: Int = s1 + 1;
+        println("  " + ll_ssa(s2) + " = load " + ll_ir_val(ll_pk(r)) + ", ptr " + ll_ssa(s1));
+        return ll_pack(ll_ppos(r), s2, ll_pk(r), "");
     }
     if pos < n && ll_k(toks, pos) == "BANG" {
         let r: String = ll_unary(toks, pos + 1, n, ssa0, env);
@@ -36,9 +61,7 @@ fn ll_unary(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> Str
     }
     if pos < n && ll_k(toks, pos) == "MINUS" {
         let r: String = ll_unary(toks, pos + 1, n, ssa0, env);
-        let s: Int = ll_pssa(r) + 1;
-        println("  " + ll_ssa(s) + " = sub i64 0, " + ll_ssa(ll_pssa(r)));
-        return ll_pack(ll_ppos(r), s, "i64", "");
+        return ll_neg_int(r);
     }
     return ll_postfix(toks, pos, n, ssa0, env);
 }
@@ -180,6 +203,9 @@ fn ll_primary(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> S
         println("  " + ll_ssa(s) + " = add i64 0, " + ll_t(toks, pos));
         return ll_pack(pos + 1, s, "i64", "");
     }
+    if k == "FLOAT" {
+        return ll_float_lit(toks, pos, ssa0);
+    }
     if k == "KW_TRUE" || k == "KW_FALSE" {
         let s: Int = ssa0 + 1;
         let mut bit: String = "0";
@@ -223,34 +249,4 @@ fn ll_primary(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> S
     println("ERR\tllvm\tunsupported expr " + k);
     process_exit(1);
     return ll_pack(pos, ssa0, "i64", "");
-}
-
-fn ll_call_at(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> String {
-    let nm: String = ll_t(toks, pos);
-    let mut p: Int = pos + 1;
-    if p >= n || ll_k(toks, p) != "LPAREN" {
-        println("ERR\tllvm\tcall");
-        process_exit(1);
-    }
-    p = p + 1;
-    let mut args: List[String] = list_new();
-    let mut ssa: Int = ssa0;
-    while p < n && ll_k(toks, p) != "RPAREN" {
-        if ll_k(toks, p) == "COMMA" { p = p + 1; continue; }
-        let a: String = ll_expr(toks, p, n, ssa, env);
-        args = list_push(args, a);
-        p = ll_ppos(a); ssa = ll_pssa(a);
-    }
-    if p < n && ll_k(toks, p) == "RPAREN" { p = p + 1; }
-    let b: String = ll_builtin(nm, args, ssa, type_env_get(env, "__e__"));
-    if b != "" {
-        return ll_pack(p, ll_pssa(b), ll_pk(b), ll_pptr(b));
-    }
-    let sig: String = type_env_get(env, "__fn__" + nm);
-    if sig == "" {
-        println("ERR\tllvm\tunknown call " + nm);
-        process_exit(1);
-    }
-    let u: String = ll_user_call(nm, sig, args, ssa);
-    return ll_pack(p, ll_pssa(u), ll_pk(u), ll_pptr(u));
 }

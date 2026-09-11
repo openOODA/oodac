@@ -1,0 +1,18 @@
+// # LLVM println of if-expr probe (C backend cannot build it)
+//
+// Logline: println applied directly to a string if-expr builds on LLVM; the C
+//   backend routes the ternary through oo_print_int and fails at gcc.
+//   Expect the ledger to pin this file c-fail.
+//
+// Setup: Same merges as ifexpr_multi, but printed inline instead of through
+//   a let annotation. LLVM prints b then aaa.
+//
+// Beats:
+//   1. Inline string if-expr merges print b/aaa on LLVM.
+
+pub fn main() {
+    let s1: String = "aaa";
+    let s2: String = "b";
+    println(if 1 > 2 { s1 } else { s2 });
+    println(if 2 > 1 { s1 } else { s2 });
+}

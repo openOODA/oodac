@@ -13,11 +13,12 @@ import "ll_tok.oo";
 import "ll_ty.oo";
 import "ll_stmt.oo";
 import "ll_ifexpr.oo";
+import "ll_contract.oo";
 import "types/types_core.oo";
 
 pub fn ll_fn_name_at(toks: List[String], pos: Int, n: Int) -> String {
     let mut p: Int = pos;
-    if p < n && ll_k(toks, p) == "KW_PUB" { p = p + 1; }
+    while p < n && (ll_k(toks, p) == "KW_PUB" || ll_k(toks, p) == "KW_EXPORT") { p = p + 1; }
     if p < n && ll_k(toks, p) == "KW_FN" { p = p + 1; }
     if p < n && ll_k(toks, p) == "IDENT" { return ll_t(toks, p); }
     return "";
@@ -25,7 +26,7 @@ pub fn ll_fn_name_at(toks: List[String], pos: Int, n: Int) -> String {
 
 pub fn ll_parse_sig(toks: List[String], pos: Int, n: Int, stab: String) -> String {
     let mut p: Int = pos;
-    if ll_k(toks, p) == "KW_PUB" { p = p + 1; }
+    while ll_k(toks, p) == "KW_PUB" || ll_k(toks, p) == "KW_EXPORT" { p = p + 1; }
     if ll_k(toks, p) != "KW_FN" { return ""; }
     p = p + 1;
     let name: String = ll_t(toks, p);
@@ -53,19 +54,23 @@ pub fn ll_parse_sig(toks: List[String], pos: Int, n: Int, stab: String) -> Strin
         p = p + 1;
         rk = ll_ty_at(toks, p, n, stab);
     }
-    if name == "main" { rk = "i32"; }
+    if name == "main" { rk = "main_i32"; }
     return name + "=" + aks + ">" + rk;
 }
 
 pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String, stab: String) -> Int {
     let mut p: Int = pos;
+    let mut is_export: Bool = false;
+    if ll_k(toks, p) == "KW_EXPORT" { is_export = true; p = p + 1; }
     if ll_k(toks, p) == "KW_PUB" { p = p + 1; }
+    if ll_k(toks, p) == "KW_EXPORT" { is_export = true; p = p + 1; }
     if ll_k(toks, p) != "KW_FN" { return ll_skip_fn(toks, pos, n); }
     p = p + 1;
     let name: String = ll_t(toks, p);
     p = p + 1;
     if p < n && ll_k(toks, p) == "LPAREN" { p = p + 1; }
     let mut env: String = fenv;
+    env = type_env_put(env, "__fname__", name);
     let mut caps: String = "";
     let mut form: String = "";
     let mut plist: String = "";
@@ -103,14 +108,14 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String, stab: Stri
         rk = ll_ty_at(toks, p, n, stab);
         p = ll_skip_type(toks, p, n);
     }
-    while p < n && ll_k(toks, p) != "LBRACE" {
-        if ll_k(toks, p) == "SEMI" { return p + 1; }
-        p = p + 1;
-    }
+    let ci: String = ll_contract_collect(toks, p, n, env, name);
+    p = ll_ppos(ci);
+    env = ll_pptr(ci);
     if p >= n { return p; }
+    if ll_k(toks, p) != "LBRACE" { return p; }
     p = p + 1;
     if name == "main" {
-        println("define i32 @main(i32 %argc, ptr %argv) {");
+        println("define hidden i32 @main(i32 %argc, ptr %argv) {");
         println("entry:");
         let mut i: Int = 0;
         let cn: Int = chars_len(caps);
@@ -147,24 +152,31 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String, stab: Stri
         println("  br label %args0");
         println("args2:");
         env = type_env_put(env, "args", "slist");
-        let mut mrk: String = "i32";
+        let mut mrk: String = "main_i32";
         if rk == "resi" { mrk = "resim"; }
         if rk == "opti" || rk == "opts" { mrk = rk; }
+        env = type_env_put(env, "__rk__", mrk);
+        if type_env_get(env, "__creq__") != "" || type_env_get(env, "__cens__") != "" {
+            println("ERR\tllvm\tcontracts on main not lowered");
+            process_exit(1);
+        }
         let mb: String = ll_emit_stmts(toks, p, n, mrk, env, 10, stab);
         if ll_pterm(mb) == 0 { println("  ret i32 0"); }
         println("}");
         return ll_skip_fn(toks, pos, n);
     }
+    let mut vis: String = "hidden ";
+    if is_export { vis = "default "; }
     if ll_is_mem(rk) {
         if plist != "" {
-            println("define void @" + name + "(ptr sret(" + ll_ir_alloc(rk) + ") align 8 %ret, " + plist + ") {");
+            println("define " + vis + "void @" + name + "(ptr sret(" + ll_ir_alloc(rk) + ") align 8 %ret, " + plist + ") {");
         } else {
-            println("define void @" + name + "(ptr sret(" + ll_ir_alloc(rk) + ") align 8 %ret) {");
+            println("define " + vis + "void @" + name + "(ptr sret(" + ll_ir_alloc(rk) + ") align 8 %ret) {");
         }
     } else if rk == "void" {
-        println("define void @" + name + "(" + plist + ") {");
+        println("define " + vis + "void @" + name + "(" + plist + ") {");
     } else {
-        println("define " + ll_ir_val(rk) + " @" + name + "(" + plist + ") {");
+        println("define " + vis + ll_ir_val(rk) + " @" + name + "(" + plist + ") {");
     }
     let mut fi: Int = 0;
     let fnn: Int = chars_len(form);
@@ -194,6 +206,10 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String, stab: Stri
         }
         fi = fi + 1;
     }
+    env = type_env_put(env, "__rk__", rk);
+    let ce: String = ll_contract_entry(toks, env, ssa, name);
+    ssa = ll_pssa(ce);
+    env = ll_pptr(ce);
     let fb: String = ll_emit_stmts(toks, p, n, rk, env, ssa + 1, stab);
     if ll_pterm(fb) == 0 {
         if rk == "void" || ll_is_mem(rk) { println("  ret void"); }

@@ -1,0 +1,45 @@
+// # LLVM multi-statement if-expr parity probe
+//
+// Logline: if used as a value with multi-statement arms, else-if chains,
+//   terminating arms, and string/variable arms.
+//
+// Setup: Both backends run pre-statements in order and merge the trailing
+//   expression. A terminating arm skips the merge branch; the live side flows
+//   through. Doubly terminated arms merge dead.
+//
+// Beats:
+//   1. Multi arms with println and let pre-statements print 8 then 42.
+//   2. Single-terminated arm through a helper prints 1 then 12.
+//   3. Else-if chain with multi arms prints 42.
+//   4. Doubly terminated arms print 1.
+//   5. String literal and variable arms print b then b/aaa.
+
+fn f(c: Bool) -> Int {
+    let x: Int = if c { return 1; } else { 2 };
+    return x + 10;
+}
+
+fn g(c: Bool) -> Int {
+    let x: Int = if c { return 1; } else { return 2 };
+    return x;
+}
+
+pub fn main() {
+    let x: Int = if 1 > 2 { println(9); 7 } else { 8 };
+    println(x);
+    let y: Int = if 2 > 1 { let q: Int = 40; q + 2 } else { 0 };
+    println(y);
+    println(f(true));
+    println(f(false));
+    let z: Int = if 1 > 2 { 7 } else if 2 > 3 { let a: Int = 1; a } else { let b: Int = 2; b + 40 };
+    println(z);
+    println(g(true));
+    let s: String = if 1 > 2 { "a" } else { "b" };
+    println(s);
+    let s1: String = "aaa";
+    let s2: String = "b";
+    let t1: String = if 1 > 2 { s1 } else { s2 };
+    println(t1);
+    let t2: String = if 2 > 1 { s1 } else { s2 };
+    println(t2);
+}

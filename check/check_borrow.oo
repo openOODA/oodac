@@ -139,7 +139,7 @@ fn borrow_walk_let(toks: List[String], i0: Int, n: Int, moved0: String, shr0: St
 
 fn borrow_walk_fn(toks: List[String], i0: Int, n: Int) -> Int {
     let mut i: Int = i0;
-    if bk(toks, i) == "KW_PUB" { i = i + 1; }
+    while i < n && (bk(toks, i) == "KW_PUB" || bk(toks, i) == "KW_EXPORT") { i = i + 1; }
     if i < n && bk(toks, i) == "KW_FN" { i = i + 1; }
     if i < n && bk(toks, i) == "IDENT" { i = i + 1; }
     while i < n && bk(toks, i) != "LBRACE" && bk(toks, i) != "EOF" { i = i + 1; }
@@ -178,8 +178,9 @@ pub fn check_borrow(toks: List[String]) {
     let n: Int = list_len(toks);
     let mut i: Int = 0;
     while i < n {
-        let k: String = bk(toks, i);
-        if k == "KW_FN" || (k == "KW_PUB" && i + 1 < n && bk(toks, i + 1) == "KW_FN") {
+        let mut mi: Int = i;
+        while mi < n && (bk(toks, mi) == "KW_PUB" || bk(toks, mi) == "KW_EXPORT") { mi = mi + 1; }
+        if mi < n && bk(toks, mi) == "KW_FN" {
             i = borrow_walk_fn(toks, i, n);
         } else {
             i = i + 1;

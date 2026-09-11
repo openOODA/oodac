@@ -1,0 +1,52 @@
+// # LLVM fixed-width integer parity probe
+//
+// Logline: u32/i32/u64 lower through the ll_int kind lattice with C-exact wrap.
+//
+// Setup: Checker normalizes widths to Int; C emits stdint types with C
+//   conversions; LLVM emits i32/i64 with matching sext/zext/trunc rules.
+//
+// Beats:
+//   1. u32/i32/u64 params, returns, and calls convert at fn boundaries.
+//   2. u32 wrap (3000000000+2000000000) matches C uint32_t wrap.
+//   3. Signed i32 div/mod and unsigned u32 div/mod match C truncation.
+//   4. u64 max (0-1) prints -1 on both backends (same long-long rendering).
+//   5. if-expr mixed arms extend the narrow side.
+//   Struct fields and u32 for-range bounds live in width_struct_for.oo
+//   (the C backend cannot build those yet).
+
+fn add_u32(a: u32, b: u32) -> u32 {
+    return a + b;
+}
+
+fn mul_i32(a: i32, b: i32) -> i32 {
+    return a * b;
+}
+
+fn id_u64(x: u64) -> u64 {
+    return x;
+}
+
+fn is_big(x: u32, lim: u32) -> u32 {
+    if x > lim {
+        return 1;
+    }
+    return 0;
+}
+
+pub fn main() {
+    println(add_u32(3000000000, 2000000000));
+    println(mul_i32(100000, 200));
+    println(id_u64(0 - 1));
+    println(is_big(4000000000, 100));
+    println(is_big(7, 100));
+    let q: u32 = add_u32(7, 0) / add_u32(2, 0);
+    println(q);
+    let r: i32 = mul_i32(0 - 7, 1) / mul_i32(2, 1);
+    println(r);
+    let m: u32 = add_u32(7, 0) % add_u32(3, 0);
+    println(m);
+    let g: Int = 7;
+    println(add_u32(g, 100000));
+    let pick: Int = if add_u32(3, 0) > add_u32(5, 0) { 100 } else { add_u32(1, 0) };
+    println(pick);
+}

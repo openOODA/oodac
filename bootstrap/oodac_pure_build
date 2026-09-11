@@ -203,7 +203,7 @@ if [[ "${PURE_SKIP_CHECK:-}" != "1" ]]; then
   # cold check exceeds 900s on this host; 180s cannot finish.
   ck_to=$((60 + nmods * 2))
   if [[ $nmods -gt 80 ]]; then
-    ck_to=1800
+    ck_to=3600
   elif [[ $ck_to -gt 180 ]]; then
     ck_to=180
   fi

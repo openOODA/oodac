@@ -11,6 +11,7 @@
 
 import "ll_tok.oo";
 import "ll_ty.oo";
+import "ll_int.oo";
 import "ll_call.oo";
 import "ll_ctor.oo";
 import "ll_struct_list.oo";
@@ -58,8 +59,8 @@ pub fn ll_builtin(name: String, args: List[String], ssa0: Int, expect: String) -
     }
     if name == "list_get" && na >= 2 {
         let a0: String = ll_ensure_ptr(ll_arg(args, 0), ssa0);
-        let ix: String = ll_arg(args, 1);
-        let s: Int = ll_pssa(a0) + 1;
+        let ix: String = ll_i64arg(args, 1, ll_pssa(a0));
+        let s: Int = ll_hw(ll_pssa(a0), ll_pssa(ix)) + 1;
         if ll_pk(a0) == "ilist" {
             println("  " + ll_ssa(s) + " = call i64 @oo_ilist_get(ptr byval(%OoIList) align 8 " + ll_pptr(a0) + ", i64 " + ll_ssa(ll_pssa(ix)) + ")");
             return ll_pack(0, s, "i64", "");
@@ -69,12 +70,13 @@ pub fn ll_builtin(name: String, args: List[String], ssa0: Int, expect: String) -
     }
     if name == "list_push" && na >= 2 {
         let a0: String = ll_ensure_ptr(ll_arg(args, 0), ssa0);
-        let s: Int = ll_pssa(a0);
+        let pv: String = ll_i64arg(args, 1, ll_pssa(a0));
+        let s: Int = ll_hw(ll_pssa(a0), ll_pssa(pv)) + 1;
         let out: String = ll_tmpa(s + 1);
         s = s + 1;
         println("  " + out + " = alloca " + ll_ir_alloc(ll_pk(a0)) + ", align 8");
         if ll_pk(a0) == "ilist" {
-            println("  call void @oo_ilist_push(ptr sret(%OoIList) align 8 " + out + ", ptr byval(%OoIList) align 8 " + ll_pptr(a0) + ", i64 " + ll_ssa(ll_pssa(ll_arg(args, 1))) + ")");
+            println("  call void @oo_ilist_push(ptr sret(%OoIList) align 8 " + out + ", ptr byval(%OoIList) align 8 " + ll_pptr(a0) + ", i64 " + ll_ssa(ll_pssa(pv)) + ")");
             return ll_pack(0, s, "ilist", out);
         }
         let a1: String = ll_as_val(ll_arg(args, 1), s);
@@ -84,11 +86,13 @@ pub fn ll_builtin(name: String, args: List[String], ssa0: Int, expect: String) -
     }
     if name == "list_slice" && na >= 3 {
         let a0: String = ll_ensure_ptr(ll_arg(args, 0), ssa0);
-        let s: Int = ll_pssa(a0) + 1;
+        let c1: String = ll_i64arg(args, 1, ll_pssa(a0));
+        let c2: String = ll_i64arg(args, 2, ll_pssa(c1));
+        let s: Int = ll_hw(ll_hw(ll_pssa(a0), ll_pssa(c1)), ll_pssa(c2)) + 1;
         let out: String = ll_tmpa(s);
         println("  " + out + " = alloca " + ll_ir_alloc(ll_pk(a0)) + ", align 8");
-        let a: String = ll_ssa(ll_pssa(ll_arg(args, 1)));
-        let b: String = ll_ssa(ll_pssa(ll_arg(args, 2)));
+        let a: String = ll_ssa(ll_pssa(c1));
+        let b: String = ll_ssa(ll_pssa(c2));
         if ll_pk(a0) == "ilist" {
             println("  call void @oo_ilist_slice(ptr sret(%OoIList) align 8 " + out + ", ptr byval(%OoIList) align 8 " + ll_pptr(a0) + ", i64 " + a + ", i64 " + b + ")");
             return ll_pack(0, s, "ilist", out);
@@ -106,8 +110,9 @@ pub fn ll_builtin(name: String, args: List[String], ssa0: Int, expect: String) -
     }
     if name == "char_at" && na >= 2 {
         let a0: String = ll_as_val(ll_arg(args, 0), ssa0);
-        let s: Int = ll_pssa(a0) + 1;
-        println("  " + ll_ssa(s) + " = call { ptr, i64 } @oo_char_at({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ", i64 " + ll_ssa(ll_pssa(ll_arg(args, 1))) + ")");
+        let cx: String = ll_i64arg(args, 1, ll_pssa(a0));
+        let s: Int = ll_hw(ll_pssa(a0), ll_pssa(cx)) + 1;
+        println("  " + ll_ssa(s) + " = call { ptr, i64 } @oo_char_at({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ", i64 " + ll_ssa(ll_pssa(cx)) + ")");
         return ll_pack(0, s, "str", "");
     }
     if (name == "str_starts_with" || name == "str_ends_with") && na >= 2 {
@@ -123,8 +128,10 @@ pub fn ll_builtin(name: String, args: List[String], ssa0: Int, expect: String) -
     }
     if name == "str_slice" && na >= 3 {
         let a0: String = ll_as_val(ll_arg(args, 0), ssa0);
-        let s: Int = ll_pssa(a0) + 1;
-        println("  " + ll_ssa(s) + " = call { ptr, i64 } @oo_str_slice({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ", i64 " + ll_ssa(ll_pssa(ll_arg(args, 1))) + ", i64 " + ll_ssa(ll_pssa(ll_arg(args, 2))) + ")");
+        let d1: String = ll_i64arg(args, 1, ll_pssa(a0));
+        let d2: String = ll_i64arg(args, 2, ll_pssa(d1));
+        let s: Int = ll_hw(ll_hw(ll_pssa(a0), ll_pssa(d1)), ll_pssa(d2)) + 1;
+        println("  " + ll_ssa(s) + " = call { ptr, i64 } @oo_str_slice({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ", i64 " + ll_ssa(ll_pssa(d1)) + ", i64 " + ll_ssa(ll_pssa(d2)) + ")");
         return ll_pack(0, s, "str", "");
     }
     if name == "str_index_of" && na >= 2 {
@@ -143,9 +150,10 @@ pub fn ll_builtin(name: String, args: List[String], ssa0: Int, expect: String) -
         return ll_pack(0, s2, "i1", "");
     }
     if name == "process_exit" && na >= 1 {
-        println("  call void @oo_process_exit(i64 " + ll_ssa(ll_pssa(ll_arg(args, 0))) + ")");
+        let ex: String = ll_i64arg(args, 0, ssa0);
+        println("  call void @oo_process_exit(i64 " + ll_ssa(ll_pssa(ex)) + ")");
         println("  unreachable");
-        return ll_pack(0, ssa0, "noret", "");
+        return ll_pack(0, ll_hw(ssa0, ll_pssa(ex)), "noret", "");
     }
     if name == "env_get" && na >= 2 {
         let a1: String = ll_as_val(ll_arg(args, 1), ssa0);
@@ -196,54 +204,41 @@ fn ll_sys_exec(args: List[String], ssa0: Int) -> String {
     return ll_pack(0, base, "ress", res);
 }
 
-pub fn ll_user_call(name: String, sig: String, args: List[String], ssa0: Int) -> String {
-    let gt: Int = str_index_of(sig, ">");
-    if gt < 0 {
-        println("ERR\tllvm\tbad sig " + name);
-        process_exit(1);
+pub fn ll_print_val(kind: String, ssa: Int, ptr: String, ssa0: Int) -> Int {
+    if kind == "f64" {
+        return ll_print_float(ssa, ptr, ssa0);
     }
-    let ret: String = str_slice(sig, gt + 1, chars_len(sig));
-    let na: Int = list_len(args);
-    let mut call: String = "";
-    let mut i: Int = 0;
-    let mut s: Int = ssa0;
-    while i < na {
-        let a: String = ll_arg(args, i);
-        if ll_is_mem(ll_pk(a)) {
-            let ap: String = ll_ensure_ptr(a, s);
-            s = ll_pssa(ap);
-            if call != "" { call = call + ", "; }
-            call = call + ll_pass(ll_pk(ap)) + " " + ll_pptr(ap);
-        } else {
-            let k: String = ll_pk(a);
-            if k == "str" {
-                let av: String = ll_as_val(a, s);
-                s = ll_pssa(av);
-                if call != "" { call = call + ", "; }
-                call = call + ll_ir_val(k) + " " + ll_ssa(ll_pssa(av));
-            } else {
-                if call != "" { call = call + ", "; }
-                call = call + ll_ir_val(k) + " " + ll_ssa(ll_pssa(a));
-            }
+    if kind == "i1" {
+        let n2: Int = ssa0 + 1;
+        println("  " + ll_ssa(n2) + " = zext i1 " + ll_ssa(ssa) + " to i64");
+        return ll_print_val("i64", n2, "", n2);
+    }
+    if kind == "str" {
+        let mut s: Int = ssa;
+        if ptr != "" {
+            s = ssa0 + 1;
+            println("  " + ll_ssa(s) + " = load { ptr, i64 }, ptr " + ptr);
         }
-        i = i + 1;
+        let p: Int = s + 1;
+        let l: Int = s + 2;
+        println("  " + ll_ssa(p) + " = extractvalue { ptr, i64 } " + ll_ssa(s) + ", 0");
+        println("  " + ll_ssa(l) + " = extractvalue { ptr, i64 } " + ll_ssa(s) + ", 1");
+        println("  call void @oo_print_str(ptr " + ll_ssa(p) + ", i64 " + ll_ssa(l) + ")");
+        println("  call void @oo_println()");
+        return l;
     }
-    if ret == "void" || ret == "" {
-        println("  call void @" + name + "(" + call + ")");
-        return ll_pack(0, s, "void", "");
+    if kind == "i64" {
+        let n2: Int = ssa0 + 1;
+        println("  " + ll_ssa(n2) + " = call { ptr, i64 } @oo_int_to_str(i64 " + ll_ssa(ssa) + ")");
+        return ll_print_val("str", n2, "", n2);
     }
-    if ll_is_mem(ret) {
-        let a: String = ll_tmpa(s + 1);
-        s = s + 1;
-        println("  " + a + " = alloca " + ll_ir_alloc(ret) + ", align 8");
-        if call != "" {
-            println("  call void @" + name + "(ptr sret(" + ll_ir_alloc(ret) + ") align 8 " + a + ", " + call + ")");
-        } else {
-            println("  call void @" + name + "(ptr sret(" + ll_ir_alloc(ret) + ") align 8 " + a + ")");
-        }
-        return ll_pack(0, s, ret, a);
+    if ll_is_int(kind) {
+        let e: String = ll_int_convert(ll_pack(0, ssa, kind, ptr), ssa0, "i64");
+        return ll_print_val("i64", ll_pssa(e), "", ll_pssa(e));
     }
-    let s2: Int = s + 1;
-    println("  " + ll_ssa(s2) + " = call " + ll_ir_val(ret) + " @" + name + "(" + call + ")");
-    return ll_pack(0, s2, ret, "");
+    println("ERR\tllvm\tprint kind " + kind);
+    process_exit(1);
+    return ssa0;
 }
+
+

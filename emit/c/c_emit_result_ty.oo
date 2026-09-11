@@ -95,6 +95,14 @@ if rty != "" { if rty != "void" { e = c_env_put(e, "__frty__" + fn_name, rty);
     }
         }
     }
+    if rty != "" { if rty != "void" {
+        let fp: String = c_env_get(fn_env, "__file__");
+        if fp != "" {
+            let mg: String = c_mangle_fn_name(fn_name, fp);
+            if mg != fn_name { e = c_env_put(e, "__frty__" + mg, rty); }
+        }
+    }
+    }
     return e;
 }
 

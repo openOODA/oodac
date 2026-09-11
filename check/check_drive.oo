@@ -88,7 +88,7 @@ pub fn run_check_core_binds_at(sys: &ProcessCap, src: String, extra_binds: Strin
             } else {
                 pos = check_function(toks, pos);
             }
-        } else if k == "KW_FN" {
+        } else if k == "KW_FN" || k == "KW_EXPORT" {
             pos = check_function(toks, pos);
         } else if k == "KW_TYPE" || k == "KW_IMPORT" {
             // Skip `type Alias = Base;` / import lines to SEMI (was infinite-walk → no_fn).

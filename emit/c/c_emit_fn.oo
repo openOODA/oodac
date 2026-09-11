@@ -26,16 +26,26 @@ pub fn c_emit_fn(toks: List[String], pos: Int, n: Int, fn_env: String) -> List[S
 
 pub fn c_emit_fn_mode(toks: List[String], pos: Int, n: Int, fn_env: String, mode: String) -> List[String] {
     let mut p = pos;
-    if c_tokk(toks, p) == "KW_PUB" { p = p + 1; }
+    let mut is_pub = false;
+    let mut is_export = false;
+    while p < n {
+        let tk: String = c_tokk(toks, p);
+        if tk == "KW_PUB" { is_pub = true; p = p + 1; }
+        else if tk == "KW_EXPORT" { is_export = true; p = p + 1; }
+        else { break; }
+    }
     if c_tokk(toks, p) == "KW_FN" { p = p + 1; }
     let fn_name: String = c_tokt(toks, p);
     p = p + 2;
     // Per-source-file C name: stops the C linker redefining two .oo files' `pub fn X` as plain `X`. env keeps fn_name for __fr__ lookups.
     let src_path: String = c_env_get(fn_env, "__file__");
-    let c_fn_name: String = c_mangle_fn_name(fn_name, src_path);
+    let mut c_fn_name: String = c_mangle_fn_name(fn_name, src_path);
+    if is_export || is_pub { c_fn_name = fn_name; }
     // Inherit prior fn String-return map so println(make(..)) sees OoStr.
     let mut env: String = str_slice(fn_env, 0, chars_len(fn_env));
     let mut out_fn: String = str_slice(fn_env, 0, chars_len(fn_env));
+    if is_export { env = c_env_put(env, "__export__" + fn_name, "1"); out_fn = c_env_put(out_fn, "__export__" + fn_name, "1"); }
+    if is_pub { env = c_env_put(env, "__pub__" + fn_name, "1"); out_fn = c_env_put(out_fn, "__pub__" + fn_name, "1"); }
     env = c_env_put(env, "__cname__" + fn_name, c_fn_name);
     out_fn = c_env_put(out_fn, "__cname__" + fn_name, c_fn_name);
     let mut plist = "";
@@ -112,7 +122,7 @@ pub fn c_emit_fn_mode(toks: List[String], pos: Int, n: Int, fn_env: String, mode
             let lk: String = c_peek_list_elem(toks, p, n);
             if lk != "" && lk != "I" && lk != "S" && lk != "F" { env = c_env_put(env, "__ann__", lk); }
         }
-        if ret_ty == "long long" || ret_ty == "int" { env = c_env_put(env, "__ret_int__", "1"); }
+        if ret_ty == "long long" || ret_ty == "int" || ret_ty == "uint32_t" || ret_ty == "int32_t" || ret_ty == "uint64_t" || ret_ty == "int64_t" || ret_ty == "uint8_t" || ret_ty == "int8_t" || ret_ty == "uint16_t" || ret_ty == "int16_t" { env = c_env_put(env, "__ret_int__", "1"); }
         if ret_ty == "OoStr" {
             env = c_env_put(env, "__ret_str__", "1");
             out_fn = c_env_put(out_fn, "__fr__" + fn_name, "T");
@@ -230,9 +240,13 @@ pub fn c_is_hot_fn(name: String) -> Bool {
 }
 
 pub fn c_fn_attributes(name: String, env: String) -> String {
-    if c_env_get(env, "__cold__" + name) == "1" || c_is_cold_fn(name) { return "__attribute__((cold, noinline)) "; }
-    if c_env_get(env, "__hot__" + name) == "1" || c_is_hot_fn(name) { return "__attribute__((hot)) "; }
-    if c_env_get(env, "__inline__" + name) == "1" { return "__attribute__((always_inline)) "; }
-    return "";
+    let mut a: String = "";
+    if name == "main" { return ""; }
+    if c_env_get(env, "__export__" + name) == "1" { a = "__attribute__((visibility(\"default\"))) "; }
+    else if c_env_get(env, "__pub__" + name) == "1" { a = "__attribute__((visibility(\"hidden\"))) "; }
+    else { a = "static "; }
+    if c_env_get(env, "__cold__" + name) == "1" || c_is_cold_fn(name) { return a + "__attribute__((cold, noinline)) "; }
+    if c_env_get(env, "__hot__" + name) == "1" || c_is_hot_fn(name) { return a + "__attribute__((hot)) "; }
+    if c_env_get(env, "__inline__" + name) == "1" { return a + "__attribute__((always_inline)) "; }
+    return a;
 }
-

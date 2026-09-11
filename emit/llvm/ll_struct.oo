@@ -4,7 +4,9 @@
 // Beats: St kinds plus rich tables; %St types plus retain/release; literals fail closed.
 import "ll_tok.oo";
 import "ll_ty.oo";
+import "ll_int.oo";
 import "ll_struct_list.oo";
+import "ll_struct_rr.oo";
 import "types/types_core.oo";
 import "lex/token_parse_int.oo";
 pub fn ll_struct_kind(name: String) -> String {
@@ -15,12 +17,42 @@ pub fn ll_is_struct(kind: String) -> Bool {
     if str_slice(kind, 0, 3) != "St_" { return false; }
     return true;
 }
-fn ll_st_basek(kind: String) -> String {
+pub fn ll_st_basek(kind: String) -> String {
     if !ll_is_struct(kind) { println("ERR\tllvm\tstruct kind " + kind); process_exit(1); }
     let h: Int = str_index_of(kind, "#");
     if h < 0 { return kind; }
     return str_slice(kind, 0, h);
 }
+pub fn ll_rich_of(env: String, e: String) -> String {
+    let pre: String = "__stf__" + e + ".";
+    let pl: Int = chars_len(pre);
+    let en: Int = chars_len(env);
+    let mut o: String = "St_" + e + "#";
+    let mut first: Bool = true;
+    let mut j: Int = 0;
+    while j < en {
+        if j + pl <= en && str_slice(env, j, j + pl) == pre {
+            let mut k: Int = j + pl;
+            while k < en && char_at(env, k) != "=" { k = k + 1; }
+            let fld: String = str_slice(env, j + pl, k);
+            if k < en { k = k + 1; }
+            let v0: Int = k;
+            while k < en && char_at(env, k) != ";" { k = k + 1; }
+            let val: String = str_slice(env, v0, k);
+            let c: Int = str_index_of(val, ":");
+            let fk: String = str_slice(val, c + 1, chars_len(val));
+            if !first { o = o + ","; }
+            o = o + fld + ":" + fk;
+            first = false;
+            j = k + 1;
+        } else {
+            while j < en && char_at(env, j) != ";" { j = j + 1; }
+            j = j + 1;
+        }
+    }
+    return o;
+}
+
 pub fn ll_struct_field(kind: String, field: String) -> String {
     if !ll_is_struct(kind) { return ""; }
     let h: Int = str_index_of(kind, "#");
@@ -101,12 +133,6 @@ pub fn ll_struct_declare(toks: List[String]) -> String {
     return env;
 }
 pub fn ll_struct_emit_types(env: String) {
-    println("declare void @oo_str_retain({ ptr, i64 })");
-    println("declare void @oo_str_release({ ptr, i64 })");
-    println("declare void @oo_slist_retain(ptr byval(%OoSList) align 8)");
-    println("declare void @oo_slist_release(ptr byval(%OoSList) align 8)");
-    println("declare void @oo_ilist_retain(ptr byval(%OoIList) align 8)");
-    println("declare void @oo_ilist_release(ptr byval(%OoIList) align 8)");
     println("declare ptr @oo_list_alloc_payload(i64, i64)");
     let n: Int = chars_len(env); let mut i: Int = 0;
     while i < n {
@@ -136,11 +162,11 @@ pub fn ll_struct_emit_types(env: String) {
                 j = j + 1;
             }
             println("%St_" + nm + " = type { " + tys + " }");
-            println("define void @oo_retain_St_" + nm + "(ptr %p) {");
+            println("define hidden void @oo_retain_St_" + nm + "(ptr %p) {");
             ll_st_rr(fl, nm, 1);
             println("  ret void");
             println("}");
-            println("define void @oo_release_St_" + nm + "(ptr %p) {");
+            println("define hidden void @oo_release_St_" + nm + "(ptr %p) {");
             ll_st_rr(fl, nm, 0);
             println("  ret void");
             println("}");
@@ -148,39 +174,6 @@ pub fn ll_struct_emit_types(env: String) {
             i = c;
         }
         i = i + 1;
-    }
-}
-fn ll_st_rr(fl: String, nm: String, is_ret: Int) {
-    let mut op: String = "retain";
-    if is_ret == 0 { op = "release"; }
-    let n: Int = chars_len(fl); let mut i: Int = 0; let mut idx: Int = 0; let mut cur: String = ""; let mut s: Int = 10;
-    while i <= n {
-        let e: Bool = i == n || char_at(fl, i) == ",";
-        if e {
-            if cur != "" {
-                let fk: String = ll_st_map(cur, "|", ",");
-                if fk != "i64" && fk != "i1" && fk != "opti" {
-                    println("  " + ll_ssa(s) + " = getelementptr %St_" + nm + ", ptr %p, i32 0, i32 " + idx.to_string());
-                    if fk == "str" {
-                        println("  " + ll_ssa(s + 1) + " = load { ptr, i64 }, ptr " + ll_ssa(s));
-                        println("  call void @oo_str_" + op + "({ ptr, i64 } " + ll_ssa(s + 1) + ")");
-                    } else if fk == "slist" || fk == "ilist" {
-                        println("  call void @oo_" + fk + "_" + op + "(ptr byval(" + ll_ir_alloc(fk) + ") align 8 " + ll_ssa(s) + ")");
-                    } else if ll_is_struct(fk) {
-                        println("  call void @oo_" + op + "_" + ll_st_basek(fk) + "(ptr " + ll_ssa(s) + ")");
-                    } else {
-                        let mut inner: Int = 1;
-                        if fk == "resi" { inner = 2; }
-                        println("  " + ll_ssa(s + 1) + " = getelementptr " + ll_ir_alloc(fk) + ", ptr " + ll_ssa(s) + ", i32 0, i32 " + inner.to_string());
-                        println("  " + ll_ssa(s + 2) + " = load { ptr, i64 }, ptr " + ll_ssa(s + 1));
-                        println("  call void @oo_str_" + op + "({ ptr, i64 } " + ll_ssa(s + 2) + ")");
-                    }
-                }
-                if fk == "slist" || fk == "ilist" || ll_is_struct(fk) { s = s + 1; } else if fk == "i64" || fk == "i1" || fk == "opti" { s = s; } else { s = s + 2; }
-                idx = idx + 1; cur = "";
-            }
-            i = i + 1;
-        } else { cur = cur + char_at(fl, i); i = i + 1; }
     }
 }
 pub fn ll_struct_lit_at(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> String {
@@ -219,8 +212,17 @@ pub fn ll_struct_lit_at(toks: List[String], pos: Int, n: Int, ssa0: Int, env: St
         let fk: String = str_slice(fe2, cj2 + 1, chars_len(fe2)); p = p + 1;
         if p >= n || ll_k(toks, p) != "COLON" { println("ERR\tllvm\tstruct lit colon"); process_exit(1); }
         p = p + 1;
-        let v: String = ll_expr(toks, p, n, s, env); p = ll_ppos(v); s = ll_pssa(v);
-        if ll_pk(v) != fk && ll_st_basek(ll_pk(v) + "#") != ll_st_basek(fk + "#") { println("ERR\tllvm\tfield type " + fld2); process_exit(1); }
+        let v0: String = ll_expr(toks, p, n, s, env); p = ll_ppos(v0); s = ll_pssa(v0);
+        let v: String = ll_int_convert(v0, s, fk);
+        s = ll_pssa(v);
+        let pk: String = ll_pk(v);
+        if pk != fk {
+            let mut same: Bool = false;
+            if ll_is_struct(pk) && ll_is_struct(fk) {
+                if ll_st_basek(pk) == ll_st_basek(fk) { same = true; }
+            }
+            if !same { println("ERR\tllvm\tfield type " + fld2); process_exit(1); }
+        }
         let fi: String = ll_struct_field(rich, fld2); let idx: String = str_slice(fi, 0, str_index_of(fi, ":"));
         s = s + 1;
         println("  " + ll_ssa(s) + " = getelementptr %St_" + nm + ", ptr " + a + ", i32 0, i32 " + idx);

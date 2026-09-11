@@ -84,19 +84,20 @@ pub fn c_emit_print_args(toks: List[String], pos: Int, n: Int, env: String, with
                 if c_call_result_ty(cnm) == "double" {
                     is_dbl = true;
                 }
+                if !is_dbl && c_env_get(env, "__frty__" + cnm) == "double" {
+                    is_dbl = true;
+                }
             }
         }
         if !is_dbl {
-            let c0 = char_at(arg, 0);
-            if c0 == "-" || char_is_digit(c0) {
-                let mut di = 1;
-                let an = chars_len(arg);
-                while di < an {
-                    if char_at(arg, di) == "." {
-                        is_dbl = true;
-                    }
-                    di = di + 1;
+            let an = chars_len(arg);
+            let mut di = 0;
+            while di + 2 < an {
+                if char_is_digit(char_at(arg, di)) && char_at(arg, di + 1) == "." && char_is_digit(char_at(arg, di + 2)) {
+                    is_dbl = true;
+                    di = an;
                 }
+                di = di + 1;
             }
         }
         if is_str {

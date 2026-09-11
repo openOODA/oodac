@@ -1,0 +1,21 @@
+// # LLVM break-in-if-expr-arm probe (C backend cannot build it)
+//
+// Logline: A break arm inside a loop-expr merge builds on LLVM; the C backend
+//   fails at gcc. Expect the ledger to pin this file c-fail.
+//
+// Setup: The break arm terminates, so the live side (7) flows through every
+//   iteration and the loop counter prints 3.
+//
+// Beats:
+//   1. Break arm in value position exits the loop.
+//   2. Live side merges 7 per iteration; loop prints 7/7/7 then 3.
+
+pub fn main() {
+    let mut i: Int = 0;
+    while i < 3 {
+        i = i + 1;
+        let y: Int = if i > 10 { break } else { 7 };
+        println(y);
+    }
+    println(i);
+}

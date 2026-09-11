@@ -1,0 +1,137 @@
+// # LLVM ARC scope-exit releases
+//
+// Logline: Push/pop env frames and emit oo_*_release for owned locals on block exit.
+//
+// Setup: Frame marker __sc__=1. Names after the last marker are this block's
+// locals. __-internal keys skipped. Formals live before the body frame.
+// Phase 1: str, slist, ilist, St_*. Result/Option/olist deferred.
+//
+// Beats:
+//   1. ll_arc_push appends a frame; ll_arc_pop strips it.
+//   2. ll_arc_rel loads then calls the matching runtime release.
+//   3. ll_arc_exit walks the top frame backward and emits unique releases.
+
+import "ll_tok.oo";
+import "ll_ty.oo";
+import "types/types_core.oo";
+
+pub fn ll_arc_push(env: String) -> String {
+    return type_env_put(env, "__sc__", "1");
+}
+
+pub fn ll_arc_frame_at(env: String) -> Int {
+    let key: String = "__sc__=1;";
+    let kn: Int = chars_len(key);
+    let en: Int = chars_len(env);
+    let mut i: Int = en - kn;
+    while i >= 0 {
+        let mut ok: Bool = true;
+        let mut j: Int = 0;
+        while j < kn {
+            if char_at(env, i + j) != char_at(key, j) { ok = false; j = kn; }
+            j = j + 1;
+        }
+        if ok { return i; }
+        i = i - 1;
+    }
+    return 0 - 1;
+}
+
+pub fn ll_arc_pop(env: String) -> String {
+    let at: Int = ll_arc_frame_at(env);
+    if at < 0 { return env; }
+    return str_slice(env, 0, at);
+}
+
+pub fn ll_arc_owned(kind: String) -> Bool {
+    if kind == "str" || kind == "slist" || kind == "ilist" { return true; }
+    if chars_len(kind) >= 3 && str_slice(kind, 0, 3) == "St_" { return true; }
+    return false;
+}
+
+fn ll_arc_st_nm(kind: String) -> String {
+    let rest: String = str_slice(kind, 3, chars_len(kind));
+    let h: Int = str_index_of(rest, "#");
+    if h < 0 { return rest; }
+    return str_slice(rest, 0, h);
+}
+
+fn ll_arc_ptr(name: String, env: String) -> String {
+    let loc: String = type_env_get(env, "__l__" + name);
+    if loc != "" { return loc; }
+    return ll_var(name);
+}
+
+fn ll_arc_rr(kind: String, ptr: String, ssa0: Int, is_ret: Int) -> Int {
+    let mut op: String = "release";
+    if is_ret != 0 { op = "retain"; }
+    if kind == "str" {
+        let s: Int = ssa0 + 1;
+        println("  " + ll_ssa(s) + " = load { ptr, i64 }, ptr " + ptr);
+        println("  call void @oo_str_" + op + "({ ptr, i64 } " + ll_ssa(s) + ")");
+        return s;
+    }
+    if kind == "slist" {
+        println("  call void @oo_slist_" + op + "(ptr byval(%OoSList) align 8 " + ptr + ")");
+        return ssa0;
+    }
+    if kind == "ilist" {
+        println("  call void @oo_ilist_" + op + "(ptr byval(%OoIList) align 8 " + ptr + ")");
+        return ssa0;
+    }
+    println("  call void @oo_" + op + "_St_" + ll_arc_st_nm(kind) + "(ptr " + ptr + ")");
+    return ssa0;
+}
+
+pub fn ll_arc_rel(name: String, kind: String, env: String, ssa0: Int) -> Int {
+    return ll_arc_rr(kind, ll_arc_ptr(name, env), ssa0, 0);
+}
+
+pub fn ll_arc_keep(name: String, kind: String, env: String, ssa0: Int) -> Int {
+    return ll_arc_rr(kind, ll_arc_ptr(name, env), ssa0, 1);
+}
+
+pub fn ll_arc_keep_ptr(kind: String, ptr: String, ssa0: Int) -> Int {
+    return ll_arc_rr(kind, ptr, ssa0, 1);
+}
+
+pub fn ll_arc_exit(env: String, ssa0: Int) -> Int {
+    if type_env_get(env, "__no_arc__") == "1" { return ssa0; }
+    let at: Int = ll_arc_frame_at(env);
+    if at < 0 { return ssa0; }
+    let en: Int = chars_len(env);
+    let mut p: Int = at + 9;
+    let mut names: List[String] = list_new();
+    let mut kinds: List[String] = list_new();
+    while p < en {
+        let start: Int = p;
+        while p < en && char_at(env, p) != "=" && char_at(env, p) != ";" { p = p + 1; }
+        if p < en && char_at(env, p) == "=" {
+            let name: String = str_slice(env, start, p);
+            p = p + 1;
+            let ks: Int = p;
+            while p < en && char_at(env, p) != ";" { p = p + 1; }
+            names = list_push(names, name);
+            kinds = list_push(kinds, str_slice(env, ks, p));
+            if p < en { p = p + 1; }
+        } else {
+            p = p + 1;
+        }
+    }
+    let mut seen: String = "";
+    let mut ssa: Int = ssa0;
+    let mut i: Int = list_len(names) - 1;
+    while i >= 0 {
+        let name: String = list_get(names, i);
+        let kind: String = list_get(kinds, i);
+        let mut skip: Bool = false;
+        if chars_len(name) >= 2 && char_at(name, 0) == "_" && char_at(name, 1) == "_" { skip = true; }
+        if type_env_get(seen, name) != "" { skip = true; }
+        if !skip {
+            seen = type_env_put(seen, name, "1");
+            if ll_arc_owned(kind) { ssa = ll_arc_rel(name, kind, env, ssa); }
+        }
+        i = i - 1;
+    }
+    return ssa;
+}

@@ -28,7 +28,7 @@ pub fn kind_to_int(k: String) -> Int {
   if k == "KW_MATCH" { return 20; } if k == "KW_FOR" { return 21; } if k == "KW_IN" { return 22; } if k == "KW_WHILE" { return 23; }
   if k == "KW_RETURN" { return 24; } if k == "KW_TYPE" { return 25; } if k == "KW_WHERE" { return 26; } if k == "KW_TRUE" { return 27; }
   if k == "KW_FALSE" { return 28; } if k == "KW_GPU" { return 29; } if k == "KW_BREAK" { return 30; } if k == "KW_CONTINUE" { return 31; }
-  if k == "KW_TRAIT" { return 32; } if k == "KW_IMPL" { return 33; } if k == "SLASH" { return 40; } if k == "PLUS" { return 41; }
+  if k == "KW_TRAIT" { return 32; } if k == "KW_IMPL" { return 33; } if k == "KW_EXPORT" { return 34; } if k == "SLASH" { return 40; } if k == "PLUS" { return 41; }
   if k == "MINUS" { return 42; } if k == "STAR" { return 43; } if k == "PERCENT" { return 44; } if k == "EQEQ" { return 45; }
   if k == "FATARROW" { return 46; } if k == "EQ" { return 47; } if k == "NEQ" { return 48; } if k == "LSHIFT" { return 49; }
   if k == "RSHIFT" { return 50; } if k == "LTE" { return 51; } if k == "LT" { return 52; } if k == "GTE" { return 53; }
@@ -49,7 +49,7 @@ pub fn int_to_kind(k: Int) -> String {
   if k == 20 { return "KW_MATCH"; } if k == 21 { return "KW_FOR"; } if k == 22 { return "KW_IN"; } if k == 23 { return "KW_WHILE"; }
   if k == 24 { return "KW_RETURN"; } if k == 25 { return "KW_TYPE"; } if k == 26 { return "KW_WHERE"; } if k == 27 { return "KW_TRUE"; }
   if k == 28 { return "KW_FALSE"; } if k == 29 { return "KW_GPU"; } if k == 30 { return "KW_BREAK"; } if k == 31 { return "KW_CONTINUE"; }
-  if k == 32 { return "KW_TRAIT"; } if k == 33 { return "KW_IMPL"; } if k == 40 { return "SLASH"; } if k == 41 { return "PLUS"; }
+  if k == 32 { return "KW_TRAIT"; } if k == 33 { return "KW_IMPL"; } if k == 34 { return "KW_EXPORT"; } if k == 40 { return "SLASH"; } if k == 41 { return "PLUS"; }
   if k == 42 { return "MINUS"; } if k == 43 { return "STAR"; } if k == 44 { return "PERCENT"; } if k == 45 { return "EQEQ"; }
   if k == 46 { return "FATARROW"; } if k == 47 { return "EQ"; } if k == 48 { return "NEQ"; } if k == 49 { return "LSHIFT"; }
   if k == 50 { return "RSHIFT"; } if k == 51 { return "LTE"; } if k == 52 { return "LT"; } if k == 53 { return "GTE"; }

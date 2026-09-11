@@ -1,0 +1,23 @@
+// # LLVM unit if-expr arm parity probe
+//
+// Logline: if arms with statements but no trailing value zero-fill the merge,
+//   matching C's memset-zero arm behavior.
+//
+// Setup: Unit arms arise with trailing semicolons, semiless println calls,
+//   and semiless assignments. The merge value is zero of the expected kind.
+//
+// Beats:
+//   1. Semicolon-terminated unit arms print the effect then merge 0.
+//   2. Semiless println arm merges 0.
+//   3. Semiless assignment arm runs the store, then merges 0.
+
+pub fn main() {
+    let x: Int = if 1 > 2 { println(1); } else { println(2); };
+    println(x);
+    let u: Int = if 1 > 2 { println(1) } else { println(2) };
+    println(u);
+    let mut w: Int = 0;
+    let y: Int = if 2 > 1 { w = 5 } else { 9 };
+    println(y);
+    println(w);
+}

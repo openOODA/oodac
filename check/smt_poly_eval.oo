@@ -83,7 +83,11 @@ pub fn tok_slice_eq(toks: List[String], p1: Int, e1: Int, p2: Int, e2: Int) -> B
     if len1 != len2 { return false; }
     let mut i: Int = 0;
     while i < len1 {
-        if smt_tokt(toks, p1 + i) != smt_tokt(toks, p2 + i) || smt_tokk(toks, p1 + i) != smt_tokk(toks, p2 + i) { return false; }
+        let ta: String = smt_tokt(toks, p1 + i);
+        let tb: String = smt_tokt(toks, p2 + i);
+        let ka: String = smt_tokk(toks, p1 + i);
+        let kb: String = smt_tokk(toks, p2 + i);
+        if ta != tb || ka != kb { return false; }
         i = i + 1;
     }
     return true;

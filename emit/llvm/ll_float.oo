@@ -1,0 +1,84 @@
+// # LLVM float (f64) lowering
+//
+// Logline: f64 literals, arithmetic, comparisons, negation, conditions, print.
+//
+// Setup: Kind "f64" maps to IR double. No mixed int/float exists: the checker
+//   rejects those programs, and any that arrive here fail closed.
+//
+// Beats:
+//   1. FLOAT literals (digits.digits) materialize via fadd double 0.0.
+//   2. Pure f64 + - * / lower to fadd/fsub/fmul/fdiv.
+//   3. == != < > <= >= lower to ordered fcmp predicates (NaN-safe like C).
+//   4. Unary minus lowers to fneg; bare conditions to fcmp une.
+
+import "ll_tok.oo";
+import "ll_ty.oo";
+
+pub fn ll_float_lit(toks: List[String], pos: Int, ssa0: Int) -> String {
+    let s: Int = ssa0 + 1;
+    println("  " + ll_ssa(s) + " = fadd double 0.0, " + ll_t(toks, pos));
+    return ll_pack(pos + 1, s, "f64", "");
+}
+
+pub fn ll_apply_floatop(op: String, lhs: String, rhs: String) -> String {
+    let s0: Int = ll_hw(ll_pssa(lhs), ll_pssa(rhs));
+    if op == "PLUS" {
+        let s: Int = s0 + 1;
+        println("  " + ll_ssa(s) + " = fadd double " + ll_ssa(ll_pssa(lhs)) + ", " + ll_ssa(ll_pssa(rhs)));
+        return ll_pack(ll_ppos(rhs), s, "f64", "");
+    }
+    if op == "MINUS" {
+        let s: Int = s0 + 1;
+        println("  " + ll_ssa(s) + " = fsub double " + ll_ssa(ll_pssa(lhs)) + ", " + ll_ssa(ll_pssa(rhs)));
+        return ll_pack(ll_ppos(rhs), s, "f64", "");
+    }
+    if op == "STAR" {
+        let s: Int = s0 + 1;
+        println("  " + ll_ssa(s) + " = fmul double " + ll_ssa(ll_pssa(lhs)) + ", " + ll_ssa(ll_pssa(rhs)));
+        return ll_pack(ll_ppos(rhs), s, "f64", "");
+    }
+    if op == "SLASH" {
+        let s: Int = s0 + 1;
+        println("  " + ll_ssa(s) + " = fdiv double " + ll_ssa(ll_pssa(lhs)) + ", " + ll_ssa(ll_pssa(rhs)));
+        return ll_pack(ll_ppos(rhs), s, "f64", "");
+    }
+    if op == "EQEQ" || op == "NEQ" || op == "LT" || op == "GT" || op == "LTE" || op == "GTE" {
+        let mut pred: String = "oeq";
+        if op == "NEQ" { pred = "one"; }
+        if op == "LT" { pred = "olt"; }
+        if op == "GT" { pred = "ogt"; }
+        if op == "LTE" { pred = "ole"; }
+        if op == "GTE" { pred = "oge"; }
+        let s: Int = s0 + 1;
+        println("  " + ll_ssa(s) + " = fcmp " + pred + " double " + ll_ssa(ll_pssa(lhs)) + ", " + ll_ssa(ll_pssa(rhs)));
+        return ll_pack(ll_ppos(rhs), s, "i1", "");
+    }
+    println("ERR\tllvm\tfloat op " + op);
+    process_exit(1);
+    return ll_pack(ll_ppos(rhs), s0, "f64", "");
+}
+
+pub fn ll_neg_float(r: String) -> Int {
+    let s: Int = ll_pssa(r) + 1;
+    println("  " + ll_ssa(s) + " = fneg double " + ll_ssa(ll_pssa(r)));
+    return s;
+}
+
+pub fn ll_float_cond(v: String, ssa0: Int) -> Int {
+    let s: Int = ssa0 + 1;
+    println("  " + ll_ssa(s) + " = fcmp une double " + ll_ssa(ll_pssa(v)) + ", 0.0");
+    return s;
+}
+
+pub fn ll_print_float(ssa: Int, ptr: String, ssa0: Int) -> Int {
+    let mut ds: Int = ssa;
+    let mut ns: Int = ssa0;
+    if ptr != "" {
+        ds = ssa0 + 1;
+        ns = ds;
+        println("  " + ll_ssa(ds) + " = load double, ptr " + ptr);
+    }
+    println("  call void @oo_print_double(double " + ll_ssa(ds) + ")");
+    println("  call void @oo_println()");
+    return ns;
+}

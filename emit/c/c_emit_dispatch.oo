@@ -8,8 +8,40 @@
 //   1. Return unmodified function name for C identifier resolution.
 //   2. Compare two source paths normalizing leading dot-slash prefixes.
 
+fn c_file_stem(path: String) -> String {
+    let a: String = c_strip_dot_slash(path);
+    let n: Int = chars_len(a);
+    if n == 0 { return ""; }
+    let mut last_slash: Int = 0 - 1;
+    let mut i: Int = 0;
+    while i < n {
+        if char_at(a, i) == "/" { last_slash = i; }
+        i = i + 1;
+    }
+    let mut start: Int = 0;
+    if last_slash >= 0 { start = last_slash + 1; }
+    let mut end: Int = n;
+    if end >= start + 3 && str_slice(a, end - 3, end) == ".oo" {
+        end = end - 3;
+    }
+    let stem: String = str_slice(a, start, end);
+    let mut out: String = "";
+    let sn: Int = chars_len(stem);
+    let mut j: Int = 0;
+    while j < sn {
+        let ch: String = char_at(stem, j);
+        if ch == "-" || ch == "." { out = out + "_"; }
+        else { out = out + ch; }
+        j = j + 1;
+    }
+    return out;
+}
+
 pub fn c_mangle_fn_name(name: String, path: String) -> String {
-    return name;
+    if name == "main" { return name; }
+    let stem: String = c_file_stem(path);
+    if stem != "" { return "_oo_" + stem + "_" + name; }
+    return "_oo_" + name;
 }
 
 fn c_strip_dot_slash(p: String) -> String {

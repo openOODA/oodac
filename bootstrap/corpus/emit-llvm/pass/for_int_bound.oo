@@ -1,0 +1,26 @@
+// # LLVM integer-bound for-range probe
+//
+// Logline: for ranges over Int and i32 variable bounds. LLVM converts bounds
+//   to i64; C splices bound idents raw (fixed to rename locals).
+//
+// Setup: 0..m sums 0+1+2+3+4 = 10; 0..n sums 0+1+2 = 3. Both backends print
+//   10 then 3 once the runtime links again (verified at emit level only).
+//
+// Beats:
+//   1. Int variable bound iterates correctly.
+//   2. i32 variable bound converts and iterates correctly.
+
+pub fn main() {
+    let m: Int = 5;
+    let mut s: Int = 0;
+    for i in 0..m {
+        s = s + i;
+    }
+    println(s);
+    let n: i32 = 3;
+    let mut t: Int = 0;
+    for j in 0..n {
+        t = t + j;
+    }
+    println(t);
+}

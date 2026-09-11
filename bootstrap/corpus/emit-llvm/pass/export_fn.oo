@@ -1,0 +1,29 @@
+// # LLVM export-fn parity probe
+//
+// Logline: export and pub-export fns lower like pub fns with plain linkage.
+//
+// Setup: Checker and C backend handle KW_EXPORT; LLVM used to skip the
+//   qualifier by accident of single-stepping. Now handled explicitly.
+//
+// Beats:
+//   1. export fn with u32 sig lowers, links, and runs.
+//   2. pub export fn chains lower.
+//   3. Unexported fns stay reachable through calls from main.
+
+export fn add_one(x: u32) -> u32 {
+    return x + 1;
+}
+
+pub export fn mul_two(x: u32) -> u32 {
+    return x * 2;
+}
+
+fn internal_helper(x: u32) -> u32 {
+    return x + 100;
+}
+
+pub fn main() {
+    println(add_one(41));
+    println(mul_two(21));
+    println(internal_helper(12));
+}

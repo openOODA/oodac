@@ -1,0 +1,28 @@
+// # LLVM width struct-field and range-bound probe (C backend cannot build it)
+//
+// Logline: u32 struct fields and u32 for-range bounds lower on LLVM; the C
+//   backend fails (raw u32 in struct decl; unrenamed bound ident). Expect the
+//   ledger to pin this file c-fail with LLVM bytes below.
+//
+// Setup: Same ll_int lattice as width_ints.oo, plus struct-lit/field-store and
+//   for-bound extension paths.
+//
+// Beats:
+//   1. W{v} stores 3000000000 through a truncated u32 field slot.
+//   2. for 0..n with u32 n sums 0+1+2.
+//   3. Expect run output 3000000000 3.
+
+pub type W = struct {
+    v: u32
+};
+
+pub fn main() {
+    let w: W = W { v: 3000000000 };
+    println(w.v);
+    let n: u32 = 3;
+    let mut tot: Int = 0;
+    for i in 0..n {
+        tot = tot + i;
+    }
+    println(tot);
+}

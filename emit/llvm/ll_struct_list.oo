@@ -24,6 +24,12 @@ pub fn ll_is_resst(kind: String) -> Bool {
     return true;
 }
 
+pub fn ll_is_optst(kind: String) -> Bool {
+    if chars_len(kind) < 6 { return false; }
+    if str_slice(kind, 0, 6) != "optSt_" { return false; }
+    return true;
+}
+
 fn ll_olist_nm(kind: String) -> String {
     return str_slice(kind, 6, chars_len(kind));
 }
@@ -31,16 +37,17 @@ fn ll_olist_nm(kind: String) -> String {
 pub fn ll_olist_emit_one(nm: String) {
     println("%OoL_" + nm + " = type { ptr, i64, i64 }");
     println("%OoRes_St_" + nm + " = type { i32, %St_" + nm + ", %OoStr }");
-    println("define void @oo_l_" + nm + "_new(ptr sret(%OoL_" + nm + ") align 8 %out) {");
+    println("%OoOpt_St_" + nm + " = type { i32, %St_" + nm + " }");
+    println("define hidden void @oo_l_" + nm + "_new(ptr sret(%OoL_" + nm + ") align 8 %out) {");
     println("  store %OoL_" + nm + " { ptr null, i64 0, i64 0 }, ptr %out");
     println("  ret void");
     println("}");
-    println("define i64 @oo_l_" + nm + "_len(ptr %l) {");
+    println("define hidden i64 @oo_l_" + nm + "_len(ptr %l) {");
     println("  %lp = getelementptr %OoL_" + nm + ", ptr %l, i32 0, i32 1");
     println("  %lv = load i64, ptr %lp");
     println("  ret i64 %lv");
     println("}");
-    println("define %St_" + nm + " @oo_l_" + nm + "_get(ptr %l, i64 %i) {");
+    println("define hidden %St_" + nm + " @oo_l_" + nm + "_get(ptr %l, i64 %i) {");
     println("  %lp = getelementptr %OoL_" + nm + ", ptr %l, i32 0, i32 1");
     println("  %len = load i64, ptr %lp");
     println("  %ok = icmp ult i64 %i, %len");
@@ -56,7 +63,7 @@ pub fn ll_olist_emit_one(nm: String) {
     println("  call void @oo_retain_St_" + nm + "(ptr %ep)");
     println("  ret %St_" + nm + " %v");
     println("}");
-    println("define void @oo_l_" + nm + "_push(ptr sret(%OoL_" + nm + ") align 8 %out, ptr %l, ptr %vp) {");
+    println("define hidden void @oo_l_" + nm + "_push(ptr sret(%OoL_" + nm + ") align 8 %out, ptr %l, ptr %vp) {");
     println("  %lenp = getelementptr %OoL_" + nm + ", ptr %l, i32 0, i32 1");
     println("  %len = load i64, ptr %lenp");
     println("  %capp = getelementptr %OoL_" + nm + ", ptr %l, i32 0, i32 2");

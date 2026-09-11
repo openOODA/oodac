@@ -1,0 +1,35 @@
+// # LLVM float arithmetic parity probe
+//
+// Logline: Pure-float literals, arithmetic, comparisons, negation, and
+//   Float-annotated lets print identically on both backends (%g rendering).
+//
+// Setup: The checker rejects mixed int/float, so every op is f64/f64. C used
+//   to route float exprs through oo_print_int (truncating 3.5 to 3); the
+//   println dispatcher now sniffs digit-dot-digit and __frty__ doubles.
+//
+// Beats:
+//   1. add/sub/mul/div on literals print 4/5/3/3.5.
+//   2. Negation of a Float variable prints -1.5.
+//   3. == < > >= != print 1/1/0/1/1.
+//   4. Float lets and if-on-comparison behave.
+
+pub fn main() {
+    println(1.5 + 2.5);
+    println(7.5 - 2.5);
+    println(2.0 * 1.5);
+    println(7.0 / 2.0);
+    let v: Float = 1.5;
+    println(0.0 - v);
+    println(1.5 == 1.5);
+    println(1.5 < 2.5);
+    println(2.5 > 3.5);
+    println(2.5 >= 2.5);
+    println(1.5 != 2.5);
+    let b = v + 2.5;
+    println(b);
+    if b > 3.0 {
+        println(1);
+    } else {
+        println(0);
+    }
+}

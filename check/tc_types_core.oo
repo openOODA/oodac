@@ -71,11 +71,32 @@ pub fn lit_token_type(kind: String) -> String {
     return "";
 }
 
+pub fn is_primitive_int(ty: String) -> Bool {
+    if ty == "u32" || ty == "i32" || ty == "u64" || ty == "i64"
+        || ty == "u8" || ty == "i8" || ty == "u16" || ty == "i16" {
+        return true;
+    }
+    return false;
+}
+
+pub fn is_int_type(ty: String) -> Bool {
+    if ty == "Int" || is_primitive_int(ty) {
+        return true;
+    }
+    return false;
+}
+
 // Annotation vs initializer: exact name match for Int/String/Bool/Float.
 pub fn types_compatible(ann: String, got: String) -> Bool {
     if ann == got { return true;
 }
     if chars_len(ann) >= 4 && str_slice(ann, 0, 4) == "dyn " {
+        return true;
+    }
+    if is_primitive_int(ann) && got == "Int" {
+        return true;
+    }
+    if ann == "Int" && is_primitive_int(got) {
         return true;
     }
     // i64/f64 aliases used in some dumps
@@ -157,7 +178,7 @@ pub fn is_type_binop(kind: String) -> Bool {
 pub fn combine_binop_types(op: String, left: String, right: String) -> String {
     if op == "PLUS" { if left == "String" && right == "String" { return "String";
 }
-        if left == "Int" && right == "Int" {
+        if is_int_type(left) && is_int_type(right) {
             return "Int";
         }
         if left == "Float" && right == "Float" {
@@ -167,7 +188,7 @@ pub fn combine_binop_types(op: String, left: String, right: String) -> String {
         return "ERR_BINOP";
     }
     if op == "MINUS" || op == "STAR" || op == "SLASH" || op == "PERCENT" {
-        if left == "Int" && right == "Int" {
+        if is_int_type(left) && is_int_type(right) {
             return "Int";
         }
         if left == "Float" && right == "Float" {
@@ -179,13 +200,13 @@ pub fn combine_binop_types(op: String, left: String, right: String) -> String {
     if op == "LSHIFT" || op == "RSHIFT" || op == "AMP" || op == "PIPE"
         || op == "CARET" || op == "BXOR"
     {
-        if left == "Int" && right == "Int" {
+        if is_int_type(left) && is_int_type(right) {
             return "Int";
         }
         return "ERR_BINOP";
     }
-    // Comparisons: same type → Bool; mismatch → ERR
-    if left == right { return "Bool";
+    // Comparisons: same type or both integer types → Bool; mismatch → ERR
+    if left == right || (is_int_type(left) && is_int_type(right)) { return "Bool";
     }
     return "ERR_BINOP";
 }

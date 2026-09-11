@@ -1,0 +1,31 @@
+// # Probe: LLVM ARC scope-exit plus copy retain
+//
+// Logline: Owned strings and struct copies must survive and not double-free.
+//
+// Setup: Hostile copies plus scope exit. Prints ARC-OK when values hold.
+//
+// Beats:
+//   1. Bind a string, copy it, print both lengths.
+//   2. Copy a struct string field and print it.
+//   3. Reassign a string local from another owned string.
+
+type Inner = struct { s: String };
+
+pub fn mk() -> Inner {
+    return Inner { s: "tag" };
+}
+
+pub fn main() {
+    let a: String = "hello";
+    let b: String = a;
+    let mut bad: Int = 0;
+    if chars_len(b) != 5 { bad = bad + 1; }
+    let o: Inner = mk();
+    let x: Inner = o;
+    if chars_len(x.s) != 3 { bad = bad + 1; }
+    let mut s: String = "ab";
+    let t: String = "cd";
+    s = t;
+    if chars_len(s) != 2 { bad = bad + 1; }
+    if bad != 0 { println("FAIL"); } else { println("ARC-OK"); }
+}

@@ -12,19 +12,23 @@
 
 import "ll_tok.oo";
 import "ll_ty.oo";
+import "ll_int.oo";
 
 pub fn ll_builtin_host(name: String, args: List[String], ssa0: Int, expect: String) -> String {
     let na: Int = list_len(args);
     if name == "byte_at" && na >= 2 {
         let a0: String = ll_as_val(list_get(args, 0), ssa0);
-        let s: Int = ll_pssa(a0) + 1;
-        println("  " + ll_ssa(s) + " = call i64 @oo_byte_at({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ", i64 " + ll_ssa(ll_pssa(list_get(args, 1))) + ")");
+        let bx: String = ll_i64arg(args, 1, ll_pssa(a0));
+        let s: Int = ll_hw(ll_pssa(a0), ll_pssa(bx)) + 1;
+        println("  " + ll_ssa(s) + " = call i64 @oo_byte_at({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ", i64 " + ll_ssa(ll_pssa(bx)) + ")");
         return ll_pack(0, s, "i64", "");
     }
     if name == "byte_slice" && na >= 3 {
         let a0: String = ll_as_val(list_get(args, 0), ssa0);
-        let s: Int = ll_pssa(a0) + 1;
-        println("  " + ll_ssa(s) + " = call { ptr, i64 } @oo_byte_slice({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ", i64 " + ll_ssa(ll_pssa(list_get(args, 1))) + ", i64 " + ll_ssa(ll_pssa(list_get(args, 2))) + ")");
+        let b1: String = ll_i64arg(args, 1, ll_pssa(a0));
+        let b2: String = ll_i64arg(args, 2, ll_pssa(b1));
+        let s: Int = ll_hw(ll_hw(ll_pssa(a0), ll_pssa(b1)), ll_pssa(b2)) + 1;
+        println("  " + ll_ssa(s) + " = call { ptr, i64 } @oo_byte_slice({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ", i64 " + ll_ssa(ll_pssa(b1)) + ", i64 " + ll_ssa(ll_pssa(b2)) + ")");
         return ll_pack(0, s, "str", "");
     }
     if (name == "char_is_digit" || name == "char_is_alpha") && na >= 1 {
@@ -83,10 +87,11 @@ pub fn ll_builtin_host(name: String, args: List[String], ssa0: Int, expect: Stri
             println("ERR\tllvm\tbytes_push needs List[Int]");
             process_exit(1);
         }
-        let s: Int = ll_pssa(a0) + 1;
+        let bp: String = ll_i64arg(args, 1, ll_pssa(a0));
+        let s: Int = ll_hw(ll_pssa(a0), ll_pssa(bp)) + 1;
         let out: String = ll_tmpa(s);
         println("  " + out + " = alloca " + ll_ir_alloc("ilist") + ", align 8");
-        println("  call void @oo_bytes_push(ptr sret(%OoIList) align 8 " + out + ", ptr byval(%OoIList) align 8 " + ll_pptr(a0) + ", i64 " + ll_ssa(ll_pssa(list_get(args, 1))) + ")");
+        println("  call void @oo_bytes_push(ptr sret(%OoIList) align 8 " + out + ", ptr byval(%OoIList) align 8 " + ll_pptr(a0) + ", i64 " + ll_ssa(ll_pssa(bp)) + ")");
         return ll_pack(0, s, "ilist", out);
     }
     if name == "bytes_to_str" && na >= 1 {
@@ -127,6 +132,11 @@ pub fn ll_builtin_host(name: String, args: List[String], ssa0: Int, expect: Stri
     }
     if name == "oo_emit_tmp_bind" && na >= 1 {
         return list_get(args, 0);
+    }
+    if (name == "alloc_bytes" || name == "oo_alloc_bytes") && na >= 2 {
+        let s: Int = ll_hw(ll_pssa(list_get(args, 0)), ll_pssa(list_get(args, 1))) + 1;
+        println("  " + ll_ssa(s) + " = call i64 @oo_alloc_bytes(i64 " + ll_ssa(ll_pssa(list_get(args, 0))) + ", i64 " + ll_ssa(ll_pssa(list_get(args, 1))) + ")");
+        return ll_pack(0, s, "i64", "");
     }
     return "";
 }

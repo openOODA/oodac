@@ -7,11 +7,7 @@
 // Beats:
 //   1. host_rt_c returns one C translation unit.
 //   2. oo_emit_tmp_* match the emit-c builtins.
-//   3. Jail ctor scopes to OODA_FS_READDIR/WRITEDIR, defaulting WRITEDIR to
-//      getcwd() and READDIR to getcwd() plus the toolchain dir (parent of
-//      bin/) when unset, exported so the fs layer agrees with the kernel
-//      jail (still Landlocked); or OODA_NO_JAIL=1 skips. Reads stay public
-//      (toolchain binaries/sources); writes stay in the project dir.
+//   3. Jail ctor scopes to OODA_FS_READDIR/WRITEDIR; skipped under OO_SHARED.
 //   4. Ctor allowlists the binary's own dir (+ parent when dir is "bin")
 //      for reads and exports it as OODA_TOOLCHAIN when unset.
 
@@ -46,6 +42,7 @@ pub fn host_rt_c() -> String {
     s = s + "  printf(\"  OoStr %s = %.*s;\\n\", g_names[g_np], n, p ? p : \"\");\n";
     s = s + "  OoStr name = oo_str_intern_bytes(g_names[g_np], (long long)strlen(g_names[g_np]));\n";
     s = s + "  g_np++; return name;\n}\n";
+    s = s + "#ifndef OO_SHARED\n";
     s = s + "static OoStr jail_str(const char *s) {\n";
     s = s + "  OoStr o; o.data = (char *)s; o.len = s ? (long long)strlen(s) : 0; return o;\n}\n";
     s = s + "__attribute__((constructor)) void oo_jail_landlock_ctor(void) {\n";
@@ -117,5 +114,6 @@ pub fn host_rt_c() -> String {
     s = s + "  OoResS r = oo_landlock_restrict(sys, jail_str(rbuf), jail_str(wbuf));\n";
     s = s + "  if (!r.ok) { fprintf(stderr, \"ERR\\tlandlock\\tjail apply failed\\n\"); _exit(1); }\n";
     s = s + "}\n";
+    s = s + "#endif\n";
     return s;
 }
