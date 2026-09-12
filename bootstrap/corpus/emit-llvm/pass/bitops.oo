@@ -1,0 +1,19 @@
+// # Integer bitwise AND OR XOR
+//
+// Logline: `n & 15` is bitwise, not address-of. Matches emit/c/c_emit_ops_str.
+//
+// Setup: Int locals. Default llvm. No emit/c import.
+//
+// Beats:
+//   1. 60 & 15 prints 12.
+//   2. 60 | 3 prints 63.
+//   3. 60 ^ 15 prints 51.
+
+pub fn main() {
+    let n: Int = 60;
+    println(n & 15);
+    println(n | 3);
+    println(n ^ 15);
+    let d: Int = n & 15;
+    println(d);
+}

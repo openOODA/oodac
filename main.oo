@@ -2,7 +2,8 @@
 //
 // Logline: Parse argv and run check, build, emit-c, emit-llvm, or tokens.
 //
-// Setup: Dispatch check, build, emit-c, emit-llvm, and tokens. C is the reference ISA; llvm is the default build.
+// Setup: Dispatch check, build, emit-c, emit-llvm, and tokens. LLVM is the
+//   canonical backend; C is --backend c / --gcc leftover for one release.
 //
 // Beats:
 //   1. Unpack cmd/path/out/backend/json/plain/shared.
@@ -43,7 +44,7 @@ pub fn main(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env: &EnvCap,
         return;
     }
     if cmd == "emit-llvm" {
-        run_emit_llvm(fs_r, env, path, concat);
+        run_emit_llvm(fs_r, fs_w, env, path, concat);
         return;
     }
     if cmd == "emit-c" || cmd == "emit-protos" || cmd == "emit-bodies" || cmd == "emit-preamble" {

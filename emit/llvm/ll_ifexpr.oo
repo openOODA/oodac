@@ -41,6 +41,8 @@ pub fn ll_if_value_at(toks: List[String], pos: Int, n: Int, ssa0: Int, env: Stri
     let tk: String = ll_pk(th);
     let ts: Int = ll_pssa(th);
     if t1 == 0 {
+        println("  br label %tj" + cid.to_string());
+        println("tj" + cid.to_string() + ":");
         println("  br label %vend" + cid.to_string());
     }
     println("velse" + cid.to_string() + ":");
@@ -51,8 +53,10 @@ pub fn ll_if_value_at(toks: List[String], pos: Int, n: Int, ssa0: Int, env: Stri
     let er: String = ll_if_else_arm(toks, tp + 1, n, ts, env, cid, tk, rk, stab);
     let fp: Int = ll_ppos(er);
     let t2: Int = ll_pterm(er);
-    let mut pred: String = "velse" + cid.to_string();
-    if ll_pptr(er) != "" { pred = ll_pptr(er); }
+    if t2 == 0 {
+        println("ej" + cid.to_string() + ":");
+        println("  br label %vend" + cid.to_string());
+    }
     println("vend" + cid.to_string() + ":");
     if t1 != 0 && t2 != 0 {
         return ll_if_dead_merge(fp, ts, tk, ll_pk(er), env, cid);
@@ -70,7 +74,7 @@ pub fn ll_if_value_at(toks: List[String], pos: Int, n: Int, ssa0: Int, env: Stri
         process_exit(1);
     }
     let ph: Int = ll_pssa(er) + 1;
-    println("  " + ll_ssa(ph) + " = phi " + ll_ir_val(tk) + " [ " + ll_ssa(ts) + ", %vthen" + cid.to_string() + " ], [ " + ll_ssa(ll_pssa(er)) + ", %" + pred + " ]");
+    println("  " + ll_ssa(ph) + " = phi " + ll_ir_val(tk) + " [ " + ll_ssa(ts) + ", %tj" + cid.to_string() + " ], [ " + ll_ssa(ll_pssa(er)) + ", %ej" + cid.to_string() + " ]");
     return ll_pack(fp, ph, tk, "vend" + cid.to_string());
 }
 
@@ -218,7 +222,7 @@ fn ll_if_else_arm(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String, 
     if pos < n && ll_k(toks, pos) == "KW_IF" {
         let r: String = ll_if_value_at(toks, pos, n, ssa0, env);
         let rr: String = ll_if_arm_to_kind(r, tk);
-        println("  br label %vend" + cid.to_string());
+        println("  br label %ej" + cid.to_string());
         return rr;
     }
     if pos >= n || ll_k(toks, pos) != "LBRACE" {
@@ -230,6 +234,6 @@ fn ll_if_else_arm(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String, 
         return eb;
     }
     let er2: String = ll_if_arm_to_kind(eb, tk);
-    println("  br label %vend" + cid.to_string());
+    println("  br label %ej" + cid.to_string());
     return er2;
 }

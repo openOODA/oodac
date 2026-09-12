@@ -230,58 +230,85 @@ if [[ "${PURE_SKIP_CHECK:-}" != "1" ]]; then
   fi
 fi
 
+# LLVM is per-module emit-llvm + clang -c. Product `oodac build oodac/main.oo`
+# still unique_fns-refuses; this script is the only compiler rebuild. C is --gcc.
+LLVM_MODE=0
+LLVM_OBJS=()
 if [[ "$USE_GCC" != "1" && "$SOVEREIGN_BACKEND" != "c" ]]; then
-  echo "pure_build: sovereign in-process bootstrap ($SOVEREIGN_BACKEND, zero GCC/Clang seed)"
-
-  # Stage 1 self-compilation (S0 -> S1)
-  STAGE1_BIN="$TMP/stage1_oodac"
-  echo "pure_build: stage 1 self-compilation via $OODAC_BIN..."
-  mkdir -p "$(dirname "$STAGE1_BIN")"
-  "$OODAC_BIN" build --backend "$SOVEREIGN_BACKEND" "$MAIN_ABS" -o "$STAGE1_BIN"
-  chmod +x "$STAGE1_BIN"
-  STAGE1_HASH="$(sha256sum "$STAGE1_BIN" | awk '{print $1}')"
-  echo "pure_build: stage1_hash=$STAGE1_HASH (zero external toolchains)"
-
-  if [[ "$FIXED_POINT" == "1" ]]; then
-    STAGE2_BIN="$TMP/stage2_oodac"
-    BUILD_HOST="$OODAC_BIN"
-    if oodac_is_compiler "$STAGE1_BIN"; then
-      BUILD_HOST="$STAGE1_BIN"
-      echo "pure_build: stage 2 fixed-point self-compilation via stage1..."
-    else
-      echo "pure_build: stage 2 deterministic reproduction compilation..."
-    fi
-    "$BUILD_HOST" build --backend "$SOVEREIGN_BACKEND" "$MAIN_ABS" -o "$STAGE2_BIN"
-    chmod +x "$STAGE2_BIN"
-    STAGE2_HASH="$(sha256sum "$STAGE2_BIN" | awk '{print $1}')"
-    echo "pure_build: stage2_hash=$STAGE2_HASH (self-compilation fixed point)"
-
-    if [[ "$STAGE1_HASH" != "$STAGE2_HASH" ]]; then
-      echo "ERR_FIXED_POINT_DIVERGENCE $STAGE1_HASH != $STAGE2_HASH" >&2
-      rm -rf "$TMP"
-      exit 1
-    fi
-    echo "pure_build: fixed_point_verified (S1 == S2, hash=$STAGE1_HASH)"
-    mkdir -p "$(dirname "$OUT")"
-    cp -f "$STAGE2_BIN" "$OUT"
-  else
-    mkdir -p "$(dirname "$OUT")"
-    cp -f "$STAGE1_BIN" "$OUT"
-  fi
-
-  chmod +x "$OUT"
-  test -x "$OUT"
-  echo "pure_build: sovereign_build_complete ($OUT)"
-  echo "pure_build: input_fp=$PURE_INPUT_FP"
-  echo OK_PURE_SOVEREIGN
-  echo OK_PURE_MULTI
-  rm -rf "$TMP"
-  exit 0
+  LLVM_MODE=1
 fi
 
-FN_DEF='^(static[[:space:]]+inline[[:space:]]+|static[[:space:]]+|inline[[:space:]]+)?(void|int|long long|double|float|bool|char|OoStr|OoSList|OoIList|OoFList|OoResS|OoResV|OoResI|OoResB|OoResF|CapToken|[A-Za-z_][A-Za-z0-9_]*)[[:space:]]+[A-Za-z0-9_].*\)[[:space:]]*\{'
 EMIT_CACHE="${OODAC_EMIT_CACHE:-$ROOT/.ooda-cache/oodac_emit}"
 mkdir -p "$EMIT_CACHE" "$TMP"
+ONE_CK=180
+if [[ ${#MODS[@]} -gt 80 ]]; then ONE_CK=3600; fi
+
+if [[ "$LLVM_MODE" == "1" ]]; then
+  echo "pure_build: llvm per-module emit-llvm + clang -c (nmods=${#MODS[@]})"
+  export OODA_LLVM_SIGS_ROOT="main.oo"
+  export OODA_LLVM_EXTRA_CACHE="${OODAC_EMIT_CACHE:-$ROOT/.ooda-cache/oodac_emit}/llvm_extra.sigs"
+  rm -f "$OODA_LLVM_EXTRA_CACHE"
+  if [[ "${PURE_SKIP_CHECK:-}" != "1" ]]; then
+    echo "pure_build: llvm artifact check $MAIN_ABS"
+    (cd "$ROOT" && timeout 3600 "$OODAC_BIN" check "$MAIN_ABS") >/dev/null 2>&1 || true
+  fi
+  host_fp="$(sha256sum -- "$OODAC_BIN" | awk '{print $1}')"
+  host_fp="${host_fp:0:16}"
+  emit_skip=0
+  nmod=0
+  for src in "${MODS[@]}"; do
+    nmod=$((nmod + 1))
+    # ANCHOR.oo is an import index. C unique_fns skips its wrappers; they
+    # only call other ANCHOR names (lex_tokenize). Do not emit a TU.
+    if [[ "$(basename "$src")" == "ANCHOR.oo" ]]; then
+      echo "pure_build: llvm $nmod/${#MODS[@]} skip ${src#"$ROOT"/}"
+      continue
+    fi
+    ml="$TMP/$(echo "$src" | tr '/.' '__').ll"
+    mo="${ml%.ll}.o"
+    src_hash="$(sha256sum -- "$src" | awk '{print $1}')"
+    cache_ll="$EMIT_CACHE/${host_fp}_${src_hash}.ll"
+    if [[ -s "$cache_ll" ]] && grep -q 'target triple' "$cache_ll" && ! grep -qE $'^ERR\t' "$cache_ll"; then
+      cp -f "$cache_ll" "$ml"
+      emit_skip=$((emit_skip + 1))
+    else
+      emit_one() {
+        local f="$1"
+        local r="${f#"$ROOT"/}"
+        (cd "$ROOT" && timeout 1800 "$OODAC_BIN" emit-llvm "$r")
+      }
+      emit_one "$src" >"$ml" 2>"$ml.err" || true
+      if grep -qE $'^ERR\t' "$ml" "$ml.err" 2>/dev/null && grep -qE 'no artifact' "$ml" "$ml.err" 2>/dev/null; then
+        rel="${src#"$ROOT"/}"
+        (cd "$ROOT" && timeout "$ONE_CK" "$OODAC_BIN" check "$src") >/dev/null 2>&1 || true
+        emit_one "$src" >"$ml" 2>"$ml.err" || true
+        if grep -qE $'^ERR\t' "$ml" "$ml.err" 2>/dev/null && grep -qE 'no artifact' "$ml" "$ml.err" 2>/dev/null && [[ "$rel" != "$src" ]]; then
+          (cd "$ROOT" && timeout "$ONE_CK" "$OODAC_BIN" check "$rel") >/dev/null 2>&1 || true
+          emit_one "$rel" >"$ml" 2>"$ml.err" || true
+        fi
+      fi
+      if [[ -s "$ml.err" ]] && grep -qE $'^ERR\t' "$ml.err"; then
+        cat "$ml.err" >>"$ml"
+      fi
+      if [[ -s "$ml" ]] && grep -q 'target triple' "$ml" && ! grep -qE $'^ERR\t' "$ml"; then
+        cat "$ml" > "$cache_ll" 2>/dev/null || true
+      fi
+    fi
+    if [[ ! -s "$ml" ]] || ! grep -q 'target triple' "$ml" || grep -qE $'^ERR\t' "$ml"; then
+      echo "ERR_EMIT_LLVM $src ($nmod/${#MODS[@]})" >&2
+      grep -E $'^ERR\t' "$ml" "$ml.err" 2>/dev/null | head -n 20 >&2 || true
+      tail -n 8 "$ml" >&2 || true
+      exit 1
+    fi
+    echo "pure_build: llvm $nmod/${#MODS[@]} ${src#"$ROOT"/}"
+    clang --no-default-config -c -O2 -g0 -fno-ident -Wno-override-module -frandom-seed=0 "$ml" -o "$mo"
+    LLVM_OBJS+=("$mo")
+  done
+  echo "pure_build: llvm_emit skip=$emit_skip of ${#MODS[@]}"
+fi
+
+if [[ "$LLVM_MODE" != "1" ]]; then
+FN_DEF='^(static[[:space:]]+inline[[:space:]]+|static[[:space:]]+|inline[[:space:]]+)?(void|int|long long|double|float|bool|char|OoStr|OoSList|OoIList|OoFList|OoResS|OoResV|OoResI|OoResB|OoResF|CapToken|[A-Za-z_][A-Za-z0-9_]*)[[:space:]]+[A-Za-z0-9_].*\)[[:space:]]*\{'
 MCS=()
 emit_skip=0
 for src in "${MODS[@]}"; do
@@ -293,17 +320,15 @@ for src in "${MODS[@]}"; do
     emit_skip=$((emit_skip + 1))
   else
     emit_one() {
-      (cd "$ROOT" && OODA_EMIT_NO_CONCAT=1 EMIT_NO_CONCAT=1 timeout 1800 "$OODAC_BIN" emit-c "$1")
+      local f="$1"
+      local r="${f#"$ROOT"/}"
+      (cd "$ROOT" && OODA_EMIT_NO_CONCAT=1 EMIT_NO_CONCAT=1 timeout 1800 "$OODAC_BIN" emit-c "$r")
     }
     emit_one "$src" >"$mc" || true
     if grep -qE $'^ERR\temit\tno artifact' "$mc"; then
       rel="${src#"$ROOT"/}"
-      (cd "$ROOT" && timeout 180 "$OODAC_BIN" check "$src") >/dev/null 2>&1 || true
-      emit_one "$src" >"$mc" || true
-      if grep -qE $'^ERR\temit\tno artifact' "$mc" && [[ "$rel" != "$src" ]]; then
-        (cd "$ROOT" && timeout 180 "$OODAC_BIN" check "$rel") >/dev/null 2>&1 || true
-        emit_one "$rel" >"$mc" || true
-      fi
+      (cd "$ROOT" && timeout "$ONE_CK" "$OODAC_BIN" check "$rel") >/dev/null 2>&1 || true
+      emit_one "$rel" >"$mc" || true
     fi
     if [[ -s "$mc" ]] && grep -qE "$FN_DEF" "$mc" && ! grep -qE $'^ERR\tc_emit' "$mc"; then
       mkdir -p "$EMIT_CACHE"
@@ -538,6 +563,7 @@ echo "pure_build: native_caps"
 if ! grep -q 'int main\|long long main' "$TMP/all.c" && ! grep -q 'main(int argc' "$TMP/all.c"; then
   echo "int main(void) { return 0; }" >> "$TMP/all.c"
 fi
+fi
 
 OO_SSL_CFLAGS=()
 OO_SSL_LIBS=()
@@ -566,7 +592,7 @@ else
   echo "pure_build: OO_HAVE_OPENSSL=0 (TLS residual; no -lssl)"
 fi
 mkdir -p "$(dirname "$OUT")"
-OD="$WS_ROOT/oodar"
+OD="${OODAR_ROOT:-$WS_ROOT/oodar}"
 if [[ ! -f "$OD/oodar.c" ]]; then
   echo "ERR_OODAR_MISSING $OD/oodar.c" >&2
   exit 1
@@ -688,11 +714,38 @@ __attribute__((constructor)) void oo_jail_landlock_ctor(void) {
 HOST_RT_EOF
 echo "pure_build: clang -O2 oodar.c (no chs_rt.c)"
 clang -c -O2 -g0 -fno-ident "${OO_SSL_CFLAGS[@]}" -I"$OD" "$OD/oodar.c" -o "$TMP/oodar.o"
-clang -O2 -g0 -fno-ident -I"$OD" "${OO_SSL_CFLAGS[@]}" "$TMP/oodar.o" "$TMP/oodac_host_rt.c" "$TMP/all.c" \
-  -frandom-seed=0 -Wl,--build-id=none -Wl,--strip-debug \
-  -lm -ldl -lpthread "${OO_SSL_LIBS[@]}" -o "$OUT"
+if [[ "$LLVM_MODE" == "1" ]]; then
+  echo "pure_build: clang link llvm objs=${#LLVM_OBJS[@]} + oodar + host_rt"
+  clang --no-default-config -O2 -g0 -fno-ident -Wno-override-module -I"$OD" "${OO_SSL_CFLAGS[@]}" \
+    "$TMP/oodar.o" "$TMP/oodac_host_rt.c" "${LLVM_OBJS[@]}" \
+    -frandom-seed=0 -Wl,--build-id=none -Wl,--strip-debug \
+    -lm -ldl -lpthread "${OO_SSL_LIBS[@]}" -o "$OUT"
+else
+  clang -O2 -g0 -fno-ident -I"$OD" "${OO_SSL_CFLAGS[@]}" "$TMP/oodar.o" "$TMP/oodac_host_rt.c" "$TMP/all.c" \
+    -frandom-seed=0 -Wl,--build-id=none -Wl,--strip-debug \
+    -lm -ldl -lpthread "${OO_SSL_LIBS[@]}" -o "$OUT"
+fi
 chmod +x "$OUT"
 test -x "$OUT"
+if [[ "$LLVM_MODE" == "1" && "$FIXED_POINT" == "1" ]]; then
+  S1="$TMP/stage1_oodac"
+  S2="$TMP/stage2_oodac"
+  cp -f "$OUT" "$S1"
+  chmod +x "$S1"
+  echo "pure_build: llvm fixed-point S1 -> S2 via $S1"
+  OODAC_BIN="$S1" "$ROOT/bootstrap/oodac_pure_build" --no-fixed-point "$MAIN_ABS" "$S2"
+  h1="$(sha256sum "$S1" | awk '{print $1}')"
+  h2="$(sha256sum "$S2" | awk '{print $1}')"
+  echo "pure_build: stage1_hash=$h1"
+  echo "pure_build: stage2_hash=$h2"
+  if [[ "$h1" != "$h2" ]]; then
+    echo "ERR_FIXED_POINT_DIVERGENCE $h1 != $h2" >&2
+    exit 1
+  fi
+  cp -f "$S2" "$OUT"
+  chmod +x "$OUT"
+  echo "pure_build: fixed_point_verified (S1 == S2, hash=$h1)"
+fi
 OUT_BASE="$(basename "$OUT")"
 oodac_named=0
 if [[ "$OUT_BASE" == "oodac" ]]; then

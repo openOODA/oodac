@@ -29,7 +29,8 @@ cp -a ooda-v*-linux-x86_64/oodac/oodac bootstrap/seed/oodac
 chmod +x bootstrap/seed/oodac
 ```
 
-**Never** use a Cargo-built host as seed. Seed must be pure `.oo`+C product.
+**Never** use a Cargo-built host as seed. Seed must be the LLVM-built
+pure `.oo` product (`oodac_pure_build` without `--gcc`).
 
 ## SHA-256 (integrity, not secrecy)
 

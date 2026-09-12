@@ -107,7 +107,7 @@ fn ll_cmp(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> Strin
     let mut p: Int = ll_ppos(r);
     while p < n {
         let op: String = ll_k(toks, p);
-        if op != "EQEQ" && op != "NEQ" && op != "LT" && op != "GT" && op != "LTE" && op != "GTE" {
+        if op != "EQEQ" && op != "NEQ" && op != "LT" && op != "GT" && op != "LTE" && op != "GTE" && op != "AMP" && op != "PIPE" && op != "CARET" {
             return r;
         }
         p = p + 1;
@@ -168,12 +168,14 @@ fn ll_binop(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> Str
             let rhs: String = ll_cmp(toks, p, n, ls, env);
             p = ll_ppos(rhs);
             let rs: Int = ll_pssa(rhs);
+            println("  br label %aj" + id.to_string());
+            println("aj" + id.to_string() + ":");
             println("  br label %ae" + id.to_string());
             println("af" + id.to_string() + ":");
             println("  br label %ae" + id.to_string());
             println("ae" + id.to_string() + ":");
             let ph: Int = rs + 1;
-            println("  " + ll_ssa(ph) + " = phi i1 [ " + ll_ssa(rs) + ", %ar" + id.to_string() + " ], [ false, %af" + id.to_string() + " ]");
+            println("  " + ll_ssa(ph) + " = phi i1 [ " + ll_ssa(rs) + ", %aj" + id.to_string() + " ], [ false, %af" + id.to_string() + " ]");
             r = ll_pack(p, ph, "i1", "");
         } else {
             println("  br i1 " + ll_ssa(ls) + ", label %ot" + id.to_string() + ", label %or" + id.to_string());
@@ -181,12 +183,14 @@ fn ll_binop(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> Str
             let rhs: String = ll_cmp(toks, p, n, ls, env);
             p = ll_ppos(rhs);
             let rs: Int = ll_pssa(rhs);
+            println("  br label %oj" + id.to_string());
+            println("oj" + id.to_string() + ":");
             println("  br label %ae" + id.to_string());
             println("ot" + id.to_string() + ":");
             println("  br label %ae" + id.to_string());
             println("ae" + id.to_string() + ":");
             let ph: Int = rs + 1;
-            println("  " + ll_ssa(ph) + " = phi i1 [ true, %ot" + id.to_string() + " ], [ " + ll_ssa(rs) + ", %or" + id.to_string() + " ]");
+            println("  " + ll_ssa(ph) + " = phi i1 [ true, %ot" + id.to_string() + " ], [ " + ll_ssa(rs) + ", %oj" + id.to_string() + " ]");
             r = ll_pack(p, ph, "i1", "");
         }
     }

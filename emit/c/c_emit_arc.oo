@@ -50,7 +50,7 @@ pub fn c_env_take_kind(s: String, p0: Int) -> List[String] {
     return o;
 }
 
-pub fn c_arc_kind_release(kind: String, name: String) -> String {
+fn c_arc_kind_release(kind: String, name: String) -> String {
     if kind == "T" || kind == "OoStr" { return "oo_str_release(" + name + "); "; }
     if kind == "S" || kind == "OoSList" || kind == "OoL_S" { return "oo_slist_release(" + name + "); "; }
     if kind == "LF" || kind == "OoFList" || kind == "OoL_F" { return "oo_flist_release(" + name + "); "; }
@@ -86,7 +86,7 @@ pub fn c_arc_kind_release(kind: String, name: String) -> String {
     return "";
 }
 
-pub fn c_arc_kind_retain(kind: String, name: String) -> String {
+fn c_arc_kind_retain(kind: String, name: String) -> String {
     if kind == "T" || kind == "OoStr" { return "oo_str_retain(" + name + "); "; }
     if kind == "S" || kind == "OoSList" || kind == "OoL_S" { return "oo_slist_retain(" + name + "); "; }
     if kind == "LF" || kind == "OoFList" || kind == "OoL_F" { return "oo_flist_retain(" + name + "); "; }

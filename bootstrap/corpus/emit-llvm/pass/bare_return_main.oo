@@ -1,0 +1,17 @@
+// # Bare return in main
+//
+// Logline: `return;` in main is unit; LLVM emits ret i32 0. Matches oodac/main.oo
+//   command dispatch.
+//
+// Setup: Default llvm. No emit/c import.
+//
+// Beats:
+//   1. Prints 1 then exits; the dead arm is not reached.
+
+pub fn main() {
+    if true {
+        println(1);
+        return;
+    }
+    println(0);
+}

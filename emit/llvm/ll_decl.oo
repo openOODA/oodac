@@ -1,0 +1,68 @@
+// # LLVM import declares
+//
+// Logline: Print declare lines for callees defined in other TUs.
+//
+// Setup: Sig table from import artifacts. No emit/c import.
+//
+// Beats:
+//   1. Skip names kept in this TU.
+//   2. Skip names this TU does not call.
+//   3. sret for memory returns; value types otherwise.
+
+import "ll_tok.oo";
+import "ll_ty.oo";
+
+fn ll_decl_params(aks: String) -> String {
+    let n: Int = chars_len(aks); let mut o: String = ""; let mut start: Int = 0; let mut p: Int = 0;
+    while p <= n {
+        if p == n || char_at(aks, p) == "," {
+            if p > start {
+                if o != "" { o = o + ", "; }
+                o = o + ll_pass(str_slice(aks, start, p));
+            }
+            start = p + 1;
+        }
+        p = p + 1;
+    }
+    return o;
+}
+
+fn ll_emit_one_decl(name: String, sig: String) {
+    let gt: Int = str_index_of(sig, ">");
+    if gt < 0 { return; }
+    let ps: String = ll_decl_params(str_slice(sig, 0, gt));
+    let rk: String = str_slice(sig, gt + 1, chars_len(sig));
+    if ll_is_mem(rk) {
+        if ps != "" {
+            println("declare void @" + name + "(ptr sret(" + ll_ir_alloc(rk) + ") align 8, " + ps + ")");
+        } else {
+            println("declare void @" + name + "(ptr sret(" + ll_ir_alloc(rk) + ") align 8)");
+        }
+    } else if rk == "void" || rk == "" {
+        println("declare void @" + name + "(" + ps + ")");
+    } else {
+        println("declare " + ll_ir_val(rk) + " @" + name + "(" + ps + ")");
+    }
+}
+
+pub fn ll_emit_import_decls(extra: String, local: String, want: String) {
+    let n: Int = chars_len(extra); let mut i: Int = 0; let mut seen: String = "\t";
+    while i < n {
+        let at: Bool = i == 0 || char_at(extra, i - 1) == ";";
+        if at && i + 6 <= n && str_slice(extra, i, i + 6) == "__fn__" {
+            let mut k: Int = i + 6;
+            while k < n && char_at(extra, k) != "=" { k = k + 1; }
+            let nm: String = str_slice(extra, i + 6, k);
+            let mut m: Int = k + 1;
+            while m < n && char_at(extra, m) != ";" { m = m + 1; }
+            if str_index_of(local, "\t" + nm + "\t") < 0 && str_index_of(want, "\t" + nm + "\t") >= 0 {
+                if str_index_of(seen, "\t" + nm + "\t") < 0 {
+                    seen = seen + nm + "\t";
+                    ll_emit_one_decl(nm, str_slice(extra, k + 1, m));
+                }
+            }
+            i = m;
+        }
+        i = i + 1;
+    }
+}

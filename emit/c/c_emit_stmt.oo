@@ -233,7 +233,7 @@ pub fn c_emit_if_expr(toks: List[String], pos: Int, n: Int, env: String) -> List
     return c_emit_pack2(p.to_string(), "((" + cond + ") ? (" + then_e + ") : (" + else_e + "))");
 }
 
-pub fn c_pack_pos_env(p: Int, e: String) -> List[String] {
+fn c_pack_pos_env(p: Int, e: String) -> List[String] {
     let mut o: List[String] = list_new();
     o = list_push(o, p.to_string());
     o = list_push(o, e);

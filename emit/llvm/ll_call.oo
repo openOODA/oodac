@@ -60,7 +60,7 @@ pub fn ll_field_load(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, 
 
 pub fn ll_str_gep(toks: List[String], pos: Int, ssa0: Int) -> String {
     let tx: String = ll_t(toks, pos);
-    let ln: Int = chars_len(tx) + 1;
+    let ln: Int = bytes_len(tx) + 1;
     let n: Int = ssa0 + 1;
     println("  " + ll_ssa(n) + " = getelementptr [" + ln.to_string() + " x i8], ptr @.s" + pos.to_string() + ", i64 0, i64 0");
     let n2: Int = n + 1;

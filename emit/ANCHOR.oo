@@ -2,7 +2,8 @@
 //
 // Logline: Same typed artifact in. C out today. A later backend does not import emit/c lowering.
 //
-// Setup: C is the reference backend. Residual names exit 2. Shared type names live in types/.
+// Setup: LLVM is the canonical backend. Residual names exit 2. Shared type
+//   names live in types/. C leftover is emit/c.
 //
 // Beats:
 //   1. Import emit/c (reference) and emit/llvm (second consumer).

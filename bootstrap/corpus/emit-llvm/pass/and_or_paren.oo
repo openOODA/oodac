@@ -1,0 +1,32 @@
+// # Nested AND of parenthesized OR
+//
+// Logline: `a && (b || c)` must produce PHI predecessors that match the RHS join.
+//
+// Setup: Bool locals. Default llvm build. No emit/c import.
+//
+// Beats:
+//   1. true && (false || true) prints 1.
+//   2. false && (true || true) prints 0.
+//   3. true && (false || false) prints 0.
+
+pub fn main() {
+    let a: Bool = true;
+    let b: Bool = false;
+    let c: Bool = true;
+    if a && (b || c) {
+        println(1);
+    } else {
+        println(0);
+    }
+    let d: Bool = false;
+    if d && (a || c) {
+        println(1);
+    } else {
+        println(0);
+    }
+    if a && (b || d) {
+        println(1);
+    } else {
+        println(0);
+    }
+}

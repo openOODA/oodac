@@ -10,7 +10,7 @@
 //   3. c_emit_impl_methods emits impl fns as concrete C functions.
 import "types/token_search.oo";
 
-pub fn parse_trait_item(toks: List[String], pos0: Int, item_idx: Int) -> Int {
+fn parse_trait_item(toks: List[String], pos0: Int, item_idx: Int) -> Int {
     let n = list_len(toks);
 let mut name = "";
 if pos0 + 1 < n { name = c_tokt(toks, pos0 + 1);
@@ -20,7 +20,7 @@ if pos0 + 1 < n { name = c_tokt(toks, pos0 + 1);
     return skip_trait_or_impl(toks, pos0);
 }
 
-pub fn parse_impl_item(toks: List[String], pos0: Int, item_idx: Int) -> Int {
+fn parse_impl_item(toks: List[String], pos0: Int, item_idx: Int) -> Int {
     let n = list_len(toks);
 let mut tname = "";
 let mut sname = "";

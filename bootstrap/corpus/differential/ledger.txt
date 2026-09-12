@@ -8,6 +8,9 @@ bootstrap/corpus/differential/cases/arith_star.oo diverge a4b2c5db15348c29 9efe5
 bootstrap/corpus/differential/cases/for_let_shadow.oo parity 3a3070eb11fca782 3a3070eb11fca782  # both print 5/5/5; LLVM shadow alloca matches C-scoping
 bootstrap/corpus/emit-llvm/pass/arith_muldiv.oo parity 26d88f4df812e7df 26d88f4df812e7df  # prints 7/4/9/6/2; STAR SLASH PERCENT with C precedence
 bootstrap/corpus/emit-llvm/pass/bool_print.oo parity 76fe9f61152f4c08 76fe9f61152f4c08  # prints 0/1/1
+bootstrap/corpus/emit-llvm/pass/bare_return_main.oo parity 4355a46b19d348dc 4355a46b19d348dc  # prints 1; bare return in main is ret i32 0
+bootstrap/corpus/emit-llvm/pass/bitops.oo parity 9bf0d4d18dffb6d5 9bf0d4d18dffb6d5  # prints 12/63/51/12; bitwise AND OR XOR not address-of
+bootstrap/corpus/emit-llvm/pass/parse_int_digits.oo parity a1fb50e6c86fae16 a1fb50e6c86fae16  # prints 12; brace-less else-if must not swallow i+=1
 bootstrap/corpus/emit-llvm/pass/cap_spread2.oo parity 10159baf262b43a9 10159baf262b43a9  # seven peripheral grants, prints 7
 bootstrap/corpus/emit-llvm/pass/ensures_complex.oo parity 53c234e5e8472b6a 53c234e5e8472b6a  # prints 2; dynamic ensures result == x + 1 on LLVM and C
 bootstrap/corpus/emit-llvm/pass/export_fn.oo parity 54d668685174d41b 54d668685174d41b  # prints 42/42/112; export and pub-export lower with plain linkage
@@ -29,11 +32,13 @@ bootstrap/corpus/emit-llvm/pass/multi_left_lib.oo both-fail - -  # library modul
 bootstrap/corpus/emit-llvm/pass/multi_right_lib.oo both-fail - -  # library module, no main entry
 bootstrap/corpus/emit-llvm/pass/println_str.oo parity d65f6e8549443223 d65f6e8549443223  # prints hello llvm
 bootstrap/corpus/emit-llvm/pass/result_val_err.oo c-fail def9d6bd7c0e0627 -  # C emits oo_print_int with wrong arg type; LLVM prints 42/boom
+bootstrap/corpus/emit-llvm/pass/ret_field_list.oo parity 9a271f2a916b0b6e 9a271f2a916b0b6e  # prints 0; sret store of List field return
 bootstrap/corpus/emit-llvm/pass/str_concat.oo parity aec070645fe53ee3 aec070645fe53ee3  # prints foobar
 bootstrap/corpus/emit-llvm/pass/str_escapes.oo parity 616cb1e7ef1b7a62 616cb1e7ef1b7a62  # 11 plus control bytes, exact
 bootstrap/corpus/emit-llvm/pass/str_match_stmt.oo parity 9e1bde90aecdf714 9e1bde90aecdf714  # prints B/wild; string-match literal/block/wild arms; fixed C need_close overcount
 bootstrap/corpus/emit-llvm/pass/str_starts_with.oo parity ad0fadf63cc7cd77 ad0fadf63cc7cd77  # prints 1/1
 bootstrap/corpus/emit-llvm/pass/struct_field.oo parity f4b907e89b1eca6d f4b907e89b1eca6d  # prints 41/mdef/7/41/100/101; decl+literal+chain+store+call-arg
+bootstrap/corpus/emit-llvm/pass/struct_nest.oo parity 5f3be412232c7b3c 5f3be412232c7b3c  # prints 9/1/2/4; nested multi-field struct GEP not flattened
 bootstrap/corpus/emit-llvm/pass/struct_list.oo c-fail 8300cf1ff6cc128b -  # LLVM prints 2/x/1/2/2/2/3; C mistypes List[Item] as OoIList
 bootstrap/corpus/emit-llvm/pass/user_fn_call.oo parity 4358298b6bb27f48 4358298b6bb27f48  # prints 42/hi/55
 bootstrap/corpus/emit-llvm/pass/while_sum.oo parity 917df3320d778ddb 917df3320d778ddb  # prints 10
@@ -72,3 +77,5 @@ bootstrap/corpus/emit-llvm/pass/result_unwrap_ok.oo parity 98ea6e4f216f2fb4 98ea
 bootstrap/corpus/emit-llvm/pass/str_local_eq.oo parity 4355a46b19d348dc 4355a46b19d348dc  # ported from emit-c/pass; C and LLVM byte-identical
 bootstrap/corpus/emit-llvm/pass/verify_ctor.oo parity 4355a46b19d348dc 4355a46b19d348dc  # prints 1; verify ctor silent unless OODA_TEST
 bootstrap/corpus/emit-llvm/pass/while_if_else.oo parity 8773ceae2539ef37 8773ceae2539ef37  # ported from emit-c/pass; C and LLVM byte-identical
+bootstrap/corpus/emit-llvm/pass/and_or_paren.oo parity 88fb1949a818a3ac 88fb1949a818a3ac  # prints 1/0/0; nested a && (b || c) PHI join matches C
+bootstrap/corpus/emit-llvm/pass/ifexpr_and.oo parity 5d90ef7fc0d040fd 5d90ef7fc0d040fd  # prints 1/0; if-expr AND/OR arms PHI from tj/ej

@@ -9,6 +9,9 @@
 //   2. Past the end, emit EOF and stop.
 //   3. SKIP updates the cursor; ERR prints and exits; TOK unpacks fields and emit_tok, stopping on EOF.
 import "token_parse_int.oo";
+import "lex.oo";
+import "token_next.oo";
+import "token_ident.oo";
 
 
 pub fn dump_tokens(src: String) {

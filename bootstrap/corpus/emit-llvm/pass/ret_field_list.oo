@@ -1,0 +1,23 @@
+// # Return a List field through sret
+//
+// Logline: `return art.toks` is a mem return; store to %ret and ret void,
+//   matching cli/cli_emit emit_toks_for_file.
+//
+// Setup: Struct with List[String] field. Default llvm. No emit/c.
+//
+// Beats:
+//   1. get returns the field; list_len prints 0.
+
+pub type Art = struct {
+    toks: List[String]
+};
+
+pub fn get(a: Art) -> List[String] {
+    return a.toks;
+}
+
+pub fn main() {
+    let a: Art = Art { toks: list_new() };
+    let t: List[String] = get(a);
+    println(list_len(t));
+}

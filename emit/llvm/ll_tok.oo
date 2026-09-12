@@ -115,7 +115,7 @@ pub fn ll_struct_tab_of(env: String) -> String {
             while k < n && char_at(env, k) != ";" { k = k + 1; }
             o = o + str_slice(env, i, k) + ";";
             i = k;
-        } else if at && i + 5 <= n && str_slice(env, i, i + 5) == "__st__" {
+        } else if at && i + 6 <= n && str_slice(env, i, i + 6) == "__st__" {
             let mut k: Int = i;
             while k < n && char_at(env, k) != ";" { k = k + 1; }
             o = o + str_slice(env, i, k) + ";";
@@ -142,7 +142,7 @@ pub fn ll_stab_rich(stab: String, t: String) -> String {
             let ci: Int = str_index_of(val, ":");
             if ci >= 0 {
                 if !first { rich = rich + ","; }
-                rich = rich + fld + ":" + str_slice(val, ci + 1, chars_len(val));
+                rich = rich + fld + ":" + ll_st_map(str_slice(val, ci + 1, chars_len(val)), ",", "|");
                 first = false;
             }
             j = m;

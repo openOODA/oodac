@@ -1,0 +1,41 @@
+// # Digit else-if chain must increment
+//
+// Logline: Brace-less else if must not swallow the following i = i + 1.
+//   Matches lex/token_parse_int. Untyped lets. Default llvm.
+//
+// Setup: Clone of parse_int over "12". No emit/c import.
+//
+// Beats:
+//   1. Prints 12.
+
+pub fn pi(s: String) -> Int {
+    let n = chars_len(s);
+    let mut v = 0;
+    let mut i = 0;
+    let mut sign = 1;
+    if n > 0 {
+        if char_at(s, 0) == "-" {
+            sign = -1;
+            i = 1;
+        }
+    }
+    while i < n {
+        let c = char_at(s, i);
+        if c == "0" { v = v * 10 + 0; }
+        else if c == "1" { v = v * 10 + 1; }
+        else if c == "2" { v = v * 10 + 2; }
+        else if c == "3" { v = v * 10 + 3; }
+        else if c == "4" { v = v * 10 + 4; }
+        else if c == "5" { v = v * 10 + 5; }
+        else if c == "6" { v = v * 10 + 6; }
+        else if c == "7" { v = v * 10 + 7; }
+        else if c == "8" { v = v * 10 + 8; }
+        else if c == "9" { v = v * 10 + 9; }
+        i = i + 1;
+    }
+    return v * sign;
+}
+
+pub fn main() {
+    println(pi("12"));
+}

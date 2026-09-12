@@ -1,0 +1,35 @@
+// # If-expr arms that contain AND/OR
+//
+// Logline: Nested &&/|| inside if-expr arms must PHI from post-arm joins, not
+//   vthen/velse, matching ast/ast_parse is_upper.
+//
+// Setup: Multi-stmt then-arm trailing AND; else-arm OR. Default llvm. No emit/c.
+//
+// Beats:
+//   1. "Ast" first-byte is_upper prints 1.
+//   2. Dead then with else OR-false prints 0.
+
+pub fn main() {
+    let name: String = "Ast";
+    let is_upper: Bool = if chars_len(name) > 0 {
+        let b: Int = byte_at(name, 0);
+        b >= 65 && b <= 90
+    } else {
+        false
+    };
+    if is_upper {
+        println(1);
+    } else {
+        println(0);
+    }
+    let z: Bool = if false {
+        true && false
+    } else {
+        false || false
+    };
+    if z {
+        println(1);
+    } else {
+        println(0);
+    }
+}

@@ -1,0 +1,16 @@
+// # Imported struct defining TU
+//
+// Logline: Wrap is defined here so a one-TU user must import the layout.
+//
+// Setup: No main. Used by llvm_impstruct.oo.
+//
+// Beats:
+//   1. Wrap has one Int field.
+
+pub type Wrap = struct {
+    n: Int
+};
+
+pub fn impstruct(n: Int) -> Int {
+    return n;
+}

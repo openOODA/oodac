@@ -20,6 +20,12 @@ import "types/types_core.oo";
 
 pub fn ll_return_stmt(toks: List[String], p: Int, n: Int, ssa: Int, env: String, ret_kind: String, stab: String) -> String {
     if p + 1 < n && ll_k(toks, p + 1) == "SEMI" {
+        if ret_kind == "main_i32" {
+            let ns: Int = ll_arc_exit(env, ssa);
+            println("  ret i32 0");
+            let q: Int = ll_skip_to_rbrace(toks, p + 1, n);
+            return ll_pack(q, ns, ret_kind, env) + "\t1";
+        }
         if ret_kind != "void" {
             println("ERR\tllvm\tbare return needs void");
             process_exit(1);
@@ -57,6 +63,9 @@ pub fn ll_return_stmt(toks: List[String], p: Int, n: Int, ssa: Int, env: String,
         } else {
             println("  ret " + ll_ir_val(ret_kind) + " " + ll_ssa(ns));
         }
+    } else if ll_is_mem(ret_kind) {
+        println("  store " + ll_ir_val(ret_kind) + " " + ll_ssa(ll_pssa(v)) + ", ptr %ret");
+        println("  ret void");
     } else {
         println("  ret " + ll_ir_val(ret_kind) + " " + ll_ssa(ll_pssa(v)));
     }

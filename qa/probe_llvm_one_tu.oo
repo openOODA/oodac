@@ -7,7 +7,7 @@
 // Beats:
 //   1. check the fixture.
 //   2. emit-llvm stdout contains define hidden @shown.
-//   3. emit-llvm stdout contains define internal @hid and not hidden @hid.
+//   3. emit-llvm stdout contains define internal @hid, not hidden @hid, and %St_Box.
 
 pub fn main(p: &ProcessCap, env: &EnvCap) {
     let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
@@ -38,6 +38,10 @@ pub fn main(p: &ProcessCap, env: &EnvCap) {
     }
     if str_index_of(ir, "define hidden i64 @hid") >= 0 {
         println("ERR\thid must not be hidden");
+        process_exit(1);
+    }
+    if str_index_of(ir, "%St_Box = type") < 0 {
+        println("ERR\tmissing St_Box");
         process_exit(1);
     }
     println("OK");

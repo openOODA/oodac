@@ -1,0 +1,122 @@
+// # LLVM imported struct types
+//
+// Logline: One-TU emit looks up structs defined in other files via extra_st.
+//   Defining TU still define-s retain/release; users only declare.
+//
+// Setup: extra cache prefixes full-graph __st__/__stf__. No emit/c import.
+//
+// Beats:
+//   1. Local type names are the define set.
+//   2. Other extra_st names get %St type plus RR/olist declares.
+
+import "ll_tok.oo";
+import "ll_ty.oo";
+import "types/types_core.oo";
+
+pub fn ll_local_st_names(toks: List[String]) -> String {
+    let n: Int = list_len(toks);
+    let mut o: String = "\t";
+    let mut i: Int = 0;
+    while i < n {
+        let mut p: Int = i;
+        if ll_k(toks, i) == "KW_PUB" { p = i + 1; }
+        if p < n && ll_k(toks, p) == "KW_TYPE" && p + 1 < n && ll_k(toks, p + 1) == "IDENT" {
+            let nm: String = ll_t(toks, p + 1);
+            let mut q: Int = p + 2;
+            if q < n && ll_k(toks, q) == "EQ" { q = q + 1; }
+            if q < n && ll_k(toks, q) == "IDENT" && ll_t(toks, q) == "struct" {
+                o = o + nm + "\t";
+            }
+        }
+        i = i + 1;
+    }
+    return o;
+}
+
+pub fn ll_st_pick(env: String, names: String) -> String {
+    let n: Int = chars_len(env);
+    let mut o: String = "";
+    let mut i: Int = 0;
+    while i < n {
+        let at: Bool = i == 0 || char_at(env, i - 1) == ";";
+        if at {
+            let mut k: Int = i;
+            while k < n && char_at(env, k) != ";" { k = k + 1; }
+            let ent: String = str_slice(env, i, k);
+            let mut keep: Bool = false;
+            if chars_len(ent) >= 6 && str_slice(ent, 0, 6) == "__st__" {
+                let eq: Int = str_index_of(ent, "=");
+                if eq >= 0 {
+                    let nm: String = str_slice(ent, 6, eq);
+                    if str_index_of(names, "\t" + nm + "\t") >= 0 { keep = true; }
+                }
+            } else if chars_len(ent) >= 7 && str_slice(ent, 0, 7) == "__stf__" {
+                let rest: String = str_slice(ent, 7, chars_len(ent));
+                let d: Int = str_index_of(rest, ".");
+                if d >= 0 {
+                    let nm: String = str_slice(rest, 0, d);
+                    if str_index_of(names, "\t" + nm + "\t") >= 0 { keep = true; }
+                }
+            }
+            if keep { o = o + ent + ";"; }
+            i = k;
+        }
+        i = i + 1;
+    }
+    return o;
+}
+
+fn ll_st_fields(env: String, nm: String) -> String {
+    let pre: String = "__stf__" + nm + ".";
+    let pl: Int = chars_len(pre);
+    let n: Int = chars_len(env);
+    let mut tys: String = "";
+    let mut j: Int = 0;
+    while j < n {
+        if j + pl <= n && str_slice(env, j, j + pl) == pre {
+            let mut k: Int = j + pl;
+            while k < n && char_at(env, k) != "=" { k = k + 1; }
+            k = k + 1;
+            let mut m: Int = k;
+            while m < n && char_at(env, m) != ";" { m = m + 1; }
+            let val: String = str_slice(env, k, m);
+            let ci: Int = str_index_of(val, ":");
+            if ci < 0 { println("ERR\tllvm\tstruct tab"); process_exit(1); }
+            let fk: String = str_slice(val, ci + 1, chars_len(val));
+            if tys != "" { tys = tys + ", "; }
+            tys = tys + ll_ir_alloc(fk);
+            j = m;
+        }
+        j = j + 1;
+    }
+    return tys;
+}
+
+pub fn ll_struct_emit_imports(stenv: String, local_st: String) {
+    let n: Int = chars_len(stenv);
+    let mut i: Int = 0;
+    while i < n {
+        if i + 6 <= n && str_slice(stenv, i, i + 6) == "__st__" {
+            let mut e: Int = i + 6;
+            while e < n && char_at(stenv, e) != "=" { e = e + 1; }
+            let nm: String = str_slice(stenv, i + 6, e);
+            e = e + 1;
+            let mut c: Int = e;
+            while c < n && char_at(stenv, c) != ";" { c = c + 1; }
+            if type_env_get(local_st, "__st__" + nm) == "" {
+                println("%St_" + nm + " = type { " + ll_st_fields(stenv, nm) + " }");
+                println("%OoL_" + nm + " = type { ptr, i64, i64 }");
+                println("%OoRes_St_" + nm + " = type { i32, %St_" + nm + ", %OoStr }");
+                println("%OoOpt_St_" + nm + " = type { i32, %St_" + nm + " }");
+                println("declare void @oo_retain_St_" + nm + "(ptr)");
+                println("declare void @oo_release_St_" + nm + "(ptr)");
+                println("declare void @oo_l_" + nm + "_new(ptr sret(%OoL_" + nm + ") align 8)");
+                println("declare i64 @oo_l_" + nm + "_len(ptr)");
+                println("declare %St_" + nm + " @oo_l_" + nm + "_get(ptr, i64)");
+                println("declare void @oo_l_" + nm + "_push(ptr sret(%OoL_" + nm + ") align 8, ptr, ptr)");
+            }
+            i = c;
+        }
+        i = i + 1;
+    }
+}

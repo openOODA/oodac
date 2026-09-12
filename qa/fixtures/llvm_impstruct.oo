@@ -1,0 +1,14 @@
+// # One-TU user of an imported struct
+//
+// Logline: Uses &Wrap without defining it. emit-llvm one-TU needs extra_st.
+//
+// Setup: Import llvm_impstruct_lib.oo. No main. No emit/c.
+//
+// Beats:
+//   1. wrap_n reads n.
+
+import "llvm_impstruct_lib.oo";
+
+pub fn wrap_n(w: &Wrap) -> Int {
+    return impstruct(w.n);
+}

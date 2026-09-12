@@ -42,7 +42,7 @@ pub fn ll_rich_of(env: String, e: String) -> String {
             let c: Int = str_index_of(val, ":");
             let fk: String = str_slice(val, c + 1, chars_len(val));
             if !first { o = o + ","; }
-            o = o + fld + ":" + fk;
+            o = o + fld + ":" + ll_st_map(fk, ",", "|");
             first = false;
             j = k + 1;
         } else {
@@ -94,9 +94,13 @@ pub fn ll_struct_field_load(kind: String, ssa: Int, ptr: String, field: String, 
     println("  " + ll_ssa(t) + " = load " + ll_ir_val(fk) + ", ptr " + ll_pptr(fp));
     return ll_pack(0, t, fk, "");
 }
-pub fn ll_struct_declare(toks: List[String]) -> String {
-    let n: Int = list_len(toks); let mut env: String = ""; let mut i: Int = 0;
+pub fn ll_struct_declare(toks: List[String], base: String) -> String {
+    let n: Int = list_len(toks); let mut env: String = base; let mut i: Int = 0;
     while i < n {
+        if ll_k(toks, i) == "KW_PUB" && i + 1 < n && ll_k(toks, i + 1) == "KW_TYPE" {
+            i = i + 1;
+            continue;
+        }
         if ll_k(toks, i) == "KW_TYPE" {
             let mut q: Int = i + 1;
             if q < n && ll_k(toks, q) == "IDENT" {
@@ -108,7 +112,10 @@ pub fn ll_struct_declare(toks: List[String]) -> String {
                         q = q + 1;
                         if q < n && ll_k(toks, q) == "LBRACE" {
                             q = q + 1;
-                            if type_env_get(env, "__st__" + nm) != "" { println("ERR\tllvm\tdup struct " + nm); process_exit(1); }
+                            if type_env_get(env, "__st__" + nm) != "" {
+                                i = i + 1;
+                                continue;
+                            }
                             let mut idx: Int = 0; // decl fields in order
                             while q < n && ll_k(toks, q) != "RBRACE" {
                                 if ll_k(toks, q) == "COMMA" { q = q + 1; continue; }

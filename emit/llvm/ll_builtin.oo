@@ -153,6 +153,12 @@ pub fn ll_builtin(name: String, args: List[String], ssa0: Int, expect: String) -
         println("  " + ll_ssa(s2) + " = icmp ne i32 " + ll_ssa(s) + ", 0");
         return ll_pack(0, s2, "i1", "");
     }
+    if name == "file_size" && na >= 2 {
+        let a1: String = ll_as_val(ll_arg(args, 1), ssa0);
+        let s: Int = ll_pssa(a1) + 1;
+        println("  " + ll_ssa(s) + " = call i64 @oo_file_size(i64 " + ll_ssa(ll_pssa(ll_arg(args, 0))) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ")");
+        return ll_pack(0, s, "i64", "");
+    }
     if name == "process_exit" && na >= 1 {
         let ex: String = ll_i64arg(args, 0, ssa0);
         println("  call void @oo_process_exit(i64 " + ll_ssa(ll_pssa(ex)) + ")");

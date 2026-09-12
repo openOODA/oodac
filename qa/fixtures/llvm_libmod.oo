@@ -7,7 +7,11 @@
 // Beats:
 //   1. hid returns 1.
 //   2. shown calls hid.
-//   3. No main.
+//   3. No main. pub type Box is declared once.
+
+pub type Box = struct {
+    n: Int
+};
 
 fn hid() -> Int {
     return 1;

@@ -76,7 +76,7 @@ pub fn c_emit_while_fuel_open(cond: String) {
 // Increment + exceed check vs OO_MC_LIMIT (set at TU start when MAX_CYCLES present).
 // Used for while body, range-for body, and call-entry (recursion fuel).
 // `mc` arg kept for call-site compat; budget is always the macro (1-char env marker only).
-pub fn c_emit_while_fuel_check(mc: String) {
+fn c_emit_while_fuel_check(mc: String) {
     println("  __oo_mc = __oo_mc + 1;");
     println("  if (__oo_mc > OO_MC_LIMIT) {");
     println("    oo_print_str(oo_str_lit(\"ERR\\tmax_cycles\\texceeded\"));");

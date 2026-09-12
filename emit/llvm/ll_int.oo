@@ -15,7 +15,7 @@ import "ll_tok.oo";
 import "ll_ty.oo";
 
 pub fn ll_is_int(kind: String) -> Bool {
-    if kind == "i32" || kind == "u32" || kind == "i64" || kind == "u64" { return true; }
+    if kind == "i32" || kind == "u32" || kind == "i64" || kind == "u64" || kind == "i1" { return true; }
     return false;
 }
 
@@ -39,6 +39,11 @@ pub fn ll_int_common(a: String, b: String) -> String {
 pub fn ll_int_convert(v: String, ssa0: Int, target: String) -> String {
     let fk: String = ll_pk(v);
     if fk == target { return v; }
+    if fk == "i1" && ll_is_int(target) {
+        let mut s: Int = ll_hw(ssa0, ll_pssa(v)) + 1;
+        println("  " + ll_ssa(s) + " = zext i1 " + ll_ssa(ll_pssa(v)) + " to " + ll_ir_val(target));
+        return ll_pack(ll_ppos(v), s, target, "");
+    }
     if !ll_is_int(fk) || !ll_is_int(target) { return v; }
     let mut s: Int = ll_hw(ssa0, ll_pssa(v));
     let mut val: Int = ll_pssa(v);
@@ -108,6 +113,9 @@ pub fn ll_apply_intop(op: String, lhs: String, rhs: String) -> String {
     else if op == "GT" { if uns { inst = "icmp ugt"; } else { inst = "icmp sgt"; } }
     else if op == "LTE" { if uns { inst = "icmp ule"; } else { inst = "icmp sle"; } }
     else if op == "GTE" { if uns { inst = "icmp uge"; } else { inst = "icmp sge"; } }
+    else if op == "AMP" { inst = "and"; }
+    else if op == "PIPE" { inst = "or"; }
+    else if op == "CARET" { inst = "xor"; }
     else { println("ERR\tllvm\tintop " + op); process_exit(1); }
     if op == "EQEQ" || op == "NEQ" || op == "LT" || op == "GT" || op == "LTE" || op == "GTE" {
         println("  " + ll_ssa(s) + " = " + inst + " " + t + " " + ll_ssa(ll_pssa(le)) + ", " + ll_ssa(ll_pssa(re)));

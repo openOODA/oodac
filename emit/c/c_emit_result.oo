@@ -181,7 +181,7 @@ pub fn c_lower_ok_err(name: String, args: String, env: String) -> String {
     }
     return "";
 }
-pub fn result_ok_payload_type(rty: String) -> String {
+fn result_ok_payload_type(rty: String) -> String {
     let n: Int = chars_len(rty);
     if n < 8 || str_slice(rty, 0, 7) != "Result[" { return "String"; }
     let mut i: Int = 7;

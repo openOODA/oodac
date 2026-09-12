@@ -17,6 +17,7 @@ import "ll_call.oo";
 import "ll_ctor.oo";
 import "ll_match.oo";
 import "ll_struct.oo";
+import "ll_field.oo";
 import "ll_exit.oo";
 import "ll_arc.oo";
 import "types/types_core.oo";
@@ -36,10 +37,6 @@ pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String, env
             let name: String = ll_t(toks, p);
             let site: Int = p;
             p = p + 1;
-            let mut shloc: String = "";
-            if type_env_get(env, "__l__" + name) != "" {
-                shloc = ll_var(name) + "_s" + site.to_string();
-            }
             let mut ty: String = "i64";
             let mut ann: String = "";
             if p < n && ll_k(toks, p) == "COLON" {
@@ -55,11 +52,8 @@ pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String, env
             ssa = ll_pssa(v);
             if ll_pk(v) != "" && ll_pk(v) != "void" { ty = ll_pk(v); }
             if ll_is_int(ann) && ll_is_int(ty) && ann != ty { ty = ann; }
-            let mut dst: String = ll_var(name);
-            if shloc != "" {
-                dst = shloc;
-                env = type_env_put(env, "__l__" + name, dst);
-            }
+            let dst: String = ll_var(name) + "_s" + site.to_string();
+            env = type_env_put(env, "__l__" + name, dst);
             println("  " + dst + " = alloca " + ll_ir_alloc(ty) + ", align 8");
             ssa = ll_store(name, ty, v, ssa, env);
             env = type_env_put(env, name, ty);
@@ -76,7 +70,7 @@ pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String, env
             println("  br i1 " + ll_ssa(cv) + ", label %then" + cid.to_string() + ", label %else" + cid.to_string());
             if p < n && ll_k(toks, p) == "LBRACE" { p = p + 1; }
             println("then" + cid.to_string() + ":");
-            let th: String = ll_emit_stmts(toks, p, n, ret_kind, env, ssa, stab);
+            let th: String = ll_emit_stmts(toks, p, n, ret_kind, type_env_put(env, "__one__", ""), ssa, stab);
             p = ll_ppos(th);
             ssa = ll_pssa(th);
             if p < n && ll_k(toks, p) == "RBRACE" { p = p + 1; }
@@ -87,7 +81,11 @@ pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String, env
                 p = p + 1;
                 let mut had_else_block: Bool = false;
                 if p < n && ll_k(toks, p) == "LBRACE" { p = p + 1; had_else_block = true; }
-                let el: String = ll_emit_stmts(toks, p, n, ret_kind, env, ssa, stab);
+                let el: String = if had_else_block {
+                    ll_emit_stmts(toks, p, n, ret_kind, type_env_put(env, "__one__", ""), ssa, stab)
+                } else {
+                    ll_emit_stmts(toks, p, n, ret_kind, type_env_put(env, "__one__", "1"), ssa, stab)
+                };
                 p = ll_ppos(el); ssa = ll_pssa(el);
                 if had_else_block && p < n && ll_k(toks, p) == "RBRACE" { p = p + 1; }
                 et = ll_pterm(el);
@@ -111,7 +109,7 @@ pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String, env
             println("  br i1 " + ll_ssa(cv) + ", label %wbody" + wid.to_string() + ", label %wend" + wid.to_string());
             if p < n && ll_k(toks, p) == "LBRACE" { p = p + 1; }
             println("wbody" + wid.to_string() + ":");
-            let envb: String = type_env_put(type_env_put(env, "__brk__", "wend" + wid.to_string()), "__cont__", "wcond" + wid.to_string());
+            let envb: String = type_env_put(type_env_put(type_env_put(env, "__brk__", "wend" + wid.to_string()), "__cont__", "wcond" + wid.to_string()), "__one__", "");
             let bd: String = ll_emit_stmts(toks, p, n, ret_kind, envb, ssa, stab);
             p = ll_ppos(bd); ssa = ll_pssa(bd);
             if p < n && ll_k(toks, p) == "RBRACE" { p = p + 1; }
@@ -175,7 +173,7 @@ pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String, env
             let fvar: String = ll_var(fname) + "_" + fid.to_string();
             println("  " + fvar + " = alloca i64, align 8");
             println("  store i64 " + ll_ssa(los) + ", ptr " + fvar);
-            let envf: String = type_env_put(type_env_put(type_env_put(type_env_put(env, fname, "i64"), "__l__" + fname, fvar), "__brk__", "fend" + fid.to_string()), "__cont__", "fcond" + fid.to_string());
+            let envf: String = type_env_put(type_env_put(type_env_put(type_env_put(type_env_put(env, fname, "i64"), "__l__" + fname, fvar), "__brk__", "fend" + fid.to_string()), "__cont__", "fcond" + fid.to_string()), "__one__", "");
             println("  br label %fcond" + fid.to_string());
             println("fcond" + fid.to_string() + ":");
             ssa = ssa + 1;
@@ -241,8 +239,11 @@ pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String, env
             if p < n && ll_k(toks, p) == "SEMI" { p = p + 1; }
             if ll_pk(v) == "noret" {
                 p = ll_skip_to_rbrace(toks, p, n);
-                return ll_pack(p, ll_arc_exit(env, ssa), ret_kind, ll_arc_pop(env)) + "\t1";
+                return ll_pack(p, ssa, ret_kind, ll_arc_pop(env)) + "\t1";
             }
+        }
+        if type_env_get(env0, "__one__") != "" {
+            return ll_pack(p, ssa, ret_kind, env);
         }
     }
     return ll_pack(p, ssa, ret_kind, env);

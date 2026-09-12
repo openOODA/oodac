@@ -1,0 +1,43 @@
+// # LLVM struct field store
+//
+// Logline: Lower `x.f = e` to getelementptr plus store. No emit/c import.
+//
+// Setup: Field table from ll_struct. Called from ll_emit_stmts.
+//
+// Beats:
+//   1. Resolve the field type from the receiver kind.
+//   2. Store through the field pointer, loading if the rhs is in memory.
+//   3. Fail closed on an unknown field.
+
+import "ll_tok.oo";
+import "ll_ty.oo";
+import "ll_int.oo";
+import "ll_expr.oo";
+import "ll_struct.oo";
+import "types/types_core.oo";
+
+pub fn ll_store_field_stmt(toks: List[String], p0: Int, n: Int, ssa0: Int, env: String, stab: String) -> String {
+    let p: Int = p0;
+    let bk: String = type_env_get(env, ll_t(toks, p));
+    let fi: String = ll_struct_field(bk, ll_t(toks, p + 2));
+    if fi == "" || str_index_of(fi, ":") < 0 {
+        println("ERR\tllvm\tunknown field " + ll_t(toks, p + 2));
+        process_exit(1);
+    }
+    let ck: Int = str_index_of(fi, ":");
+    let fk: String = str_slice(fi, ck + 1, chars_len(fi));
+    let mut bptr: String = ll_var(ll_t(toks, p));
+    let bloc: String = type_env_get(env, "__l__" + ll_t(toks, p));
+    if bloc != "" { bptr = bloc; }
+    let fp: String = ll_struct_field_ptr(bk, bptr, ll_t(toks, p + 2), ssa0);
+    let rhs0: String = ll_expr(toks, p + 4, n, ll_pssa(fp), type_env_put(env, "__e__", fk));
+    let rhs: String = ll_int_convert(rhs0, ll_pssa(rhs0), fk);
+    let mut np: Int = ll_ppos(rhs); let mut ns: Int = ll_pssa(rhs);
+    if ll_pptr(rhs) != "" {
+        ns = ns + 1;
+        println("  " + ll_ssa(ns) + " = load " + ll_ir_val(fk) + ", ptr " + ll_pptr(rhs));
+    }
+    println("  store " + ll_ir_val(fk) + " " + ll_ssa(ns) + ", ptr " + ll_pptr(fp));
+    if np < n && ll_k(toks, np) == "SEMI" { np = np + 1; }
+    return ll_pack(np, ns, fk, "");
+}

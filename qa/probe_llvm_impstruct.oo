@@ -1,0 +1,52 @@
+// # Probe: one-TU emit of an imported struct
+//
+// Logline: User TU declares %St_Wrap and oo_retain_St_Wrap; it must not define
+//   retain (the defining TU owns that).
+//
+// Setup: ProcessCap + EnvCap. SIGS_ROOT is the user fixture so extra_st has Wrap.
+//
+// Beats:
+//   1. check both fixtures.
+//   2. emit-llvm user IR has %St_Wrap and declare retain.
+//   3. emit-llvm user IR does not define retain.
+
+pub fn main(p: &ProcessCap, env: &EnvCap) {
+    let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
+    let host: String = match hr { Ok(s) => s, Err(_) => "" };
+    if host == "" {
+        println("ERR\tOODA_COMPILER required");
+        process_exit(1);
+    }
+    let lib: String = "oodac/qa/fixtures/llvm_impstruct_lib.oo";
+    let fx: String = "oodac/qa/fixtures/llvm_impstruct.oo";
+    let ck0: Result[String, String] = sys_exec(p, host, "check", lib);
+    if ck0.is_err() {
+        println("ERR\tcheck lib");
+        process_exit(1);
+    }
+    let ck: Result[String, String] = sys_exec(p, host, "check", fx);
+    if ck.is_err() {
+        println("ERR\tcheck use");
+        process_exit(1);
+    }
+    let cmd: String = "OODA_LLVM_SIGS_ROOT=" + fx + " " + host + " emit-llvm " + fx;
+    let er: Result[String, String] = sys_exec(p, "bash", "-c", cmd);
+    if er.is_err() {
+        println("ERR\temit-llvm impstruct");
+        process_exit(1);
+    }
+    let ir: String = match er { Ok(s) => s, Err(_) => "" };
+    if str_index_of(ir, "%St_Wrap = type") < 0 {
+        println("ERR\tmissing St_Wrap");
+        process_exit(1);
+    }
+    if str_index_of(ir, "declare void @oo_retain_St_Wrap") < 0 {
+        println("ERR\tmissing declare retain Wrap");
+        process_exit(1);
+    }
+    if str_index_of(ir, "define hidden void @oo_retain_St_Wrap") >= 0 {
+        println("ERR\tuser TU must not define retain Wrap");
+        process_exit(1);
+    }
+    println("OK");
+}

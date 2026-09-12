@@ -1,0 +1,30 @@
+// # Nested multi-field struct field index
+//
+// Logline: Outer.sign must GEP i32 2, not flatten Inner's commas into extra
+//   indices. Matches check/smt_poly_eval PolyVal { pos, Interval, sign }.
+//
+// Setup: Inner has three fields. Outer holds Inner then Int. Default llvm.
+//
+// Beats:
+//   1. Prints 9 / 1 / 2 / 4 from pos, inner.a, inner.b, sign.
+
+pub type Inner = struct {
+    a: Int,
+    b: Int,
+    c: Bool
+};
+
+pub type Outer = struct {
+    pos: Int,
+    inv: Inner,
+    sign: Int
+};
+
+pub fn main() {
+    let inner: Inner = Inner { a: 1, b: 2, c: true };
+    let o: Outer = Outer { pos: 9, inv: inner, sign: 4 };
+    println(o.pos);
+    println(o.inv.a);
+    println(o.inv.b);
+    println(o.sign);
+}

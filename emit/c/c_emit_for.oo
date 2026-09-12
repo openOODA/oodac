@@ -20,7 +20,7 @@ import "c_emit_arc.oo";
 import "c_emit_simd.oo";
 
 
-pub fn c_emit_src_line(toks: List[String], pos: Int, env: String) {
+fn c_emit_src_line(toks: List[String], pos: Int, env: String) {
     c_dwarf_emit_src_line(toks, pos, env);
 }
 
