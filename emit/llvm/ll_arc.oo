@@ -45,6 +45,7 @@ pub fn ll_arc_pop(env: String) -> String {
 
 pub fn ll_arc_owned(kind: String) -> Bool {
     if kind == "str" || kind == "slist" || kind == "ilist" { return true; }
+    if kind == "ress" || kind == "resi" || kind == "opts" { return true; }
     if chars_len(kind) >= 3 && str_slice(kind, 0, 3) == "St_" { return true; }
     return false;
 }
@@ -78,6 +79,25 @@ fn ll_arc_rr(kind: String, ptr: String, ssa0: Int, is_ret: Int) -> Int {
     if kind == "ilist" {
         println("  call void @oo_ilist_" + op + "(ptr byval(%OoIList) align 8 " + ptr + ")");
         return ssa0;
+    }
+    if kind == "ress" || kind == "opts" || kind == "resi" {
+        let s: Int = ssa0 + 1;
+        let tag: String = s.to_string();
+        println("  " + ll_ssa(s) + " = getelementptr " + ll_ir_alloc(kind) + ", ptr " + ptr + ", i32 0, i32 0");
+        println("  " + ll_ssa(s + 1) + " = load i32, ptr " + ll_ssa(s));
+        let mut pred: String = "ne";
+        if kind == "resi" { pred = "eq"; }
+        println("  " + ll_ssa(s + 2) + " = icmp " + pred + " i32 " + ll_ssa(s + 1) + ", 0");
+        println("  br i1 " + ll_ssa(s + 2) + ", label %arcy" + tag + ", label %arcn" + tag);
+        println("arcy" + tag + ":");
+        let mut fi: String = "1";
+        if kind == "resi" { fi = "2"; }
+        println("  " + ll_ssa(s + 3) + " = getelementptr " + ll_ir_alloc(kind) + ", ptr " + ptr + ", i32 0, i32 " + fi);
+        println("  " + ll_ssa(s + 4) + " = load { ptr, i64 }, ptr " + ll_ssa(s + 3));
+        println("  call void @oo_str_" + op + "({ ptr, i64 } " + ll_ssa(s + 4) + ")");
+        println("  br label %arcn" + tag);
+        println("arcn" + tag + ":");
+        return s + 4;
     }
     println("  call void @oo_" + op + "_St_" + ll_arc_st_nm(kind) + "(ptr " + ptr + ")");
     return ssa0;

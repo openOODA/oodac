@@ -1,0 +1,48 @@
+// # LLVM verify-block constructors
+//
+// Logline: Lower verify Name { stmts } to an internal ctor gated on OODA_TEST.
+//
+// Setup: Mirrors C getenv("OODA_TEST") constructors via llvm.global_ctors.
+// Body runs through ll_emit_stmts. No emit/c import.
+//
+// Beats:
+//   1. Skip the optional name and require a brace block.
+//   2. getenv null or empty returns without running the body.
+//   3. Append a global ctor so ooda test runs the block.
+
+import "ll_tok.oo";
+import "ll_stmt.oo";
+import "types/token_search.oo";
+
+pub fn ll_emit_verify(toks: List[String], pos: Int, n: Int, stab: String) -> Int {
+    let mut p: Int = pos + 1;
+    let mut vname: String = "anon";
+    if p < n && ll_k(toks, p) == "IDENT" {
+        vname = ll_t(toks, p);
+        p = p + 1;
+    }
+    if p >= n || ll_k(toks, p) != "LBRACE" { return p; }
+    let id: String = pos.to_string();
+    let fnn: String = "oo_verify_" + vname + "_" + id;
+    println("define internal void @" + fnn + "() {");
+    println("entry:");
+    println("  %g = call ptr @getenv(ptr @.oodatest)");
+    println("  %z = icmp eq ptr %g, null");
+    println("  br i1 %z, label %vskip, label %vchk");
+    println("vchk:");
+    println("  %c = load i8, ptr %g");
+    println("  %e = icmp eq i8 %c, 0");
+    println("  br i1 %e, label %vskip, label %vrun");
+    println("vrun:");
+    let body: String = ll_emit_stmts(toks, p + 1, n, "void", "", 10, stab);
+    if ll_pterm(body) == 0 {
+        println("  call void @oo_print_str(ptr getelementptr ([10 x i8], ptr @.vok, i64 0, i64 0), i64 9)");
+        println("  call void @oo_println()");
+        println("  br label %vskip");
+    }
+    println("vskip:");
+    println("  ret void");
+    println("}");
+    println("@llvm.global_ctors = appending global [1 x { i32, ptr, ptr }] [{ i32, ptr, ptr } { i32 65535, ptr @" + fnn + ", ptr null }]");
+    return skip_balanced(toks, p);
+}

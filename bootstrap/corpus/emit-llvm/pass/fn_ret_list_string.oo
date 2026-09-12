@@ -1,0 +1,20 @@
+// # fn ret list string
+//
+// Logline: Emit-c pass fixture that returns List[String] from pack and prints length and first item.
+//
+// Beats:
+//   1. pack builds a one-item string list.
+//   2. main binds that list as ys.
+//   3. println prints list_len and list_get.
+
+pub fn pack() -> List[String] {
+    let mut xs: List[String] = list_new();
+    xs = list_push(xs, "a");
+    return xs;
+}
+
+pub fn main() {
+    let ys: List[String] = pack();
+    println(list_len(ys));
+    println(list_get(ys, 0));
+}

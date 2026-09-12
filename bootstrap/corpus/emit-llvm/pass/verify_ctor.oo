@@ -1,0 +1,21 @@
+// # LLVM verify ctor
+//
+// Logline: verify block must compile on LLVM and stay silent without OODA_TEST.
+//
+// Setup: ctor gated on getenv("OODA_TEST"); main prints 1.
+//
+// Beats:
+//   1. A named verify block is present.
+//   2. main prints 1 with OODA_TEST unset.
+//   3. The ctor must not run during a normal build run.
+
+pub fn main() {
+    println(1);
+}
+
+verify smoke {
+    let x: Int = 1;
+    if x != 1 {
+        println(0);
+    }
+}

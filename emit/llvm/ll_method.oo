@@ -247,7 +247,7 @@ pub fn ll_match_expr(toks: List[String], pos: Int, n: Int, ssa0: Int, env: Strin
             process_exit(1);
         }
     }
-    if p < n && ll_k(toks, p) == "RBRACE" { p = p + 1; }
+    while p < n && (ll_k(toks, p) == "COMMA" || ll_k(toks, p) == "RBRACE") { p = p + 1; }
     println("  br label %mend" + id.to_string());
     println("mend" + id.to_string() + ":");
     let ph: Int = ll_hw(oks, ers2) + 1;

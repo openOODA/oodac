@@ -70,17 +70,21 @@ pub fn ll_builtin(name: String, args: List[String], ssa0: Int, expect: String) -
     }
     if name == "list_push" && na >= 2 {
         let a0: String = ll_ensure_ptr(ll_arg(args, 0), ssa0);
-        let pv: String = ll_i64arg(args, 1, ll_pssa(a0));
-        let s: Int = ll_hw(ll_pssa(a0), ll_pssa(pv)) + 1;
-        let out: String = ll_tmpa(s + 1);
-        s = s + 1;
-        println("  " + out + " = alloca " + ll_ir_alloc(ll_pk(a0)) + ", align 8");
-        if ll_pk(a0) == "ilist" {
+        let a1r: String = ll_arg(args, 1);
+        let as_i: Bool = ll_pk(a0) == "ilist" || ll_is_int(ll_pk(a1r));
+        let s0: Int = ll_pssa(a0);
+        let out: String = ll_tmpa(s0 + 1);
+        let mut s: Int = s0 + 1;
+        if as_i {
+            let pv: String = ll_i64arg(args, 1, s);
+            s = ll_hw(s, ll_pssa(pv)) + 1;
+            println("  " + out + " = alloca %OoIList, align 8");
             println("  call void @oo_ilist_push(ptr sret(%OoIList) align 8 " + out + ", ptr byval(%OoIList) align 8 " + ll_pptr(a0) + ", i64 " + ll_ssa(ll_pssa(pv)) + ")");
             return ll_pack(0, s, "ilist", out);
         }
-        let a1: String = ll_as_val(ll_arg(args, 1), s);
+        let a1: String = ll_as_val(a1r, s);
         s = ll_pssa(a1);
+        println("  " + out + " = alloca %OoSList, align 8");
         println("  call void @oo_slist_push(ptr sret(%OoSList) align 8 " + out + ", ptr byval(%OoSList) align 8 " + ll_pptr(a0) + ", { ptr, i64 } " + ll_ssa(s) + ")");
         return ll_pack(0, s, "slist", out);
     }

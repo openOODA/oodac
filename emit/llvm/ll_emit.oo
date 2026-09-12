@@ -16,6 +16,7 @@ import "ll_int.oo";
 import "ll_struct.oo";
 import "ll_expr.oo";
 import "ll_ty.oo";
+import "ll_verify.oo";
 import "types/token_search.oo";
 import "types/types_core.oo";
 
@@ -202,11 +203,10 @@ pub fn ll_emit_stream_toks(toks: List[String]) {
                 pos = ll_skip_fn(toks, pos, n);
             }
         } else if k == "IDENT" && (ll_t(toks, pos) == "trait" || ll_t(toks, pos) == "impl") {
-            println("ERR\tllvm\ttrait/impl not lowered");
-            process_exit(1);
+            while pos < n && ll_k(toks, pos) != "LBRACE" && ll_k(toks, pos) != "EOF" { pos = pos + 1; }
+            if pos < n && ll_k(toks, pos) == "LBRACE" { pos = skip_balanced(toks, pos); }
         } else if k == "KW_VERIFY" {
-            println("ERR\tllvm\tverify blocks not lowered");
-            process_exit(1);
+            pos = ll_emit_verify(toks, pos, n, stab);
         } else {
             pos = pos + 1;
         }

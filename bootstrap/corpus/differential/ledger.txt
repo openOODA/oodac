@@ -44,3 +44,31 @@ bootstrap/corpus/emit-llvm/pass/ifexpr_break.oo c-fail fa360771c59a5ace -  # LLV
 bootstrap/corpus/emit-llvm/pass/ifexpr_multi.oo parity 5b21fce85dd8bd56 5b21fce85dd8bd56  # int/str/opt if-expr merges via phi/select
 bootstrap/corpus/emit-llvm/pass/ifexpr_strnest.oo c-fail f90dff60e33f0260 -  # LLVM prints b/aaa; inline string if-expr in println; C routes ternary through oo_print_int, gcc rejects
 bootstrap/corpus/emit-llvm/pass/ifexpr_unit.oo parity 5e72493f87fb5f6b 5e72493f87fb5f6b  # unit if-expr arms
+bootstrap/corpus/emit-llvm/pass/call_arg_binop.oo parity 19793d5ded0529a2 19793d5ded0529a2  # ported from emit-c/pass; C and LLVM byte-identical
+bootstrap/corpus/emit-llvm/pass/call_method_to_string.oo parity 084c799cd551dd1d 084c799cd551dd1d  # ported from emit-c/pass; C and LLVM byte-identical
+bootstrap/corpus/emit-llvm/pass/call_nested.oo parity ebe95d10cc11e27b ebe95d10cc11e27b  # ported from emit-c/pass; C and LLVM byte-identical
+bootstrap/corpus/emit-llvm/pass/call_pack_binop_args.oo parity 7ee29791fc17e986 7ee29791fc17e986  # ported from emit-c/pass; C and LLVM byte-identical
+bootstrap/corpus/emit-llvm/pass/field_at_str.oo parity 5891b5b522d5df08 5891b5b522d5df08  # ported from emit-c/pass; C and LLVM byte-identical
+bootstrap/corpus/emit-llvm/pass/fn_ret_list_string.oo parity 2ca6ff62f75b3405 2ca6ff62f75b3405  # ported from emit-c/pass; C and LLVM byte-identical
+bootstrap/corpus/emit-llvm/pass/fn_ret_string.oo parity 98ea6e4f216f2fb4 98ea6e4f216f2fb4  # return-path ARC retain then scope-exit; prints hi
+bootstrap/corpus/emit-llvm/pass/for_range_int.oo parity 917df3320d778ddb 917df3320d778ddb  # ported from emit-c/pass; C and LLVM byte-identical
+bootstrap/corpus/emit-llvm/pass/if_else_println.oo parity 2c8b08da5ce60398 2c8b08da5ce60398  # ported from emit-c/pass; C and LLVM byte-identical
+bootstrap/corpus/emit-llvm/pass/if_expr_let.oo parity 1121cfccd5913f0a 1121cfccd5913f0a  # ported from emit-c/pass; C and LLVM byte-identical
+bootstrap/corpus/emit-llvm/pass/let_ident_copy.oo parity a63d8014dba89134 a63d8014dba89134  # ported from emit-c/pass; C and LLVM byte-identical
+bootstrap/corpus/emit-llvm/pass/list_int_basic.oo parity 84fa61ffd2392fe8 84fa61ffd2392fe8  # untyped list_new + int push infers ilist; prints 2/10
+bootstrap/corpus/emit-llvm/pass/list_pack_get.oo parity 911169ddaaf146af 911169ddaaf146af  # ported from emit-c/pass; C and LLVM byte-identical
+bootstrap/corpus/emit-llvm/pass/list_string_basic.oo parity d1b15f66a216b16a d1b15f66a216b16a  # ported from emit-c/pass; C and LLVM byte-identical
+bootstrap/corpus/emit-llvm/pass/list_string_get_bind.oo parity 98ea6e4f216f2fb4 98ea6e4f216f2fb4  # ported from emit-c/pass; C and LLVM byte-identical
+bootstrap/corpus/emit-llvm/pass/list_string_param.oo parity 113f4d149147dee6 113f4d149147dee6  # ported from emit-c/pass; C and LLVM byte-identical
+bootstrap/corpus/emit-llvm/pass/match_assign.oo parity 3d86376092e98637 3d86376092e98637  # match-expr trailing comma consumed; prints ERR_ARM
+bootstrap/corpus/emit-llvm/pass/match_result_let.oo parity 633e5a9ce4fe843d 633e5a9ce4fe843d  # let-form Result match-expr; prints hi/boom
+bootstrap/corpus/emit-llvm/pass/match_result_stmt.oo parity 5891b5b522d5df08 5891b5b522d5df08  # ported from emit-c/pass; C and LLVM byte-identical
+bootstrap/corpus/emit-llvm/pass/paren_cmp.oo parity 82c1315e6c757f33 82c1315e6c757f33  # ported from emit-c/pass; C and LLVM byte-identical
+bootstrap/corpus/emit-llvm/pass/prec_and_cmp.oo parity 4355a46b19d348dc 4355a46b19d348dc  # ported from emit-c/pass; C and LLVM byte-identical
+bootstrap/corpus/emit-llvm/pass/prec_or_eq.oo parity a6e2b7a040683432 a6e2b7a040683432  # ported from emit-c/pass; C and LLVM byte-identical
+bootstrap/corpus/emit-llvm/pass/println_int.oo parity cb7dbbb6d97c9a78 cb7dbbb6d97c9a78  # ported from emit-c/pass; C and LLVM byte-identical
+bootstrap/corpus/emit-llvm/pass/result_ok_err.oo parity 633e5a9ce4fe843d 633e5a9ce4fe843d  # Ok/Err helpers plus match-expr; prints hi/boom
+bootstrap/corpus/emit-llvm/pass/result_unwrap_ok.oo parity 98ea6e4f216f2fb4 98ea6e4f216f2fb4  # ported from emit-c/pass; C and LLVM byte-identical
+bootstrap/corpus/emit-llvm/pass/str_local_eq.oo parity 4355a46b19d348dc 4355a46b19d348dc  # ported from emit-c/pass; C and LLVM byte-identical
+bootstrap/corpus/emit-llvm/pass/verify_ctor.oo parity 4355a46b19d348dc 4355a46b19d348dc  # prints 1; verify ctor silent unless OODA_TEST
+bootstrap/corpus/emit-llvm/pass/while_if_else.oo parity 8773ceae2539ef37 8773ceae2539ef37  # ported from emit-c/pass; C and LLVM byte-identical

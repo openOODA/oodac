@@ -15,6 +15,7 @@ import "ll_expr.oo";
 import "ll_ctor.oo";
 import "ll_contract.oo";
 import "ll_call.oo";
+import "ll_arc.oo";
 import "types/types_core.oo";
 
 pub fn ll_return_stmt(toks: List[String], p: Int, n: Int, ssa: Int, env: String, ret_kind: String, stab: String) -> String {
@@ -35,6 +36,8 @@ pub fn ll_return_stmt(toks: List[String], p: Int, n: Int, ssa: Int, env: String,
     if type_env_get(env, "__ens__") == "1" && ret_kind != "main_i32" && ret_kind != "void" {
         ns = ll_contract_return(toks, v, env, ns, ret_kind, p);
     }
+    if ll_arc_owned(ll_pk(v)) && ll_pptr(v) != "" { ns = ll_arc_keep_ptr(ll_pk(v), ll_pptr(v), ns); }
+    ns = ll_arc_exit(env, ns);
     if ret_kind == "resim" {
         ns = ll_ret_resim(v, ns);
     } else if ret_kind == "resi" {

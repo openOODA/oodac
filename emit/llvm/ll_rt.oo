@@ -57,6 +57,14 @@ pub fn ll_rt_header(toks: List[String]) {
     println("%OoOptI = type { i32, i64 }");
     println("%OoOptS = type { i32, %OoStr }");
     println("%OoResV = type { i32, %OoStr }");
+    println("%OoClosure = type { ptr, ptr, ptr }");
+    println("declare ptr @getenv(ptr)");
+    println("@.oodatest = private unnamed_addr constant [10 x i8] c\"OODA_TEST\\00\"");
+    println("@.vok = private unnamed_addr constant [10 x i8] c\"OK verify\\00\"");
+    println("declare void @oo_print_int(i64)");
+    println("declare void @oo_print_bool(i32)");
+    println("declare void @oo_closure_retain(ptr byval(%OoClosure) align 8)");
+    println("declare void @oo_closure_release(ptr byval(%OoClosure) align 8)");
     println("declare void @oo_slist_new(ptr sret(%OoSList) align 8)");
     println("declare i64 @oo_slist_len(ptr byval(%OoSList) align 8)");
     println("declare void @oo_ilist_new(ptr sret(%OoIList) align 8)");

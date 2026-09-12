@@ -232,6 +232,12 @@ jobs:
           llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/ifexpr_break.oo "$(printf '7\n7\n7\n3')"
           llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/ifexpr_strnest.oo "$(printf 'b\naaa')"
           llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/ensures_complex.oo 2
+          llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/list_int_basic.oo "$(printf '2\n10')"
+          llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/match_assign.oo ERR_ARM
+          llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/match_result_let.oo "$(printf 'hi\nboom')"
+          llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/result_ok_err.oo "$(printf 'hi\nboom')"
+          llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/fn_ret_string.oo hi
+          llvm_pass oodac/bootstrap/corpus/emit-llvm/pass/verify_ctor.oo 1
           "$HOST" build --backend llvm oodac/qa/probe_llvm_arc_scope.oo -o .ooda-cache/ooda-tmp/llvm_arc.bin
           test "$(.ooda-cache/ooda-tmp/llvm_arc.bin)" = "ARC-OK"
           .ooda-cache/ooda-tmp/llvm_arc.bin
