@@ -1,0 +1,22 @@
+// # C-ABI Math Ops Fixture
+//
+// Logline: Host C calling verification fixture for exported and non-exported functions.
+//
+// Setup: Exports add_numbers and mul_numbers with primitive fixed-width integer types.
+//
+// Beats:
+//   1. export fn add_numbers(a: u32, b: u32) -> u32
+//   2. export fn mul_numbers(a: i32, b: i32) -> i32
+//   3. Non-exported internal_helper(x: u32) -> u32
+
+export fn add_numbers(a: u32, b: u32) -> u32 {
+    return a + b;
+}
+
+export fn mul_numbers(a: i32, b: i32) -> i32 {
+    return a * b;
+}
+
+fn internal_helper(x: u32) -> u32 {
+    return x + 10;
+}

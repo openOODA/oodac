@@ -61,8 +61,9 @@ pub fn ll_parse_sig(toks: List[String], pos: Int, n: Int, stab: String) -> Strin
 pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String, stab: String) -> Int {
     let mut p: Int = pos;
     let mut is_export: Bool = false;
+    let mut is_pub: Bool = false;
     if ll_k(toks, p) == "KW_EXPORT" { is_export = true; p = p + 1; }
-    if ll_k(toks, p) == "KW_PUB" { p = p + 1; }
+    if ll_k(toks, p) == "KW_PUB" { is_pub = true; p = p + 1; }
     if ll_k(toks, p) == "KW_EXPORT" { is_export = true; p = p + 1; }
     if ll_k(toks, p) != "KW_FN" { return ll_skip_fn(toks, pos, n); }
     p = p + 1;
@@ -165,7 +166,8 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String, stab: Stri
         println("}");
         return ll_skip_fn(toks, pos, n);
     }
-    let mut vis: String = "hidden ";
+    let mut vis: String = "internal ";
+    if is_pub { vis = "hidden "; }
     if is_export { vis = "default "; }
     if ll_is_mem(rk) {
         if plist != "" {

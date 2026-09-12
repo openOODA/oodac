@@ -1,0 +1,9 @@
+// # Test Var Return 2
+// Logline: Test return variable of type Int
+// Setup: Test
+// Beats:
+//   1. Function returning local variable
+export fn add_var2(a: u32, b: u32) -> u32 {
+    let sum: Int = a + b;
+    return sum;
+}

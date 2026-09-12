@@ -9,7 +9,7 @@
 //   2. is_residual_forbidden is true when that tag is nonempty; residual_deny prints the path-A refuse and exits.
 //   3. check_residual_free_calls walks IDENT LPAREN pairs and denies any tagged name.
 //
-// honesty: refuse is product path A — not full DESIGN moonshot implementations
+// honesty: refuse is product path A — not full DESIGN target implementations
 // OPEN-70: import_c, ffi_gen, lto_xlang_link are product (not residual).
 // Other residual_feature_of tags below stay path A default-deny.
 

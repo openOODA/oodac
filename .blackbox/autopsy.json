@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0.0",
+  "crash_type": "CAPABILITY_VIOLATION",
+  "crash_signal": 0,
+  "signal_name": "NONE",
+  "signal": "NONE",
+  "fault_address": "0x0",
+  "failure_coordinate": "/home/jeryd/Projects/openOODA/oodar/fs/os/sys.c:143:0:oo_process_exit",
+  "root_cause": "CAPABILITY_TRAP_VIOLATION",
+  "remediation": "Grant required capability token before invoking restricted operation.",
+  "capability": {
+    "token_name": "ProcessCap",
+    "operation": "oo_process_exit"
+  },
+  "call_stack": [
+    {"frame": 0, "address": "0x405ca8"},
+    {"frame": 1, "address": "0x41dc8a"},
+    {"frame": 2, "address": "0x42a8e7"},
+    {"frame": 3, "address": "0x400ec3"},
+    {"frame": 4, "address": "0x400f7e"},
+    {"frame": 5, "address": "0x7f0c7d6ab681"},
+    {"frame": 6, "address": "0x7f0c7d6ab798"},
+    {"frame": 7, "address": "0x400db5"}
+  ],
+  "flight_events": [
+    {"seq": 1, "timestamp_us": 1789163363466496, "category": "core", "action": "init", "detail": "flight_sensor_active"},
+    {"seq": 2, "timestamp_us": 1789163363466526, "category": "capability", "action": "violation", "detail": "ProcessCap"}
+  ],
+  "flight_log": [
+    {"seq": 1, "timestamp_us": 1789163363466496, "category": "core", "action": "init", "detail": "flight_sensor_active"},
+    {"seq": 2, "timestamp_us": 1789163363466526, "category": "capability", "action": "violation", "detail": "ProcessCap"}
+  ]
+}

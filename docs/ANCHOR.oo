@@ -1,6 +1,6 @@
 // # oodac/docs — Package Manual
 //
-// Logline: Per-package docs for the sovereign compiler.
+// Logline: Per-package docs for the primary compiler.
 //
 // Setup: RFC-0005. Website Source: openOODA/oodac/docs/.
 //        Prose files. Not imported by the compiler.

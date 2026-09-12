@@ -1,0 +1,12 @@
+// # Test Export Call
+// Logline: Test export calling export
+// Setup: Test
+// Beats:
+//   1. Exported functions
+export fn add_one(x: u32) -> u32 {
+    return x + 1;
+}
+
+export fn add_two(x: u32) -> u32 {
+    return add_one(x) + 1;
+}

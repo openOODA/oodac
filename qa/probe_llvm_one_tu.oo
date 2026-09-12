@@ -1,0 +1,44 @@
+// # Probe: one-TU emit-llvm of a no-main module keeps all fns
+//
+// Logline: Library emit must define shown as hidden and hid as internal.
+//
+// Setup: ProcessCap + EnvCap. Host is OODA_COMPILER. Fixture is qa/fixtures/llvm_libmod.oo.
+//
+// Beats:
+//   1. check the fixture.
+//   2. emit-llvm stdout contains define hidden @shown.
+//   3. emit-llvm stdout contains define internal @hid and not hidden @hid.
+
+pub fn main(p: &ProcessCap, env: &EnvCap) {
+    let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
+    let host: String = match hr { Ok(s) => s, Err(_) => "" };
+    if host == "" {
+        println("ERR\tOODA_COMPILER required");
+        process_exit(1);
+    }
+    let fx: String = "oodac/qa/fixtures/llvm_libmod.oo";
+    let ck: Result[String, String] = sys_exec(p, host, "check", fx);
+    if ck.is_err() {
+        println("ERR\tcheck libmod");
+        process_exit(1);
+    }
+    let er: Result[String, String] = sys_exec(p, host, "emit-llvm", fx);
+    if er.is_err() {
+        println("ERR\temit-llvm libmod");
+        process_exit(1);
+    }
+    let ir: String = match er { Ok(s) => s, Err(_) => "" };
+    if str_index_of(ir, "define hidden i64 @shown") < 0 {
+        println("ERR\tmissing hidden shown");
+        process_exit(1);
+    }
+    if str_index_of(ir, "define internal i64 @hid") < 0 {
+        println("ERR\tmissing internal hid");
+        process_exit(1);
+    }
+    if str_index_of(ir, "define hidden i64 @hid") >= 0 {
+        println("ERR\thid must not be hidden");
+        process_exit(1);
+    }
+    println("OK");
+}

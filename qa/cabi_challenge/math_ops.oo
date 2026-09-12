@@ -1,0 +1,21 @@
+// # Math Ops C-ABI Test Fixture
+//
+// Logline: Test fixture for C-ABI export functions and internal helpers.
+//
+// Setup: Exported arithmetic functions and internal non-exported functions.
+//
+// Beats:
+//   1. Export add_numbers and mul_numbers.
+//   2. Internal non-exported helper function.
+
+export fn add_numbers(a: u32, b: u32) -> u32 {
+    return a + b;
+}
+
+export fn mul_numbers(a: i32, b: i32) -> i32 {
+    return a * b;
+}
+
+fn internal_helper(x: u32) -> u32 {
+    return x + 42;
+}

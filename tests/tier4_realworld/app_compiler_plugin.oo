@@ -1,4 +1,4 @@
-// # Sovereign Compiler AST Plugin Pass
+// # Primary Compiler AST Plugin Pass
 //
 // Logline: Analyzes lexical token streams and counts AST function declarations with capability gating.
 //

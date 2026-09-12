@@ -2,7 +2,7 @@
 
 File: ooda/docs/TOKEN_OPT.oot
 Audience: LLM agents, autonomous token auditors, and human operators who want
-to query, report, audit, and act on token telemetry from a sovereign openOODA
+to query, report, audit, and act on token telemetry from a primary openOODA
 runtime. The token subsystem is owned by Chronos (Mcode #2).
 
 ## 1. What this surface is for
@@ -12,7 +12,7 @@ The token subsystem answers four questions deterministically:
   1. How many tokens did the current session consume, by step type?
   2. How much would the same workload cost under a naive monolith simulation?
   3. Where is the source code wasting context, and what rewrite would save the most?
-  4. What does the sovereign runtime know about its own token footprint right now?
+  4. What does the primary runtime know about its own token footprint right now?
 
 Every answer is a JSON record, never a sentence. LLM agents can pattern-match on
 field names without breaking when the surface grows.

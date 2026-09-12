@@ -14,6 +14,9 @@ import "check/check_collect.oo";
 import "check/check_artifact.oo";
 import "types/typed_artifact.oo";
 import "emit/llvm/ANCHOR.oo";
+import "emit/llvm/ll_emit.oo";
+import "emit/llvm/ll_struct.oo";
+import "emit/llvm/ll_tok.oo";
 
 fn ll_concat(env: &EnvCap) -> Bool {
     let r: Result[String, String] = env_get(env, "OODA_EMIT_CONCAT");
@@ -59,7 +62,27 @@ pub fn run_emit_llvm(fs: &FsReadCap, env: &EnvCap, path: String, concat: Bool) {
             process_exit(1);
         }
         let src: String = match pr { Ok(s) => s, Err(_) => "" };
-        ll_emit_stream_toks(ll_toks_file(fs, path, src));
+        let toks: List[String] = ll_toks_file(fs, path, src);
+        let paths: List[String] = collect_module_paths(fs, path);
+        let mut extra: String = "";
+        let mut i: Int = 0;
+        while i < list_len(paths) {
+            let ip: String = list_get(paths, i);
+            let pn0: Int = chars_len(ip);
+            let mut skip: Bool = ip == path;
+            if pn0 >= 9 && str_slice(ip, pn0 - 9, pn0) == "ANCHOR.oo" { skip = true; }
+            if !skip {
+                let ir: Result[String, String] = read_file(fs, ip);
+                if ir.is_ok() {
+                    let isrc: String = match ir { Ok(s) => s, Err(_) => "" };
+                    let itoks: List[String] = ll_toks_file(fs, ip, isrc);
+                    let st: String = ll_struct_declare(itoks);
+                    extra = extra + ll_collect_sigs(itoks, ll_struct_tab_of(st));
+                }
+            }
+            i = i + 1;
+        }
+        ll_emit_stream_plus(toks, extra);
         return;
     }
     let paths: List[String] = collect_module_paths(fs, path);

@@ -1,0 +1,16 @@
+// # Clash Test
+// Logline: Test clash with standard C identifiers
+// Setup: Non-exported functions
+// Beats:
+//   1. Clashing function
+export fn compute(x: u32) -> u32 {
+    return helper(x);
+}
+
+fn log(x: u32) -> u32 {
+    return x;
+}
+
+fn helper(x: u32) -> u32 {
+    return log(x);
+}

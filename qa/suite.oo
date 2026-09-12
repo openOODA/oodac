@@ -1,11 +1,11 @@
 // # Test OODAC Compiler — Run Compiler Probes Twice
 //
-// Logline: Run core compiler QA probes twice in fresh processes under the sovereign compiler. Fail closed on miss.
+// Logline: Run core compiler QA probes twice in fresh processes under the primary compiler. Fail closed on miss.
 //
 // Setup: Double-run identity law for compiler verification. Compiler resolves with zero user config.
 //
 // Beats:
-//   1. Resolve sovereign compiler binary (OODA_COMPILER, OODA_TOOLCHAIN, HOME).
+//   1. Resolve primary compiler binary (OODA_COMPILER, OODA_TOOLCHAIN, HOME).
 //   2. Compile and execute each compiler probe twice in fresh processes.
 //   3. Clean up temporary probe binaries immediately.
 //   4. Exit 0 only when all compiler probes pass both runs.

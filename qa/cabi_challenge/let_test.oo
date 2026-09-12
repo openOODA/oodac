@@ -1,0 +1,13 @@
+// # Let Test
+// Logline: Test let binding with u32
+// Setup: Test
+// Beats:
+//   1. Let binding
+fn helper(x: u32) -> u32 {
+    return x;
+}
+
+export fn compute(x: u32) -> u32 {
+    let res: u32 = helper(x);
+    return res;
+}

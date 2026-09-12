@@ -1,0 +1,13 @@
+// # Test Clash
+// Logline: Test clash with standard C functions
+// Setup: Clash
+// Beats:
+//   1. Exported function
+//   2. Internal clash function
+export fn run_add(a: u32, b: u32) -> u32 {
+    return a + b;
+}
+
+fn log(x: u32) -> u32 {
+    return x + 1;
+}

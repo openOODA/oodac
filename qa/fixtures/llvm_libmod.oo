@@ -1,0 +1,18 @@
+// # LLVM one-TU library fixture
+//
+// Logline: No main. Private hid and pub shown for linkage probes.
+//
+// Setup: emit-llvm one-TU must keep both fns. hid is internal; shown is hidden.
+//
+// Beats:
+//   1. hid returns 1.
+//   2. shown calls hid.
+//   3. No main.
+
+fn hid() -> Int {
+    return 1;
+}
+
+pub fn shown() -> Int {
+    return hid();
+}

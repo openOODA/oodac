@@ -1,0 +1,12 @@
+// # Test Sin
+// Logline: Test sin clash
+// Setup: Clash
+// Beats:
+//   1. Function
+export fn do_math(a: u32) -> u32 {
+    return sin(a);
+}
+
+fn sin(x: u32) -> u32 {
+    return x * 2;
+}

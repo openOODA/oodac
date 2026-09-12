@@ -1,13 +1,13 @@
 // # LLVM stream from a typed token artifact
 //
-// Logline: Print runtime header then emit reachable fns from main. Skip type/import rows.
+// Logline: Print runtime header then emit fns. Skip type/import rows.
 //
 // Setup: Product path is artifact toks. No second lex. No emit/c import.
 //
 // Beats:
 //   1. ll_rt_header emits types and STRING globals.
-//   2. Collect fn sigs. Reachability from main so concat std does not lower dead fns.
-//   3. Walk KW_FN / KW_PUB fn items that are reachable.
+//   2. Programs with main keep reachable fns; one-TU libraries keep every fn.
+//   3. Walk KW_FN / KW_PUB fn items that are in the keep set.
 
 import "ll_tok.oo";
 import "ll_rt.oo";
@@ -20,7 +20,7 @@ import "ll_verify.oo";
 import "types/token_search.oo";
 import "types/types_core.oo";
 
-fn ll_collect_sigs(toks: List[String], stab: String) -> String {
+pub fn ll_collect_sigs(toks: List[String], stab: String) -> String {
     let n: Int = list_len(toks);
     let mut pos: Int = 0;
     let mut env: String = "";
@@ -172,6 +172,10 @@ fn ll_prune_sigs(sigs: String, stenv: String, want: String) -> String {
 }
 
 pub fn ll_emit_stream_toks(toks: List[String]) {
+    ll_emit_stream_plus(toks, "");
+}
+
+pub fn ll_emit_stream_plus(toks: List[String], extra: String) {
     if list_len(toks) < 1 {
         println("ERR\tllvm\tempty artifact");
         process_exit(1);
@@ -180,8 +184,11 @@ pub fn ll_emit_stream_toks(toks: List[String]) {
     let stenv: String = ll_struct_declare(toks);
     ll_struct_emit_types(stenv);
     let stab: String = ll_struct_tab_of(stenv);
-    let sigs: String = ll_collect_sigs(toks, stab) + stenv;
-    let keep: String = ll_reachable(toks, ll_known_fns(sigs));
+    let local_sigs: String = ll_collect_sigs(toks, stab);
+    let sigs: String = local_sigs + stenv + extra;
+    let local_fns: String = ll_known_fns(local_sigs);
+    let mut keep: String = ll_reachable(toks, ll_known_fns(sigs));
+    if !ll_in_set(local_fns, "main") { keep = local_fns; }
     let n: Int = list_len(toks);
     let mut pos: Int = 0;
     while pos < n {

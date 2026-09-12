@@ -13,7 +13,7 @@
 
 import "std/science/phys/relativistic/astro_stubs.oo";
 import "std/science/phys/relativistic/astro_advanced_stubs.oo";
-import "std/app/combat/attitude_stubs.oo";
+import "std/science/phys/attitude/attitude_stubs.oo";
 import "std/sec/asymmetric/fhe_stubs.oo";
 import "std/app/data/graph/db_graph_stubs.oo";
 import "std/fs/archive/gzip.oo";

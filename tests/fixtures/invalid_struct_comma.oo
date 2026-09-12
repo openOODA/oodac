@@ -1,6 +1,6 @@
 // # Illegal Struct Trailing Comma Fixture
 //
-// Logline: Violates Pillar 10 and RULES.oot zero struct trailing comma rule.
+// Logline: Violates Requirement 10 and RULES.oot zero struct trailing comma rule.
 //
 // Setup: Parsing must reject trailing comma before struct closing brace.
 //

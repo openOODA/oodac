@@ -2,7 +2,7 @@
 //
 // Logline: Lowers multi-dimensional numeric loops and matrices to L3/L2/L1/Reg tiled C loops with 64-byte alignment and vector pragmas.
 //
-// Setup: Bridges polyhedral domain, schedule, and tile models to sovereign C backend loop emission.
+// Setup: Bridges polyhedral domain, schedule, and tile models to primary C backend loop emission.
 //
 // Beats:
 //   1. Configure multi-level cache tile plans (L3=256, L2=64, L1=16, Reg=4) and 64-byte alignment.

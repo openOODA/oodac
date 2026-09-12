@@ -1,8 +1,8 @@
-// # Boyd E-M Sensor Fusion Engine
+// # Performance model Sensor Fusion Engine
 //
 // Logline: Processes multi-axis IMU telemetry with deterministic linear arena bounds and formal contracts.
 //
-// Setup: Pure compute adhering to Boyd's E-M optimization metric.
+// Setup: Pure compute adhering to Performance model optimization metric.
 //
 // Beats:
 //   1. Declare Telemetry3D and FusionState structs with zero trailing commas.

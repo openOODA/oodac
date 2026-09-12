@@ -1,0 +1,12 @@
+// # Test Export Call Direct
+// Logline: Test direct return of export call
+// Setup: Test
+// Beats:
+//   1. Two exported functions
+export fn add_one(x: u32) -> u32 {
+    return x + 1;
+}
+
+export fn forward_add(x: u32) -> u32 {
+    return add_one(x);
+}

@@ -44,8 +44,7 @@ pub fn ll_ty_at(toks: List[String], pos: Int, n: Int, stab: String) -> String {
             let e: String = ll_t(toks, p + 2);
             if e == "String" { return "slist"; }
             if e == "Int" { return "ilist"; }
-            if ll_stab_rich(stab, e) != "" { return "olist_" + e; }
-            if ll_ty_struct_rich(toks, e, n, stab) != "" { return "olist_" + e; }
+            return "olist_" + e;
         }
         println("ERR\tllvm\tlist kind");
         process_exit(1);
@@ -56,8 +55,7 @@ pub fn ll_ty_at(toks: List[String], pos: Int, n: Int, stab: String) -> String {
             if e == "String" { return "ress"; }
             if e == "Int" { return "resi"; }
             if e == "Void" { return "ress"; }
-            if ll_stab_rich(stab, e) != "" { return "resSt_" + e; }
-            if ll_ty_struct_rich(toks, e, n, stab) != "" { return "resSt_" + e; }
+            return "resSt_" + e;
         }
         println("ERR\tllvm\tresult kind");
         process_exit(1);
@@ -67,8 +65,7 @@ pub fn ll_ty_at(toks: List[String], pos: Int, n: Int, stab: String) -> String {
             let e: String = ll_t(toks, p + 2);
             if e == "Int" { return "opti"; }
             if e == "String" { return "opts"; }
-            if ll_stab_rich(stab, e) != "" { return "optSt_" + e; }
-            if ll_ty_struct_rich(toks, e, n, stab) != "" { return "optSt_" + e; }
+            return "optSt_" + e;
         }
         println("ERR\tllvm\toption kind");
         process_exit(1);
