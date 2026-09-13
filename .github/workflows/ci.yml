@@ -30,6 +30,8 @@ jobs:
   # Recorded gap: mutation kill-rate (G7 full) has no harness yet.
   test:
     runs-on: ubuntu-latest
+    env:
+      OO_LIST_AMBIENT_QUOTA: "1073741824"
     defaults:
       run:
         working-directory: ${{ github.workspace }}
@@ -78,6 +80,7 @@ jobs:
           OODAC_BIN: ${{ github.workspace }}/oodac/bin/oodac
           OODA_FS_READDIR: ${{ github.workspace }}
           OODA_FS_WRITEDIR: ${{ github.workspace }}
+          OO_LIST_AMBIENT_QUOTA: "1073741824"
         run: |
           set -eu
           HOST="$OODA_COMPILER"
@@ -294,7 +297,6 @@ jobs:
         env:
           OODAC_BIN: ${{ github.workspace }}/oodac/bin/oodac
           OO_LIST_AMBIENT_QUOTA: "1073741824"
-          PURE_SKIP_CHECK: "1"
         run: |
           set -eu
           test -x "$OODAC_BIN"
