@@ -10,7 +10,17 @@
 //   3. Verify unique_fns refuse on compiler main and blackbox symbols present.
 //   4. Print PASS_LATTICE_AUDIT only when all gates hold.
 
-pub fn main(fs_w: &FsWriteCap, p: &ProcessCap, env: &EnvCap, args: List[String]) {
+fn probe_resolve(fs: &FsReadCap, p: String) -> String {
+    if path_exists(fs, p) { return p; }
+    if path_exists(fs, "oodac/" + p) { return "oodac/" + p; }
+    if chars_len(p) > 6 && str_slice(p, 0, 6) == "oodac/" {
+        let sub: String = str_slice(p, 6, chars_len(p));
+        if path_exists(fs, sub) { return sub; }
+    }
+    return p;
+}
+
+pub fn main(fs_r: &FsReadCap, fs_w: &FsWriteCap, p: &ProcessCap, env: &EnvCap, args: List[String]) {
     let mut host: String = "";
     let oc: Result[String, String] = env_get(env, "OODA_COMPILER");
     if oc.is_ok() { host = oc.val; }
@@ -22,44 +32,59 @@ pub fn main(fs_w: &FsWriteCap, p: &ProcessCap, env: &EnvCap, args: List[String])
         println("ERR\tOODA_COMPILER or OODAC_BIN required");
         process_exit(1);
     }
-    let cr: Result[String, String] = sys_exec(p, host, "check", "oodac/qa/probe_cap_sealed.oo");
+    let p_sealed: String = probe_resolve(fs_r, "qa/probe_cap_sealed.oo");
+    let p_list: String = probe_resolve(fs_r, "qa/probe_list_ok.oo");
+    let p_smtf: String = probe_resolve(fs_r, "qa/probe_smt_false.oo");
+    let p_smtu: String = probe_resolve(fs_r, "qa/probe_smt_unproven.oo");
+    let p_main: String = probe_resolve(fs_r, "main.oo");
+    let p_hold: String = probe_resolve(fs_r, "qa/probe_blackbox_hold.oo");
+    if !path_exists(fs_r, p_sealed) || !path_exists(fs_r, p_list) || !path_exists(fs_r, p_smtf) || !path_exists(fs_r, p_smtu) || !path_exists(fs_r, p_main) || !path_exists(fs_r, p_hold) {
+        println("FAIL lattice probe fixtures missing");
+        process_exit(1);
+    }
+    let cr: Result[String, String] = sys_exec(p, host, "check", p_sealed);
     if cr.is_ok() {
         println("FAIL cap sealed should deny");
         process_exit(1);
     }
-    let ok1: Result[String, String] = sys_exec(p, host, "check", "oodac/qa/probe_list_ok.oo");
+    let ok1: Result[String, String] = sys_exec(p, host, "check", p_list);
     if !ok1.is_ok() {
         println("FAIL list_ok should pass");
         process_exit(1);
     }
-    let sr: Result[String, String] = sys_exec(p, host, "check", "oodac/qa/probe_smt_false.oo");
+    let sr: Result[String, String] = sys_exec(p, host, "check", p_smtf);
     if sr.is_ok() {
         println("FAIL smt const-false should deny");
         process_exit(1);
     }
-    let ur: Result[String, String] = sys_exec(p, host, "check", "oodac/qa/probe_smt_unproven.oo");
+    let ur: Result[String, String] = sys_exec(p, host, "check", p_smtu);
     if ur.is_ok() {
         println("FAIL smt unproven should deny");
         process_exit(1);
     }
-    let br: Result[String, String] = sys_exec(p, host, "build", "oodac/main.oo", "-o", "/tmp/lattice_main.bin");
+    let br: Result[String, String] = sys_exec(p, host, "build", p_main, "-o", "/tmp/lattice_main.bin");
     if br.is_ok() {
         println("FAIL unique_fns should deny compiler main build");
         process_exit(1);
     }
-    let hb: Result[String, String] = sys_exec(p, host, "build", "oodac/qa/probe_blackbox_hold.oo", "-o", "/tmp/lattice_hold.bin");
+    let hb: Result[String, String] = sys_exec(p, host, "build", "--backend", "c", p_hold, "-o", "/tmp/lattice_hold.bin");
     if !hb.is_ok() {
         println("FAIL blackbox hold should build");
         process_exit(1);
     }
     let sc: String = "// SECRET: tok\nfn main() { let tok: String = \"s\"; println(tok); }\n";
     let sw: Result[Void, String] = write_file(fs_w, "/tmp/lattice_secret.oo", sc);
-    if sw.is_ok() {
-        let sec: Result[String, String] = sys_exec(p, host, "check", "/tmp/lattice_secret.oo");
-        if sec.is_ok() {
-            println("FAIL SECRET sink should deny");
-            process_exit(1);
-        }
+    if sw.is_err() {
+        println("FAIL cannot write secret test fixture");
+        process_exit(1);
+    }
+    let sec: Result[String, String] = sys_exec(p, host, "check", "/tmp/lattice_secret.oo");
+    let _rm1: Result[String, String] = sys_exec(p, "rm", "-f", "/tmp/lattice_secret.oo");
+    let _rm2: Result[String, String] = sys_exec(p, "rm", "-f", "/tmp/lattice_hold.bin");
+    let _rm3: Result[String, String] = sys_exec(p, "rm", "-f", "/tmp/lattice_main.bin");
+    if sec.is_ok() {
+        println("FAIL SECRET sink should deny");
+        process_exit(1);
     }
     println("PASS_LATTICE_AUDIT");
 }

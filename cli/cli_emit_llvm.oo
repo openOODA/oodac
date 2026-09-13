@@ -13,7 +13,7 @@ import "lex/token_fmt.oo";
 import "check/check_collect.oo";
 import "check/check_artifact.oo";
 import "types/typed_artifact.oo";
-import "emit/llvm/ANCHOR.oo";
+import "emit/llvm/anchor.oo";
 import "emit/llvm/ll_emit.oo";
 import "emit/llvm/ll_struct.oo";
 import "emit/llvm/ll_tok.oo";
@@ -85,7 +85,7 @@ pub fn run_emit_llvm(fs: &FsReadCap, fs_w: &FsWriteCap, env: &EnvCap, path: Stri
                 let ip: String = list_get(paths, i);
                 let pn0: Int = chars_len(ip);
                 let mut skip: Bool = ip == path && root == path;
-                if pn0 >= 9 && str_slice(ip, pn0 - 9, pn0) == "ANCHOR.oo" { skip = true; }
+                if pn0 >= 9 && (str_slice(ip, pn0 - 9, pn0) == "ANCHOR.oo" || str_slice(ip, pn0 - 9, pn0) == "anchor.oo") { skip = true; }
                 if !skip {
                     let ir: Result[String, String] = read_file(fs, ip);
                     if ir.is_ok() {
@@ -115,7 +115,7 @@ pub fn run_emit_llvm(fs: &FsReadCap, fs_w: &FsWriteCap, env: &EnvCap, path: Stri
     while i < nle {
         let p: String = list_get(paths, i);
         let pn0: Int = chars_len(p);
-        if pn0 >= 9 && str_slice(p, pn0 - 9, pn0) == "ANCHOR.oo" {
+        if pn0 >= 9 && (str_slice(p, pn0 - 9, pn0) == "ANCHOR.oo" || str_slice(p, pn0 - 9, pn0) == "anchor.oo") {
             i = i + 1;
             continue;
         }

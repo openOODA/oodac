@@ -98,7 +98,7 @@ pub fn run_emit_c_family(fs: &FsReadCap, env: &EnvCap, cmd: String, path: String
     while i < nle {
         let p: String = list_get(paths, i);
         let pn: Int = chars_len(p);
-        if pn >= 9 && str_slice(p, pn - 9, pn) == "ANCHOR.oo" {
+        if pn >= 9 && (str_slice(p, pn - 9, pn) == "ANCHOR.oo" || str_slice(p, pn - 9, pn) == "anchor.oo") {
             i = i + 1;
             continue;
         }

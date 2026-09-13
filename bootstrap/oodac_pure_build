@@ -106,7 +106,9 @@ collect() {
   if [[ "$path" = /* ]]; then abs="$path"
   else abs="$(cd "$(dirname "$path")" 2>/dev/null && pwd || echo "${dir:-$ROOT}")/$(basename "$path")"
   fi
-  if [[ -d "$abs" && -f "$abs/ANCHOR.oo" ]]; then
+  if [[ -d "$abs" && -f "$abs/anchor.oo" ]]; then
+    abs="$abs/anchor.oo"
+  elif [[ -d "$abs" && -f "$abs/ANCHOR.oo" ]]; then
     abs="$abs/ANCHOR.oo"
   fi
   if [[ ! -f "$abs" ]]; then
@@ -132,38 +134,55 @@ collect() {
     [[ -z "$imp" ]] && continue
     if [[ "$imp" = /* ]]; then
       if [[ -f "$imp" ]]; then collect "$imp"
+      elif [[ -f "$imp/anchor.oo" ]]; then collect "$imp/anchor.oo"
       elif [[ -f "$imp/ANCHOR.oo" ]]; then collect "$imp/ANCHOR.oo"
       else echo "ERR_MISSING $imp" >&2; exit 1; fi
     elif [[ "$imp" != std/* && "$imp" != oodac/* && -f "$dir/$imp" ]]; then
       collect "$dir/$imp"
+    elif [[ "$imp" != std/* && "$imp" != oodac/* && -f "$dir/$imp/anchor.oo" ]]; then
+      collect "$dir/$imp/anchor.oo"
     elif [[ "$imp" != std/* && "$imp" != oodac/* && -f "$dir/$imp/ANCHOR.oo" ]]; then
       collect "$dir/$imp/ANCHOR.oo"
     elif [[ -f "$ROOT/$imp" ]]; then
       collect "$ROOT/$imp"
+    elif [[ -f "$ROOT/$imp/anchor.oo" ]]; then
+      collect "$ROOT/$imp/anchor.oo"
     elif [[ -f "$ROOT/$imp/ANCHOR.oo" ]]; then
       collect "$ROOT/$imp/ANCHOR.oo"
     elif [[ "$imp" == std/* && -f "$ROOT/$imp" ]]; then
       collect "$ROOT/$imp"
+    elif [[ "$imp" == std/* && -f "$ROOT/$imp/anchor.oo" ]]; then
+      collect "$ROOT/$imp/anchor.oo"
     elif [[ "$imp" == std/* && -f "$ROOT/$imp/ANCHOR.oo" ]]; then
       collect "$ROOT/$imp/ANCHOR.oo"
     elif [[ "$imp" == std/* && -f "$WS_ROOT/$imp" ]]; then
       collect "$WS_ROOT/$imp"
+    elif [[ "$imp" == std/* && -f "$WS_ROOT/$imp/anchor.oo" ]]; then
+      collect "$WS_ROOT/$imp/anchor.oo"
     elif [[ "$imp" == std/* && -f "$WS_ROOT/$imp/ANCHOR.oo" ]]; then
       collect "$WS_ROOT/$imp/ANCHOR.oo"
     elif [[ -f "$ROOT/std/$imp" ]]; then
       collect "$ROOT/std/$imp"
+    elif [[ -f "$ROOT/std/$imp/anchor.oo" ]]; then
+      collect "$ROOT/std/$imp/anchor.oo"
     elif [[ -f "$ROOT/std/$imp/ANCHOR.oo" ]]; then
       collect "$ROOT/std/$imp/ANCHOR.oo"
     elif [[ "$imp" == oodac/* && -f "$WS_ROOT/$imp" ]]; then
       collect "$WS_ROOT/$imp"
+    elif [[ "$imp" == oodac/* && -f "$WS_ROOT/$imp/anchor.oo" ]]; then
+      collect "$WS_ROOT/$imp/anchor.oo"
     elif [[ "$imp" == oodac/* && -f "$WS_ROOT/$imp/ANCHOR.oo" ]]; then
       collect "$WS_ROOT/$imp/ANCHOR.oo"
     elif [[ -f "$ROOT/oodac/$imp" ]]; then
       collect "$ROOT/oodac/$imp"
+    elif [[ -f "$ROOT/oodac/$imp/anchor.oo" ]]; then
+      collect "$ROOT/oodac/$imp/anchor.oo"
     elif [[ -f "$ROOT/oodac/$imp/ANCHOR.oo" ]]; then
       collect "$ROOT/oodac/$imp/ANCHOR.oo"
     elif [[ -f "$WS_ROOT/$imp" ]]; then
       collect "$WS_ROOT/$imp"
+    elif [[ -f "$WS_ROOT/$imp/anchor.oo" ]]; then
+      collect "$WS_ROOT/$imp/anchor.oo"
     elif [[ -f "$WS_ROOT/$imp/ANCHOR.oo" ]]; then
       collect "$WS_ROOT/$imp/ANCHOR.oo"
     else
@@ -260,7 +279,7 @@ if [[ "$LLVM_MODE" == "1" ]]; then
     nmod=$((nmod + 1))
     # ANCHOR.oo is an import index. C unique_fns skips its wrappers; they
     # only call other ANCHOR names (lex_tokenize). Do not emit a TU.
-    if [[ "$(basename "$src")" == "ANCHOR.oo" ]]; then
+    if [[ "$(basename "$src")" == "ANCHOR.oo" || "$(basename "$src")" == "anchor.oo" ]]; then
       echo "pure_build: llvm $nmod/${#MODS[@]} skip ${src#"$ROOT"/}"
       continue
     fi
@@ -399,7 +418,7 @@ FNR == 1 { in_main = 0 }
     n = $0
     sub(/.*OO_FN_/, "", n)
     gsub(/[^A-Za-z0-9_].*/, "", n)
-    if (n != "" && FILENAME !~ /ANCHOR_oo/) start("fn", n, $0)
+    if (n != "" && FILENAME !~ /anchor_oo/ && FILENAME !~ /ANCHOR_oo/) start("fn", n, $0)
     else if (n != "") { blk_kind = "skip"; blk_name = n; blk = $0 "\n"; depth = 1 }
     next
   }

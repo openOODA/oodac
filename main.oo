@@ -10,12 +10,12 @@
 //   2. Dispatch check, build, emit-c family, emit-llvm, or tokens.
 //   3. Unknown cmd exits 2.
 
-import "lex/ANCHOR.oo";
-import "ast/ANCHOR.oo";
-import "check/ANCHOR.oo";
-import "types/ANCHOR.oo";
-import "emit/c/ANCHOR.oo";
-import "emit/ANCHOR.oo";
+import "lex/anchor.oo";
+import "ast/anchor.oo";
+import "check/anchor.oo";
+import "types/anchor.oo";
+import "emit/c/anchor.oo";
+import "emit/anchor.oo";
 import "cli/cli_parse.oo";
 import "cli/cli_build.oo";
 import "cli/cli_emit.oo";

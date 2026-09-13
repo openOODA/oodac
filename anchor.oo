@@ -10,12 +10,12 @@
 //   3. Re-export the typechecker surface (types/, check_caps, check_types).
 //   4. Boundary: internal refactor of the C emitter stays local; toolchain imports this single file.
 
-import "lex/ANCHOR.oo";
-import "ast/ANCHOR.oo";
-import "check/ANCHOR.oo";
-import "types/ANCHOR.oo";
-import "emit/c/ANCHOR.oo";
-import "cli/ANCHOR.oo";
+import "lex/anchor.oo";
+import "ast/anchor.oo";
+import "check/anchor.oo";
+import "types/anchor.oo";
+import "emit/c/anchor.oo";
+import "cli/anchor.oo";
 // ──▓▓ Sovereign Lattice ── OODAC ANCHOR ──▓▓──
 // :: public: oodac_lex_all, oodac_parse_expr, oodac_parse_stmt, oodac_parse_file ::
 

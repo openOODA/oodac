@@ -8,6 +8,16 @@
 //   1. check is nonzero and contains ERR.
 //   2. build is nonzero, contains ERR, ELF absent.
 
+fn resolve_p(fs: &FsReadCap, p: String) -> String {
+    if path_exists(fs, p) { return p; }
+    if path_exists(fs, "oodac/" + p) { return "oodac/" + p; }
+    if chars_len(p) > 6 && str_slice(p, 0, 6) == "oodac/" {
+        let sub: String = str_slice(p, 6, chars_len(p));
+        if path_exists(fs, sub) { return sub; }
+    }
+    return p;
+}
+
 pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
     let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
     let host: String = match hr { Ok(s) => s, Err(_) => "" };
@@ -15,15 +25,20 @@ pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
         println("ERR\tOODA_COMPILER required");
         process_exit(1);
     }
-    let src: String = "oodac/qa/probe_smt_false.oo";
+    let src: String = resolve_p(fs_r, "qa/probe_smt_false.oo");
+    if !path_exists(fs_r, src) {
+        println("ERR\tsrc not found: " + src);
+        process_exit(1);
+    }
     let out: String = ".ooda-cache/ooda-tmp/probe_smt_false.bin";
+    let _rm1: Result[String, String] = sys_exec(p, "rm", "-f", out);
     let ca: Result[String, String] = sys_exec(p, host, "check", src);
     if ca.is_ok() {
         println("ERR\tcheck must fail");
         process_exit(1);
     }
     let ct: String = match ca { Ok(s) => s, Err(e) => e };
-    if str_index_of(ct, "ERR") < 0 {
+    if str_index_of(ct, "cannot open") >= 0 || str_index_of(ct, "unsat") < 0 {
         println("ERR\tcheck silent");
         process_exit(1);
     }
@@ -33,7 +48,7 @@ pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
         process_exit(1);
     }
     let bt: String = match ba { Ok(s) => s, Err(e) => e };
-    if str_index_of(bt, "ERR") < 0 {
+    if str_index_of(bt, "cannot open") >= 0 || str_index_of(bt, "unsat") < 0 {
         println("ERR\tbuild silent");
         process_exit(1);
     }
@@ -41,5 +56,6 @@ pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
         println("ERR\tELF shipped");
         process_exit(1);
     }
+    let _rm2: Result[String, String] = sys_exec(p, "rm", "-f", out);
     println("OK");
 }

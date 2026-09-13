@@ -43,6 +43,11 @@ pub fn host_rt_c() -> String {
     s = s + "  OoStr name = oo_str_intern_bytes(g_names[g_np], (long long)strlen(g_names[g_np]));\n";
     s = s + "  g_np++; return name;\n}\n";
     s = s + "#ifndef OO_SHARED\n";
+    s = s + "__attribute__((weak)) long long oo_hot_reload(OoStr path) {\n";
+    s = s + "  (void)path;\n";
+    s = s + "  oo_cap_require(0, 1, \"hot_reload\");\n";
+    s = s + "  return 0;\n";
+    s = s + "}\n";
     s = s + "static OoStr jail_str(const char *s) {\n";
     s = s + "  OoStr o; o.data = (char *)s; o.len = s ? (long long)strlen(s) : 0; return o;\n}\n";
     s = s + "__attribute__((constructor)) void oo_jail_landlock_ctor(void) {\n";

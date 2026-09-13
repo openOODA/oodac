@@ -9,6 +9,16 @@
 //   2. check oodac/cli/cli_emit.oo is OK.
 //   3. check oodac/emit/c/ANCHOR.oo is OK and does not say undefined c_emit_stmt.
 
+fn resolve_p(fs: &FsReadCap, p: String) -> String {
+    if path_exists(fs, p) { return p; }
+    if path_exists(fs, "oodac/" + p) { return "oodac/" + p; }
+    if chars_len(p) > 6 && str_slice(p, 0, 6) == "oodac/" {
+        let sub: String = str_slice(p, 6, chars_len(p));
+        if path_exists(fs, sub) { return sub; }
+    }
+    return p;
+}
+
 pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
     let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
     let host: String = match hr { Ok(s) => s, Err(_) => "" };
@@ -16,17 +26,18 @@ pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
         println("ERR\tOODA_COMPILER required");
         process_exit(1);
     }
-    let src_r: Result[String, String] = read_file(fs_r, "oodac/cli/cli_emit.oo");
+    let p_cli: String = resolve_p(fs_r, "cli/cli_emit.oo");
+    let src_r: Result[String, String] = read_file(fs_r, p_cli);
     if src_r.is_err() {
         println("ERR\tunreadable cli_emit.oo");
         process_exit(1);
     }
     let src: String = match src_r { Ok(s) => s, Err(_) => "" };
-    if str_index_of(src, "import \"emit/c/ANCHOR.oo\"") >= 0 {
-        println("ERR\tcli_emit dumps emit/c/ANCHOR.oo");
+    if str_index_of(src, "import \"emit/c/anchor.oo\"") >= 0 || str_index_of(src, "import \"emit/c/ANCHOR.oo\"") >= 0 {
+        println("ERR\tcli_emit dumps emit/c anchor");
         process_exit(1);
     }
-    let ce: Result[String, String] = sys_exec(p, host, "check", "oodac/cli/cli_emit.oo");
+    let ce: Result[String, String] = sys_exec(p, host, "check", p_cli);
     if ce.is_err() {
         println("ERR\tcheck cli_emit.oo");
         let et: String = ce.val;
@@ -38,9 +49,13 @@ pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
         println("ERR\tcli_emit check not OK");
         process_exit(1);
     }
-    let ae: Result[String, String] = sys_exec(p, host, "check", "oodac/emit/c/ANCHOR.oo");
+    let mut apath: String = resolve_p(fs_r, "emit/c/anchor.oo");
+    if !path_exists(fs_r, apath) {
+        apath = resolve_p(fs_r, "emit/c/ANCHOR.oo");
+    }
+    let ae: Result[String, String] = sys_exec(p, host, "check", apath);
     if ae.is_err() {
-        println("ERR\tcheck emit/c/ANCHOR.oo");
+        println("ERR\tcheck emit/c anchor");
         let at: String = ae.val;
         println(at);
         process_exit(1);
@@ -51,7 +66,7 @@ pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
         process_exit(1);
     }
     if str_index_of(atxt, "OK") < 0 {
-        println("ERR\temit ANCHOR check not OK");
+        println("ERR\temit anchor check not OK");
         process_exit(1);
     }
     println("OK");

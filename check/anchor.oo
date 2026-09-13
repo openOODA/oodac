@@ -81,7 +81,7 @@ import "tc_ops_cmp.oo";
 import "tc_ops_logic.oo";
 import "tc_ops_unary.oo";
 import "lex/token_parse_int.oo";
-import "lex/ANCHOR.oo";
+import "lex/anchor.oo";
 import "tc_read_result.oo";
 import "tc_refine.oo";
 import "tc_refine_bind.oo";

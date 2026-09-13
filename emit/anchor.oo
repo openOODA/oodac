@@ -10,8 +10,8 @@
 //   2. emit_backend consumes toks from the artifact. It does not lex.
 //   3. Unknown backend names fail closed. Product emit-c and emit-llvm call this.
 
-import "c/ANCHOR.oo";
-import "llvm/ANCHOR.oo";
+import "c/anchor.oo";
+import "llvm/anchor.oo";
 
 pub fn emit_backend(backend: String, src: String, toks: List[String], mode: String, path: String, is_plain: Bool) {
     if list_len(toks) < 1 {

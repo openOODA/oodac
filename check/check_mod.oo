@@ -18,16 +18,22 @@ import "check_artifact.oo";
 import "ast/load_import.oo";
 
 
-fn sibling_anchor(path: String) -> String {
+fn sibling_anchor(fs_r: &FsReadCap, path: String) -> String {
     let n: Int = chars_len(path);
     let mut i: Int = n;
+    let mut dir: String = "";
     while i > 0 {
         i = i - 1;
         if char_at(path, i) == "/" {
-            return str_slice(path, 0, i + 1) + "ANCHOR.oo";
+            dir = str_slice(path, 0, i + 1);
+            i = 0;
         }
     }
-    return "ANCHOR.oo";
+    let lower: String = dir + "anchor.oo";
+    if path_exists(fs_r, lower) {
+        return lower;
+    }
+    return dir + "ANCHOR.oo";
 }
 
 fn path_is_main_oo(path: String) -> Bool {
@@ -60,7 +66,7 @@ fn anchor_extra_names(fs_r: &FsReadCap, path: String) -> String {
     if path_is_main_oo(path) {
         return "\t";
     }
-    let anc: String = sibling_anchor(path);
+    let anc: String = sibling_anchor(fs_r, path);
     if anc == path {
         return "\t";
     }

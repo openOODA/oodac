@@ -9,7 +9,7 @@
 //   2. Re-export public parse functions and import loader.
 //   3. Enforce boundary — internal refactor zero ripple.
 
-import "lex/ANCHOR.oo";
+import "lex/anchor.oo";
 import "ast.oo";
 import "ast_emit_outline.oo";
 import "ast_emit_reflect.oo";

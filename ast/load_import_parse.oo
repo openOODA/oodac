@@ -149,9 +149,11 @@ pub fn reject_bad_import_name(imp: String) {
 }
 
 pub fn probe_candidate(fs: &FsReadCap, cand: String) -> String {
-    if path_exists(fs, cand) { return cand; }
+    let apath_lower: String = path_join(cand, "anchor.oo");
+    if path_exists(fs, apath_lower) { return apath_lower; }
     let apath: String = path_join(cand, "ANCHOR.oo");
     if path_exists(fs, apath) { return apath; }
+    if path_exists(fs, cand) { return cand; }
     return "";
 }
 

@@ -1,6 +1,6 @@
 # Seed signing runbook (product trust)
 
-File: ooda/bootstrap/seed/SIGNING.oot
+File: oodac/bootstrap/seed/signing.oot
 
 Bootstrap treats the seed binary as a trust root. SHA-256 alone only proves the
 bytes match a sidecar that an attacker who rewrote the tree could also rewrite.

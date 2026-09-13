@@ -10,7 +10,22 @@
 //   3. check and build of probe_list_assign_callee.oo are ERR; ELF absent.
 //   4. check and build of probe_list_arg_callee.oo are ERR; ELF absent.
 
-fn refuse_kind(p: &ProcessCap, fs_r: &FsReadCap, host: String, src: String, out: String) {
+fn resolve_p(fs: &FsReadCap, p: String) -> String {
+    if path_exists(fs, p) { return p; }
+    if path_exists(fs, "oodac/" + p) { return "oodac/" + p; }
+    if chars_len(p) > 6 && str_slice(p, 0, 6) == "oodac/" {
+        let sub: String = str_slice(p, 6, chars_len(p));
+        if path_exists(fs, sub) { return sub; }
+    }
+    return p;
+}
+
+fn refuse_kind(p: &ProcessCap, fs_r: &FsReadCap, host: String, raw_src: String, out: String) {
+    let src: String = resolve_p(fs_r, raw_src);
+    if !path_exists(fs_r, src) {
+        println("ERR\tsrc not found\t" + src);
+        process_exit(1);
+    }
     let ca: Result[String, String] = sys_exec(p, host, "check", src);
     if ca.is_ok() {
         println("ERR\tcheck must fail\t" + src);
@@ -44,9 +59,9 @@ pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
         println("ERR\tOODA_COMPILER required");
         process_exit(1);
     }
-    refuse_kind(p, fs_r, host, "oodac/qa/probe_list_kind_callee.oo", ".ooda-cache/ooda-tmp/probe_list_kind_callee.bin");
-    refuse_kind(p, fs_r, host, "oodac/qa/probe_list_let_callee.oo", ".ooda-cache/ooda-tmp/probe_list_let_callee.bin");
-    refuse_kind(p, fs_r, host, "oodac/qa/probe_list_assign_callee.oo", ".ooda-cache/ooda-tmp/probe_list_assign_callee.bin");
-    refuse_kind(p, fs_r, host, "oodac/qa/probe_list_arg_callee.oo", ".ooda-cache/ooda-tmp/probe_list_arg_callee.bin");
+    refuse_kind(p, fs_r, host, "qa/probe_list_kind_callee.oo", ".ooda-cache/ooda-tmp/probe_list_kind_callee.bin");
+    refuse_kind(p, fs_r, host, "qa/probe_list_let_callee.oo", ".ooda-cache/ooda-tmp/probe_list_let_callee.bin");
+    refuse_kind(p, fs_r, host, "qa/probe_list_assign_callee.oo", ".ooda-cache/ooda-tmp/probe_list_assign_callee.bin");
+    refuse_kind(p, fs_r, host, "qa/probe_list_arg_callee.oo", ".ooda-cache/ooda-tmp/probe_list_arg_callee.bin");
     println("OK");
 }

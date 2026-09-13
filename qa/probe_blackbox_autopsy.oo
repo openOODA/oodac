@@ -10,6 +10,32 @@
 //   3. timeout --signal=SEGV 1 the ELF; autopsy.json names SIGSEGV.
 //   4. oodac build check-valid hot_reload; running it writes CAPABILITY_VIOLATION.
 
+fn resolve_p(fs: &FsReadCap, p: String) -> String {
+    if path_exists(fs, p) { return p; }
+    if path_exists(fs, "oodac/" + p) { return "oodac/" + p; }
+    if chars_len(p) > 6 && str_slice(p, 0, 6) == "oodac/" {
+        let sub: String = str_slice(p, 6, chars_len(p));
+        if path_exists(fs, sub) { return sub; }
+    }
+    return p;
+}
+
+fn restore_autopsy(p: &ProcessCap, hold: String, celf: String) {
+    let _rm_h: Result[String, String] = sys_exec(p, "rm", "-f", hold);
+    let _rm_c: Result[String, String] = sys_exec(p, "rm", "-f", celf);
+    let _rm_a: Result[String, String] = sys_exec(p, "rm", "-f", ".blackbox/autopsy.json");
+    let _rst_git: Result[String, String] = sys_exec(p, "git", "checkout", "HEAD", "--", ".blackbox/autopsy.json");
+    let _rst_sub: Result[String, String] = sys_exec(p, "git", "checkout", "HEAD", "--", "oodac/.blackbox/autopsy.json");
+    let _cp_fb: Result[String, String] = sys_exec(p, "cp", "-p", ".ooda-cache/ooda-tmp/autopsy_tracked.bak", ".blackbox/autopsy.json");
+    let _rm_bk: Result[String, String] = sys_exec(p, "rm", "-f", ".ooda-cache/ooda-tmp/autopsy_tracked.bak");
+}
+
+fn fail_probe(p: &ProcessCap, hold: String, celf: String, msg: String) {
+    restore_autopsy(p, hold, celf);
+    println(msg);
+    process_exit(1);
+}
+
 pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
     let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
     let host: String = match hr { Ok(s) => s, Err(_) => "" };
@@ -17,82 +43,81 @@ pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
         println("ERR\tOODA_COMPILER required");
         process_exit(1);
     }
-    let hold: String = ".ooda-cache/ooda-tmp/probe_bb_hold.bin";
-    let br: Result[String, String] = sys_exec(p, host, "build", "oodac/qa/probe_blackbox_hold.oo", "-o", hold);
-    if br.is_err() {
-        println("ERR\tbuild hold");
-        let btxt: String = br.val;
-        println(btxt);
+    let hold_src: String = resolve_p(fs_r, "qa/probe_blackbox_hold.oo");
+    let captrap_src: String = resolve_p(fs_r, "qa/probe_blackbox_captrap.oo");
+    if !path_exists(fs_r, hold_src) || !path_exists(fs_r, captrap_src) {
+        println("ERR\tprobe victims missing");
         process_exit(1);
     }
+    let hold: String = ".ooda-cache/ooda-tmp/probe_bb_hold.bin";
+    let celf: String = ".ooda-cache/ooda-tmp/probe_bb_captrap.bin";
+    let _mk: Result[String, String] = sys_exec(p, "mkdir", "-p", ".ooda-cache/ooda-tmp");
+    let _bk: Result[String, String] = sys_exec(p, "cp", "-p", ".blackbox/autopsy.json", ".ooda-cache/ooda-tmp/autopsy_tracked.bak");
+
+    let br: Result[String, String] = sys_exec(p, host, "build", hold_src, "-o", hold);
+    if br.is_err() {
+        let btxt: String = match br { Ok(_) => "", Err(e) => e };
+        fail_probe(p, hold, celf, "ERR\tbuild hold\n" + btxt);
+    }
     if !path_exists(fs_r, hold) {
-        println("ERR\thold ELF missing");
-        process_exit(1);
+        fail_probe(p, hold, celf, "ERR\thold ELF missing");
     }
     let nr: Result[String, String] = sys_exec(p, "nm", hold);
     if nr.is_err() {
-        println("ERR\tnm failed");
-        process_exit(1);
+        fail_probe(p, hold, celf, "ERR\tnm failed");
     }
     let ntxt: String = match nr { Ok(s) => s, Err(_) => "" };
     if str_index_of(ntxt, "blackbox_init") < 0 {
-        println("ERR\tmissing blackbox_init");
-        process_exit(1);
+        fail_probe(p, hold, celf, "ERR\tmissing blackbox_init");
     }
     if str_index_of(ntxt, "blackbox_dump_autopsy") < 0 {
-        println("ERR\tmissing blackbox_dump_autopsy");
-        process_exit(1);
+        fail_probe(p, hold, celf, "ERR\tmissing blackbox_dump_autopsy");
     }
     if str_index_of(ntxt, "oo_blackbox_trap_cap") < 0 {
-        println("ERR\tmissing oo_blackbox_trap_cap");
-        process_exit(1);
+        fail_probe(p, hold, celf, "ERR\tmissing oo_blackbox_trap_cap");
     }
+
+    let _rm_a1: Result[String, String] = sys_exec(p, "rm", "-f", ".blackbox/autopsy.json");
     let mut av: List[String] = list_new();
     av = list_push(av, "--signal=SEGV");
     av = list_push(av, "1");
     av = list_push(av, hold);
     let _tr: Result[Int, String] = sys_exec_wait(p, "timeout", av);
     if !path_exists(fs_r, ".blackbox/autopsy.json") {
-        println("ERR\tautopsy.json missing");
-        process_exit(1);
+        fail_probe(p, hold, celf, "ERR\tautopsy.json missing");
     }
     let ar: Result[String, String] = read_file(fs_r, ".blackbox/autopsy.json");
     if ar.is_err() {
-        println("ERR\tautopsy unreadable");
-        process_exit(1);
+        fail_probe(p, hold, celf, "ERR\tautopsy unreadable");
     }
     let aj: String = match ar { Ok(s) => s, Err(_) => "" };
     if str_index_of(aj, "schema_version") < 0 {
-        println("ERR\tautopsy schema_version");
-        process_exit(1);
+        fail_probe(p, hold, celf, "ERR\tautopsy schema_version");
     }
     if str_index_of(aj, "SIGSEGV") < 0 {
-        println("ERR\tautopsy not SIGSEGV");
-        process_exit(1);
+        fail_probe(p, hold, celf, "ERR\tautopsy not SIGSEGV");
     }
-    let celf: String = ".ooda-cache/ooda-tmp/probe_bb_captrap.bin";
-    let cb: Result[String, String] = sys_exec(p, host, "build", "oodac/qa/probe_blackbox_captrap.oo", "-o", celf);
+
+    let _rm_a2: Result[String, String] = sys_exec(p, "rm", "-f", ".blackbox/autopsy.json");
+    let cb: Result[String, String] = sys_exec(p, host, "build", captrap_src, "-o", celf);
     if cb.is_err() {
-        println("ERR\tbuild captrap");
-        let ctxt: String = cb.val;
-        println(ctxt);
-        process_exit(1);
+        let ctxt: String = match cb { Ok(_) => "", Err(e) => e };
+        fail_probe(p, hold, celf, "ERR\tbuild captrap\n" + ctxt);
     }
     if !path_exists(fs_r, celf) {
-        println("ERR\tcaptrap ELF missing");
-        process_exit(1);
+        fail_probe(p, hold, celf, "ERR\tcaptrap ELF missing");
     }
     let empty: List[String] = list_new();
     let _cr: Result[Int, String] = sys_exec_wait(p, celf, empty);
     let ar2: Result[String, String] = read_file(fs_r, ".blackbox/autopsy.json");
     if ar2.is_err() {
-        println("ERR\tcap autopsy unreadable");
-        process_exit(1);
+        fail_probe(p, hold, celf, "ERR\tcap autopsy unreadable");
     }
     let aj2: String = match ar2 { Ok(s) => s, Err(_) => "" };
     if str_index_of(aj2, "CAPABILITY_VIOLATION") < 0 {
-        println("ERR\tautopsy not CAPABILITY_VIOLATION");
-        process_exit(1);
+        fail_probe(p, hold, celf, "ERR\tautopsy not CAPABILITY_VIOLATION");
     }
+
+    restore_autopsy(p, hold, celf);
     println("OK");
 }

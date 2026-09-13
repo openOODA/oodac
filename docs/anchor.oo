@@ -13,9 +13,9 @@
 //   5. TOKEN_OPT.oot / TOKEN_TOOLING.oot — token surface.
 //   6. CAP_LEGACY_SUPERSEDE_REMOVAL_TODO.oot — granular cap rules.
 
-import "CAP_BOUNDARY.oot";
+import "cap_boundary.oot";
 import "silent-miscompile-prevention.oot";
 import "x86-codegen-style.oot";
-import "TOKEN_OPT.oot";
-import "TOKEN_TOOLING.oot";
-import "CAP_LEGACY_SUPERSEDE_REMOVAL_TODO.oot";
+import "token_opt.oot";
+import "token_tooling.oot";
+import "cap_legacy_supersede_removal_todo.oot";

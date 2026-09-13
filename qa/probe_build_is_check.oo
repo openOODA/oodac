@@ -10,6 +10,16 @@
 //   3. build hold -o oodac/qa is ERR (directory).
 //   4. --backend wasm on a valid file exits nonzero.
 
+fn resolve_p(fs: &FsReadCap, p: String) -> String {
+    if path_exists(fs, p) { return p; }
+    if path_exists(fs, "oodac/" + p) { return "oodac/" + p; }
+    if chars_len(p) > 6 && str_slice(p, 0, 6) == "oodac/" {
+        let sub: String = str_slice(p, 6, chars_len(p));
+        if path_exists(fs, sub) { return sub; }
+    }
+    return p;
+}
+
 pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
     let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
     let host: String = match hr { Ok(s) => s, Err(_) => "" };
@@ -17,10 +27,26 @@ pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
         println("ERR\tOODA_COMPILER required");
         process_exit(1);
     }
+    let capmiss_src: String = resolve_p(fs_r, "qa/probe_blackbox_capmiss.oo");
+    let nomain_src: String = resolve_p(fs_r, "qa/probe_no_main.oo");
+    let hold_src: String = resolve_p(fs_r, "qa/probe_blackbox_hold.oo");
+    let std_src: String = resolve_p(fs_r, "qa/probe_build_std_import.oo");
+    let qa_dir: String = resolve_p(fs_r, "qa");
+    if !path_exists(fs_r, capmiss_src) || !path_exists(fs_r, nomain_src) || !path_exists(fs_r, hold_src) || !path_exists(fs_r, std_src) || !path_exists(fs_r, qa_dir) {
+        println("ERR\tprobe fixtures missing");
+        process_exit(1);
+    }
     let celf: String = ".ooda-cache/ooda-tmp/probe_capmiss_must_not.bin";
-    let br: Result[String, String] = sys_exec(p, host, "build", "oodac/qa/probe_blackbox_capmiss.oo", "-o", celf);
+    let _mk: Result[String, String] = sys_exec(p, "mkdir", "-p", ".ooda-cache/ooda-tmp");
+    let _rm1: Result[String, String] = sys_exec(p, "rm", "-f", celf);
+    let br: Result[String, String] = sys_exec(p, host, "build", capmiss_src, "-o", celf);
     if br.is_ok() {
         println("ERR\tcapmiss build must fail");
+        process_exit(1);
+    }
+    let b_err: String = match br { Ok(_) => "", Err(e) => e };
+    if str_index_of(b_err, "unreadable") >= 0 || str_index_of(b_err, "cannot open") >= 0 {
+        println("ERR\tcapmiss fixture missing: " + b_err);
         process_exit(1);
     }
     if path_exists(fs_r, celf) {
@@ -28,24 +54,32 @@ pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
         process_exit(1);
     }
     let nelf: String = ".ooda-cache/ooda-tmp/probe_nomain_must_not.bin";
-    let nr: Result[String, String] = sys_exec(p, host, "build", "oodac/qa/probe_no_main.oo", "-o", nelf);
+    let _rm2: Result[String, String] = sys_exec(p, "rm", "-f", nelf);
+    let nr: Result[String, String] = sys_exec(p, host, "build", nomain_src, "-o", nelf);
     if nr.is_ok() {
         println("ERR\tno-main build must fail");
+        process_exit(1);
+    }
+    let n_err: String = match nr { Ok(_) => "", Err(e) => e };
+    if str_index_of(n_err, "unreadable") >= 0 || str_index_of(n_err, "cannot open") >= 0 {
+        println("ERR\tno-main fixture missing: " + n_err);
         process_exit(1);
     }
     if path_exists(fs_r, nelf) {
         println("ERR\tno-main ELF shipped");
         process_exit(1);
     }
-    let dr: Result[String, String] = sys_exec(p, host, "build", "oodac/qa/probe_blackbox_hold.oo", "-o", "oodac/qa");
+    let dr: Result[String, String] = sys_exec(p, host, "build", hold_src, "-o", qa_dir);
     if dr.is_ok() {
         println("ERR\t-o dir build must fail");
         process_exit(1);
     }
-    let lr: Result[String, String] = sys_exec(p, host, "build", "oodac/qa/probe_build_std_import.oo", "--backend", "wasm");
+    let lr: Result[String, String] = sys_exec(p, host, "build", std_src, "--backend", "wasm");
     if lr.is_ok() {
         println("ERR\tbackend wasm must fail");
         process_exit(1);
     }
+    let _rm3: Result[String, String] = sys_exec(p, "rm", "-f", celf);
+    let _rm4: Result[String, String] = sys_exec(p, "rm", "-f", nelf);
     println("OK");
 }

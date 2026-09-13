@@ -1,6 +1,6 @@
 # Bootstrap seed (optional local)
 
-File: ooda/bootstrap/seed/README.oot
+File: oodac/bootstrap/seed/readme.oot
 
 Place an executable pure `oodac` here as `bootstrap/seed/oodac` for offline CI
 and cold machines that lack `oodac/oodac` in the working tree.

@@ -9,8 +9,8 @@
 //   2. Re-export public C streaming and monomorphization interfaces.
 //   3. Preserve strict <= 256 lines limit.
 
-import "lex/ANCHOR.oo";
-import "types/ANCHOR.oo";
+import "lex/anchor.oo";
+import "types/anchor.oo";
 import "c_cache_store.oo";
 import "c_contract_expr.oo";
 import "c_emit.oo";

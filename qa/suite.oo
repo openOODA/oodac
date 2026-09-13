@@ -17,11 +17,12 @@ fn run_probe_once(p: &ProcessCap, oodac: String, path: String) -> Result[Int, St
     let tmp_bin: String = path + ".tmp.bin";
     let b: Result[String, String] = sys_exec(p, oodac, "build", "--backend", "c", path, "-o", tmp_bin);
     if b.is_err() {
+        let _del: Result[String, String] = sys_exec(p, "rm", "-f", tmp_bin); // rm .tmp.bin
         let e: String = match b { Ok(_) => "", Err(m) => m };
         return Err("compile fail " + path + ": " + e);
     }
-    let r: Result[String, String] = sys_exec(p, tmp_bin);
-    let _del: Result[String, String] = sys_exec(p, "rm", "-f", tmp_bin);
+    let r: Result[String, String] = sys_exec(p, "env", "OODA_COMPILER=" + oodac, tmp_bin);
+    let _del: Result[String, String] = sys_exec(p, "rm", "-f", tmp_bin); // rm .tmp.bin
     if r.is_err() {
         let e: String = match r { Ok(_) => "", Err(m) => m };
         return Err("exec fail " + path + ": " + e);
@@ -37,7 +38,17 @@ fn run_probe_twice(p: &ProcessCap, oodac: String, path: String) -> Result[Int, S
     return Ok(0);
 }
 
+fn resolve_probe(fs: &FsReadCap, p: String) -> String {
+    if path_exists(fs, p) { return p; }
+    let oodac_p: String = "oodac/" + p;
+    if path_exists(fs, oodac_p) { return oodac_p; }
+    return p;
+}
+
 pub fn main(p: &ProcessCap, fs_r: &FsReadCap, env: &EnvCap, args: List[String]) -> Result[Int, String] {
+    let _sc1: Result[String, String] = sys_exec(p, "rm", "-rf", ".ooda-cache/ooda-tmp");
+    let _sc2: Result[String, String] = sys_exec(p, "rm", "-rf", "oodac/.ooda-cache/ooda-tmp");
+
     let cr: Result[String, String] = env_get(env, "OODA_COMPILER");
     let mut oodac: String = match cr { Ok(s) => s, Err(_) => "" };
     if oodac == "" {
@@ -55,19 +66,19 @@ pub fn main(p: &ProcessCap, fs_r: &FsReadCap, env: &EnvCap, args: List[String]) 
     }
 
     let mut ps: List[String] = list_new();
-    ps = list_push(ps, "qa/probe_api_surface.oo");
-    ps = list_push(ps, "qa/probe_smt_false_kind.oo");
-    ps = list_push(ps, "qa/probe_smt_unproven_kind.oo");
-    ps = list_push(ps, "qa/probe_lattice_audit.oo");
-    ps = list_push(ps, "qa/probe_landlock_jail.oo");
-    ps = list_push(ps, "qa/probe_borrow_kind.oo");
-    ps = list_push(ps, "qa/probe_result_kind.oo");
-    ps = list_push(ps, "qa/probe_option_kind.oo");
-    ps = list_push(ps, "qa/probe_list_kind.oo");
-    ps = list_push(ps, "qa/probe_emit_graph.oo");
-    ps = list_push(ps, "qa/probe_blackbox_autopsy.oo");
-    ps = list_push(ps, "qa/probe_adversarial_stubs_failclosed.oo");
-    ps = list_push(ps, "qa/probe_build_is_check.oo");
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_api_surface.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_smt_false_kind.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_smt_unproven_kind.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_lattice_audit.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_landlock_jail.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_borrow_kind.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_result_kind.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_option_kind.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_list_kind.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_emit_graph.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_blackbox_autopsy.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_adversarial_stubs_failclosed.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_build_is_check.oo"));
 
     let mut i: Int = 0;
     while i < list_len(ps) {
@@ -78,5 +89,7 @@ pub fn main(p: &ProcessCap, fs_r: &FsReadCap, env: &EnvCap, args: List[String]) 
         i = i + 1;
     }
     println("oodac test suite: ALL PROBES PASSED (double-run identical)");
+    let _ec1: Result[String, String] = sys_exec(p, "rm", "-rf", ".ooda-cache/ooda-tmp");
+    let _ec2: Result[String, String] = sys_exec(p, "rm", "-rf", "oodac/.ooda-cache/ooda-tmp");
     return Ok(0);
 }

@@ -9,11 +9,11 @@
 //   2. Re-export parse_cli_argv, run_build_san, and run_emit_c_family.
 //   3. Preserve <= 256 lines.
 
-import "lex/ANCHOR.oo";
-import "ast/ANCHOR.oo";
-import "check/ANCHOR.oo";
-import "types/ANCHOR.oo";
-import "emit/c/ANCHOR.oo";
+import "lex/anchor.oo";
+import "ast/anchor.oo";
+import "check/anchor.oo";
+import "types/anchor.oo";
+import "emit/c/anchor.oo";
 import "cli_build.oo";
 import "cli_emit.oo";
 import "cli_emit_llvm.oo";

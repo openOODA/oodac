@@ -8,6 +8,16 @@
 //   1. check and build of probe_result_kind_ok_str.oo are ERR; ELF absent.
 //   2. check and build of probe_result_kind_callee.oo are ERR; ELF absent.
 
+fn resolve_p(fs: &FsReadCap, p: String) -> String {
+    if path_exists(fs, p) { return p; }
+    if path_exists(fs, "oodac/" + p) { return "oodac/" + p; }
+    if chars_len(p) > 6 && str_slice(p, 0, 6) == "oodac/" {
+        let sub: String = str_slice(p, 6, chars_len(p));
+        if path_exists(fs, sub) { return sub; }
+    }
+    return p;
+}
+
 pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
     let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
     let host: String = match hr { Ok(s) => s, Err(_) => "" };
@@ -15,7 +25,11 @@ pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
         println("ERR\tOODA_COMPILER required");
         process_exit(1);
     }
-    let a: String = "oodac/qa/probe_result_kind_ok_str.oo";
+    let a: String = resolve_p(fs_r, "qa/probe_result_kind_ok_str.oo");
+    if !path_exists(fs_r, a) {
+        println("ERR\tsrc not found: " + a);
+        process_exit(1);
+    }
     let oa: String = ".ooda-cache/ooda-tmp/probe_result_kind_ok_str.bin";
     let ca: Result[String, String] = sys_exec(p, host, "check", a);
     if ca.is_ok() {
@@ -36,7 +50,11 @@ pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
         println("ERR\tok_str ELF shipped");
         process_exit(1);
     }
-    let b: String = "oodac/qa/probe_result_kind_callee.oo";
+    let b: String = resolve_p(fs_r, "qa/probe_result_kind_callee.oo");
+    if !path_exists(fs_r, b) {
+        println("ERR\tsrc not found: " + b);
+        process_exit(1);
+    }
     let ob: String = ".ooda-cache/ooda-tmp/probe_result_kind_callee.bin";
     let cb: Result[String, String] = sys_exec(p, host, "check", b);
     if cb.is_ok() {

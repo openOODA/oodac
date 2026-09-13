@@ -9,6 +9,16 @@
 //   2. build the outside victim; nm requires oo_jail_landlock_ctor.
 //   3. sys_exec the victim prints OK.
 
+fn resolve_p(fs: &FsReadCap, p: String) -> String {
+    if path_exists(fs, p) { return p; }
+    if path_exists(fs, "oodac/" + p) { return "oodac/" + p; }
+    if chars_len(p) > 6 && str_slice(p, 0, 6) == "oodac/" {
+        let sub: String = str_slice(p, 6, chars_len(p));
+        if path_exists(fs, sub) { return sub; }
+    }
+    return p;
+}
+
 pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
     let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
     let host: String = match hr { Ok(s) => s, Err(_) => "" };
@@ -25,7 +35,8 @@ pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
         process_exit(1);
     }
     let elf: String = ".ooda-cache/ooda-tmp/probe_landlock_outside.bin";
-    let br: Result[String, String] = sys_exec(p, host, "build", "oodac/qa/probe_landlock_outside.oo", "-o", elf);
+    let victim: String = resolve_p(fs_r, "qa/probe_landlock_outside.oo");
+    let br: Result[String, String] = sys_exec(p, host, "build", victim, "-o", elf);
     if br.is_err() {
         println("ERR\tbuild landlock victim");
         let bt: String = match br { Ok(s) => s, Err(e) => e };
@@ -62,5 +73,6 @@ pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
         println("ERR\tlandlock leak");
         process_exit(1);
     }
+    let _ = sys_exec(p, "rm", "-f", elf);
     println("OK");
 }

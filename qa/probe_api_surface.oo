@@ -30,18 +30,28 @@ fn join_oodac(root: String, rel: String) -> String {
 
 pub fn probe_api_surface_run(fs: &FsReadCap) -> Int {
     let mut root: String = "";
-    let mut path: String = "ANCHOR.oo";
-    if !path_exists(fs, path) {
+    let mut path: String = "";
+    if path_exists(fs, "oodac/anchor.oo") {
+        path = "oodac/anchor.oo";
+        root = "oodac";
+    } else if path_exists(fs, "oodac/ANCHOR.oo") {
         path = "oodac/ANCHOR.oo";
         root = "oodac";
-    }
-    if !path_exists(fs, path) {
-        println("FAIL api_surface missing ANCHOR.oo");
+    } else if path_exists(fs, "anchor.oo") {
+        path = "anchor.oo";
+        root = "";
+    } else if path_exists(fs, "ANCHOR.oo") {
+        path = "ANCHOR.oo";
+        root = "";
+    } else {
+        println("FAIL api_surface missing anchor.oo");
+        process_exit(1);
         return 1;
     }
     let rr: Result[String, String] = read_file(fs, path);
     if rr.is_err() {
-        println("FAIL api_surface unreadable ANCHOR.oo");
+        println("FAIL api_surface unreadable anchor.oo");
+        process_exit(1);
         return 1;
     }
     let src: String = match rr { Ok(s) => s, Err(_) => "" };

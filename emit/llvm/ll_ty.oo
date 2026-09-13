@@ -38,7 +38,7 @@ pub fn ll_ty_at(toks: List[String], pos: Int, n: Int, stab: String) -> String {
     if t == "RandCap" || t == "ArenaCap" || t == "FfiCap" || t == "ThreadCap" { return "i64"; }
     if t == "GpuCap" || t == "CompilerReadCap" || t == "SignCap" || t == "AudioCap" { return "i64"; }
     if t == "CameraCap" || t == "UsbCap" || t == "HidCap" || t == "WindowCap" { return "i64"; }
-    if t == "FrameCap" { return "i64"; }
+    if t == "FrameCap" || t == "MetricsCap" { return "i64"; }
     if t == "List" {
         if p + 2 < n && ll_k(toks, p + 1) == "LBRACKET" && ll_k(toks, p + 2) == "IDENT" {
             let e: String = ll_t(toks, p + 2);
@@ -141,6 +141,7 @@ pub fn ll_cap_grant(ty: String) -> String {
     if ty == "HidCap" { return "hid"; }
     if ty == "WindowCap" { return "window"; }
     if ty == "FrameCap" { return "frame"; }
+    if ty == "MetricsCap" { return "metrics"; }
     return "";
 }
 

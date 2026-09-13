@@ -9,6 +9,16 @@
 //   2. emit/ANCHOR.oo defines emit_backend. CLI emit reads art.toks and does not lex.
 //   3. build --backend wasm of a well-typed file exits 2.
 
+fn resolve_p(fs: &FsReadCap, p: String) -> String {
+    if path_exists(fs, p) { return p; }
+    if path_exists(fs, "oodac/" + p) { return "oodac/" + p; }
+    if chars_len(p) > 6 && str_slice(p, 0, 6) == "oodac/" {
+        let sub: String = str_slice(p, 6, chars_len(p));
+        if path_exists(fs, sub) { return sub; }
+    }
+    return p;
+}
+
 pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
     let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
     let host: String = match hr { Ok(s) => s, Err(_) => "" };
@@ -16,8 +26,8 @@ pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
         println("ERR\tOODA_COMPILER required");
         process_exit(1);
     }
-    let d1r: Result[String, String] = read_file(fs_r, "oodac/docs/silent-miscompile-prevention.oot");
-    let d2r: Result[String, String] = read_file(fs_r, "oodac/docs/x86-codegen-style.oot");
+    let d1r: Result[String, String] = read_file(fs_r, resolve_p(fs_r, "docs/silent-miscompile-prevention.oot"));
+    let d2r: Result[String, String] = read_file(fs_r, resolve_p(fs_r, "docs/x86-codegen-style.oot"));
     if d1r.is_err() || d2r.is_err() {
         println("ERR\tunreadable attach docs");
         process_exit(1);
@@ -36,18 +46,22 @@ pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
         println("ERR\tdocs missing emit/<name>/ attach dir");
         process_exit(1);
     }
-    let ar: Result[String, String] = read_file(fs_r, "oodac/emit/ANCHOR.oo");
+    let mut ea: String = resolve_p(fs_r, "emit/anchor.oo");
+    if !path_exists(fs_r, ea) {
+        ea = resolve_p(fs_r, "emit/ANCHOR.oo");
+    }
+    let ar: Result[String, String] = read_file(fs_r, ea);
     if ar.is_err() {
-        println("ERR\tunreadable emit/ANCHOR.oo");
+        println("ERR\tunreadable emit anchor");
         process_exit(1);
     }
     let a: String = match ar { Ok(s) => s, Err(_) => "" };
     if str_index_of(a, "emit_backend") < 0 {
-        println("ERR\temit/ANCHOR missing emit_backend");
+        println("ERR\temit/anchor missing emit_backend");
         process_exit(1);
     }
-    let c1r: Result[String, String] = read_file(fs_r, "oodac/cli/cli_emit.oo");
-    let c2r: Result[String, String] = read_file(fs_r, "oodac/cli/cli_emit_llvm.oo");
+    let c1r: Result[String, String] = read_file(fs_r, resolve_p(fs_r, "cli/cli_emit.oo"));
+    let c2r: Result[String, String] = read_file(fs_r, resolve_p(fs_r, "cli/cli_emit_llvm.oo"));
     if c1r.is_err() || c2r.is_err() {
         println("ERR\tunreadable cli emit");
         process_exit(1);
@@ -62,7 +76,7 @@ pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
         println("ERR\tcli emit re-lexes");
         process_exit(1);
     }
-    let wr: Result[String, String] = sys_exec(p, host, "build", "oodac/qa/probe_list_ok.oo", "--backend", "wasm");
+    let wr: Result[String, String] = sys_exec(p, host, "build", resolve_p(fs_r, "qa/probe_list_ok.oo"), "--backend", "wasm");
     if wr.is_ok() {
         println("ERR\tbackend wasm must stay residual");
         process_exit(1);

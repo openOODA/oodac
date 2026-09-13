@@ -49,7 +49,7 @@ fn tc_imp_allow(path: String) -> Bool {
     // Module indexes are load-bearing: the build discovers modules by
     // import-DFS from the entry point, so importing an index IS the use.
     // A stale index path still fails at import resolution.
-    if tc_imp_ends(path, "ANCHOR.oo") {
+    if tc_imp_ends(path, "ANCHOR.oo") || tc_imp_ends(path, "anchor.oo") {
         return true;
     }
     return false;
@@ -149,9 +149,9 @@ pub fn typecheck_unused_imports(toks: List[String]) {
     if srcp.contains("oodac/") {
         return;
     }
-    // ANCHOR.oo files are module indexes: the import list IS the content.
+    // anchor.oo / ANCHOR.oo files are module indexes: the import list IS the content.
     // A stale path still fails at import resolution, so nothing is hidden.
-    if chars_len(srcp) >= 9 && str_slice(srcp, chars_len(srcp) - 9, chars_len(srcp)) == "ANCHOR.oo" {
+    if chars_len(srcp) >= 9 && (str_slice(srcp, chars_len(srcp) - 9, chars_len(srcp)) == "ANCHOR.oo" || str_slice(srcp, chars_len(srcp) - 9, chars_len(srcp)) == "anchor.oo") {
         return;
     }
     let mut i: Int = 0;

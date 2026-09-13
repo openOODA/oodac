@@ -9,6 +9,16 @@
 //   2. probe_borrow_mut_alias.oo check is nonzero and contains ERR borrow.
 //   3. probe_borrow_shared.oo check is OK. Fail victims leave no ELF.
 
+fn resolve_p(fs: &FsReadCap, p: String) -> String {
+    if path_exists(fs, p) { return p; }
+    if path_exists(fs, "oodac/" + p) { return "oodac/" + p; }
+    if chars_len(p) > 6 && str_slice(p, 0, 6) == "oodac/" {
+        let sub: String = str_slice(p, 6, chars_len(p));
+        if path_exists(fs, sub) { return sub; }
+    }
+    return p;
+}
+
 pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
     let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
     let host: String = match hr { Ok(s) => s, Err(_) => "" };
@@ -16,34 +26,40 @@ pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
         println("ERR\tOODA_COMPILER required");
         process_exit(1);
     }
-    let mv: String = "oodac/qa/probe_borrow_move.oo";
+    let mv: String = resolve_p(fs_r, "qa/probe_borrow_move.oo");
+    let al: String = resolve_p(fs_r, "qa/probe_borrow_mut_alias.oo");
+    let p_sh: String = resolve_p(fs_r, "qa/probe_borrow_shared.oo");
+    if !path_exists(fs_r, mv) || !path_exists(fs_r, al) || !path_exists(fs_r, p_sh) { // path_exists probe_borrow_move
+        println("ERR\tborrow probe fixtures missing");
+        process_exit(1);
+    }
     let ca: Result[String, String] = sys_exec(p, host, "check", mv);
     let cmove: String = match ca { Ok(s) => s, Err(e) => e };
     if ca.is_ok() {
         println("ERR\tmove check must fail");
         process_exit(1);
     }
-    if str_index_of(cmove, "move") < 0 {
+    if str_index_of(cmove, "cannot open") >= 0 || str_index_of(cmove, "use after move") < 0 {
         println("ERR\tmove silent");
         process_exit(1);
     }
-    let al: String = "oodac/qa/probe_borrow_mut_alias.oo";
     let cb: Result[String, String] = sys_exec(p, host, "check", al);
     let calias: String = match cb { Ok(s) => s, Err(e) => e };
     if cb.is_ok() {
         println("ERR\talias check must fail");
         process_exit(1);
     }
-    if str_index_of(calias, "borrow") < 0 {
+    if str_index_of(calias, "cannot open") >= 0 || str_index_of(calias, "mut alias") < 0 {
         println("ERR\talias silent");
         process_exit(1);
     }
-    let sh: Result[String, String] = sys_exec(p, host, "check", "oodac/qa/probe_borrow_shared.oo");
+    let sh: Result[String, String] = sys_exec(p, host, "check", p_sh);
     if !sh.is_ok() {
         println("ERR\tshared & must check");
         process_exit(1);
     }
     let out: String = ".ooda-cache/ooda-tmp/probe_borrow_move.bin";
+    let _rm1: Result[String, String] = sys_exec(p, "rm", "-f", out);
     let ba: Result[String, String] = sys_exec(p, host, "build", mv, "-o", out);
     if ba.is_ok() {
         println("ERR\tmove build must fail");
@@ -53,5 +69,6 @@ pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
         println("ERR\tELF shipped");
         process_exit(1);
     }
+    let _rm2: Result[String, String] = sys_exec(p, "rm", "-f", out);
     println("OK");
 }

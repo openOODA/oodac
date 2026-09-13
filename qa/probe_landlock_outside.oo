@@ -17,7 +17,7 @@ pub fn main(p: &ProcessCap, env: &EnvCap, fs: &FsReadCap) {
         println("ERR\tlandlock\tjail env required");
         process_exit(1);
     }
-    if !path_exists(fs, "oodac/qa/probe_landlock_outside.oo") {
+    if !path_exists(fs, "qa/probe_landlock_outside.oo") && !path_exists(fs, "oodac/qa/probe_landlock_outside.oo") {
         println("ERR\tlandlock\tjail path unreadable");
         process_exit(1);
     }
