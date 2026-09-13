@@ -23,7 +23,7 @@ pub fn main(p: &ProcessCap, env: &EnvCap) {
     }
     let em: Result[String, String] = sys_exec(p, host, "emit-llvm", "--concat", "oodac/qa/probe_llvm_unknown_ty.oo");
     if em.is_ok() {
-        println("ERR\tllvm must refuse Float");
+        println("ERR\tllvm must refuse unmapped type");
         process_exit(1);
     }
     let et: String = match em { Ok(s) => s, Err(e) => e };
