@@ -10,7 +10,7 @@ WS_ROOT="$(cd "$ROOT/.." && pwd)"
 # Hermetic FS jail: default to WS_ROOT if not set, so new binary can read both ooda and std sources
 export OODA_FS_READDIR="$WS_ROOT"
 export OODA_FS_WRITEDIR="$WS_ROOT"
-export OO_LIST_AMBIENT_QUOTA="${OO_LIST_AMBIENT_QUOTA:-4294967296}"
+export OO_LIST_AMBIENT_QUOTA="${OO_LIST_AMBIENT_QUOTA:-8589934592}"
 oodac_abs() {
   local p="$1"
   if [[ -e "$p" ]]; then
@@ -233,7 +233,8 @@ if [[ "${PURE_SKIP_CHECK:-}" != "1" ]]; then
     rm -f "$ROOT/.ooda-cache/ooda-tmp/art_"*.art
     rm -f "$WS_ROOT/.ooda-cache/ooda-tmp/art_"*.art
     set +e
-    (cd "$ROOT" && timeout "$ck_to" "$OODAC_BIN" check "$MAIN_ABS") >"$TMP/main_check.out" 2>"$TMP/main_check.err"
+    MAIN_REL="${MAIN_ABS#"$ROOT"/}"
+    (cd "$ROOT" && timeout "$ck_to" "$OODAC_BIN" check "$MAIN_REL") >"$TMP/main_check.out" 2>"$TMP/main_check.err"
     main_ck=$?
     set -e
   }
@@ -264,7 +265,8 @@ if [[ ${#MODS[@]} -gt 80 ]]; then ONE_CK=3600; fi
 
 if [[ "$LLVM_MODE" == "1" ]]; then
   echo "pure_build: llvm per-module emit-llvm + clang -c (nmods=${#MODS[@]})"
-  export OODA_LLVM_SIGS_ROOT="main.oo"
+  MAIN_REL="${MAIN_ABS#"$ROOT"/}"
+  export OODA_LLVM_SIGS_ROOT="$MAIN_REL"
   export OODA_LLVM_EXTRA_CACHE="${OODAC_EMIT_CACHE:-$ROOT/.ooda-cache/oodac_emit}/llvm_extra.sigs"
   rm -f "$OODA_LLVM_EXTRA_CACHE"
   host_fp="$(sha256sum -- "$OODAC_BIN" | awk '{print $1}')"
@@ -295,12 +297,8 @@ if [[ "$LLVM_MODE" == "1" ]]; then
       emit_one "$src" >"$ml" 2>"$ml.err" || true
       if grep -qE $'^ERR\t' "$ml" "$ml.err" 2>/dev/null && grep -qE 'no artifact' "$ml" "$ml.err" 2>/dev/null; then
         rel="${src#"$ROOT"/}"
-        (cd "$ROOT" && timeout "$ONE_CK" "$OODAC_BIN" check "$src") >/dev/null 2>&1 || true
-        emit_one "$src" >"$ml" 2>"$ml.err" || true
-        if grep -qE $'^ERR\t' "$ml" "$ml.err" 2>/dev/null && grep -qE 'no artifact' "$ml" "$ml.err" 2>/dev/null && [[ "$rel" != "$src" ]]; then
-          (cd "$ROOT" && timeout "$ONE_CK" "$OODAC_BIN" check "$rel") >/dev/null 2>&1 || true
-          emit_one "$rel" >"$ml" 2>"$ml.err" || true
-        fi
+        (cd "$ROOT" && timeout "$ONE_CK" "$OODAC_BIN" check "$rel") >/dev/null 2>&1 || true
+        emit_one "$rel" >"$ml" 2>"$ml.err" || true
       fi
       if [[ -s "$ml.err" ]] && grep -qE $'^ERR\t' "$ml.err"; then
         cat "$ml.err" >>"$ml"
