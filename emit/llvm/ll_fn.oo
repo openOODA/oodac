@@ -155,7 +155,8 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String, stab: Stri
         env = type_env_put(env, "args", "slist");
         let mut mrk: String = "main_i32";
         if rk == "resi" { mrk = "resim"; }
-        if rk == "opti" || rk == "opts" { mrk = rk; }
+        if rk == "opti" { mrk = "optim"; }
+        if rk == "opts" { mrk = "optsm"; }
         env = type_env_put(env, "__rk__", mrk);
         if type_env_get(env, "__creq__") != "" || type_env_get(env, "__cens__") != "" {
             println("ERR\tllvm\tcontracts on main not lowered");

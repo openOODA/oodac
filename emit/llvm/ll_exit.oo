@@ -20,7 +20,7 @@ import "types/types_core.oo";
 
 pub fn ll_return_stmt(toks: List[String], p: Int, n: Int, ssa: Int, env: String, ret_kind: String, stab: String) -> String {
     if p + 1 < n && ll_k(toks, p + 1) == "SEMI" {
-        if ret_kind == "main_i32" {
+        if ret_kind == "main_i32" || ret_kind == "optim" || ret_kind == "optsm" {
             let ns: Int = ll_arc_exit(env, ssa);
             println("  ret i32 0");
             let q: Int = ll_skip_to_rbrace(toks, p + 1, n);
@@ -34,18 +34,28 @@ pub fn ll_return_stmt(toks: List[String], p: Int, n: Int, ssa: Int, env: String,
         let q: Int = ll_skip_to_rbrace(toks, p + 1, n);
         return ll_pack(q, ssa, ret_kind, env) + "\t1";
     }
-    let envx: String = type_env_put(env, "__e__", ret_kind);
+    let mut exp_kind: String = "";
+    if ret_kind == "optim" {
+        exp_kind = "opti";
+    } else if ret_kind == "optsm" {
+        exp_kind = "opts";
+    } else {
+        exp_kind = str_slice(ret_kind, 0, chars_len(ret_kind));
+    }
+    let envx: String = type_env_put(env, "__e__", exp_kind);
     let v0: String = ll_expr(toks, p + 1, n, ssa, envx);
-    let v: String = ll_int_convert(v0, ll_pssa(v0), ret_kind);
+    let v: String = ll_int_convert(v0, ll_pssa(v0), exp_kind);
     let mut np: Int = ll_ppos(v); let mut ns: Int = ll_pssa(v);
     if np < n && ll_k(toks, np) == "SEMI" { np = np + 1; }
-    if type_env_get(env, "__ens__") == "1" && ret_kind != "main_i32" && ret_kind != "void" {
-        ns = ll_contract_return(toks, v, env, ns, ret_kind, p);
+    if type_env_get(env, "__ens__") == "1" && ret_kind != "main_i32" && ret_kind != "void" && ret_kind != "optim" && ret_kind != "optsm" {
+        ns = ll_contract_return(toks, v, env, ns, exp_kind, p);
     }
     if ll_arc_owned(ll_pk(v)) && ll_pptr(v) != "" { ns = ll_arc_keep_ptr(ll_pk(v), ll_pptr(v), ns); }
     ns = ll_arc_exit(env, ns);
     if ret_kind == "resim" {
         ns = ll_ret_resim(v, ns);
+    } else if ret_kind == "optim" || ret_kind == "optsm" {
+        println("  ret i32 0");
     } else if ret_kind == "resi" {
         ns = ll_ret_resi(v, ns);
     } else if ret_kind == "void" {

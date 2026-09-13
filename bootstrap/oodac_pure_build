@@ -10,7 +10,7 @@ WS_ROOT="$(cd "$ROOT/.." && pwd)"
 # Hermetic FS jail: default to WS_ROOT if not set, so new binary can read both ooda and std sources
 export OODA_FS_READDIR="$WS_ROOT"
 export OODA_FS_WRITEDIR="$WS_ROOT"
-export OO_LIST_AMBIENT_QUOTA="${OO_LIST_AMBIENT_QUOTA:-1073741824}"
+export OO_LIST_AMBIENT_QUOTA="${OO_LIST_AMBIENT_QUOTA:-4294967296}"
 oodac_abs() {
   local p="$1"
   if [[ -e "$p" ]]; then
@@ -267,10 +267,6 @@ if [[ "$LLVM_MODE" == "1" ]]; then
   export OODA_LLVM_SIGS_ROOT="main.oo"
   export OODA_LLVM_EXTRA_CACHE="${OODAC_EMIT_CACHE:-$ROOT/.ooda-cache/oodac_emit}/llvm_extra.sigs"
   rm -f "$OODA_LLVM_EXTRA_CACHE"
-  if [[ "${PURE_SKIP_CHECK:-}" != "1" ]]; then
-    echo "pure_build: llvm artifact check $MAIN_ABS"
-    (cd "$ROOT" && timeout 3600 "$OODAC_BIN" check "$MAIN_ABS") >/dev/null 2>&1 || true
-  fi
   host_fp="$(sha256sum -- "$OODAC_BIN" | awk '{print $1}')"
   host_fp="${host_fp:0:16}"
   emit_skip=0
