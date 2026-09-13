@@ -30,8 +30,9 @@ jobs:
   # Recorded gap: mutation kill-rate (G7 full) has no harness yet.
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 180
     env:
-      OO_LIST_AMBIENT_QUOTA: "1073741824"
+      OO_LIST_AMBIENT_QUOTA: "4294967296"
     defaults:
       run:
         working-directory: ${{ github.workspace }}
@@ -59,6 +60,13 @@ jobs:
         with:
           repository: openOODA/mcp
           path: mcp
+      - name: Configure swap
+        run: |
+          sudo fallocate -l 10G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=10240
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+          free -h
       - name: Install clang
         run: sudo apt-get update && sudo apt-get install -y clang
       - name: Count anchor imports
@@ -80,7 +88,7 @@ jobs:
           OODAC_BIN: ${{ github.workspace }}/oodac/bin/oodac
           OODA_FS_READDIR: ${{ github.workspace }}
           OODA_FS_WRITEDIR: ${{ github.workspace }}
-          OO_LIST_AMBIENT_QUOTA: "1073741824"
+          OO_LIST_AMBIENT_QUOTA: "4294967296"
         run: |
           set -eu
           HOST="$OODA_COMPILER"
@@ -280,6 +288,8 @@ jobs:
   llvm-self-host:
     runs-on: ubuntu-latest
     timeout-minutes: 180
+    env:
+      OO_LIST_AMBIENT_QUOTA: "4294967296"
     defaults:
       run:
         working-directory: ${{ github.workspace }}
@@ -291,12 +301,19 @@ jobs:
         with:
           repository: openOODA/oodar
           path: oodar
+      - name: Configure swap
+        run: |
+          sudo fallocate -l 10G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=10240
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+          free -h
       - name: Install clang
         run: sudo apt-get update && sudo apt-get install -y clang
       - name: LLVM oodac_pure_build
         env:
           OODAC_BIN: ${{ github.workspace }}/oodac/bin/oodac
-          OO_LIST_AMBIENT_QUOTA: "1073741824"
+          OO_LIST_AMBIENT_QUOTA: "4294967296"
         run: |
           set -eu
           test -x "$OODAC_BIN"
