@@ -105,7 +105,10 @@ pub fn run_emit_llvm(fs: &FsReadCap, fs_w: &FsWriteCap, env: &EnvCap, path: Stri
                 let _: Result[Void, String] = write_file(fs_w, cp, extra);
             }
         }
-        ll_emit_stream_plus(toks, extra);
+        let tx: Result[String, String] = env_get(env, "OODA_LLVM_TRIPLE");
+        let mut triple: String = match tx { Ok(s) => s, Err(_) => "" };
+        if triple == "" { triple = "x86_64-unknown-linux-gnu"; }
+        ll_emit_stream_plus_t(toks, extra, triple);
         return;
     }
     let paths: List[String] = collect_module_paths(fs, path);

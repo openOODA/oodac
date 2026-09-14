@@ -201,6 +201,18 @@ for path in sys.argv[1:]:
 sys.exit(0 if ok else 1)
 PY
   record "P-ALIGN-01" "loads/stores carry align" "$al_ok"
+
+  OODA_LLVM_TRIPLE=aarch64-unknown-linux-gnu emit "$CORPUS/fn_ret_int.oo" "$d/add.a64.ll"
+  grep -q 'aarch64-unknown-linux-gnu' "$d/add.a64.ll"
+  record "P-TRIPLE-02" "second triple aarch64" "$?"
+  llvm-as "$d/add.a64.ll" -o "$d/add.a64.bc"
+  record "P-AS-A64" "aarch64 llvm-as" "$?"
+  llc -filetype=obj "$d/add.ll" -o "$d/add.llc.o"
+  record "P-LLC-01" "llc x86_64 IR" "$?"
+  llvm-as "$d/add.ll" -o "$d/add.bc2"
+  record "P-BC-01" "bitcode via llvm-as" "$?"
+  opt -O2 -module-summary "$d/add.ll" -o "$d/add.thin.bc" 2>/dev/null || opt -O2 "$d/add.ll" -o "$d/add.thin.bc"
+  record "P-THIN-01" "opt module-summary/ThinLTO bitcode" "$?"
 }
 
 run_suite 1

@@ -163,11 +163,15 @@ pub fn ll_emit_stream_toks(toks: List[String]) {
 }
 
 pub fn ll_emit_stream_plus(toks: List[String], extra: String) {
+    ll_emit_stream_plus_t(toks, extra, "x86_64-unknown-linux-gnu");
+}
+
+pub fn ll_emit_stream_plus_t(toks: List[String], extra: String, triple: String) {
     if list_len(toks) < 1 {
         println("ERR\tllvm\tempty artifact");
         process_exit(1);
     }
-    ll_rt_header(toks);
+    ll_rt_header_triple(toks, triple);
     let extra_st: String = ll_struct_tab_of(extra);
     let stenv: String = ll_struct_declare(toks, extra_st);
     let local_st: String = ll_st_pick(stenv, ll_local_st_names(toks));
