@@ -1,0 +1,23 @@
+// # LLVM olist field then string
+//
+// Logline: Struct with List[Struct] then String must retain without SSA clash.
+//
+// Setup: No caps. S1-only: seed retain reused %t12 on this layout.
+//
+// Beats:
+//   1. Wrap { items: list_new(), name: "x" } typechecks and emits.
+//   2. main prints the name field.
+
+type Item = struct {
+    n: Int
+};
+
+type Wrap = struct {
+    items: List[Item],
+    name: String
+};
+
+pub fn main() {
+    let w: Wrap = Wrap { items: list_new(), name: "x" };
+    println(w.name);
+}

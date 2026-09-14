@@ -375,6 +375,12 @@ jobs:
           mkdir -p .ooda-cache/ooda-tmp
           /tmp/oodac_ll_ci build --backend llvm oodac/bootstrap/corpus/emit-llvm/pass/fn_ret_int.oo -o /tmp/s1_fn.bin
           test "$(/tmp/s1_fn.bin)" = "42"
+          /tmp/oodac_ll_ci build --backend llvm oodac/bootstrap/corpus/emit-llvm/s1/print_str.oo -o /tmp/s1_ps.bin
+          test "$(/tmp/s1_ps.bin)" = "hi"
+          /tmp/oodac_ll_ci build --backend llvm oodac/bootstrap/corpus/emit-llvm/s1/olist_then_str.oo -o /tmp/s1_ol.bin
+          test "$(/tmp/s1_ol.bin)" = "x"
+          /tmp/oodac_ll_ci build --backend llvm oodac/bootstrap/corpus/emit-llvm/s1/resl_ok.oo -o /tmp/s1_resl.bin
+          test "$(/tmp/s1_resl.bin)" = "1"
           /tmp/oodac_ll_ci build --backend elf oodac/bootstrap/corpus/emit-llvm/pass/fn_ret_int.oo -o /tmp/s6_elf.bin
           test -x /tmp/s6_elf.bin
           test "$(/tmp/s6_elf.bin)" = "42"

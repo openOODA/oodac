@@ -6,7 +6,7 @@
 //
 // Beats:
 //   1. List[String] is slist. List[Int] is ilist.
-//   2. Result[Int, String] is resi. Result[String, String] is ress. Option[Int] is opti.
+//   2. Result[Int, String] is resi. Result[List[_], String] is resl. Option[Int] is opti.
 //   3. Cap tokens are i64.
 
 import "ll_tok.oo";
@@ -55,6 +55,7 @@ pub fn ll_ty_at(toks: List[String], pos: Int, n: Int, stab: String) -> String {
             if e == "String" { return "ress"; }
             if e == "Int" { return "resi"; }
             if e == "Void" { return "ress"; }
+            if e == "List" { return "resl"; }
             return "resSt_" + e;
         }
         println("ERR\tllvm\tresult kind");
@@ -160,6 +161,7 @@ pub fn ll_ir_alloc(kind: String) -> String {
     if kind == "opts" { return "%OoOptS"; }
     if kind == "ress" { return "%OoResS"; }
     if kind == "resi" { return "%OoResI"; }
+    if kind == "resl" { return "%OoResL"; }
     if kind == "i1" { return "i1"; }
     if kind == "i32" || kind == "u32" { return "i32"; }
     if kind == "i64" || kind == "u64" { return "i64"; }
@@ -194,6 +196,7 @@ pub fn ll_is_agg(kind: String) -> Bool {
     if kind == "opts" { return true; }
     if kind == "ress" { return true; }
     if kind == "resi" { return true; }
+    if kind == "resl" { return true; }
     if chars_len(kind) >= 3 && str_slice(kind, 0, 3) == "St_" { return true; }
     if chars_len(kind) >= 6 && (str_slice(kind, 0, 6) == "olist_" || str_slice(kind, 0, 6) == "resSt_" || str_slice(kind, 0, 6) == "optSt_") { return true; }
     return false;
@@ -203,6 +206,7 @@ pub fn ll_is_mem(kind: String) -> Bool {
     if kind == "ilist" { return true; }
     if kind == "ress" { return true; }
     if kind == "resi" { return true; }
+    if kind == "resl" { return true; }
     if kind == "opti" { return true; }
     if kind == "opts" { return true; }
     if chars_len(kind) >= 3 && str_slice(kind, 0, 3) == "St_" { return true; }

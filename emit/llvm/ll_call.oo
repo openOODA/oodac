@@ -20,6 +20,8 @@ fn ll_field_tab(kind: String, m: String) -> String {
     if kind == "resi" && m == "val" { return "1:i64"; }
     if kind == "resi" && m == "err" { return "2:str"; }
     if kind == "ress" && (m == "val" || m == "err") { return "1:str"; }
+    if kind == "resl" && m == "val" { return "1:slist"; }
+    if kind == "resl" && m == "err" { return "2:str"; }
     if kind == "opti" && m == "val" { return "1:i64"; }
     if kind == "opts" && m == "val" { return "1:str"; }
     if chars_len(kind) >= 6 && str_slice(kind, 0, 6) == "resSt_" && m == "val" {
@@ -114,6 +116,8 @@ pub fn ll_match_bind(sk: String, ptr: String, bn: String, ok: Int, id: Int, ssa0
     if sk == "opts" { bk = "str"; }
     if sk == "resi" && ok == 1 { bk = "i64"; }
     if sk == "resi" && ok == 0 { bk = "str"; fi = "2"; }
+    if sk == "resl" && ok == 1 { bk = "slist"; }
+    if sk == "resl" && ok == 0 { bk = "str"; fi = "2"; }
     if ll_is_resst(sk) && ok == 1 { bk = "St_" + str_slice(sk, 6, chars_len(sk)); }
     if ll_is_resst(sk) && ok == 0 { bk = "str"; fi = "2"; }
     if ll_is_optst(sk) && ok == 1 { bk = "St_" + str_slice(sk, 6, chars_len(sk)); }

@@ -1,0 +1,13 @@
+// # LLVM oo_print_str builtin
+//
+// Logline: Free call oo_print_str writes a string with no trailing newline.
+//
+// Setup: No caps. S1-only: seed predates the builtin alias.
+//
+// Beats:
+//   1. main calls oo_print_str on a literal.
+//   2. stdout is hi with no extra line.
+
+pub fn main() {
+    oo_print_str("hi");
+}

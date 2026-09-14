@@ -1,0 +1,25 @@
+// # LLVM Result[List[String]] Ok match
+//
+// Logline: resl Ok payload is slist; is_err and match-expr must lower.
+//
+// Setup: No caps. S1-only: seed maps Result[List] to resSt_List.
+//
+// Beats:
+//   1. Helper returns Ok(list with one string).
+//   2. is_err is false; match Ok(v) prints list_len 1.
+
+fn rows() -> Result[List[String], String] {
+    let mut xs: List[String] = list_new();
+    xs = list_push(xs, "a");
+    return Ok(xs);
+}
+
+pub fn main() {
+    let r: Result[List[String], String] = rows();
+    if r.is_err() {
+        println("no");
+        process_exit(1);
+    }
+    let xs: List[String] = match r { Ok(v) => v, Err(_) => list_new() };
+    println(list_len(xs).to_string());
+}

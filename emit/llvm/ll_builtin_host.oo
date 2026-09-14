@@ -8,7 +8,7 @@
 //   1. byte_at and byte_slice mirror the char_at and str_slice SSA idiom.
 //   2. read_file and write_file take an explicit i64 cap as the first arg.
 //   3. bytes_new, bytes_push, and bytes_to_str use the ilist ABI.
-//   4. oo_emit_tmp_* lower as no-ops (bind is identity); LLVM keeps no C temps.
+//   4. oo_print_str / print extract {ptr,i64} and call @oo_print_str with no newline.
 
 import "ll_tok.oo";
 import "ll_ty.oo";
@@ -19,6 +19,20 @@ import "ll_builtin_tui.oo";
 
 pub fn ll_builtin_host(name: String, args: List[String], ssa0: Int, expect: String) -> String {
     let na: Int = list_len(args);
+    if (name == "oo_print_str" || name == "print") && na >= 1 {
+        let a0: String = ll_as_val(list_get(args, 0), ssa0);
+        if ll_pk(a0) != "str" {
+            println("ERR\tllvm\tprint_str kind " + ll_pk(a0));
+            process_exit(1);
+        }
+        let s: Int = ll_pssa(a0);
+        let p: Int = s + 1;
+        let l: Int = s + 2;
+        println("  " + ll_ssa(p) + " = extractvalue { ptr, i64 } " + ll_ssa(s) + ", 0");
+        println("  " + ll_ssa(l) + " = extractvalue { ptr, i64 } " + ll_ssa(s) + ", 1");
+        println("  call void @oo_print_str(ptr " + ll_ssa(p) + ", i64 " + ll_ssa(l) + ")");
+        return ll_pack(0, l, "void", "");
+    }
     if (name == "byte_at" || name == "oo_byte_at") && na >= 2 {
         let a0: String = ll_as_val(list_get(args, 0), ssa0);
         let bx: String = ll_i64arg(args, 1, ll_pssa(a0));
