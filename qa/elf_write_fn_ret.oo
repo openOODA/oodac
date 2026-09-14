@@ -1,0 +1,34 @@
+// # Drive shipped elf_emit_program on fn_ret_int
+//
+// Logline: Write a native ELF via elf_emit_program. No clang on that path.
+//
+// Setup: FsRead/Write + ProcessCap. Reads the fn_ret_int fixture.
+//
+// Beats:
+//   1. elf_emit_program returns bytes. write_file + chmod +x.
+//   2. Two execs print 42.
+
+import "emit/elf/elf_emit.oo";
+
+pub fn main(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap) {
+    let srcp: String = "bootstrap/corpus/emit-llvm/pass/fn_ret_int.oo";
+    let sr: Result[String, String] = read_file(fs_r, srcp);
+    if sr.is_err() {
+        println("ERR\tread fn_ret_int");
+        process_exit(1);
+    }
+    let src: String = match sr { Ok(s) => s, Err(_) => "" };
+    let blob: String = elf_emit_program(src);
+    let out: String = ".ooda-cache/ooda-tmp/native_elf_fn_ret_int.bin";
+    let wr: Result[Void, String] = write_file(fs_w, out, blob);
+    if wr.is_err() {
+        println("ERR\twrite ELF");
+        process_exit(1);
+    }
+    let ch: Result[String, String] = sys_exec(sys, "/usr/bin/chmod", "+x", out);
+    if ch.is_err() {
+        println("ERR\tchmod");
+        process_exit(1);
+    }
+    println("OK\twrote\t" + out);
+}

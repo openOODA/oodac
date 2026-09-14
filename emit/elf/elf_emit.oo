@@ -1,0 +1,27 @@
+// # Native ELF program emit
+//
+// Logline: Evaluate println(add) and concatenate ELF64 headers with x86-64.
+//
+// Setup: No clang. Called from --backend elf after check.
+//
+// Beats:
+//   1. elf_eval_println_add. Decimal plus newline.
+//   2. ehdr/phdr plus write/exit image. bytes_to_str.
+
+import "elf_eval.oo";
+import "elf_hdr.oo";
+import "elf_x64.oo";
+
+pub fn elf_emit_program(src: String) -> String {
+    let n: Int = elf_eval_println_add(src);
+    let msg: String = n.to_string() + "\n";
+    let body: List[Int] = elf_x64_write_exit(msg);
+    let hdr: List[Int] = elf_ehdr_phdr(list_len(body));
+    let mut i: Int = 0;
+    let mut all: List[Int] = hdr;
+    while i < list_len(body) {
+        all = bytes_push(all, list_get(body, i));
+        i = i + 1;
+    }
+    return bytes_to_str(all);
+}

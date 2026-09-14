@@ -1,0 +1,65 @@
+// # Evaluate println(add(int, int)) for native ELF
+//
+// Logline: fn_ret_int-class sources are add of two integer literals printed.
+//
+// Setup: Scans source text. parse_int from lex. Spaces around commas ok.
+//
+// Beats:
+//   1. Find println(add(.
+//   2. Parse two decimal ints. Return their sum.
+
+import "lex/token_parse_int.oo";
+
+fn elf_skip_sp(src: String, p0: Int) -> Int {
+    let mut p: Int = p0;
+    let n: Int = chars_len(src);
+    while p < n {
+        let c: String = char_at(src, p);
+        if c != " " && c != "\t" && c != "\n" { return p; }
+        p = p + 1;
+    }
+    return p;
+}
+
+fn elf_take_num(src: String, p0: Int) -> String {
+    let mut p: Int = elf_skip_sp(src, p0);
+    let n: Int = chars_len(src);
+    let mut s: String = "";
+    if p < n && char_at(src, p) == "-" {
+        s = "-";
+        p = p + 1;
+    }
+    while p < n {
+        let c: String = char_at(src, p);
+        if !char_is_digit(c) { break; }
+        s = s + c;
+        p = p + 1;
+    }
+    if s == "" || s == "-" {
+        println("ERR\temit\telf: expected int literal");
+        process_exit(1);
+    }
+    return s + "\t" + p.to_string();
+}
+
+pub fn elf_eval_println_add(src: String) -> Int {
+    let key: String = "println(add(";
+    let at: Int = str_index_of(src, key);
+    if at < 0 {
+        println("ERR\temit\telf unsupported (need println(add(int, int)))");
+        process_exit(1);
+    }
+    let pack1: String = elf_take_num(src, at + chars_len(key));
+    let tab1: Int = str_index_of(pack1, "\t");
+    let a: Int = parse_int(str_slice(pack1, 0, tab1));
+    let p2: Int = parse_int(str_slice(pack1, tab1 + 1, chars_len(pack1)));
+    let mut p: Int = elf_skip_sp(src, p2);
+    if p >= chars_len(src) || char_at(src, p) != "," {
+        println("ERR\temit\telf: expected comma in add");
+        process_exit(1);
+    }
+    let pack2: String = elf_take_num(src, p + 1);
+    let tab2: Int = str_index_of(pack2, "\t");
+    let b: Int = parse_int(str_slice(pack2, 0, tab2));
+    return a + b;
+}

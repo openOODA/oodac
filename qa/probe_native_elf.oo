@@ -1,0 +1,46 @@
+// # Probe: --backend elf writes a runnable x86-64 ELF for fn_ret_int
+//
+// Logline: Native ELF path does not invoke clang. The ELF prints 42 twice.
+//
+// Setup: ProcessCap + EnvCap + FsReadCap. Host is OODA_COMPILER (S1).
+//
+// Beats:
+//   1. build --backend elf of fn_ret_int writes an executable.
+//   2. Two runs print 42. Host check of the source still passes.
+
+pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
+    let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
+    let host: String = match hr { Ok(s) => s, Err(_) => "" };
+    if host == "" {
+        println("ERR\tOODA_COMPILER required");
+        process_exit(1);
+    }
+    let src: String = "oodac/bootstrap/corpus/emit-llvm/pass/fn_ret_int.oo";
+    let out: String = ".ooda-cache/ooda-tmp/native_elf_fn_ret_int.bin";
+    let br: Result[String, String] = sys_exec(p, host, "build", "--backend", "elf", src, "-o", out);
+    if br.is_err() {
+        println("ERR\tnative-elf build");
+        let bt: String = match br { Ok(s) => s, Err(e) => e };
+        println(bt);
+        process_exit(1);
+    }
+    if !path_exists(fs_r, out) {
+        println("ERR\tnative-elf missing");
+        process_exit(1);
+    }
+    let r1: Result[String, String] = sys_exec(p, out);
+    let r2: Result[String, String] = sys_exec(p, out);
+    if r1.is_err() || r2.is_err() {
+        println("ERR\tnative-elf run");
+        process_exit(1);
+    }
+    let t1: String = match r1 { Ok(s) => s, Err(_) => "" };
+    let t2: String = match r2 { Ok(s) => s, Err(_) => "" };
+    if str_index_of(t1, "42") < 0 || str_index_of(t2, "42") < 0 {
+        println("ERR\tnative-elf stdout");
+        println(t1);
+        println(t2);
+        process_exit(1);
+    }
+    println("OK");
+}

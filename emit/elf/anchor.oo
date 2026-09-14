@@ -1,0 +1,10 @@
+// # Native ELF backend index
+//
+// Logline: Re-export elf_emit_program. Concat skips *anchor.oo.
+//
+// Setup: Imported by cli_build. Bodies live in elf_emit.oo.
+//
+// Beats:
+//   1. Import elf_emit.oo.
+
+import "elf_emit.oo";

@@ -13,6 +13,7 @@
 
 import "ll_tok.oo";
 import "ll_ty.oo";
+import "ll_float.oo";
 
 pub fn ll_is_int(kind: String) -> Bool {
     if kind == "i32" || kind == "u32" || kind == "i64" || kind == "u64" || kind == "i1" { return true; }

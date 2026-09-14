@@ -34,7 +34,7 @@ pub fn parse_cli_argv(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, arg
                 process_exit(2);
             }
             let bv: String = list_get(args, i + 1);
-            if bv != "c" && bv != "llvm" {
+            if bv != "c" && bv != "llvm" && bv != "elf" {
                 println("ERR\tbackend\tresidual: " + bv);
                 process_exit(2);
             }

@@ -363,6 +363,13 @@ jobs:
           mkdir -p .ooda-cache/ooda-tmp
           /tmp/oodac_ll_ci build --backend llvm oodac/bootstrap/corpus/emit-llvm/pass/fn_ret_int.oo -o /tmp/s1_fn.bin
           test "$(/tmp/s1_fn.bin)" = "42"
+          /tmp/oodac_ll_ci build --backend elf oodac/bootstrap/corpus/emit-llvm/pass/fn_ret_int.oo -o /tmp/s6_elf.bin
+          test -x /tmp/s6_elf.bin
+          test "$(/tmp/s6_elf.bin)" = "42"
+          test "$(/tmp/s6_elf.bin)" = "42"
+          PATH=/bin:/usr/bin /tmp/s6_elf.bin | grep -q '^42$'
+          /tmp/oodac_ll_ci build oodac/qa/probe_native_elf.oo -o /tmp/probe_native_elf.bin
+          /tmp/probe_native_elf.bin
           /tmp/oodac_ll_ci build --backend llvm cli/main.oo -o /tmp/cli_ll
           test -x /tmp/cli_ll
           /tmp/cli_ll --help | head -5

@@ -1,0 +1,47 @@
+// # Little-endian byte append for ELF
+//
+// Logline: Push u8/u16/u32/u64 onto a List[Int] used as a byte buffer.
+//
+// Setup: bytes_push returns a new list. Low byte first. n is non-negative.
+//
+// Beats:
+//   1. u8 is n mod 256. Wider stores peel 8 bits per step.
+
+pub fn elf_u8(b: List[Int], n: Int) -> List[Int] {
+    let lo: Int = n - (n / 256) * 256;
+    return bytes_push(b, lo);
+}
+
+pub fn elf_u16(b: List[Int], n: Int) -> List[Int] {
+    let b1: List[Int] = elf_u8(b, n);
+    return elf_u8(b1, n / 256);
+}
+
+pub fn elf_u32(b: List[Int], n: Int) -> List[Int] {
+    let mut x: Int = n;
+    let mut out: List[Int] = b;
+    let mut i: Int = 0;
+    while i < 4 {
+        out = elf_u8(out, x);
+        x = x / 256;
+        i = i + 1;
+    }
+    return out;
+}
+
+pub fn elf_u64(b: List[Int], n: Int) -> List[Int] {
+    let mut x: Int = n;
+    let mut out: List[Int] = b;
+    let mut i: Int = 0;
+    while i < 8 {
+        out = elf_u8(out, x);
+        x = x / 256;
+        i = i + 1;
+    }
+    return out;
+}
+
+pub fn elf_i32(b: List[Int], n: Int) -> List[Int] {
+    if n >= 0 { return elf_u32(b, n); }
+    return elf_u32(b, 4294967296 + n);
+}

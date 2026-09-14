@@ -1,0 +1,42 @@
+// # ELF64 ET_EXEC header and one PT_LOAD
+//
+// Logline: 64-byte ehdr + 56-byte phdr, load at 0x400000, entry at 0x400078.
+//
+// Setup: Little-endian x86-64. filesz covers header plus payload.
+//
+// Beats:
+//   1. Magic 7fELF, ELF64, LSB, ET_EXEC, EM_X86_64.
+//   2. One PF_R|PF_X LOAD from file offset 0.
+
+import "elf_u.oo";
+
+pub fn elf_ehdr_phdr(payload_len: Int) -> List[Int] {
+    let filesz: Int = 120 + payload_len;
+    let mut b: List[Int] = bytes_new();
+    b = elf_u8(b, 127); b = elf_u8(b, 69); b = elf_u8(b, 76); b = elf_u8(b, 70);
+    b = elf_u8(b, 2); b = elf_u8(b, 1); b = elf_u8(b, 1);
+    b = elf_u8(b, 0); b = elf_u8(b, 0); b = elf_u8(b, 0); b = elf_u8(b, 0);
+    b = elf_u8(b, 0); b = elf_u8(b, 0); b = elf_u8(b, 0); b = elf_u8(b, 0); b = elf_u8(b, 0);
+    b = elf_u16(b, 2);
+    b = elf_u16(b, 62);
+    b = elf_u32(b, 1);
+    b = elf_u64(b, 4194424);
+    b = elf_u64(b, 64);
+    b = elf_u64(b, 0);
+    b = elf_u32(b, 0);
+    b = elf_u16(b, 64);
+    b = elf_u16(b, 56);
+    b = elf_u16(b, 1);
+    b = elf_u16(b, 0);
+    b = elf_u16(b, 0);
+    b = elf_u16(b, 0);
+    b = elf_u32(b, 1);
+    b = elf_u32(b, 5);
+    b = elf_u64(b, 0);
+    b = elf_u64(b, 4194304);
+    b = elf_u64(b, 4194304);
+    b = elf_u64(b, filesz);
+    b = elf_u64(b, filesz);
+    b = elf_u64(b, 4096);
+    return b;
+}
