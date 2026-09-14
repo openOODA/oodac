@@ -75,6 +75,19 @@ pub fn ll_builtin_host(name: String, args: List[String], ssa0: Int, expect: Stri
         println("  " + ll_ssa(s) + " = call { ptr, i64 } @crypto_sha256_internal({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ")");
         return ll_pack(0, s, "str", "");
     }
+    if name == "crypto_sha512_internal" && na >= 1 {
+        let a0: String = ll_as_val(list_get(args, 0), ssa0);
+        let s: Int = ll_pssa(a0) + 1;
+        println("  " + ll_ssa(s) + " = call { ptr, i64 } @crypto_sha512_internal({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ")");
+        return ll_pack(0, s, "str", "");
+    }
+    if name == "crypto_hmac_sha256_internal" && na >= 2 {
+        let a0: String = ll_as_val(list_get(args, 0), ssa0);
+        let a1: String = ll_as_val(list_get(args, 1), ll_pssa(a0));
+        let s: Int = ll_hw(ll_pssa(a0), ll_pssa(a1)) + 1;
+        println("  " + ll_ssa(s) + " = call { ptr, i64 } @crypto_hmac_sha256_internal({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ")");
+        return ll_pack(0, s, "str", "");
+    }
     if name == "bytes_new" || name == "oo_bytes_new" {
         if na != 0 {
             println("ERR\tllvm\tbytes_new takes no args");

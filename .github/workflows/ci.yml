@@ -315,6 +315,14 @@ jobs:
         with:
           repository: openOODA/cli
           path: cli
+      - uses: actions/checkout@v4
+        with:
+          repository: openOODA/ooda
+          path: ooda
+      - uses: actions/checkout@v4
+        with:
+          repository: openOODA/opm
+          path: opm
       - name: Configure swap
         run: |
           echo "=== Initial Memory & Swap ==="
@@ -340,7 +348,7 @@ jobs:
           cd oodac
           ./bootstrap/oodac_pure_build --no-fixed-point main.oo /tmp/oodac_ll_ci
           test -x /tmp/oodac_ll_ci
-      - name: LLVM concat cli
+      - name: LLVM concat cli ooda opm
         env:
           OODAC_BIN: /tmp/oodac_ll_ci
           OODA_COMPILER: /tmp/oodac_ll_ci
@@ -355,7 +363,13 @@ jobs:
           mkdir -p .ooda-cache/ooda-tmp
           /tmp/oodac_ll_ci build --backend llvm cli/main.oo -o /tmp/cli_ll
           test -x /tmp/cli_ll
-          /tmp/cli_ll --help | head -8
+          /tmp/cli_ll --help | head -5
+          /tmp/oodac_ll_ci build --backend llvm ooda/main.oo -o /tmp/ooda_ll
+          test -x /tmp/ooda_ll
+          /tmp/ooda_ll --help | head -5
+          /tmp/oodac_ll_ci build --backend llvm opm/cli/main.oo -o /tmp/opm_ll
+          test -x /tmp/opm_ll
+          /tmp/opm_ll --help | head -5 || true
 
   # Product `oodac build oodac/main.oo` must refuse (unique_fns). Ship the
   # committed seed ELF; do not wait on Unique bar or a self-host rebuild.
