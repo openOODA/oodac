@@ -68,8 +68,12 @@ pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
     }
     let c1: String = match c1r { Ok(s) => s, Err(_) => "" };
     let c2: String = match c2r { Ok(s) => s, Err(_) => "" };
-    if str_index_of(c1, "art.toks") < 0 || str_index_of(c2, "art.toks") < 0 {
+    if str_index_of(c2, "art.toks") < 0 {
         println("ERR\tcli emit does not consume artifact toks");
+        process_exit(1);
+    }
+    if str_index_of(c1, "residual: c") < 0 {
+        println("ERR\temit-c not residual");
         process_exit(1);
     }
     if str_index_of(c1, "lex_scan_source") >= 0 || str_index_of(c2, "lex_scan_source") >= 0 {
