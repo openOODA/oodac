@@ -21,7 +21,7 @@ fn ll_need_call(need: String, nm: String) -> String {
     if nm == "println" || nm == "print" {
         n = ll_need_add(n, "oo_print_str");
         n = ll_need_add(n, "oo_println");
-        n = ll_need_add(n, "oo_int_to_str");
+        n = ll_need_add(n, "oo_print_int");
         return n;
     }
     if nm == "unwrap" || nm == "unwrap_or" {
@@ -173,6 +173,7 @@ pub fn ll_need_scan(toks: List[String]) -> String {
         need = ll_need_add(need, "oo_str_retain");
         need = ll_need_add(need, "oo_str_release");
         need = ll_need_add(need, "oo_str_concat");
+        need = ll_need_add(need, "oo_str_eq");
         need = ll_need_add(need, "oo_print_str");
         need = ll_need_add(need, "oo_println");
     }

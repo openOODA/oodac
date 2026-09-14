@@ -12,7 +12,7 @@
 import "ll_need.oo";
 
 fn ll_d(need: String, name: String, line: String) {
-    if ll_need_has(need, name) { println(line); }
+    if ll_need_has(need, name) { println(line + " nounwind"); }
 }
 
 pub fn ll_rt_decl_emit(need: String) {

@@ -169,14 +169,16 @@ pub fn ll_struct_emit_types(env: String, toks: List[String]) {
                 j = j + 1;
             }
             println("%St_" + nm + " = type { " + tys + " }");
-            println("define hidden void @oo_retain_St_" + nm + "(ptr %p) {");
+            println("define hidden void @oo_retain_St_" + nm + "(ptr noalias nocapture noundef %p) nounwind {");
             ll_heap();
             ll_st_rr(fl, nm, 1);
+            ll_heap_end();
             println("  ret void");
             println("}");
-            println("define hidden void @oo_release_St_" + nm + "(ptr %p) {");
+            println("define hidden void @oo_release_St_" + nm + "(ptr noalias nocapture noundef %p) nounwind {");
             ll_heap();
             ll_st_rr(fl, nm, 0);
+            ll_heap_end();
             println("  ret void");
             println("}");
             if ll_olist_wanted(toks, nm) { ll_olist_emit_one(nm); }

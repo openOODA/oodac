@@ -25,7 +25,7 @@ pub fn ll_emit_verify(toks: List[String], pos: Int, n: Int, stab: String) -> Str
     if p >= n || ll_k(toks, p) != "LBRACE" { return ll_pack(p, 0, "", ""); }
     let id: String = pos.to_string();
     let fnn: String = "oo_verify_" + vname + "_" + id;
-    println("define internal void @" + fnn + "() {");
+    println("define internal void @" + fnn + "() nounwind {");
     println("entry:");
     ll_heap();
     println("  %g = call ptr @getenv(ptr @.oodatest)");
@@ -43,6 +43,7 @@ pub fn ll_emit_verify(toks: List[String], pos: Int, n: Int, stab: String) -> Str
         println("  br label %vskip" + id);
     }
     println("vskip" + id + ":");
+    ll_heap_end();
     println("  ret void");
     println("}");
     return ll_pack(skip_balanced(toks, p), 0, fnn, "");

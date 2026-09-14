@@ -10,6 +10,11 @@
 
 pub fn ll_heap() {
     println("  %heap = alloca [4194304 x i8], align 16");
+    println("  call void @llvm.lifetime.start.p0(i64 4194304, ptr %heap)");
+}
+
+pub fn ll_heap_end() {
+    println("  call void @llvm.lifetime.end.p0(i64 4194304, ptr %heap)");
 }
 
 pub fn ll_nhash(s: String) -> Int {
@@ -41,6 +46,7 @@ pub fn ll_slot_name(dst: String) {
 }
 
 pub fn ll_trap() {
+    ll_heap_end();
     println("  call void @oo_process_exit(i64 1)");
     println("  unreachable");
 }

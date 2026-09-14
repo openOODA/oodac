@@ -5,7 +5,7 @@
 // Setup: Called from ll_stmt. Int constants use #imm in ptr.
 //
 // Beats:
-//   1. i64 uses oo_int_to_str then print_str.
+//   1. i64 uses oo_print_int then println.
 //   2. f64 uses ll_print_float.
 
 import "ll_tok.oo";
@@ -39,11 +39,11 @@ pub fn ll_print_val(kind: String, ssa: Int, ptr: String, ssa0: Int) -> Int {
         return l;
     }
     if kind == "i64" {
-        let n2: Int = ssa0 + 1;
         let mut arg: String = ll_ssa(ssa);
         if chars_len(ptr) >= 2 && char_at(ptr, 0) == "#" { arg = str_slice(ptr, 1, chars_len(ptr)); }
-        println("  " + ll_ssa(n2) + " = call { ptr, i64 } @oo_int_to_str(i64 " + arg + ")");
-        return ll_print_val("str", n2, "", n2);
+        println("  call void @oo_print_int(i64 " + arg + ")");
+        println("  call void @oo_println()");
+        return ssa0;
     }
     if ll_is_int(kind) {
         let e: String = ll_int_convert(ll_pack(0, ssa, kind, ptr), ssa0, "i64");

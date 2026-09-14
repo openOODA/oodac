@@ -16,12 +16,14 @@ import "ll_ctor.oo";
 import "ll_contract.oo";
 import "ll_call.oo";
 import "ll_arc.oo";
+import "ll_slot.oo";
 import "types/types_core.oo";
 
 pub fn ll_return_stmt(toks: List[String], p: Int, n: Int, ssa: Int, env: String, ret_kind: String, stab: String) -> String {
     if p + 1 < n && ll_k(toks, p + 1) == "SEMI" {
         if ret_kind == "main_i32" || ret_kind == "optim" || ret_kind == "optsm" {
             let ns: Int = ll_arc_exit(env, ssa);
+            ll_heap_end();
             println("  ret i32 0");
             let q: Int = ll_skip_to_rbrace(toks, p + 1, n);
             return ll_pack(q, ns, ret_kind, env) + "\t1";
@@ -30,6 +32,7 @@ pub fn ll_return_stmt(toks: List[String], p: Int, n: Int, ssa: Int, env: String,
             println("ERR\tllvm\tbare return needs void");
             process_exit(1);
         }
+        ll_heap_end();
         println("  ret void");
         let q: Int = ll_skip_to_rbrace(toks, p + 1, n);
         return ll_pack(q, ssa, ret_kind, env) + "\t1";
@@ -52,6 +55,7 @@ pub fn ll_return_stmt(toks: List[String], p: Int, n: Int, ssa: Int, env: String,
     }
     if ll_arc_owned(ll_pk(v)) && ll_pptr(v) != "" { ns = ll_arc_keep_ptr(ll_pk(v), ll_pptr(v), ns); }
     ns = ll_arc_exit(env, ns);
+    ll_heap_end();
     if ret_kind == "resim" {
         ns = ll_ret_resim(v, ns);
     } else if ret_kind == "optim" || ret_kind == "optsm" {

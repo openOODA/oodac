@@ -1,13 +1,8 @@
 // # LLVM type names from Ooda tokens
 //
-// Logline: Map IDENT types at a token index to slist, ilist, str, i64, i1, resi, opti, ress.
+// Logline: Map IDENT types to slist, ilist, str, i64, i1, resi, opti. Caps are i64.
 //
-// Setup: ll_k/ll_t. Shared names stay conceptual with types/; no emit/c import.
-//
-// Beats:
-//   1. List[String] is slist. List[Int] is ilist.
-//   2. Result[Int, String] is resi. Result[List[_], String] is resl. Option[Int] is opti.
-//   3. Cap tokens are i64.
+// Setup: ll_k/ll_t. No emit/c import.
 
 import "ll_tok.oo";
 import "ll_slot.oo";
@@ -231,10 +226,14 @@ pub fn ll_is_mem(kind: String) -> Bool {
 }
 
 pub fn ll_pass(kind: String) -> String {
-    if chars_len(kind) >= 3 && str_slice(kind, 0, 3) == "St_" { return "ptr"; }
-    if chars_len(kind) >= 6 && (str_slice(kind, 0, 6) == "olist_" || str_slice(kind, 0, 6) == "resSt_" || str_slice(kind, 0, 6) == "optSt_") { return "ptr"; }
+    if chars_len(kind) >= 3 && str_slice(kind, 0, 3) == "St_" { return "ptr noalias nocapture noundef"; }
+    if chars_len(kind) >= 6 && (str_slice(kind, 0, 6) == "olist_" || str_slice(kind, 0, 6) == "resSt_" || str_slice(kind, 0, 6) == "optSt_") { return "ptr noalias nocapture noundef"; }
     if ll_is_mem(kind) {
-        return "ptr byval(" + ll_ir_alloc(kind) + ") align 8";
+        return "ptr noalias nocapture byval(" + ll_ir_alloc(kind) + ") align 8";
+    }
+    if ll_is_refk(kind) { return "ptr noalias nocapture noundef"; }
+    if kind == "i64" || kind == "u64" || kind == "i32" || kind == "u32" || kind == "i1" {
+        return ll_ir_val(kind) + " noundef";
     }
     return ll_ir_val(kind);
 }

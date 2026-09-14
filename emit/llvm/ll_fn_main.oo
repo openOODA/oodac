@@ -16,7 +16,7 @@ import "types/types_core.oo";
 
 pub fn ll_emit_main(toks: List[String], pos: Int, n: Int, p: Int, env0: String, caps: String, rk: String, stab: String, use_args: Bool) -> Int {
     let mut env: String = env0;
-    println("define hidden i32 @main(i32 %argc, ptr %argv) {");
+    println("define hidden i32 @main(i32 noundef %argc, ptr nocapture noundef %argv) nounwind {");
     println("entry:");
     ll_heap();
     let mut i: Int = 0;
@@ -67,7 +67,7 @@ pub fn ll_emit_main(toks: List[String], pos: Int, n: Int, p: Int, env0: String, 
         process_exit(1);
     }
     let mb: String = ll_emit_stmts(toks, p, n, mrk, env, 10, stab);
-    if ll_pterm(mb) == 0 { println("  ret i32 0"); }
+    if ll_pterm(mb) == 0 { ll_heap_end(); println("  ret i32 0"); }
     println("}");
     return ll_skip_fn(toks, pos, n);
 }

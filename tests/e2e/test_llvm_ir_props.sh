@@ -138,8 +138,30 @@ PY
 
   opt -O2 -S "$d/add.ll" -o "$d/add.opt.ll"
   record "P-OPT-01" "opt -O2 fn_ret_int" "$?"
-  clang --no-default-config -c -O2 -Wno-override-module "$d/add.ll" -o "$d/add.o"
-  record "P-CLANG-01" "clang -c fn_ret_int" "$?"
+  clang --no-default-config -c -O2 --target=x86_64-unknown-linux-gnu "$d/add.ll" -o "$d/add.o"
+  record "P-CLANG-01" "clang -c fn_ret_int (no override-module)" "$?"
+
+  grep -q 'nounwind' "$d/add.ll"
+  record "P-ATTR-01" "functions have nounwind" "$?"
+  grep -q 'noundef' "$d/add.ll"
+  record "P-ATTR-02" "Int params are noundef" "$?"
+  grep -q 'noalias' "$d/bor.ll"
+  record "P-NOALIAS-01" "borrowed ptr is noalias" "$?"
+  grep -q 'oo_print_int' "$d/hello.ll"
+  record "P-PRINT-01" "println Int uses oo_print_int" "$?"
+  if grep -q 'oo_int_to_str' "$d/hello.ll"; then
+    record "P-PRINT-02" "hello has no oo_int_to_str" 1
+  else
+    record "P-PRINT-02" "hello has no oo_int_to_str" 0
+  fi
+  grep -q 'target triple' "$d/add.ll"
+  record "P-TRIPLE-01" "target triple present" "$?"
+  grep -q 'llvm.module.flags' "$d/add.ll"
+  record "P-FLAGS-01" "module flags present" "$?"
+  grep -q 'llvm.lifetime.start' "$d/add.ll"
+  record "P-LIFE-01" "lifetime.start on alloca" "$?"
+  grep -q 'nounwind' "$d/add.ll" && grep -q 'oo_process_exit' "$d/add.ll"
+  record "P-DECL-03" "declares attributed" "$?"
 
   python3 - "$d/add.ll" "$d/hello.ll" "$d/st.ll" "$d/ver.ll" "$d/bor.ll" "$d/sd.ll" << 'PY' && al_ok=0 || al_ok=1
 import sys, re
