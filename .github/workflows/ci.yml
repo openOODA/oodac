@@ -351,7 +351,8 @@ jobs:
           set -eu
           test -x /tmp/oodac_ll_ci
           export OODA_FS_READDIR="${{ github.workspace }}:/tmp:/usr:/etc"
-          export OODA_FS_WRITEDIR="/tmp"
+          export OODA_FS_WRITEDIR="${{ github.workspace }}:/tmp"
+          mkdir -p .ooda-cache/ooda-tmp
           /tmp/oodac_ll_ci build --backend llvm cli/main.oo -o /tmp/cli_ll
           test -x /tmp/cli_ll
           /tmp/cli_ll --help | head -8
