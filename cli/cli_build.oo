@@ -1,13 +1,13 @@
 // # Build a source file to a native C binary or shared library
 //
-// Logline: check then emit-llvm (default) or emit-c via ProcessCap argv, clang or gcc -shared.
+// Logline: check then emit-llvm via ProcessCap argv, clang -O2.
 //
 // Setup: Host is OODA_COMPILER, OODAC_BIN, or OODA_TOOLCHAIN layout. Links oodar.c or liboodar.a.
 //
 // Beats:
 //   1. Refuse residual backends, compiler-main concat, -o directory, and no main (unless --shared).
 //   2. sys_exec host check; on ERR do not emit or link.
-//   3. mkdir; emit-llvm (clang -O2) or emit-c (-shared -fPIC or oodar.c binary).
+//   3. mkdir; emit-llvm (clang -O2). --backend c is residual.
 
 import "lex/token_fmt.oo";
 import "lex/token_parse_int.oo";
@@ -109,7 +109,7 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
     let mut out: String = path + ".bin";
     if is_shared { out = path + ".so"; }
     if out_arg != "" { out = out_arg; }
-    if backend != "" && backend != "c" && backend != "llvm" {
+    if backend != "" && backend != "llvm" {
         println("ERR\tbuild\tbackend residual: " + backend);
         process_exit(2);
     }
@@ -137,7 +137,6 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
     let od: String = oodar_root(fs_r, host);
     let tmp_dir: String = cache_dir(env);
     let tmp_h: String = crypto_sha256_internal(path);
-    let tmp_c: String = tmp_dir + "/all_" + str_slice(tmp_h, 0, 16) + ".c";
     let tmp_ll: String = tmp_dir + "/all_" + str_slice(tmp_h, 0, 16) + ".ll";
     let mk: Result[String, String] = sys_exec(sys, "/usr/bin/mkdir", "-p", tmp_dir);
     if mk.is_err() {
@@ -153,7 +152,6 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
     }
     let hr: String = write_host_rt(fs_w, tmp_dir);
     let mut b: String = backend;
-    if is_shared && b != "llvm" { b = "c"; }
     if b == "llvm" || b == "" {
         let em: Result[String, String] = sys_exec(sys, host, "emit-llvm", "--concat", path);
         if !em.is_ok() {
@@ -196,39 +194,8 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
             process_exit(1);
         }
     } else {
-        let em: Result[String, String] = sys_exec(sys, host, "emit-c", "--concat", path);
-        if !em.is_ok() {
-            println("ERR\tbuild\temit-c failed");
-            let emsg: String = match em { Ok(s) => s, Err(e) => e };
-            println(emsg);
-            process_exit(1);
-        }
-        let wr: Result[Void, String] = write_file(fs_w, tmp_c, em.val);
-        if wr.is_err() {
-            println("ERR\tbuild\twrite C failed");
-            process_exit(1);
-        }
-        let mut r: Result[String, String] = Err("");
-        if is_shared {
-            let lib_a: String = oodar_lib(fs_r, od);
-            r = sys_exec(sys, "gcc", "-shared", "-fPIC", "-DOO_SHARED=1", "-fvisibility=hidden", "-Wl,--exclude-libs,ALL", "-O2", "-g0", "-fno-ident", "-I" + od, hr, tmp_c, lib_a, "-frandom-seed=0", "-Wl,--build-id=none", "-Wl,--strip-debug", "-lm", "-ldl", "-lpthread", "-o", out);
-        } else {
-            let obj: String = tmp_dir + "/oodar.o";
-            let co: Result[String, String] = sys_exec(sys, "gcc", "-c", "-O2", "-g0", "-fno-ident", "-I" + od, od + "/oodar.c", "-o", obj);
-            if !co.is_ok() {
-                println("ERR\tbuild\toodar.o failed");
-                let ct: String = match co { Ok(s) => s, Err(e) => e };
-                println(ct);
-                process_exit(1);
-            }
-            r = sys_exec(sys, "gcc", "-O2", "-g0", "-fno-ident", "-I" + od, obj, hr, tmp_c, "-frandom-seed=0", "-Wl,--build-id=none", "-Wl,--strip-debug", "-lm", "-ldl", "-lpthread", "-o", out);
-        }
-        if !r.is_ok() {
-            println("ERR\tbuild\tgcc failed");
-            let gtxt: String = match r { Ok(s) => s, Err(e) => e };
-            println(gtxt);
-            process_exit(1);
-        }
+        println("ERR\tbuild\tbackend residual: " + b);
+        process_exit(2);
     }
     println("OK_PURE_NATIVE");
     println("OK\tbuild\t" + out);

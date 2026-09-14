@@ -142,11 +142,11 @@ run_feature_tests() {
     record_test "T1-F03-02" "Uppercase anchor import exemption" 1
   fi
 
-  # T1-F03-03: CLI emit-c handles module
-  if timeout 5s "$OODAC" emit-c "$f_dir/t_ex_low.oo" 2>/dev/null | grep -q "main"; then
-    record_test "T1-F03-03" "CLI emit-c TU generation" 0
+  # T1-F03-03: CLI emit-c is residual
+  if timeout 5s "$OODAC" emit-c "$f_dir/t_ex_low.oo" >/dev/null 2>&1; then
+    record_test "T1-F03-03" "CLI emit-c residual" 1
   else
-    record_test "T1-F03-03" "CLI emit-c TU generation" 1
+    record_test "T1-F03-03" "CLI emit-c residual" 0
   fi
 
   # T1-F03-04: CLI emit-llvm handles module

@@ -8,7 +8,7 @@
 //   1. Skip names that are assigned or returned.
 //   2. Walk to the matching RPAREN.
 //   3. If the next token is SEMI, tc_err_at unused Result.
-import "emit/c/c_emit_call_ty.oo";
+import "tc_res_call.oo";
 
 fn tab_has(tab: String, name: String) -> Bool {
     let needle: String = "\t" + name + "\t";

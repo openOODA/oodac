@@ -1,13 +1,13 @@
-// # Probe: check writes a typed artifact; emit-c consumes it
+// # Probe: check writes a typed artifact; emit-llvm consumes it
 //
-// Logline: After check of probe_artifact_list.oo the art_<sha>.art file exists and emit-c --artifact prints slist lowering.
+// Logline: After check of probe_artifact_list.oo the art file exists and emit-llvm lowers slist.
 //
 // Setup: ProcessCap + EnvCap + FsReadCap. Host is OODA_COMPILER. SHA matches types/typed_artifact.oo.
 //
 // Beats:
 //   1. check the victim is OK.
 //   2. artifact cache path exists.
-//   3. emit-c --artifact that path contains xs_lvl1 = oo_slist_new.
+//   3. emit-llvm of that path contains @oo_slist_new.
 
 fn art_sha16(path: String, src: String) -> String {
     let digest: String = crypto_sha256_internal(path + "\n" + src);
@@ -41,13 +41,13 @@ pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
         println("ERR\tno artifact " + dest);
         process_exit(1);
     }
-    let em: Result[String, String] = sys_exec(p, host, "emit-c", "--artifact", dest, srcp);
+    let em: Result[String, String] = sys_exec(p, host, "emit-llvm", srcp);
     if em.is_err() {
-        println("ERR\temit-c --artifact");
+        println("ERR\temit-llvm artifact");
         process_exit(1);
     }
     let txt: String = match em { Ok(s) => s, Err(_) => "" };
-    if str_index_of(txt, "xs_lvl1 = oo_slist_new") < 0 {
+    if str_index_of(txt, "@oo_slist_new") < 0 {
         println("ERR\tartifact emit missed slist xs");
         process_exit(1);
     }

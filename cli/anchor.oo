@@ -1,6 +1,6 @@
 // # CLI Subsystem — Module Entry Door
 //
-// Logline: Command-line parse, C-backend build, emit-c, and emit-llvm dispatch.
+// Logline: Command-line parse, LLVM build, and emit-llvm dispatch.
 //
 // Setup: Imports CLI parse, build, emit-c, and emit-llvm plus the compiler ANCHORs.
 //
@@ -13,7 +13,6 @@ import "lex/anchor.oo";
 import "ast/anchor.oo";
 import "check/anchor.oo";
 import "types/anchor.oo";
-import "emit/c/anchor.oo";
 import "cli_build.oo";
 import "cli_emit.oo";
 import "cli_emit_llvm.oo";

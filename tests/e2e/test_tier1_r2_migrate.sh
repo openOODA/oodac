@@ -35,7 +35,6 @@ run_suite() {
     "cli/anchor.oo"
     "docs/anchor.oo"
     "emit/anchor.oo"
-    "emit/c/anchor.oo"
     "emit/llvm/anchor.oo"
     "lex/anchor.oo"
     "qa/anchor.oo"

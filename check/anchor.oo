@@ -9,7 +9,7 @@
 //   2. Re-export public verification and typechecking interfaces.
 //   3. Preserve capability passing and zero ambient authority.
 
-import "emit/c/c_emit_env.oo";
+import "c_emit_env.oo";
 import "check_cache.oo";
 import "check_cap_grant.oo";
 import "check_cap_util.oo";

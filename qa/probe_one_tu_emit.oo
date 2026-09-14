@@ -1,13 +1,11 @@
-// # Probe: one-TU emit-c is not an import-graph dump
+// # Probe: emit-c is residual
 //
-// Logline: Naked emit-c of cli_emit.oo is one-TU: defines run_emit_c_family, not c_emit_stream_toks_at.
+// Logline: Naked emit-c of cli_emit.oo exits residual. C backend is gone.
 //
-// Setup: ProcessCap + EnvCap. Host is OODA_COMPILER. Concat opt-in unset.
+// Setup: ProcessCap + EnvCap. Host is OODA_COMPILER.
 //
 // Beats:
-//   1. sys_exec host emit-c oodac/cli/cli_emit.oo.
-//   2. Fail if output lacks run_emit_c_family.
-//   3. Fail if output defines c_emit_stream_toks_at (lives in emit/c/c_emit.oo).
+//   1. sys_exec host emit-c oodac/cli/cli_emit.oo is Err.
 
 pub fn main(p: &ProcessCap, env: &EnvCap) {
     let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
@@ -17,17 +15,8 @@ pub fn main(p: &ProcessCap, env: &EnvCap) {
         process_exit(1);
     }
     let r: Result[String, String] = sys_exec(p, host, "emit-c", "oodac/cli/cli_emit.oo");
-    if r.is_err() {
-        println("ERR\temit-c failed");
-        process_exit(1);
-    }
-    let c: String = match r { Ok(s) => s, Err(_) => "" };
-    if str_index_of(c, "run_emit_c_family") < 0 {
-        println("ERR\tmissing run_emit_c_family");
-        process_exit(1);
-    }
-    if str_index_of(c, "OO_FN_c_emit_stream_toks_at") >= 0 {
-        println("ERR\tforeign OO_FN_c_emit_stream_toks_at in one-TU dump");
+    if r.is_ok() {
+        println("ERR\temit-c still lives");
         process_exit(1);
     }
     println("OK");

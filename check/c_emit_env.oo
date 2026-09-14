@@ -1,8 +1,8 @@
-// # Map list-kind names in the C emit env
+// # Name=kind env map for check and typestate
 //
 // Logline: Gets and puts last-wins name=kind bindings in a semicolon env, scoped to the topmost {; frame on put.
 //
-// Setup: Backend-C emit floor. env is "name=S;name2=I;" (S=List[String] I=List[Int] T=OoStr R/V=Result F=Float; also __asgn__=ident).
+// Setup: env is "name=S;name2=I;" (S=List[String] I=List[Int] T=OoStr R/V=Result F=Float). Shared with typestate. Not an emit backend.
 //
 // Beats:
 //   1. c_env_get returns the last name= value that starts at the string start or after a semicolon.

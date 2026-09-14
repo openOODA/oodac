@@ -63,6 +63,10 @@ if [[ ${#ARGS[@]} -lt 2 ]]; then
   echo "usage: oodac_pure_build [--backend <target>] [--fixed-point] <main.oo> <out_bin>" >&2
   exit 2
 fi
+if [[ "$USE_GCC" == "1" || "$SOVEREIGN_BACKEND" == "c" ]]; then
+  echo "ERR residual: c (--gcc leftover removed)" >&2
+  exit 2
+fi
 
 MAIN="$(oodac_abs "${ARGS[0]}")"
 OUT="$(oodac_abs "${ARGS[1]}")"

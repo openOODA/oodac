@@ -263,7 +263,7 @@ jobs:
           oodac/bootstrap/corpus/differential/diffrun.sh "$HOST"
           echo "DIFF_RATCHET_OK"
           echo "=== compiler not concat ==="
-          "$HOST" build --backend c oodac/qa/probe_compiler_not_concat.oo -o .ooda-cache/ooda-tmp/ci_nocat.bin
+          "$HOST" build oodac/qa/probe_compiler_not_concat.oo -o .ooda-cache/ooda-tmp/ci_nocat.bin
           .ooda-cache/ooda-tmp/ci_nocat.bin
           echo "=== elf hash ==="
           "$HOST" build oodac/qa/probe_elf_hash.oo -o .ooda-cache/ooda-tmp/ci_elfhash.bin
@@ -370,6 +370,12 @@ jobs:
           /tmp/oodac_ll_ci build --backend llvm opm/cli/main.oo -o /tmp/opm_ll
           test -x /tmp/opm_ll
           /tmp/opm_ll --help | head -5 || true
+          set +e
+          /tmp/oodac_ll_ci build --backend c oodac/qa/probe_list_ok.oo -o /tmp/c_residual.bin
+          c_rc=$?
+          set -e
+          echo "c_residual_rc=$c_rc"
+          test "$c_rc" -eq 2
 
   # Product `oodac build oodac/main.oo` must refuse (unique_fns). Ship the
   # committed seed ELF; do not wait on Unique bar or a self-host rebuild.

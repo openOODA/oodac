@@ -19,7 +19,7 @@
 ## This repo: oodac
 
 Primary self-hosting compiler. Root `anchor.oo` re-exports six
-surfaces: `lex`, `ast`, `check`, `types`, `emit/c`, and `cli`.
+surfaces: `lex`, `ast`, `check`, `types`, `emit/llvm`, and `cli`.
 
 ## Install
 

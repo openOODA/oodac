@@ -85,14 +85,14 @@ EOF
   local missing_anchors=0
   local anchor_files=(
     "anchor.oo" "ast/anchor.oo" "check/anchor.oo" "cli/anchor.oo" "docs/anchor.oo"
-    "emit/anchor.oo" "emit/c/anchor.oo" "emit/llvm/anchor.oo" "lex/anchor.oo"
+    "emit/anchor.oo" "emit/llvm/anchor.oo" "lex/anchor.oo"
     "qa/anchor.oo" "qa/nested/anchor.oo" "scripts/anchor.oo" "tests/anchor.oo"
     "tests/fixtures/anchor.oo" "tests/tier4_realworld/anchor.oo" "types/anchor.oo"
   )
   for a in "${anchor_files[@]}"; do
     if [[ ! -f "$PROJECT_ROOT/$a" ]]; then missing_anchors=$((missing_anchors + 1)); fi
   done
-  record_test "T3-X05" "Pure build module tree contains all 16 lowercase anchors" "$missing_anchors"
+  record_test "T3-X05" "Pure build module tree contains lowercase anchors" "$missing_anchors"
 
   # T3-X06: Pure Build Sovereign Backend Config
   local x06=1

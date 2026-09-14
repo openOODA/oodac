@@ -2,8 +2,8 @@
 //
 // Logline: Parse argv and run check, build, emit-c, emit-llvm, or tokens.
 //
-// Setup: Dispatch check, build, emit-c, emit-llvm, and tokens. LLVM is the
-//   canonical backend; C is --backend c / --gcc leftover for one release.
+// Setup: Dispatch check, build, emit-llvm, and tokens. LLVM is the only
+//   backend. emit-c and --backend c are residual (exit 2).
 //
 // Beats:
 //   1. Unpack cmd/path/out/backend/json/plain/shared.
@@ -14,7 +14,6 @@ import "lex/anchor.oo";
 import "ast/anchor.oo";
 import "check/anchor.oo";
 import "types/anchor.oo";
-import "emit/c/anchor.oo";
 import "emit/anchor.oo";
 import "cli/cli_parse.oo";
 import "cli/cli_build.oo";

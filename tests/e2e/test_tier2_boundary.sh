@@ -51,7 +51,7 @@ run_suite() {
   # T2-B03: Empty input file fails closed on build
   touch "$d/empty.oo"
   local b03=1
-  if ! timeout 5s "$OODAC" build --backend c "$d/empty.oo" -o "$d/empty.bin" >/dev/null 2>&1; then
+  if ! timeout 5s "$OODAC" build "$d/empty.oo" -o "$d/empty.bin" >/dev/null 2>&1; then
     b03=0
   fi
   record_test "T2-B03" "Empty 0-byte file fails closed on build (no main)" "$b03"

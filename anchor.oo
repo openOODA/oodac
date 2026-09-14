@@ -1,8 +1,8 @@
 // # oodac Compiler Core — Canonical ANCHOR Entry
 //
-// Logline: Re-exports the C-backend compiler surface for toolchain consumers.
+// Logline: Re-exports the LLVM-backend compiler surface for toolchain consumers.
 //
-// Setup: Compiles the canonical surface from the flat layout. Subsystem boundaries: lex → parse → check → tc → emit/c. This ANCHOR.oo is the oodac/ parent directory entry.
+// Setup: Compiles the canonical surface from the flat layout. Subsystem boundaries: lex → parse → check → tc → emit/llvm. This ANCHOR.oo is the oodac/ parent directory entry.
 //
 // Beats:
 //   1. Re-export the lexical scanner surface (lex_all).
@@ -14,7 +14,7 @@ import "lex/anchor.oo";
 import "ast/anchor.oo";
 import "check/anchor.oo";
 import "types/anchor.oo";
-import "emit/c/anchor.oo";
+import "emit/anchor.oo";
 import "cli/anchor.oo";
 // ──▓▓ Sovereign Lattice ── OODAC ANCHOR ──▓▓──
 // :: public: oodac_lex_all, oodac_parse_expr, oodac_parse_stmt, oodac_parse_file ::

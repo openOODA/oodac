@@ -1,30 +1,24 @@
 // # Compiler Backend Registry
 //
-// Logline: Same typed artifact in. C out today. A later backend does not import emit/c lowering.
+// Logline: Same typed artifact in. LLVM IR out. Residual backends exit 2.
 //
-// Setup: LLVM is the canonical backend. Residual names exit 2. Shared type
-//   names live in types/. C leftover is emit/c.
+// Setup: LLVM is the only backend. Shared type names live in types/.
 //
 // Beats:
-//   1. Import emit/c (reference) and emit/llvm (second consumer).
+//   1. Import emit/llvm. C emit is gone.
 //   2. emit_backend consumes toks from the artifact. It does not lex.
-//   3. Unknown backend names fail closed. Product emit-c and emit-llvm call this.
+//   3. Unknown backend names fail closed.
 
-import "c/anchor.oo";
 import "llvm/anchor.oo";
 
 pub fn emit_backend(backend: String, src: String, toks: List[String], mode: String, path: String, is_plain: Bool) {
-    let mut anchor_mark: Int = 0;
-    anchor_mark = list_len(toks);
-    if anchor_mark < 1 {
+    let mut n: Int = 0;
+    n = list_len(toks);
+    if n < 1 {
         println("ERR\temit\tempty artifact");
         process_exit(1);
     }
-    if backend == "c" {
-        c_emit_stream_toks_at(src, toks, mode, path, is_plain);
-        return;
-    }
-    if backend == "llvm" {
+    if backend == "llvm" || backend == "" {
         ll_emit_stream_toks(toks);
         return;
     }

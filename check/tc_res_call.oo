@@ -1,0 +1,46 @@
+// # Result-returning call names for must-use
+//
+// Logline: Classify runtime calls that return Result[String] or Result[Void].
+//
+// Setup: Used by typecheck_must_use_calls. Names match the host ABI.
+//
+// Beats:
+//   1. c_is_res_s_call covers Result[String] host ops.
+//   2. c_is_res_v_call covers Result[Void] fs writes.
+
+pub fn c_is_res_s_call(name: String) -> Bool {
+    if name == "Ok" || name == "Err" || name == "read_file" || name == "oo_read_file" || name == "lex_all" { return true; }
+    if name == "sys_exec" || name == "process_exec" || name == "oo_sys_exec" { return true; }
+    if name == "env_get" || name == "oo_env_get" || name == "fetch" || name == "oo_fetch" || name == "chs_build" { return true; }
+    if name == "json_parse_internal" || name == "python_embed_internal" { return true; }
+    if name == "tcp_bind" || name == "tcp_connect" || name == "bind_udp" || name == "tls_connect" { return true; }
+    if name == "oo_tcp_bind" || name == "oo_tcp_connect" || name == "oo_bind_udp" || name == "oo_tls_connect" { return true; }
+    if name == "tcp_write" || name == "tcp_read" || name == "udp_recv" || name == "udp_send" || name == "tcp_close" || name == "sock_raw" { return true; }
+    if name == "oo_tcp_write" || name == "oo_tcp_read" || name == "oo_udp_recv" || name == "oo_udp_send" || name == "oo_tcp_close" || name == "oo_sock_raw" { return true; }
+    if name == "mutex_lock" || name == "mutex_unlock" || name == "thread_spawn" || name == "thread_join" || name == "gpu_launch" { return true; }
+    if name == "oo_mutex_lock" || name == "oo_mutex_unlock" || name == "oo_thread_spawn" || name == "oo_thread_join" || name == "oo_thread_join_s" || name == "oo_gpu_launch" { return true; }
+    if name == "channel_new" || name == "channel_send" || name == "channel_recv" { return true; }
+    if name == "oo_channel_new" || name == "oo_channel_send" || name == "oo_channel_recv" { return true; }
+    if name == "actor_spawn" || name == "actor_send" || name == "actor_recv" { return true; }
+    if name == "oo_actor_spawn" || name == "oo_actor_send" || name == "oo_actor_recv" { return true; }
+    if name == "sys_spawn" || name == "sys_wait" || name == "sys_kill" { return true; }
+    if name == "oo_sys_spawn" || name == "oo_sys_wait" || name == "oo_sys_kill" { return true; }
+    if name == "sys_epoll_create" || name == "sys_inotify_init" || name == "sys_prctl" { return true; }
+    if name == "oo_sys_epoll_create" || name == "oo_sys_inotify_init" || name == "oo_sys_prctl" { return true; }
+    if name == "landlock_restrict" || name == "oo_landlock_restrict" || name == "dns_resolve" || name == "oo_dns_resolve" || name == "oo_dns_resolve_ipv4" { return true; }
+    if name == "arena_create" || name == "arena_alloc" || name == "arena_reset" { return true; }
+    if name == "oo_arena_create" || name == "oo_arena_alloc" || name == "oo_arena_reset" { return true; }
+    if name == "actor_restart" || name == "otp_supervise" || name == "cap_rpc_send" || name == "cap_rpc_recv" { return true; }
+    if name == "oo_actor_restart" || name == "oo_otp_supervise" || name == "oo_cap_rpc_send" || name == "oo_cap_rpc_recv" { return true; }
+    if name == "parse" || name == "load_model" || name == "dlopen" || name == "oo_dlopen" || name == "dlsym" || name == "oo_dlsym" || name == "dlclose" || name == "oo_dlclose" || name == "ffi_call" || name == "oo_ffi_call" { return true; }
+    return false;
+}
+
+pub fn c_is_res_v_call(name: String) -> Bool {
+    if name == "write_file" || name == "oo_write_file" || name == "fs_write_file" || name == "file_append_sync" { return true; }
+    if name == "fs_mkdir" || name == "oo_fs_mkdir" || name == "fs_remove_file" || name == "oo_fs_remove_file" { return true; }
+    if name == "fs_rmdir" || name == "oo_fs_rmdir" || name == "oo_fs_hardlink" || name == "oo_fs_symlink" { return true; }
+    if name == "scenario" || name == "check" || name == "sh_mkdir_p" || name == "sh_clean" || name == "sh_copy" { return true; }
+    if name == "fs_copy_file" || name == "fs_mkdir_p" || name == "fs_copy_tree" { return true; }
+    return false;
+}

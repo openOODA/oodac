@@ -80,7 +80,7 @@ pub fn diag_fix_hint(code: String) -> String {
         return "Build/link fail: inspect compile/link output and input paths.";
     }
     if code == "E_BACKEND" {
-        return "Unsupported backend: product floor is --backend c only.";
+        return "Unsupported backend: product floor is LLVM only.";
     }
     if code == "E_SECRET" {
         return "Secret: do not pass SECRET idents to println/write_file/fetch/sys_exec/env_get/read_file/path_exists/file_size/seed/sleep_ms/alloc/free/process_exit; attr IFC residual.";

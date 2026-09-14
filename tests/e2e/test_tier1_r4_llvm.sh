@@ -119,14 +119,12 @@ EOF
   fi
   record_test "T1-F09-02" "LLVM call site calls @oo_monotonic_us() with 0 args" "$f9_call"
 
-  # T1-F09-03: C emitter parity: oo_monotonic_us() with 0 args
+  # T1-F09-03: emit-c is residual
   local f9_c=1
-  if timeout 5s "$OODAC" emit-c "$d/mono.oo" > "$d/mono.c" 2>&1; then
-    if grep -F -q "oo_monotonic_us()" "$d/mono.c" 2>/dev/null; then
-      f9_c=0
-    fi
+  if ! timeout 5s "$OODAC" emit-c "$d/mono.oo" > "$d/mono.c" 2>&1; then
+    f9_c=0
   fi
-  record_test "T1-F09-03" "C emitter calls oo_monotonic_us() with 0 args" "$f9_c"
+  record_test "T1-F09-03" "emit-c residual after C backend removal" "$f9_c"
 
   # T1-F09-04: Object linking with oodar.o
   local f9_link=1
@@ -225,7 +223,7 @@ pub fn main(p: &ProcessCap, e: &EnvCap, t: &TimeCap) -> Int {
 }
 EOF
   local f10_multi=1
-  if timeout 90s "$OODAC" build --backend c "$d/multi_cap.oo" -o "$d/multi_cap.bin" >/dev/null 2>&1; then
+  if timeout 90s "$OODAC" build --backend llvm "$d/multi_cap.oo" -o "$d/multi_cap.bin" >/dev/null 2>&1; then
     if "$d/multi_cap.bin" >/dev/null 2>&1; then
       f10_multi=0
     fi
