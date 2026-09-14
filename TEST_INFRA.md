@@ -110,7 +110,7 @@ The `oodac` compiler is the self-hosting compiler for the openOODA native langua
 ### Feature 9: R4 monotonic_us Lowering Parity (`emit/llvm/`)
 - **T1-F09-01 [LLVM Declaration 0-Arg]**: `emit-llvm` produces `declare i64 @oo_monotonic_us()`.
 - **T1-F09-02 [LLVM Call Site 0-Arg]**: `emit-llvm` produces `call i64 @oo_monotonic_us()` with 0 arguments.
-- **T1-F09-03 [C Backend Parity]**: `emit-c` produces `oo_monotonic_us()` matching C runtime prototype.
+- **T1-F09-03 [emit-c residual]**: `emit-c` exits residual (C backend removed).
 - **T1-F09-04 [Linkage with oodar.o]**: LLVM-generated object links against `oodar.o` without calling convention mismatch.
 - **T1-F09-05 [Monotonic Output Assertion]**: Executing compiled binary produces strictly positive, non-decreasing timestamps.
 

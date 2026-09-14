@@ -6,7 +6,7 @@ Product check no longer accepts a broad `NetCap` / `FsCap` / `SysCap` /
 Callers must declare the granular capability they actually use.
 
 This file is the migration rule table. It is not a live caller inventory.
-Product CLI, check, and emit-c sources live under `cli/`, `check/`, and
+Product CLI, check, and emit-llvm sources live under `cli/`, `check/`, and
 `emit/c/`. Residual ISA CLIs are not product.
 
 ## Migration rules
