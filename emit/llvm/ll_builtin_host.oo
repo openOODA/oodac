@@ -16,6 +16,7 @@ import "ll_int.oo";
 import "ll_builtin_fs.oo";
 import "ll_builtin_sys.oo";
 import "ll_builtin_tui.oo";
+import "ll_slot.oo";
 
 pub fn ll_builtin_host(name: String, args: List[String], ssa0: Int, expect: String) -> String {
     let na: Int = list_len(args);
@@ -73,7 +74,7 @@ pub fn ll_builtin_host(name: String, args: List[String], ssa0: Int, expect: Stri
         let a1: String = ll_as_val(list_get(args, 1), ll_pssa(a0));
         let s: Int = ll_pssa(a1) + 1;
         let out: String = ll_tmpa(s);
-        println("  " + out + " = alloca " + ll_ir_alloc("slist") + ", align 8");
+        ll_slot_name(out);
         println("  call void @str_split(ptr sret(%OoSList) align 8 " + out + ", { ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ")");
         return ll_pack(0, s, "slist", out);
     }
@@ -108,7 +109,7 @@ pub fn ll_builtin_host(name: String, args: List[String], ssa0: Int, expect: Stri
             process_exit(1);
         }
         let a: String = ll_tmpa(ssa0 + 1);
-        println("  " + a + " = alloca " + ll_ir_alloc("ilist") + ", align 8");
+        ll_slot_name(a);
         println("  call void @oo_bytes_new(ptr sret(%OoIList) align 8 " + a + ")");
         return ll_pack(0, ssa0 + 1, "ilist", a);
     }
@@ -121,7 +122,7 @@ pub fn ll_builtin_host(name: String, args: List[String], ssa0: Int, expect: Stri
         let bp: String = ll_i64arg(args, 1, ll_pssa(a0));
         let s: Int = ll_hw(ll_pssa(a0), ll_pssa(bp)) + 1;
         let out: String = ll_tmpa(s);
-        println("  " + out + " = alloca " + ll_ir_alloc("ilist") + ", align 8");
+        ll_slot_name(out);
         println("  call void @oo_bytes_push(ptr sret(%OoIList) align 8 " + out + ", ptr byval(%OoIList) align 8 " + ll_pptr(a0) + ", i64 " + ll_ssa(ll_pssa(bp)) + ")");
         return ll_pack(0, s, "ilist", out);
     }
@@ -139,7 +140,7 @@ pub fn ll_builtin_host(name: String, args: List[String], ssa0: Int, expect: Stri
         let a1: String = ll_as_val(list_get(args, 1), ssa0);
         let a: String = ll_tmpa(ll_pssa(a1) + 1);
         let s: Int = ll_pssa(a1) + 1;
-        println("  " + a + " = alloca %OoResS, align 8");
+        ll_slot_name(a);
         println("  call void @oo_read_file(ptr sret(%OoResS) align 8 " + a + ", i64 " + ll_ssa(ll_pssa(list_get(args, 0))) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ")");
         return ll_pack(0, s, "ress", a);
     }
@@ -148,7 +149,7 @@ pub fn ll_builtin_host(name: String, args: List[String], ssa0: Int, expect: Stri
         let a2: String = ll_as_val(list_get(args, 2), ll_pssa(a1));
         let a: String = ll_tmpa(ll_pssa(a2) + 1);
         let s: Int = ll_pssa(a2) + 1;
-        println("  " + a + " = alloca %OoResV, align 8");
+        ll_slot_name(a);
         println("  call void @oo_write_file(ptr sret(%OoResV) align 8 " + a + ", i64 " + ll_ssa(ll_pssa(list_get(args, 0))) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a2)) + ")");
         return ll_pack(0, s, "ress", a);
     }

@@ -16,6 +16,8 @@ import "ll_call.oo";
 import "ll_ctor.oo";
 import "ll_struct_list.oo";
 import "ll_builtin_host.oo";
+import "ll_print.oo";
+import "ll_slot.oo";
 
 pub fn ll_arg(args: List[String], i: Int) -> String {
     return list_get(args, i);
@@ -25,7 +27,7 @@ pub fn ll_list_new(expect: String, ssa0: Int) -> String {
     let mut k: String = "slist";
     if expect == "ilist" { k = "ilist"; }
     let a: String = ll_tmpa(ssa0 + 1);
-    println("  " + a + " = alloca " + ll_ir_alloc(k) + ", align 8");
+    ll_slot_name(a);
     if k == "ilist" {
         println("  call void @oo_ilist_new(ptr sret(%OoIList) align 8 " + a + ")");
     } else {
@@ -78,13 +80,13 @@ pub fn ll_builtin(name: String, args: List[String], ssa0: Int, expect: String) -
         if as_i {
             let pv: String = ll_i64arg(args, 1, s);
             s = ll_hw(s, ll_pssa(pv)) + 1;
-            println("  " + out + " = alloca %OoIList, align 8");
+            ll_slot_name(out);
             println("  call void @oo_ilist_push(ptr sret(%OoIList) align 8 " + out + ", ptr byval(%OoIList) align 8 " + ll_pptr(a0) + ", i64 " + ll_ssa(ll_pssa(pv)) + ")");
             return ll_pack(0, s, "ilist", out);
         }
         let a1: String = ll_as_val(a1r, s);
         s = ll_pssa(a1);
-        println("  " + out + " = alloca %OoSList, align 8");
+        ll_slot_name(out);
         println("  call void @oo_slist_push(ptr sret(%OoSList) align 8 " + out + ", ptr byval(%OoSList) align 8 " + ll_pptr(a0) + ", { ptr, i64 } " + ll_ssa(s) + ")");
         return ll_pack(0, s, "slist", out);
     }
@@ -94,7 +96,7 @@ pub fn ll_builtin(name: String, args: List[String], ssa0: Int, expect: String) -
         let c2: String = ll_i64arg(args, 2, ll_pssa(c1));
         let s: Int = ll_hw(ll_hw(ll_pssa(a0), ll_pssa(c1)), ll_pssa(c2)) + 1;
         let out: String = ll_tmpa(s);
-        println("  " + out + " = alloca " + ll_ir_alloc(ll_pk(a0)) + ", align 8");
+        ll_slot_name(out);
         let a: String = ll_ssa(ll_pssa(c1));
         let b: String = ll_ssa(ll_pssa(c2));
         if ll_pk(a0) == "ilist" {
@@ -169,7 +171,7 @@ pub fn ll_builtin(name: String, args: List[String], ssa0: Int, expect: String) -
         let a1: String = ll_as_val(ll_arg(args, 1), ssa0);
         let a: String = ll_tmpa(ll_pssa(a1) + 1);
         let s: Int = ll_pssa(a1) + 1;
-        println("  " + a + " = alloca %OoResS, align 8");
+        ll_slot_name(a);
         println("  call void @oo_env_get(ptr sret(%OoResS) align 8 " + a + ", i64 " + ll_ssa(ll_pssa(ll_arg(args, 0))) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ")");
         return ll_pack(0, s, "ress", a);
     }
@@ -192,63 +194,28 @@ fn ll_sys_exec(args: List[String], ssa0: Int) -> String {
     let mut s: Int = ssa0;
     let av: String = ll_tmpa(s + 1);
     s = s + 1;
-    println("  " + av + " = alloca [" + argc.to_string() + " x %OoStr], align 8");
+    ll_slot_name(av);
     let mut i: Int = 1;
     while i < na {
         let a: String = ll_ensure_ptr(ll_arg(args, i), s);
         s = ll_pssa(a);
         let sl: Int = s + 1;
-        println("  " + ll_ssa(sl) + " = load { ptr, i64 }, ptr " + ll_pptr(a));
+        println("  " + ll_ssa(sl) + " = load { ptr, i64 }, ptr " + ll_pptr(a) + ", align 8");
         let gp: Int = sl + 1;
-        println("  " + ll_ssa(gp) + " = getelementptr [" + argc.to_string() + " x %OoStr], ptr " + av + ", i64 0, i64 " + (i - 1).to_string());
-        println("  store { ptr, i64 } " + ll_ssa(sl) + ", ptr " + ll_ssa(gp));
+        println("  " + ll_ssa(gp) + " = getelementptr inbounds [" + argc.to_string() + " x %OoStr], ptr " + av + ", i64 0, i64 " + (i - 1).to_string());
+        println("  store { ptr, i64 } " + ll_ssa(sl) + ", ptr " + ll_ssa(gp) + ", align 8");
         s = gp;
         i = i + 1;
     }
     let res: String = ll_tmpa(s + 1);
     s = s + 1;
-    println("  " + res + " = alloca %OoResS, align 8");
+    ll_slot_name(res);
     let base: Int = s + 1;
-    println("  " + ll_ssa(base) + " = getelementptr [" + argc.to_string() + " x %OoStr], ptr " + av + ", i64 0, i64 0");
+    println("  " + ll_ssa(base) + " = getelementptr inbounds [" + argc.to_string() + " x %OoStr], ptr " + av + ", i64 0, i64 0");
     println("  call void @oo_sys_exec(ptr sret(%OoResS) align 8 " + res + ", i64 " + ll_ssa(ll_pssa(ll_arg(args, 0))) + ", i32 " + argc.to_string() + ", ptr " + ll_ssa(base) + ")");
     return ll_pack(0, base, "ress", res);
 }
 
-pub fn ll_print_val(kind: String, ssa: Int, ptr: String, ssa0: Int) -> Int {
-    if kind == "f64" {
-        return ll_print_float(ssa, ptr, ssa0);
-    }
-    if kind == "i1" {
-        let n2: Int = ssa0 + 1;
-        println("  " + ll_ssa(n2) + " = zext i1 " + ll_ssa(ssa) + " to i64");
-        return ll_print_val("i64", n2, "", n2);
-    }
-    if kind == "str" {
-        let mut s: Int = ssa;
-        if ptr != "" {
-            s = ssa0 + 1;
-            println("  " + ll_ssa(s) + " = load { ptr, i64 }, ptr " + ptr);
-        }
-        let p: Int = s + 1;
-        let l: Int = s + 2;
-        println("  " + ll_ssa(p) + " = extractvalue { ptr, i64 } " + ll_ssa(s) + ", 0");
-        println("  " + ll_ssa(l) + " = extractvalue { ptr, i64 } " + ll_ssa(s) + ", 1");
-        println("  call void @oo_print_str(ptr " + ll_ssa(p) + ", i64 " + ll_ssa(l) + ")");
-        println("  call void @oo_println()");
-        return l;
-    }
-    if kind == "i64" {
-        let n2: Int = ssa0 + 1;
-        println("  " + ll_ssa(n2) + " = call { ptr, i64 } @oo_int_to_str(i64 " + ll_ssa(ssa) + ")");
-        return ll_print_val("str", n2, "", n2);
-    }
-    if ll_is_int(kind) {
-        let e: String = ll_int_convert(ll_pack(0, ssa, kind, ptr), ssa0, "i64");
-        return ll_print_val("i64", ll_pssa(e), "", ll_pssa(e));
-    }
-    println("ERR\tllvm\tprint kind " + kind);
-    process_exit(1);
-    return ssa0;
-}
+
 
 

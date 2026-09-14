@@ -1,6 +1,6 @@
 // # LLVM struct field store
 //
-// Logline: Lower `x.f = e` to getelementptr plus store. No emit/c import.
+// Logline: Lower `x.f = e` to getelementptr inbounds plus store. No emit/c import.
 //
 // Setup: Field table from ll_struct. Called from ll_emit_stmts.
 //
@@ -33,11 +33,13 @@ pub fn ll_store_field_stmt(toks: List[String], p0: Int, n: Int, ssa0: Int, env: 
     let rhs0: String = ll_expr(toks, p + 4, n, ll_pssa(fp), type_env_put(env, "__e__", fk));
     let rhs: String = ll_int_convert(rhs0, ll_pssa(rhs0), fk);
     let mut np: Int = ll_ppos(rhs); let mut ns: Int = ll_pssa(rhs);
-    if ll_pptr(rhs) != "" {
+    let mut src: String = ll_opnd(rhs);
+    if ll_has_slot(rhs) {
         ns = ns + 1;
-        println("  " + ll_ssa(ns) + " = load " + ll_ir_val(fk) + ", ptr " + ll_pptr(rhs));
+        println("  " + ll_ssa(ns) + " = load " + ll_ir_val(fk) + ", ptr " + ll_pptr(rhs) + ", align 8");
+        src = ll_ssa(ns);
     }
-    println("  store " + ll_ir_val(fk) + " " + ll_ssa(ns) + ", ptr " + ll_pptr(fp));
+    println("  store " + ll_ir_val(fk) + " " + src + ", ptr " + ll_pptr(fp) + ", align 8");
     if np < n && ll_k(toks, np) == "SEMI" { np = np + 1; }
     return ll_pack(np, ns, fk, "");
 }

@@ -1,0 +1,118 @@
+// # LLVM user-call and call-at
+//
+// Logline: Lower user function calls and IDENT( argument lists.
+//
+// Setup: Sigs from env. sret/byval for memory returns. Ref args are ptr.
+//
+// Beats:
+//   1. Int immediates use ll_opnd.
+//   2. Unknown callee fails closed.
+
+import "ll_tok.oo";
+import "ll_ty.oo";
+import "ll_int.oo";
+import "ll_slot.oo";
+import "ll_builtin.oo";
+import "ll_expr.oo";
+import "types/types_core.oo";
+
+pub fn ll_user_call(name: String, sig: String, args: List[String], ssa0: Int) -> String {
+    let gt: Int = str_index_of(sig, ">");
+    if gt < 0 {
+        println("ERR\tllvm\tbad sig " + name);
+        process_exit(1);
+    }
+    let ret: String = str_slice(sig, gt + 1, chars_len(sig));
+    let na: Int = list_len(args);
+    let mut call: String = "";
+    let mut i: Int = 0;
+    let mut s: Int = ssa0;
+    while i < na {
+        let a: String = list_get(args, i);
+        if ll_is_mem(ll_pk(a)) {
+            let ap: String = ll_ensure_ptr(a, s);
+            s = ll_pssa(ap);
+            if call != "" { call = call + ", "; }
+            call = call + ll_pass(ll_pk(ap)) + " " + ll_pptr(ap);
+        } else {
+            let k: String = ll_pk(a);
+            if ll_is_refk(k) {
+                if call != "" { call = call + ", "; }
+                call = call + "ptr " + ll_pptr(a);
+            } else if k == "str" {
+                let av: String = ll_as_val(a, s);
+                s = ll_pssa(av);
+                if call != "" { call = call + ", "; }
+                call = call + ll_ir_val(k) + " " + ll_ssa(ll_pssa(av));
+            } else {
+                let pk: String = ll_sig_param(sig, i);
+                if pk != "" && ll_is_int(k) && ll_is_int(pk) && k != pk {
+                    let av: String = ll_int_convert(a, ll_hw(s, ll_pssa(a)), pk);
+                    s = ll_pssa(av);
+                    if call != "" { call = call + ", "; }
+                    call = call + ll_ir_val(ll_pk(av)) + " " + ll_opnd(av);
+                } else {
+                    if call != "" { call = call + ", "; }
+                    call = call + ll_ir_val(k) + " " + ll_opnd(a);
+                }
+            }
+        }
+        i = i + 1;
+    }
+    if ret == "void" || ret == "" {
+        println("  call void @" + name + "(" + call + ")");
+        return ll_pack(0, s, "void", "");
+    }
+    if ll_is_mem(ret) {
+        let a: String = ll_tmpa(s + 1);
+        s = s + 1;
+        ll_slot_name(a);
+        if call != "" {
+            println("  call void @" + name + "(ptr sret(" + ll_ir_alloc(ret) + ") align 8 " + a + ", " + call + ")");
+        } else {
+            println("  call void @" + name + "(ptr sret(" + ll_ir_alloc(ret) + ") align 8 " + a + ")");
+        }
+        return ll_pack(0, s, ret, a);
+    }
+    let s2: Int = s + 1;
+    println("  " + ll_ssa(s2) + " = call " + ll_ir_val(ret) + " @" + name + "(" + call + ")");
+    return ll_pack(0, s2, ret, "");
+}
+
+pub fn ll_call_at(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> String {
+    let nm: String = ll_t(toks, pos);
+    let mut p: Int = pos + 1;
+    if p >= n || ll_k(toks, p) != "LPAREN" {
+        println("ERR\tllvm\tcall");
+        process_exit(1);
+    }
+    p = p + 1;
+    let sig0: String = type_env_get(env, "__fn__" + nm);
+    let mut args: List[String] = list_new();
+    let mut ssa: Int = ssa0;
+    let mut ai: Int = 0;
+    while p < n && ll_k(toks, p) != "RPAREN" {
+        if ll_k(toks, p) == "COMMA" { p = p + 1; continue; }
+        let mut aenv: String = str_slice(env, 0, chars_len(env));
+        if sig0 != "" {
+            let pk: String = ll_sig_param(sig0, ai);
+            if pk != "" { aenv = type_env_put(aenv, "__e__", pk); }
+        }
+        let a: String = ll_expr(toks, p, n, ssa, aenv);
+        args = list_push(args, a);
+        p = ll_ppos(a); ssa = ll_pssa(a);
+        ai = ai + 1;
+    }
+    if p < n && ll_k(toks, p) == "RPAREN" { p = p + 1; }
+    let b: String = ll_builtin(nm, args, ssa, type_env_get(env, "__e__"));
+    if b != "" {
+        return ll_pack(p, ll_pssa(b), ll_pk(b), ll_pptr(b));
+    }
+    let sig: String = type_env_get(env, "__fn__" + nm);
+    if sig == "" {
+        println("ERR\tllvm\tunknown call " + nm);
+        process_exit(1);
+    }
+    let u: String = ll_user_call(nm, sig, args, ssa);
+    return ll_pack(p, ll_pssa(u), ll_pk(u), ll_pptr(u));
+}

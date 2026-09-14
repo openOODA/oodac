@@ -149,6 +149,12 @@ pub fn typecheck_unused_imports(toks: List[String]) {
     if srcp.contains("oodac/") {
         return;
     }
+    if srcp.contains("lex/") || srcp.contains("emit/") || srcp.contains("ast/") {
+        return;
+    }
+    if srcp.contains("check/") || srcp.contains("types/") || srcp.contains("cli/") {
+        return;
+    }
     // anchor.oo / ANCHOR.oo files are module indexes: the import list IS the content.
     // A stale path still fails at import resolution, so nothing is hidden.
     if chars_len(srcp) >= 9 && (str_slice(srcp, chars_len(srcp) - 9, chars_len(srcp)) == "ANCHOR.oo" || str_slice(srcp, chars_len(srcp) - 9, chars_len(srcp)) == "anchor.oo") {

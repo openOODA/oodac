@@ -1,0 +1,46 @@
+// # LLVM entry-block heap slots
+//
+// Logline: One entry alloca per function; later slots are inbounds GEPs.
+//
+// Setup: Call ll_heap after `{`. Named and temp storage uses ll_slot.
+//
+// Beats:
+//   1. %heap is the only alloca.
+//   2. Temps use ssa*64. Named uses a hashed offset above 20000.
+
+pub fn ll_heap() {
+    println("  %heap = alloca [4194304 x i8], align 16");
+}
+
+pub fn ll_nhash(s: String) -> Int {
+    let n: Int = chars_len(s);
+    let mut h: Int = 0;
+    let mut i: Int = 0;
+    while i < n {
+        h = h * 31 + byte_at(char_at(s, i), 0);
+        i = i + 1;
+    }
+    if h < 0 { h = 0 - h; }
+    return 20000 + (h % 20000);
+}
+
+pub fn ll_slot(dst: String, n: Int) {
+    let mut off: Int = n * 64;
+    if off < 0 { off = 0 - off; }
+    println("  " + dst + " = getelementptr inbounds [4194304 x i8], ptr %heap, i64 0, i64 " + off.to_string());
+}
+
+pub fn ll_slot_tmp(n: Int) -> String {
+    let a: String = "%a" + n.to_string();
+    ll_slot(a, n);
+    return a;
+}
+
+pub fn ll_slot_name(dst: String) {
+    ll_slot(dst, ll_nhash(dst));
+}
+
+pub fn ll_trap() {
+    println("  call void @oo_process_exit(i64 1)");
+    println("  unreachable");
+}

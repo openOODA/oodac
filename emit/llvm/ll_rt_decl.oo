@@ -1,0 +1,168 @@
+// # LLVM runtime declare filter
+//
+// Logline: Print only needed @oo_* declares. process_exit is noreturn.
+//
+// Setup: need is a tab set from ll_need_scan. Types stay in ll_rt_header.
+//
+// Beats:
+//   1. Missing names are skipped.
+//   2. oo_process_exit is noreturn.
+//   3. Globals for verify/unwrap print when those symbols are needed.
+
+import "ll_need.oo";
+
+fn ll_d(need: String, name: String, line: String) {
+    if ll_need_has(need, name) { println(line); }
+}
+
+pub fn ll_rt_decl_emit(need: String) {
+    ll_d(need, "getenv", "declare ptr @getenv(ptr)");
+    if ll_need_has(need, "getenv") {
+        println("@.oodatest = private unnamed_addr constant [10 x i8] c\"OODA_TEST\\00\"");
+        println("@.vok = private unnamed_addr constant [10 x i8] c\"OK verify\\00\"");
+    }
+    ll_d(need, "oo_print_int", "declare void @oo_print_int(i64)");
+    ll_d(need, "oo_print_bool", "declare void @oo_print_bool(i32)");
+    ll_d(need, "oo_closure_retain", "declare void @oo_closure_retain(ptr byval(%OoClosure) align 8)");
+    ll_d(need, "oo_closure_release", "declare void @oo_closure_release(ptr byval(%OoClosure) align 8)");
+    ll_d(need, "oo_slist_new", "declare void @oo_slist_new(ptr sret(%OoSList) align 8)");
+    ll_d(need, "oo_slist_len", "declare i64 @oo_slist_len(ptr byval(%OoSList) align 8)");
+    ll_d(need, "oo_ilist_new", "declare void @oo_ilist_new(ptr sret(%OoIList) align 8)");
+    ll_d(need, "oo_ilist_len", "declare i64 @oo_ilist_len(ptr byval(%OoIList) align 8)");
+    ll_d(need, "oo_int_to_str", "declare { ptr, i64 } @oo_int_to_str(i64)");
+    ll_d(need, "oo_str_repeat", "declare { ptr, i64 } @oo_str_repeat({ ptr, i64 }, i64)");
+    ll_d(need, "oo_str_to_uppercase", "declare { ptr, i64 } @oo_str_to_uppercase({ ptr, i64 })");
+    ll_d(need, "oo_str_to_lowercase", "declare { ptr, i64 } @oo_str_to_lowercase({ ptr, i64 })");
+    ll_d(need, "oo_str_lit", "declare { ptr, i64 } @oo_str_lit(ptr)");
+    ll_d(need, "oo_str_concat", "declare { ptr, i64 } @oo_str_concat({ ptr, i64 }, { ptr, i64 })");
+    ll_d(need, "oo_char_at", "declare { ptr, i64 } @oo_char_at({ ptr, i64 }, i64)");
+    ll_d(need, "oo_str_slice", "declare { ptr, i64 } @oo_str_slice({ ptr, i64 }, i64, i64)");
+    ll_d(need, "oo_print_str", "declare void @oo_print_str(ptr, i64)");
+    ll_d(need, "oo_println", "declare void @oo_println()");
+    ll_d(need, "oo_chars_len", "declare i64 @oo_chars_len({ ptr, i64 })");
+    ll_d(need, "oo_print_double", "declare void @oo_print_double(double)");
+    ll_d(need, "oo_bytes_len", "declare i64 @oo_bytes_len({ ptr, i64 })");
+    ll_d(need, "oo_str_eq", "declare i32 @oo_str_eq({ ptr, i64 }, { ptr, i64 })");
+    ll_d(need, "oo_str_ends_with", "declare i32 @oo_str_ends_with({ ptr, i64 }, { ptr, i64 })");
+    ll_d(need, "oo_str_starts_with", "declare i32 @oo_str_starts_with({ ptr, i64 }, { ptr, i64 })");
+    ll_d(need, "oo_str_contains", "declare i32 @oo_str_contains({ ptr, i64 }, { ptr, i64 })");
+    if ll_need_has(need, "oo_unwrap_msg") {
+        println("@.uunwrapmsg = private unnamed_addr constant [12 x i8] c\"ERR\\09unwrap\\0A\\00\"");
+    }
+    ll_rt_emit_decls2(need);
+}
+
+fn ll_rt_emit_decls2(need: String) {
+    ll_d(need, "oo_str_index_of", "declare i64 @oo_str_index_of({ ptr, i64 }, { ptr, i64 })");
+    ll_d(need, "oo_byte_at", "declare i64 @oo_byte_at({ ptr, i64 }, i64)");
+    ll_d(need, "oo_byte_slice", "declare { ptr, i64 } @oo_byte_slice({ ptr, i64 }, i64, i64)");
+    ll_d(need, "oo_char_is_digit", "declare i32 @oo_char_is_digit({ ptr, i64 })");
+    ll_d(need, "oo_char_is_alpha", "declare i32 @oo_char_is_alpha({ ptr, i64 })");
+    ll_d(need, "oo_char_is_space", "declare i32 @oo_char_is_space({ ptr, i64 })");
+    ll_d(need, "str_split", "declare void @str_split(ptr sret(%OoSList) align 8, { ptr, i64 }, { ptr, i64 })");
+    ll_d(need, "oo_str_trim", "declare { ptr, i64 } @oo_str_trim({ ptr, i64 })");
+    ll_d(need, "crypto_sha256_internal", "declare { ptr, i64 } @crypto_sha256_internal({ ptr, i64 })");
+    ll_d(need, "crypto_sha512_internal", "declare { ptr, i64 } @crypto_sha512_internal({ ptr, i64 })");
+    ll_d(need, "crypto_hmac_sha256_internal", "declare { ptr, i64 } @crypto_hmac_sha256_internal({ ptr, i64 }, { ptr, i64 })");
+    ll_d(need, "oo_path_exists", "declare i32 @oo_path_exists(i64, { ptr, i64 })");
+    ll_d(need, "oo_file_size", "declare i64 @oo_file_size(i64, { ptr, i64 })");
+    ll_d(need, "oo_env_get", "declare void @oo_env_get(ptr sret(%OoResS) align 8, i64, { ptr, i64 })");
+    ll_d(need, "oo_sys_exec", "declare void @oo_sys_exec(ptr sret(%OoResS) align 8, i64, i32, ptr)");
+    ll_d(need, "oo_process_exit", "declare void @oo_process_exit(i64) noreturn");
+    ll_d(need, "oo_sleep_ms", "declare void @oo_sleep_ms(i64, i64)");
+    ll_d(need, "oo_now_ms", "declare i64 @oo_now_ms(i64)");
+    ll_d(need, "oo_monotonic_us", "declare i64 @oo_monotonic_us()");
+    ll_rt_emit_caps(need);
+    ll_rt_emit_rest(need);
+}
+
+fn ll_rt_emit_caps(need: String) {
+    ll_d(need, "oo_cap_grant_process", "declare i64 @oo_cap_grant_process()");
+    ll_d(need, "oo_cap_grant_env", "declare i64 @oo_cap_grant_env()");
+    ll_d(need, "oo_cap_grant_fsread", "declare i64 @oo_cap_grant_fsread()");
+    ll_d(need, "oo_cap_grant_fswrite", "declare i64 @oo_cap_grant_fswrite()");
+    ll_d(need, "oo_cap_grant_bind", "declare i64 @oo_cap_grant_bind()");
+    ll_d(need, "oo_cap_grant_sys", "declare i64 @oo_cap_grant_sys()");
+    ll_d(need, "oo_cap_grant_time", "declare i64 @oo_cap_grant_time()");
+    ll_d(need, "oo_cap_grant_alloc", "declare i64 @oo_cap_grant_alloc()");
+    ll_d(need, "oo_alloc_bytes", "declare i64 @oo_alloc_bytes(i64, i64)");
+    ll_d(need, "oo_cap_grant_tcp", "declare i64 @oo_cap_grant_tcp()");
+    ll_d(need, "oo_cap_grant_udp", "declare i64 @oo_cap_grant_udp()");
+    ll_d(need, "oo_cap_grant_net", "declare i64 @oo_cap_grant_net()");
+    ll_d(need, "oo_cap_grant_fs", "declare i64 @oo_cap_grant_fs()");
+    ll_d(need, "oo_cap_grant_rand", "declare i64 @oo_cap_grant_rand()");
+    ll_d(need, "oo_cap_grant_arena", "declare i64 @oo_cap_grant_arena()");
+    ll_d(need, "oo_cap_grant_ffi", "declare i64 @oo_cap_grant_ffi()");
+    ll_d(need, "oo_cap_grant_thread", "declare i64 @oo_cap_grant_thread()");
+    ll_d(need, "oo_cap_grant_gpu", "declare i64 @oo_cap_grant_gpu()");
+    ll_d(need, "oo_cap_grant_compiler_read", "declare i64 @oo_cap_grant_compiler_read()");
+    ll_d(need, "oo_cap_grant_sign", "declare i64 @oo_cap_grant_sign()");
+    ll_d(need, "oo_cap_grant_audio", "declare i64 @oo_cap_grant_audio()");
+    ll_d(need, "oo_cap_grant_camera", "declare i64 @oo_cap_grant_camera()");
+    ll_d(need, "oo_cap_grant_usb", "declare i64 @oo_cap_grant_usb()");
+    ll_d(need, "oo_cap_grant_hid", "declare i64 @oo_cap_grant_hid()");
+    ll_d(need, "oo_cap_grant_window", "declare i64 @oo_cap_grant_window()");
+    ll_d(need, "oo_cap_grant_frame", "declare i64 @oo_cap_grant_frame()");
+    ll_d(need, "oo_cap_grant_metrics", "declare i64 @oo_cap_grant_metrics()");
+    ll_d(need, "oo_hot_reload", "declare i64 @oo_hot_reload({ ptr, i64 })");
+}
+
+fn ll_rt_emit_rest(need: String) {
+    ll_d(need, "oo_str_retain", "declare void @oo_str_retain({ ptr, i64 })");
+    ll_d(need, "oo_str_release", "declare void @oo_str_release({ ptr, i64 })");
+    ll_d(need, "oo_slist_retain", "declare void @oo_slist_retain(ptr byval(%OoSList) align 8)");
+    ll_d(need, "oo_slist_release", "declare void @oo_slist_release(ptr byval(%OoSList) align 8)");
+    ll_d(need, "oo_ilist_retain", "declare void @oo_ilist_retain(ptr byval(%OoIList) align 8)");
+    ll_d(need, "oo_ilist_release", "declare void @oo_ilist_release(ptr byval(%OoIList) align 8)");
+    ll_d(need, "oo_slist_push", "declare void @oo_slist_push(ptr sret(%OoSList) align 8, ptr byval(%OoSList) align 8, { ptr, i64 })");
+    ll_d(need, "oo_slist_get", "declare { ptr, i64 } @oo_slist_get(ptr byval(%OoSList) align 8, i64)");
+    ll_d(need, "oo_slist_slice", "declare void @oo_slist_slice(ptr sret(%OoSList) align 8, ptr byval(%OoSList) align 8, i64, i64)");
+    ll_d(need, "oo_ilist_push", "declare void @oo_ilist_push(ptr sret(%OoIList) align 8, ptr byval(%OoIList) align 8, i64)");
+    ll_d(need, "oo_ilist_get", "declare i64 @oo_ilist_get(ptr byval(%OoIList) align 8, i64)");
+    ll_d(need, "oo_ilist_slice", "declare void @oo_ilist_slice(ptr sret(%OoIList) align 8, ptr byval(%OoIList) align 8, i64, i64)");
+    ll_d(need, "oo_bytes_new", "declare void @oo_bytes_new(ptr sret(%OoIList) align 8)");
+    ll_d(need, "oo_bytes_push", "declare void @oo_bytes_push(ptr sret(%OoIList) align 8, ptr byval(%OoIList) align 8, i64)");
+    ll_d(need, "oo_bytes_to_str", "declare { ptr, i64 } @oo_bytes_to_str(ptr byval(%OoIList) align 8)");
+    ll_d(need, "oo_list_alloc_payload", "declare ptr @oo_list_alloc_payload(i64, i64)");
+    ll_rt_emit_fs(need);
+}
+
+fn ll_rt_emit_fs(need: String) {
+    ll_d(need, "oo_read_file", "declare void @oo_read_file(ptr sret(%OoResS) align 8, i64, { ptr, i64 })");
+    ll_d(need, "oo_write_file", "declare void @oo_write_file(ptr sret(%OoResV) align 8, i64, { ptr, i64 }, { ptr, i64 })");
+    ll_d(need, "oo_file_stamp", "declare { ptr, i64 } @oo_file_stamp(i64, { ptr, i64 })");
+    ll_d(need, "oo_fs_is_dir", "declare i32 @oo_fs_is_dir(i64, { ptr, i64 })");
+    ll_d(need, "oo_fs_read_dir", "declare void @oo_fs_read_dir(ptr sret(%OoSList) align 8, i64, { ptr, i64 })");
+    ll_d(need, "oo_fs_mkdir", "declare void @oo_fs_mkdir(ptr sret(%OoResV) align 8, i64, { ptr, i64 })");
+    ll_d(need, "oo_fs_rmdir", "declare void @oo_fs_rmdir(ptr sret(%OoResV) align 8, i64, { ptr, i64 })");
+    ll_d(need, "oo_fs_remove_file", "declare void @oo_fs_remove_file(ptr sret(%OoResV) align 8, i64, { ptr, i64 })");
+    ll_d(need, "oo_fs_hardlink", "declare void @oo_fs_hardlink(ptr sret(%OoResV) align 8, i64, { ptr, i64 }, { ptr, i64 })");
+    ll_d(need, "oo_fs_symlink", "declare void @oo_fs_symlink(ptr sret(%OoResV) align 8, i64, { ptr, i64 }, { ptr, i64 })");
+    ll_d(need, "oo_sys_args", "declare void @oo_sys_args(ptr sret(%OoSList) align 8, i64)");
+    ll_d(need, "oo_sys_exec_wait", "declare void @oo_sys_exec_wait(ptr sret(%OoResI) align 8, i64, { ptr, i64 }, ptr byval(%OoSList) align 8)");
+    ll_d(need, "oo_sys_spawn", "declare void @oo_sys_spawn(ptr sret(%OoResS) align 8, i64, { ptr, i64 })");
+    ll_d(need, "oo_sys_wait", "declare void @oo_sys_wait(ptr sret(%OoResS) align 8, i64, i64)");
+    ll_d(need, "oo_sys_kill", "declare void @oo_sys_kill(ptr sret(%OoResS) align 8, i64, i64, i64)");
+    ll_d(need, "oo_sys_epoll_create", "declare void @oo_sys_epoll_create(ptr sret(%OoResS) align 8, i64, i64)");
+    ll_d(need, "oo_sys_inotify_init", "declare void @oo_sys_inotify_init(ptr sret(%OoResS) align 8, i64)");
+    ll_d(need, "oo_sys_prctl", "declare void @oo_sys_prctl(ptr sret(%OoResS) align 8, i64, i64)");
+    ll_d(need, "oo_landlock_is_available", "declare i32 @oo_landlock_is_available()");
+    ll_d(need, "oo_read_stdin", "declare { ptr, i64 } @oo_read_stdin(i64)");
+    ll_d(need, "oo_read_stdin_chunk", "declare void @oo_read_stdin_chunk(ptr sret(%OoResS) align 8, i64, i64)");
+    ll_rt_emit_tui(need);
+}
+
+fn ll_rt_emit_tui(need: String) {
+    ll_d(need, "oo_tui_enable_raw", "declare void @oo_tui_enable_raw(ptr sret(%OoResS) align 8, i64, { ptr, i64 })");
+    ll_d(need, "oo_tui_disable_raw", "declare void @oo_tui_disable_raw(ptr sret(%OoResS) align 8, i64, { ptr, i64 })");
+    ll_d(need, "oo_tui_get_size", "declare void @oo_tui_get_size(ptr sret(%OoResS) align 8, i64)");
+    ll_d(need, "oo_tui_alt_screen_enter", "declare void @oo_tui_alt_screen_enter(ptr sret(%OoResS) align 8, i64)");
+    ll_d(need, "oo_tui_alt_screen_leave", "declare void @oo_tui_alt_screen_leave(ptr sret(%OoResS) align 8, i64)");
+    ll_d(need, "oo_tui_show_cursor", "declare void @oo_tui_show_cursor(ptr sret(%OoResS) align 8, i64, i64)");
+    ll_d(need, "oo_tui_clear", "declare void @oo_tui_clear(ptr sret(%OoResS) align 8, i64)");
+    ll_d(need, "oo_tui_write", "declare void @oo_tui_write(ptr sret(%OoResS) align 8, i64, { ptr, i64 })");
+    ll_d(need, "oo_tui_read_byte", "declare void @oo_tui_read_byte(ptr sret(%OoResS) align 8, i64, { ptr, i64 })");
+    ll_d(need, "oo_tui_read_byte_timeout", "declare void @oo_tui_read_byte_timeout(ptr sret(%OoResS) align 8, i64, { ptr, i64 }, i64)");
+    ll_d(need, "oo_tui_signal_winch_install", "declare void @oo_tui_signal_winch_install(ptr sret(%OoResS) align 8, i64)");
+    ll_d(need, "oo_tui_signal_winch_poll", "declare void @oo_tui_signal_winch_poll(ptr sret(%OoResS) align 8, i64)");
+}

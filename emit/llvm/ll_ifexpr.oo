@@ -16,6 +16,7 @@
 import "ll_tok.oo";
 import "ll_ty.oo";
 import "ll_int.oo";
+import "ll_slot.oo";
 import "ll_expr.oo";
 import "ll_call.oo";
 import "ll_stmt.oo";
@@ -85,9 +86,9 @@ fn ll_if_dead_merge(fp: Int, ssa0: Int, tk: String, ek: String, env: String, cid
     if kk == "" || kk == "void" { kk = "i64"; }
     let a: String = ll_tmpa(ssa0 + 1);
     let s: Int = ssa0 + 1;
-    println("  " + a + " = alloca " + ll_ir_alloc(kk) + ", align 8");
+    ll_slot_name(a);
     let s2: Int = s + 1;
-    println("  " + ll_ssa(s2) + " = load " + ll_ir_val(kk) + ", ptr " + a);
+    println("  " + ll_ssa(s2) + " = load " + ll_ir_val(kk) + ", ptr " + a + ", align 8");
     return ll_pack(fp, s2, kk, "");
 }
 
@@ -166,10 +167,10 @@ fn ll_if_zero(ssa0: Int, kk: String) -> Int {
     }
     let a: String = ll_tmpa(ssa0 + 1);
     let s: Int = ssa0 + 1;
-    println("  " + a + " = alloca " + ll_ir_alloc(k) + ", align 8");
-    println("  store " + ll_ir_val(k) + " zeroinitializer, ptr " + a);
+    ll_slot_name(a);
+    println("  store " + ll_ir_val(k) + " zeroinitializer, ptr " + a + ", align 8");
     let s2: Int = s + 1;
-    println("  " + ll_ssa(s2) + " = load " + ll_ir_val(k) + ", ptr " + a);
+    println("  " + ll_ssa(s2) + " = load " + ll_ir_val(k) + ", ptr " + a + ", align 8");
     return s2;
 }
 

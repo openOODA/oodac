@@ -11,6 +11,7 @@
 
 import "ll_tok.oo";
 import "ll_ty.oo";
+import "ll_struct_list.oo";
 import "types/types_core.oo";
 
 pub fn ll_local_st_names(toks: List[String]) -> String {
@@ -92,7 +93,7 @@ fn ll_st_fields(env: String, nm: String) -> String {
     return tys;
 }
 
-pub fn ll_struct_emit_imports(stenv: String, local_st: String) {
+pub fn ll_struct_emit_imports(stenv: String, local_st: String, toks: List[String]) {
     let n: Int = chars_len(stenv);
     let mut i: Int = 0;
     while i < n {
@@ -110,10 +111,12 @@ pub fn ll_struct_emit_imports(stenv: String, local_st: String) {
                 println("%OoOpt_St_" + nm + " = type { i32, %St_" + nm + " }");
                 println("declare void @oo_retain_St_" + nm + "(ptr)");
                 println("declare void @oo_release_St_" + nm + "(ptr)");
-                println("declare void @oo_l_" + nm + "_new(ptr sret(%OoL_" + nm + ") align 8)");
-                println("declare i64 @oo_l_" + nm + "_len(ptr)");
-                println("declare %St_" + nm + " @oo_l_" + nm + "_get(ptr, i64)");
-                println("declare void @oo_l_" + nm + "_push(ptr sret(%OoL_" + nm + ") align 8, ptr, ptr)");
+                if ll_olist_wanted(toks, nm) {
+                    println("declare void @oo_l_" + nm + "_new(ptr sret(%OoL_" + nm + ") align 8)");
+                    println("declare i64 @oo_l_" + nm + "_len(ptr)");
+                    println("declare %St_" + nm + " @oo_l_" + nm + "_get(ptr, i64)");
+                    println("declare void @oo_l_" + nm + "_push(ptr sret(%OoL_" + nm + ") align 8, ptr, ptr)");
+                }
             }
             i = c;
         }

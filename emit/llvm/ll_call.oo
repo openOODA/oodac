@@ -14,6 +14,7 @@ import "ll_tok.oo";
 import "ll_ty.oo";
 import "ll_int.oo";
 import "ll_float.oo";
+import "ll_slot.oo";
 import "types/types_core.oo";
 
 fn ll_field_tab(kind: String, m: String) -> String {
@@ -48,13 +49,13 @@ pub fn ll_field_load(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, 
     }
     let base: String = ll_ensure_ptr(ll_pack(0, ssa, kind, ptr), ssa0);
     let s: Int = ll_pssa(base) + 1;
-    println("  " + ll_ssa(s) + " = getelementptr " + ll_ir_alloc(kind) + ", ptr " + ll_pptr(base) + ", i32 0, i32 " + idx);
+    println("  " + ll_ssa(s) + " = getelementptr inbounds " + ll_ir_alloc(kind) + ", ptr " + ll_pptr(base) + ", i32 0, i32 " + idx);
     let s2: Int = s + 1;
-    println("  " + ll_ssa(s2) + " = load " + ll_ir_val(fk) + ", ptr " + ll_ssa(s));
+    println("  " + ll_ssa(s2) + " = load " + ll_ir_val(fk) + ", ptr " + ll_ssa(s) + ", align 8");
     if ll_is_struct(fk) {
         let a: String = ll_tmpa(s2 + 1);
-        println("  " + a + " = alloca " + ll_ir_alloc(fk) + ", align 8");
-        println("  store " + ll_ir_val(fk) + " " + ll_ssa(s2) + ", ptr " + a);
+        ll_slot_name(a);
+        println("  store " + ll_ir_val(fk) + " " + ll_ssa(s2) + ", ptr " + a + ", align 8");
         return ll_pack(0, s2 + 1, fk, a);
     }
     return ll_pack(0, s2, fk, "");
@@ -64,7 +65,7 @@ pub fn ll_str_gep(toks: List[String], pos: Int, ssa0: Int) -> String {
     let tx: String = ll_t(toks, pos);
     let ln: Int = bytes_len(tx) + 1;
     let n: Int = ssa0 + 1;
-    println("  " + ll_ssa(n) + " = getelementptr [" + ln.to_string() + " x i8], ptr @.s" + pos.to_string() + ", i64 0, i64 0");
+    println("  " + ll_ssa(n) + " = getelementptr inbounds [" + ln.to_string() + " x i8], ptr @.s" + pos.to_string() + ", i64 0, i64 0");
     let n2: Int = n + 1;
     println("  " + ll_ssa(n2) + " = call { ptr, i64 } @oo_str_lit(ptr " + ll_ssa(n) + ")");
     return ll_pack(pos + 1, n2, "str", "");
@@ -94,16 +95,19 @@ pub fn ll_load_ident(name: String, env: String, ssa0: Int) -> String {
     if ll_is_agg(k) {
         return ll_pack(0, ssa0, k, ptr);
     }
+    if ll_is_refk(k) {
+        return ll_pack(0, ssa0, k, ptr);
+    }
     let n: Int = ssa0 + 1;
-    println("  " + ll_ssa(n) + " = load " + ll_ir_val(k) + ", ptr " + ptr);
+    println("  " + ll_ssa(n) + " = load " + ll_ir_val(k) + ", ptr " + ptr + ", align 8");
     return ll_pack(0, n, k, "");
 }
 
 pub fn ll_match_tag(sk: String, ptr: String, ssa0: Int) -> Int {
     let s: Int = ssa0 + 1;
-    println("  " + ll_ssa(s) + " = getelementptr " + ll_ir_alloc(sk) + ", ptr " + ptr + ", i32 0, i32 0");
+    println("  " + ll_ssa(s) + " = getelementptr inbounds " + ll_ir_alloc(sk) + ", ptr " + ptr + ", i32 0, i32 0");
     let s2: Int = s + 1;
-    println("  " + ll_ssa(s2) + " = load i32, ptr " + ll_ssa(s));
+    println("  " + ll_ssa(s2) + " = load i32, ptr " + ll_ssa(s) + ", align 4");
     let s3: Int = s2 + 1;
     println("  " + ll_ssa(s3) + " = icmp ne i32 " + ll_ssa(s2) + ", 0");
     return s3;
@@ -125,12 +129,12 @@ pub fn ll_match_bind(sk: String, ptr: String, bn: String, ok: Int, id: Int, ssa0
         return ll_pack(0, ssa0, bk, "");
     }
     let locn: String = "%v_" + bn + "_" + id.to_string();
-    println("  " + locn + " = alloca " + ll_ir_alloc(bk) + ", align 8");
+    ll_slot_name(locn);
     let s: Int = ssa0 + 1;
-    println("  " + ll_ssa(s) + " = getelementptr " + ll_ir_alloc(sk) + ", ptr " + ptr + ", i32 0, i32 " + fi);
+    println("  " + ll_ssa(s) + " = getelementptr inbounds " + ll_ir_alloc(sk) + ", ptr " + ptr + ", i32 0, i32 " + fi);
     let s2: Int = s + 1;
-    println("  " + ll_ssa(s2) + " = load " + ll_ir_val(bk) + ", ptr " + ll_ssa(s));
-    println("  store " + ll_ir_val(bk) + " " + ll_ssa(s2) + ", ptr " + locn);
+    println("  " + ll_ssa(s2) + " = load " + ll_ir_val(bk) + ", ptr " + ll_ssa(s) + ", align 8");
+    println("  store " + ll_ir_val(bk) + " " + ll_ssa(s2) + ", ptr " + locn + ", align 8");
     return ll_pack(0, s2, bk, locn);
 }
 
@@ -211,32 +215,37 @@ pub fn ll_store(name: String, kind: String, v: String, ssa0: Int, env: String) -
     let loc: String = type_env_get(env, "__l__" + name);
     if loc != "" { dst = loc; }
     if ll_is_agg(kind) {
-        if ll_pptr(v) != "" {
+        if ll_has_slot(v) {
             let s: Int = ssa0 + 1;
-            println("  " + ll_ssa(s) + " = load " + ll_ir_val(kind) + ", ptr " + ll_pptr(v));
-            println("  store " + ll_ir_val(kind) + " " + ll_ssa(s) + ", ptr " + dst);
+            println("  " + ll_ssa(s) + " = load " + ll_ir_val(kind) + ", ptr " + ll_pptr(v) + ", align 8");
+            println("  store " + ll_ir_val(kind) + " " + ll_ssa(s) + ", ptr " + dst + ", align 8");
             return s;
         }
-        println("  store " + ll_ir_val(kind) + " " + ll_ssa(ll_pssa(v)) + ", ptr " + dst);
+        println("  store " + ll_ir_val(kind) + " " + ll_opnd(v) + ", ptr " + dst + ", align 8");
         return ssa0;
     }
     if ll_is_int(kind) && ll_is_int(ll_pk(v)) && ll_pk(v) != kind {
         let cv: String = ll_int_convert(v, ll_hw(ssa0, ll_pssa(v)), kind);
-        println("  store " + ll_ir_val(kind) + " " + ll_ssa(ll_pssa(cv)) + ", ptr " + dst);
+        println("  store " + ll_ir_val(kind) + " " + ll_opnd(cv) + ", ptr " + dst + ", align 8");
         return ll_pssa(cv);
     }
-    println("  store " + ll_ir_val(kind) + " " + ll_ssa(ll_pssa(v)) + ", ptr " + dst);
+    println("  store " + ll_ir_val(kind) + " " + ll_opnd(v) + ", ptr " + dst + ", align 8");
     return ssa0;
 }
 
 pub fn ll_cond_i1(v: String, ssa0: Int) -> Int {
-    if ll_pk(v) == "i1" { return ll_pssa(v); }
+    if ll_pk(v) == "i1" {
+        if !ll_is_imm(v) { return ll_pssa(v); }
+        let s: Int = ssa0 + 1;
+        println("  " + ll_ssa(s) + " = icmp ne i1 " + ll_opnd(v) + ", 0");
+        return s;
+    }
     if ll_pk(v) == "f64" { return ll_float_cond(v, ssa0); }
     if ll_is_int(ll_pk(v)) && ll_pk(v) != "i64" {
         let e: String = ll_int_convert(v, ssa0, "i64");
         return ll_cond_i1(e, ll_pssa(e));
     }
     let s: Int = ssa0 + 1;
-    println("  " + ll_ssa(s) + " = icmp ne i64 " + ll_ssa(ll_pssa(v)) + ", 0");
+    println("  " + ll_ssa(s) + " = icmp ne i64 " + ll_opnd(v) + ", 0");
     return s;
 }

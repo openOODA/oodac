@@ -10,21 +10,35 @@
 //   3. Cap tokens are i64.
 
 import "ll_tok.oo";
+import "ll_slot.oo";
 
 pub fn ll_ty_at(toks: List[String], pos: Int, n: Int, stab: String) -> String {
     let mut p: Int = pos;
-    if p < n && ll_k(toks, p) == "AMP" { p = p + 1; }
+    let mut isref: Bool = false;
+    if p < n && ll_k(toks, p) == "AMP" { isref = true; p = p + 1; }
     if p < n && ll_k(toks, p) == "KW_MUT" { p = p + 1; }
     if p >= n || ll_k(toks, p) != "IDENT" {
         println("ERR\tllvm\ttype token");
         process_exit(1);
     }
     let t: String = ll_t(toks, p);
-    if t == "Int" || t == "i64" { return "i64"; }
+    if t == "Int" || t == "i64" {
+        if isref { return "ri64"; }
+        return "i64";
+    }
     if t == "Float" { return "f64"; }
-    if t == "u64" { return "u64"; }
-    if t == "i32" { return "i32"; }
-    if t == "u32" { return "u32"; }
+    if t == "u64" {
+        if isref { return "ru64"; }
+        return "u64";
+    }
+    if t == "i32" {
+        if isref { return "ri32"; }
+        return "i32";
+    }
+    if t == "u32" {
+        if isref { return "ru32"; }
+        return "u32";
+    }
     if t == "u8" || t == "i8" || t == "u16" || t == "i16" {
         println("ERR\tllvm\tnarrow int not lowered " + t);
         process_exit(1);
@@ -154,6 +168,7 @@ pub fn ll_peek_cap_name(toks: List[String], pos: Int, n: Int) -> String {
 }
 
 pub fn ll_ir_alloc(kind: String) -> String {
+    if ll_is_refk(kind) { return "ptr"; }
     if kind == "slist" { return "%OoSList"; }
     if kind == "ilist" { return "%OoIList"; }
     if kind == "str" { return "%OoStr"; }
@@ -184,6 +199,7 @@ pub fn ll_ir_alloc(kind: String) -> String {
 }
 
 pub fn ll_ir_val(kind: String) -> String {
+    if ll_is_refk(kind) { return "ptr"; }
     if kind == "str" { return "{ ptr, i64 }"; }
     return ll_ir_alloc(kind);
 }
@@ -224,17 +240,17 @@ pub fn ll_pass(kind: String) -> String {
 }
 
 pub fn ll_ensure_ptr(v: String, ssa0: Int) -> String {
-    if ll_pptr(v) != "" { return ll_pack(ll_ppos(v), ssa0, ll_pk(v), ll_pptr(v)); }
+    if ll_has_slot(v) { return ll_pack(ll_ppos(v), ssa0, ll_pk(v), ll_pptr(v)); }
     let a: String = ll_tmpa(ssa0 + 1);
     let s: Int = ssa0 + 1;
-    println("  " + a + " = alloca " + ll_ir_alloc(ll_pk(v)) + ", align 8");
-    println("  store " + ll_ir_val(ll_pk(v)) + " " + ll_ssa(ll_pssa(v)) + ", ptr " + a);
+    ll_slot_name(a);
+    println("  store " + ll_ir_val(ll_pk(v)) + " " + ll_opnd(v) + ", ptr " + a + ", align 8");
     return ll_pack(ll_ppos(v), s, ll_pk(v), a);
 }
 
 pub fn ll_as_val(v: String, ssa0: Int) -> String {
     let p: String = ll_ensure_ptr(v, ssa0);
     let s: Int = ll_pssa(p) + 1;
-    println("  " + ll_ssa(s) + " = load " + ll_ir_val(ll_pk(v)) + ", ptr " + ll_pptr(p));
+    println("  " + ll_ssa(s) + " = load " + ll_ir_val(ll_pk(v)) + ", ptr " + ll_pptr(p) + ", align 8");
     return ll_pack(ll_ppos(v), s, ll_pk(v), "");
 }

@@ -13,6 +13,7 @@ import "ll_tok.oo";
 import "ll_ty.oo";
 import "ll_int.oo";
 import "ll_struct.oo";
+import "ll_slot.oo";
 
 pub fn ll_match_expr(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> String {
     let scr: String = ll_expr(toks, pos + 1, n, ssa0, env);
@@ -72,10 +73,10 @@ pub fn ll_match_expr(toks: List[String], pos: Int, n: Int, ssa0: Int, env: Strin
         let pk: String = ll_pk(okarm);
         let hw: Int = ll_hw(oks, ll_pssa(bd)) + 1;
         let a: String = ll_tmpa(hw);
-        println("  " + a + " = alloca " + ll_ir_alloc(pk) + ", align 8");
-        println("  store " + ll_ir_val(pk) + " " + ll_ssa(oks) + ", ptr " + a);
+        ll_slot_name(a);
+        println("  store " + ll_ir_val(pk) + " " + ll_ssa(oks) + ", ptr " + a + ", align 8");
         let s2: Int = hw + 1;
-        println("  " + ll_ssa(s2) + " = load " + ll_ir_val(pk) + ", ptr " + a);
+        println("  " + ll_ssa(s2) + " = load " + ll_ir_val(pk) + ", ptr " + a + ", align 8");
         return ll_pack(p, s2, pk, a);
     }
     let erarm: String = ll_expr(toks, p, n, ll_pssa(eb) + 1, env3);
@@ -88,10 +89,10 @@ pub fn ll_match_expr(toks: List[String], pos: Int, n: Int, ssa0: Int, env: Strin
         let pk0: String = ll_pk(okarm);
         let hw0: Int = ll_hw(oks, ll_pssa(erarm)) + 1;
         let a0: String = ll_tmpa(hw0);
-        println("  " + a0 + " = alloca " + ll_ir_alloc(pk0) + ", align 8");
-        println("  store " + ll_ir_val(pk0) + " " + ll_ssa(oks) + ", ptr " + a0);
+        ll_slot_name(a0);
+        println("  store " + ll_ir_val(pk0) + " " + ll_ssa(oks) + ", ptr " + a0 + ", align 8");
         let s3: Int = hw0 + 1;
-        println("  " + ll_ssa(s3) + " = load " + ll_ir_val(pk0) + ", ptr " + a0);
+        println("  " + ll_ssa(s3) + " = load " + ll_ir_val(pk0) + ", ptr " + a0 + ", align 8");
         return ll_pack(p, s3, pk0, a0);
     }
     let ers0: Int = ll_arm_val(erarm, ll_pssa(erarm));

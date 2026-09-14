@@ -12,6 +12,7 @@
 import "ll_tok.oo";
 import "ll_ty.oo";
 import "ll_int.oo";
+import "ll_slot.oo";
 
 fn ll_tok_tui_cap(args: List[String]) -> String {
     return ll_ssa(ll_pssa(list_get(args, 0)));
@@ -20,7 +21,7 @@ fn ll_tok_tui_cap(args: List[String]) -> String {
 fn ll_ty_tui_ress(callee: String, extra: String, ssa0: Int, args: List[String]) -> String {
     let s: Int = ssa0 + 1;
     let out: String = ll_tmpa(s);
-    println("  " + out + " = alloca %OoResS, align 8");
+    ll_slot_name(out);
     println("  call void @" + callee + "(ptr sret(%OoResS) align 8 " + out + ", i64 " + ll_tok_tui_cap(args) + extra + ")");
     return ll_pack(0, s, "ress", out);
 }

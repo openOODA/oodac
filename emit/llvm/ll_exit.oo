@@ -64,20 +64,20 @@ pub fn ll_return_stmt(toks: List[String], p: Int, n: Int, ssa: Int, env: String,
         ns = ll_ret_opt(v, ret_kind, ns);
     } else if ret_kind == "main_i32" {
         println("  ret i32 0");
-    } else if ll_pptr(v) != "" {
+    } else if ll_has_slot(v) {
         ns = ns + 1;
-        println("  " + ll_ssa(ns) + " = load " + ll_ir_val(ret_kind) + ", ptr " + ll_pptr(v));
+        println("  " + ll_ssa(ns) + " = load " + ll_ir_val(ret_kind) + ", ptr " + ll_pptr(v) + ", align 8");
         if ll_is_mem(ret_kind) {
-            println("  store " + ll_ir_val(ret_kind) + " " + ll_ssa(ns) + ", ptr %ret");
+            println("  store " + ll_ir_val(ret_kind) + " " + ll_ssa(ns) + ", ptr %ret, align 8");
             println("  ret void");
         } else {
             println("  ret " + ll_ir_val(ret_kind) + " " + ll_ssa(ns));
         }
     } else if ll_is_mem(ret_kind) {
-        println("  store " + ll_ir_val(ret_kind) + " " + ll_ssa(ll_pssa(v)) + ", ptr %ret");
+        println("  store " + ll_ir_val(ret_kind) + " " + ll_opnd(v) + ", ptr %ret, align 8");
         println("  ret void");
     } else {
-        println("  ret " + ll_ir_val(ret_kind) + " " + ll_ssa(ll_pssa(v)));
+        println("  ret " + ll_ir_val(ret_kind) + " " + ll_opnd(v));
     }
     let rp: Int = ll_skip_to_rbrace(toks, np, n);
     return ll_pack(rp, ns, ret_kind, env) + "\t1";
@@ -102,7 +102,7 @@ pub fn ll_store_deref_stmt(toks: List[String], p0: Int, n: Int, ssa0: Int, env: 
     let name: String = ll_t(toks, p0 + 1);
     let ty: String = type_env_get(env, name);
     if ty == "" || ll_is_agg(ty) {
-        println("ERR\tllvm\tstore through bad ref");
+        println("ERR\tllvm\tstore through bad ref, align 8");
         process_exit(1);
     }
     let mut vv: String = ll_expr(toks, p0 + 3, n, ssa0, type_env_put(env, "__e__", ty));
@@ -112,7 +112,7 @@ pub fn ll_store_deref_stmt(toks: List[String], p0: Int, n: Int, ssa0: Int, env: 
     let la: String = ll_load_ident(name, env, ll_pssa(vv));
     let pa: Int = ll_pssa(la) + 1;
     println("  " + ll_ssa(pa) + " = inttoptr " + ll_ir_val(ty) + " " + ll_ssa(ll_pssa(la)) + " to ptr");
-    println("  store " + ll_ir_val(ty) + " " + ll_ssa(ll_pssa(vv)) + ", ptr " + ll_ssa(pa));
+    println("  store " + ll_ir_val(ty) + " " + ll_opnd(vv) + ", ptr " + ll_ssa(pa) + ", align 8");
     let mut p: Int = ll_ppos(vv);
     if p < n && ll_k(toks, p) == "SEMI" { p = p + 1; }
     return ll_pack(p, pa, ty, "");

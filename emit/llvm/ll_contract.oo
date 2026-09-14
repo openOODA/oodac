@@ -19,6 +19,7 @@ import "ll_call.oo";
 import "types/types_core.oo";
 import "lex/token_parse_int.oo";
 import "check/smt_clause_query.oo";
+import "ll_slot.oo";
 
 fn ll_con_end(toks: List[String], p: Int, n: Int) -> Int {
     let mut q: Int = p;
@@ -106,7 +107,7 @@ fn ll_con_trap(ssa0: Int, cond: Int, name: String, idx: Int, kind: String) -> In
     let mut s: Int = ssa0;
     if cond > s { s = cond; }
     s = s + 1;
-    println("  " + ll_ssa(s) + " = getelementptr [" + mlen.to_string() + " x i8], ptr @.con_" + tag + ", i64 0, i64 0");
+    println("  " + ll_ssa(s) + " = getelementptr inbounds [" + mlen.to_string() + " x i8], ptr @.con_" + tag + ", i64 0, i64 0");
     s = s + 1;
     println("  " + ll_ssa(s) + " = call { ptr, i64 } @oo_str_lit(ptr " + ll_ssa(s - 1) + ")");
     s = s + 1;
@@ -177,20 +178,20 @@ pub fn ll_contract_return(toks: List[String], v: String, env0: String, ssa0: Int
     let slot: String = "%cres" + site.to_string();
     if ret_kind == "str" {
         let mut rv: Int = ll_pssa(v);
-        if ll_pptr(v) != "" {
+        if ll_has_slot(v) {
             ssa = ssa + 1;
-            println("  " + ll_ssa(ssa) + " = load { ptr, i64 }, ptr " + ll_pptr(v));
+            println("  " + ll_ssa(ssa) + " = load { ptr, i64 }, ptr " + ll_pptr(v) + ", align 8");
             rv = ssa;
         }
         ssa = ssa + 1;
         println("  " + ll_ssa(ssa) + " = call i64 @oo_chars_len({ ptr, i64 } " + ll_ssa(rv) + ")");
-        println("  " + slot + " = alloca i64, align 8");
-        println("  store i64 " + ll_ssa(ssa) + ", ptr " + slot);
+        ll_slot_name(slot);
+        println("  store i64 " + ll_ssa(ssa) + ", ptr " + slot + ", align 8");
         env = type_env_put(env, "result", "i64");
         env = type_env_put(env, "__l__result", slot);
     } else if ll_is_int(ret_kind) || ret_kind == "f64" || ret_kind == "i1" {
-        println("  " + slot + " = alloca " + ll_ir_alloc(ret_kind) + ", align 8");
-        println("  store " + ll_ir_val(ret_kind) + " " + ll_ssa(ll_pssa(v)) + ", ptr " + slot);
+        ll_slot_name(slot);
+        println("  store " + ll_ir_val(ret_kind) + " " + ll_opnd(v) + ", ptr " + slot + ", align 8");
         env = type_env_put(env, "result", ret_kind);
         env = type_env_put(env, "__l__result", slot);
     } else {

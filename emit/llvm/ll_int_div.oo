@@ -1,0 +1,23 @@
+// # LLVM integer div and rem with zero trap
+//
+// Logline: sdiv/udiv/srem/urem after an eq-zero check; trap is fail-closed.
+//
+// Setup: Called from ll_apply_intop. Labels use the SSA index as a suffix.
+//
+// Beats:
+//   1. Divisor 0 calls oo_process_exit and unreachable.
+//   2. Defined wrapping add/mul stay in ll_int.oo; only div is checked.
+
+import "ll_tok.oo";
+
+pub fn ll_int_div(op: String, inst: String, t: String, le: String, re: String, s: Int, ck: String) -> String {
+    let tag: String = s.to_string();
+    println("  " + ll_ssa(s) + " = icmp eq " + t + " " + ll_opnd(re) + ", 0");
+    println("  br i1 " + ll_ssa(s) + ", label %div0" + tag + ", label %divok" + tag);
+    println("div0" + tag + ":");
+    println("  call void @oo_process_exit(i64 1)");
+    println("  unreachable");
+    println("divok" + tag + ":");
+    println("  " + ll_ssa(s + 1) + " = " + inst + " " + t + " " + ll_opnd(le) + ", " + ll_opnd(re));
+    return ll_pack(ll_ppos(re), s + 1, ck, "");
+}

@@ -16,6 +16,7 @@ import "ll_tok.oo";
 import "ll_ty.oo";
 import "ll_int.oo";
 import "ll_struct.oo";
+import "ll_slot.oo";
 
 pub fn ll_method(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, env: String, arg: String) -> String {
     if ll_is_struct(kind) {
@@ -27,8 +28,8 @@ pub fn ll_method(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, env:
         let fr: String = ll_struct_field_load(kind, ssa, ptr, m, ssa0);
         if ll_pptr(fr) == "" && ll_is_struct(ll_pk(fr)) {
             let a: String = ll_tmpa(ll_pssa(fr) + 1);
-            println("  " + a + " = alloca " + ll_ir_alloc(ll_pk(fr)) + ", align 8");
-            println("  store " + ll_ir_val(ll_pk(fr)) + " " + ll_ssa(ll_pssa(fr)) + ", ptr " + a);
+            ll_slot_name(a);
+            println("  store " + ll_ir_val(ll_pk(fr)) + " " + ll_opnd(fr) + ", ptr " + a + ", align 8");
             return ll_pack(0, ll_pssa(fr) + 1, ll_pk(fr), a);
         }
         return fr;
@@ -108,7 +109,7 @@ pub fn ll_method(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, env:
         println("  br label %umerge" + id.to_string());
         println("uerr" + id.to_string() + ":");
         let ms: Int = tag + 1;
-        println("  " + ll_ssa(ms) + " = getelementptr [12 x i8], ptr @.uunwrapmsg, i64 0, i64 0");
+        println("  " + ll_ssa(ms) + " = getelementptr inbounds [12 x i8], ptr @.uunwrapmsg, i64 0, i64 0");
         let ml: Int = ms + 1;
         println("  " + ll_ssa(ml) + " = call { ptr, i64 } @oo_str_lit(ptr " + ll_ssa(ms) + ")");
         let pe: Int = ll_print_val("str", ml, "", ml);
@@ -154,7 +155,7 @@ pub fn ll_method(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, env:
         let mut vs: Int = ll_pssa(lv);
         if ll_is_struct(ll_pk(lv)) && ll_pptr(lv) != "" {
             vs = vs + 1;
-            println("  " + ll_ssa(vs) + " = load " + ll_ir_val(ll_pk(lv)) + ", ptr " + ll_pptr(lv));
+            println("  " + ll_ssa(vs) + " = load " + ll_ir_val(ll_pk(lv)) + ", ptr " + ll_pptr(lv) + ", align 8");
         }
         println("  br label %wmerge" + id.to_string());
         println("werr" + id.to_string() + ":");
@@ -164,8 +165,8 @@ pub fn ll_method(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, env:
         println("  " + ll_ssa(ph) + " = phi " + ll_ir_val(ll_pk(lv)) + " [ " + ll_ssa(vs) + ", %wok" + id.to_string() + " ], [ " + ll_ssa(dv) + ", %werr" + id.to_string() + " ]");
         if ll_is_struct(ll_pk(lv)) {
             let wa: String = ll_tmpa(ph + 1);
-            println("  " + wa + " = alloca " + ll_ir_alloc(ll_pk(lv)) + ", align 8");
-            println("  store " + ll_ir_val(ll_pk(lv)) + " " + ll_ssa(ph) + ", ptr " + wa);
+            ll_slot_name(wa);
+            println("  store " + ll_ir_val(ll_pk(lv)) + " " + ll_ssa(ph) + ", ptr " + wa + ", align 8");
             return ll_pack(0, ph + 1, ll_pk(lv), wa);
         }
         return ll_pack(0, ph, ll_pk(lv), "");
@@ -178,6 +179,6 @@ pub fn ll_method(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, env:
 pub fn ll_arm_val(arm: String, ssa0: Int) -> Int {
     if ll_pptr(arm) == "" { return ll_pssa(arm); }
     let s: Int = ll_hw(ll_pssa(arm), ssa0) + 1;
-    println("  " + ll_ssa(s) + " = load " + ll_ir_val(ll_pk(arm)) + ", ptr " + ll_pptr(arm));
+    println("  " + ll_ssa(s) + " = load " + ll_ir_val(ll_pk(arm)) + ", ptr " + ll_pptr(arm) + ", align 8");
     return s;
 }

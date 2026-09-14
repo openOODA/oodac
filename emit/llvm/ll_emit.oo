@@ -13,6 +13,7 @@ import "ll_tok.oo";
 import "ll_rt.oo";
 import "ll_fn.oo";
 import "ll_int.oo";
+import "ll_user_call.oo";
 import "ll_struct.oo";
 import "ll_expr.oo";
 import "ll_ty.oo";
@@ -162,8 +163,8 @@ pub fn ll_emit_stream_plus(toks: List[String], extra: String) {
     let extra_st: String = ll_struct_tab_of(extra);
     let stenv: String = ll_struct_declare(toks, extra_st);
     let local_st: String = ll_st_pick(stenv, ll_local_st_names(toks));
-    ll_struct_emit_imports(stenv, local_st);
-    ll_struct_emit_types(local_st);
+    ll_struct_emit_imports(stenv, local_st, toks);
+    ll_struct_emit_types(local_st, toks);
     let stab: String = ll_struct_tab_of(stenv);
     let local_sigs: String = ll_collect_sigs(toks, stab);
     let sigs: String = local_sigs + stenv + extra;
@@ -184,6 +185,7 @@ pub fn ll_emit_stream_plus(toks: List[String], extra: String) {
     ll_emit_import_decls(extra, local_fns, want);
     let mut pos: Int = 0;
     let mut seen_fn: String = "\t";
+    let mut ctors: String = "";
     while pos < n {
         let k: String = ll_k(toks, pos);
         if k == "EOF" {
@@ -209,9 +211,12 @@ pub fn ll_emit_stream_plus(toks: List[String], extra: String) {
             while pos < n && ll_k(toks, pos) != "LBRACE" && ll_k(toks, pos) != "EOF" { pos = pos + 1; }
             if pos < n && ll_k(toks, pos) == "LBRACE" { pos = skip_balanced(toks, pos); }
         } else if k == "KW_VERIFY" {
-            pos = ll_emit_verify(toks, pos, n, stab);
+            let vr: String = ll_emit_verify(toks, pos, n, stab);
+            pos = ll_ppos(vr);
+            if ll_pk(vr) != "" { ctors = ctors + ll_pk(vr) + "\t"; }
         } else {
             pos = pos + 1;
         }
     }
+    ll_emit_ctors(ctors);
 }

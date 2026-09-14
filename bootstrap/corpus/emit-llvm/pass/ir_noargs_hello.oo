@@ -1,0 +1,11 @@
+// # LLVM no-args hello
+//
+// Logline: main without args must not build argv lists.
+//
+// Beats:
+//   1. Prints 7.
+//   2. No args formal.
+
+pub fn main() {
+    println(7);
+}

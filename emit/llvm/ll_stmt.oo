@@ -20,6 +20,8 @@ import "ll_struct.oo";
 import "ll_field.oo";
 import "ll_exit.oo";
 import "ll_arc.oo";
+import "ll_print.oo";
+import "ll_slot.oo";
 import "types/types_core.oo";
 
 pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String, env0: String, ssa0: Int, stab: String) -> String {
@@ -54,7 +56,7 @@ pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String, env
             if ll_is_int(ann) && ll_is_int(ty) && ann != ty { ty = ann; }
             let dst: String = ll_var(name) + "_s" + site.to_string();
             env = type_env_put(env, "__l__" + name, dst);
-            println("  " + dst + " = alloca " + ll_ir_alloc(ty) + ", align 8");
+            ll_slot_name(dst);
             ssa = ll_store(name, ty, v, ssa, env);
             env = type_env_put(env, name, ty);
             if ll_pk(v) == "ilist" || ll_pk(v) == "slist" { env = type_env_put(env, name, ll_pk(v)); }
@@ -157,29 +159,29 @@ pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String, env
                 println("ERR\tllvm\tfor residual (i64 range bounds only)");
                 process_exit(1);
             }
-            let mut los: Int = ll_pssa(lo);
-            if ll_pptr(lo) != "" {
+            let mut lo_op: String = ll_opnd(lo);
+            if ll_pptr(lo) != "" && !ll_is_imm(lo) {
                 ssa = ssa + 1;
-                println("  " + ll_ssa(ssa) + " = load i64, ptr " + ll_pptr(lo));
-                los = ssa;
+                println("  " + ll_ssa(ssa) + " = load i64, ptr " + ll_pptr(lo) + ", align 8");
+                lo_op = ll_ssa(ssa);
             }
-            let mut his: Int = ll_pssa(hi);
-            if ll_pptr(hi) != "" {
+            let mut hi_op: String = ll_opnd(hi);
+            if ll_pptr(hi) != "" && !ll_is_imm(hi) {
                 ssa = ssa + 1;
-                println("  " + ll_ssa(ssa) + " = load i64, ptr " + ll_pptr(hi));
-                his = ssa;
+                println("  " + ll_ssa(ssa) + " = load i64, ptr " + ll_pptr(hi) + ", align 8");
+                hi_op = ll_ssa(ssa);
             }
             let fid: Int = ssa + 1;
             let fvar: String = ll_var(fname) + "_" + fid.to_string();
-            println("  " + fvar + " = alloca i64, align 8");
-            println("  store i64 " + ll_ssa(los) + ", ptr " + fvar);
+            ll_slot_name(fvar);
+            println("  store i64 " + lo_op + ", ptr " + fvar + ", align 8");
             let envf: String = type_env_put(type_env_put(type_env_put(type_env_put(type_env_put(env, fname, "i64"), "__l__" + fname, fvar), "__brk__", "fend" + fid.to_string()), "__cont__", "fcond" + fid.to_string()), "__one__", "");
             println("  br label %fcond" + fid.to_string());
             println("fcond" + fid.to_string() + ":");
             ssa = ssa + 1;
-            println("  " + ll_ssa(ssa) + " = load i64, ptr " + fvar);
+            println("  " + ll_ssa(ssa) + " = load i64, ptr " + fvar + ", align 8");
             ssa = ssa + 1;
-            println("  " + ll_ssa(ssa) + " = icmp slt i64 " + ll_ssa(ssa - 1) + ", " + ll_ssa(his));
+            println("  " + ll_ssa(ssa) + " = icmp slt i64 " + ll_ssa(ssa - 1) + ", " + hi_op);
             println("  br i1 " + ll_ssa(ssa) + ", label %fbody" + fid.to_string() + ", label %fend" + fid.to_string());
             if p < n && ll_k(toks, p) == "LBRACE" { p = p + 1; }
             println("fbody" + fid.to_string() + ":");
@@ -188,10 +190,10 @@ pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String, env
             if p < n && ll_k(toks, p) == "RBRACE" { p = p + 1; }
             if ll_pterm(fb) == 0 {
                 ssa = ssa + 1;
-                println("  " + ll_ssa(ssa) + " = load i64, ptr " + fvar);
+                println("  " + ll_ssa(ssa) + " = load i64, ptr " + fvar + ", align 8");
                 ssa = ssa + 1;
                 println("  " + ll_ssa(ssa) + " = add i64 " + ll_ssa(ssa - 1) + ", 1");
-                println("  store i64 " + ll_ssa(ssa) + ", ptr " + fvar);
+                println("  store i64 " + ll_ssa(ssa) + ", ptr " + fvar + ", align 8");
                 println("  br label %fcond" + fid.to_string());
             }
             println("fend" + fid.to_string() + ":");

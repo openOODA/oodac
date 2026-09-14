@@ -7,6 +7,7 @@ import "ll_ty.oo";
 import "ll_int.oo";
 import "ll_struct_list.oo";
 import "ll_struct_rr.oo";
+import "ll_slot.oo";
 import "types/types_core.oo";
 import "lex/token_parse_int.oo";
 pub fn ll_struct_kind(name: String) -> String {
@@ -83,7 +84,7 @@ pub fn ll_struct_field_ptr(kind: String, ptr: String, field: String, ssa0: Int) 
     if fi == "" || str_index_of(fi, ":") < 0 { println("ERR\tllvm\tunknown field " + field); process_exit(1); }
     let ci: Int = str_index_of(fi, ":");
     let idx: String = str_slice(fi, 0, ci); let fk: String = str_slice(fi, ci + 1, chars_len(fi)); let s: Int = ssa0 + 1;
-    println("  " + ll_ssa(s) + " = getelementptr %" + ll_st_basek(kind) + ", ptr " + ptr + ", i32 0, i32 " + idx);
+    println("  " + ll_ssa(s) + " = getelementptr inbounds %" + ll_st_basek(kind) + ", ptr " + ptr + ", i32 0, i32 " + idx);
     return ll_pack(0, s, fk, ll_ssa(s));
 }
 pub fn ll_struct_field_load(kind: String, ssa: Int, ptr: String, field: String, ssa0: Int) -> String {
@@ -91,7 +92,7 @@ pub fn ll_struct_field_load(kind: String, ssa: Int, ptr: String, field: String, 
     let fp: String = ll_struct_field_ptr(kind, ptr, field, ssa0);
     let fk: String = ll_pk(fp);
     let t: Int = ll_pssa(fp) + 1;
-    println("  " + ll_ssa(t) + " = load " + ll_ir_val(fk) + ", ptr " + ll_pptr(fp));
+    println("  " + ll_ssa(t) + " = load " + ll_ir_val(fk) + ", ptr " + ll_pptr(fp) + ", align 8");
     return ll_pack(0, t, fk, "");
 }
 pub fn ll_struct_declare(toks: List[String], base: String) -> String {
@@ -139,8 +140,7 @@ pub fn ll_struct_declare(toks: List[String], base: String) -> String {
     }
     return env;
 }
-pub fn ll_struct_emit_types(env: String) {
-    println("declare ptr @oo_list_alloc_payload(i64, i64)");
+pub fn ll_struct_emit_types(env: String, toks: List[String]) {
     let n: Int = chars_len(env); let mut i: Int = 0;
     while i < n {
         if i + 6 <= n && str_slice(env, i, i + 6) == "__st__" {
@@ -170,14 +170,16 @@ pub fn ll_struct_emit_types(env: String) {
             }
             println("%St_" + nm + " = type { " + tys + " }");
             println("define hidden void @oo_retain_St_" + nm + "(ptr %p) {");
+            ll_heap();
             ll_st_rr(fl, nm, 1);
             println("  ret void");
             println("}");
             println("define hidden void @oo_release_St_" + nm + "(ptr %p) {");
+            ll_heap();
             ll_st_rr(fl, nm, 0);
             println("  ret void");
             println("}");
-            ll_olist_emit_one(nm);
+            if ll_olist_wanted(toks, nm) { ll_olist_emit_one(nm); }
             i = c;
         }
         i = i + 1;
@@ -188,7 +190,7 @@ pub fn ll_struct_lit_at(toks: List[String], pos: Int, n: Int, ssa0: Int, env: St
     if type_env_get(env, "__st__" + nm) == "" { println("ERR\tllvm\tunknown struct " + nm); process_exit(1); }
     if pos + 1 >= n || ll_k(toks, pos + 1) != "LBRACE" { println("ERR\tllvm\tstruct lit"); process_exit(1); }
     let a: String = ll_tmpa(ssa0 + 1); let mut s: Int = ssa0 + 1;
-    println("  " + a + " = alloca %St_" + nm + ", align 8");
+    ll_slot_name(a);
     let mut rich: String = "St_" + nm + "#"; let mut first: Bool = true;
     let en: Int = chars_len(env); let pre: String = "__stf__" + nm + "."; let pl: Int = chars_len(pre); let mut j: Int = 0;
     while j < en {
@@ -237,13 +239,13 @@ pub fn ll_struct_lit_at(toks: List[String], pos: Int, n: Int, ssa0: Int, env: St
         }
         let fi: String = ll_struct_field(rich, fld2); let idx: String = str_slice(fi, 0, str_index_of(fi, ":"));
         s = s + 1;
-        println("  " + ll_ssa(s) + " = getelementptr %St_" + nm + ", ptr " + a + ", i32 0, i32 " + idx);
-        if ll_pptr(v) != "" {
+        println("  " + ll_ssa(s) + " = getelementptr inbounds %St_" + nm + ", ptr " + a + ", i32 0, i32 " + idx);
+        if ll_has_slot(v) {
             s = s + 1;
-            println("  " + ll_ssa(s) + " = load " + ll_ir_val(fk) + ", ptr " + ll_pptr(v));
-            println("  store " + ll_ir_val(fk) + " " + ll_ssa(s) + ", ptr " + ll_ssa(s - 1));
+            println("  " + ll_ssa(s) + " = load " + ll_ir_val(fk) + ", ptr " + ll_pptr(v) + ", align 8");
+            println("  store " + ll_ir_val(fk) + " " + ll_ssa(s) + ", ptr " + ll_ssa(s - 1) + ", align 8");
         } else {
-            println("  store " + ll_ir_val(fk) + " " + ll_ssa(ll_pssa(v)) + ", ptr " + ll_ssa(s));
+            println("  store " + ll_ir_val(fk) + " " + ll_opnd(v) + ", ptr " + ll_ssa(s) + ", align 8");
         }
     }
     if p >= n || ll_k(toks, p) != "RBRACE" { println("ERR\tllvm\tstruct lit rbrace"); process_exit(1); }

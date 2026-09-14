@@ -1,0 +1,25 @@
+// # LLVM two verify blocks
+//
+// Logline: Two verify ctors must be one appending global_ctors array.
+//
+// Beats:
+//   1. Two named verify blocks.
+//   2. main prints 1.
+
+pub fn main() {
+    println(1);
+}
+
+verify smoke {
+    let x: Int = 1;
+    if x != 1 {
+        println(0);
+    }
+}
+
+verify ember {
+    let y: Int = 2;
+    if y != 2 {
+        println(0);
+    }
+}

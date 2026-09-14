@@ -1,0 +1,16 @@
+// # LLVM borrow of Int is a ptr
+//
+// Logline: &Int must lower as ptr, not ptrtoint.
+//
+// Beats:
+//   1. f takes &Int.
+//   2. main borrows a local Int.
+
+fn f(p: &Int) -> Int {
+    return *p;
+}
+
+pub fn main() {
+    let x: Int = 9;
+    println(f(&x));
+}

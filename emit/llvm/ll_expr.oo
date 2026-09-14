@@ -1,13 +1,8 @@
 // # LLVM expression lowering
 //
-// Logline: Walk primary, postfix method/call, unary, and binop tokens. Fail closed on unknown.
+// Logline: Walk primary, postfix, unary, and binop tokens.
 //
-// Setup: Locals in env name=kind. Aggregates live in allocas. STRING globals are @.s<pos>.
-//
-// Beats:
-//   1. INT/STRING/IDENT load and builtins (call-argument walk lives in ll_int.oo).
-//   2. .to_string .is_some .is_none .is_ok .is_err .val .err methods.
-//   3. C-like precedence: || < && < compare < + - < * / % via ll_binop/ll_cmp/ll_add/ll_mul.
+// Setup: Locals in env. STRING globals @.s<pos>. Beats: INT/STRING/IDENT; methods.
 import "ll_tok.oo";
 import "ll_ty.oo";
 import "ll_int.oo";
@@ -34,13 +29,14 @@ fn ll_unary(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> Str
         if ll_is_agg(ll_pk(ad)) {
             return ll_pack(ap + 1, ll_pssa(ad), ll_pk(ad), ll_pptr(ad));
         }
+        if ll_is_refk(ll_pk(ad)) {
+            return ll_pack(ap + 1, ll_pssa(ad), ll_pk(ad), ll_pptr(ad));
+        }
         if ll_pk(ad) != "i64" && ll_pk(ad) != "u64" {
             println("ERR\tllvm\tborrow of narrow/float/bool not lowered");
             process_exit(1);
         }
-        let s: Int = ll_pssa(ad) + 1;
-        println("  " + ll_ssa(s) + " = ptrtoint ptr " + ll_pptr(ad) + " to " + ll_ir_val(ll_pk(ad)));
-        return ll_pack(ap + 1, s, ll_pk(ad), ll_pptr(ad));
+        return ll_pack(ap + 1, ll_pssa(ad), "ri64", ll_pptr(ad));
     }
     if pos < n && ll_k(toks, pos) == "STAR" {
         let r: String = ll_unary(toks, pos + 1, n, ssa0, env);
@@ -48,16 +44,23 @@ fn ll_unary(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> Str
             println("ERR\tllvm\tderef of aggregate ref");
             process_exit(1);
         }
+        if ll_is_refk(ll_pk(r)) {
+            let s2: Int = ll_pssa(r) + 1;
+            let mut lk: String = "i64";
+            if ll_pk(r) == "ri32" || ll_pk(r) == "ru32" { lk = "i32"; }
+            println("  " + ll_ssa(s2) + " = load " + lk + ", ptr " + ll_pptr(r) + ", align 8");
+            return ll_pack(ll_ppos(r), s2, lk, "");
+        }
         let s1: Int = ll_pssa(r) + 1;
-        println("  " + ll_ssa(s1) + " = inttoptr " + ll_ir_val(ll_pk(r)) + " " + ll_ssa(ll_pssa(r)) + " to ptr");
+        println("  " + ll_ssa(s1) + " = inttoptr " + ll_ir_val(ll_pk(r)) + " " + ll_opnd(r) + " to ptr");
         let s2: Int = s1 + 1;
-        println("  " + ll_ssa(s2) + " = load " + ll_ir_val(ll_pk(r)) + ", ptr " + ll_ssa(s1));
+        println("  " + ll_ssa(s2) + " = load " + ll_ir_val(ll_pk(r)) + ", ptr " + ll_ssa(s1) + ", align 8");
         return ll_pack(ll_ppos(r), s2, ll_pk(r), "");
     }
     if pos < n && ll_k(toks, pos) == "BANG" {
         let r: String = ll_unary(toks, pos + 1, n, ssa0, env);
         let s: Int = ll_pssa(r) + 1;
-        println("  " + ll_ssa(s) + " = xor i1 " + ll_ssa(ll_pssa(r)) + ", true");
+        println("  " + ll_ssa(s) + " = xor i1 " + ll_opnd(r) + ", true");
         return ll_pack(ll_ppos(r), s, "i1", "");
     }
     if pos < n && ll_k(toks, pos) == "MINUS" {
@@ -205,15 +208,13 @@ fn ll_primary(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> S
     let k: String = ll_k(toks, pos);
     if k == "INT" {
         let s: Int = ssa0 + 1;
-        println("  " + ll_ssa(s) + " = add i64 0, " + ll_t(toks, pos));
-        return ll_pack(pos + 1, s, "i64", "");
+        return ll_pack(pos + 1, s, "i64", "#" + ll_t(toks, pos));
     }
     if k == "FLOAT" { return ll_float_lit(toks, pos, ssa0); }
     if k == "KW_TRUE" || k == "KW_FALSE" {
         let s: Int = ssa0 + 1;
         let bit: String = if k == "KW_TRUE" { "1" } else { "0" };
-        println("  " + ll_ssa(s) + " = add i1 0, " + bit);
-        return ll_pack(pos + 1, s, "i1", "");
+        return ll_pack(pos + 1, s, "i1", "#" + bit);
     }
     if k == "STRING" {
         return ll_str_gep(toks, pos, ssa0);

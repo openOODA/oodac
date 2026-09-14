@@ -12,37 +12,63 @@
 
 import "ll_tok.oo";
 import "ll_stmt.oo";
+import "ll_slot.oo";
 import "types/token_search.oo";
 
-pub fn ll_emit_verify(toks: List[String], pos: Int, n: Int, stab: String) -> Int {
+pub fn ll_emit_verify(toks: List[String], pos: Int, n: Int, stab: String) -> String {
     let mut p: Int = pos + 1;
     let mut vname: String = "anon";
     if p < n && ll_k(toks, p) == "IDENT" {
         vname = ll_t(toks, p);
         p = p + 1;
     }
-    if p >= n || ll_k(toks, p) != "LBRACE" { return p; }
+    if p >= n || ll_k(toks, p) != "LBRACE" { return ll_pack(p, 0, "", ""); }
     let id: String = pos.to_string();
     let fnn: String = "oo_verify_" + vname + "_" + id;
     println("define internal void @" + fnn + "() {");
     println("entry:");
+    ll_heap();
     println("  %g = call ptr @getenv(ptr @.oodatest)");
     println("  %z = icmp eq ptr %g, null");
-    println("  br i1 %z, label %vskip, label %vchk");
-    println("vchk:");
-    println("  %c = load i8, ptr %g");
+    println("  br i1 %z, label %vskip" + id + ", label %vchk" + id);
+    println("vchk" + id + ":");
+    println("  %c = load i8, ptr %g, align 1");
     println("  %e = icmp eq i8 %c, 0");
-    println("  br i1 %e, label %vskip, label %vrun");
-    println("vrun:");
+    println("  br i1 %e, label %vskip" + id + ", label %vrun" + id);
+    println("vrun" + id + ":");
     let body: String = ll_emit_stmts(toks, p + 1, n, "void", "", 10, stab);
     if ll_pterm(body) == 0 {
-        println("  call void @oo_print_str(ptr getelementptr ([10 x i8], ptr @.vok, i64 0, i64 0), i64 9)");
+        println("  call void @oo_print_str(ptr getelementptr inbounds ([10 x i8], ptr @.vok, i64 0, i64 0), i64 9)");
         println("  call void @oo_println()");
-        println("  br label %vskip");
+        println("  br label %vskip" + id);
     }
-    println("vskip:");
+    println("vskip" + id + ":");
     println("  ret void");
     println("}");
-    println("@llvm.global_ctors = appending global [1 x { i32, ptr, ptr }] [{ i32, ptr, ptr } { i32 65535, ptr @" + fnn + ", ptr null }]");
-    return skip_balanced(toks, p);
+    return ll_pack(skip_balanced(toks, p), 0, fnn, "");
+}
+
+pub fn ll_emit_ctors(ctors: String) {
+    if ctors == "" { return; }
+    let n: Int = chars_len(ctors);
+    let mut names: List[String] = list_new();
+    let mut i: Int = 0;
+    let mut start: Int = 0;
+    while i <= n {
+        if i == n || char_at(ctors, i) == "\t" {
+            if i > start { names = list_push(names, str_slice(ctors, start, i)); }
+            start = i + 1;
+        }
+        i = i + 1;
+    }
+    let cnt: Int = list_len(names);
+    if cnt < 1 { return; }
+    let mut line: String = "@llvm.global_ctors = appending global [" + cnt.to_string() + " x { i32, ptr, ptr }] [";
+    let mut j: Int = 0;
+    while j < cnt {
+        if j > 0 { line = line + ", "; }
+        line = line + "{ i32, ptr, ptr } { i32 65535, ptr @" + list_get(names, j) + ", ptr null }";
+        j = j + 1;
+    }
+    println(line + "]");
 }

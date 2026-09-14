@@ -1,0 +1,55 @@
+// # LLVM println lowering
+//
+// Logline: Print Int/Bool/String/Float values through oo_* helpers.
+//
+// Setup: Called from ll_stmt. Int constants use #imm in ptr.
+//
+// Beats:
+//   1. i64 uses oo_int_to_str then print_str.
+//   2. f64 uses ll_print_float.
+
+import "ll_tok.oo";
+import "ll_ty.oo";
+import "ll_int.oo";
+import "ll_float.oo";
+
+pub fn ll_print_val(kind: String, ssa: Int, ptr: String, ssa0: Int) -> Int {
+    if kind == "f64" {
+        return ll_print_float(ssa, ptr, ssa0);
+    }
+    if kind == "i1" {
+        let n2: Int = ssa0 + 1;
+        let mut b: String = ll_ssa(ssa);
+        if chars_len(ptr) >= 2 && char_at(ptr, 0) == "#" { b = str_slice(ptr, 1, chars_len(ptr)); }
+        println("  " + ll_ssa(n2) + " = zext i1 " + b + " to i64");
+        return ll_print_val("i64", n2, "", n2);
+    }
+    if kind == "str" {
+        let mut s: Int = ssa;
+        if ptr != "" {
+            s = ssa0 + 1;
+            println("  " + ll_ssa(s) + " = load { ptr, i64 }, ptr " + ptr + ", align 8");
+        }
+        let p: Int = s + 1;
+        let l: Int = s + 2;
+        println("  " + ll_ssa(p) + " = extractvalue { ptr, i64 } " + ll_ssa(s) + ", 0");
+        println("  " + ll_ssa(l) + " = extractvalue { ptr, i64 } " + ll_ssa(s) + ", 1");
+        println("  call void @oo_print_str(ptr " + ll_ssa(p) + ", i64 " + ll_ssa(l) + ")");
+        println("  call void @oo_println()");
+        return l;
+    }
+    if kind == "i64" {
+        let n2: Int = ssa0 + 1;
+        let mut arg: String = ll_ssa(ssa);
+        if chars_len(ptr) >= 2 && char_at(ptr, 0) == "#" { arg = str_slice(ptr, 1, chars_len(ptr)); }
+        println("  " + ll_ssa(n2) + " = call { ptr, i64 } @oo_int_to_str(i64 " + arg + ")");
+        return ll_print_val("str", n2, "", n2);
+    }
+    if ll_is_int(kind) {
+        let e: String = ll_int_convert(ll_pack(0, ssa, kind, ptr), ssa0, "i64");
+        return ll_print_val("i64", ll_pssa(e), "", ll_pssa(e));
+    }
+    println("ERR\tllvm\tprint kind " + kind);
+    process_exit(1);
+    return ssa0;
+}

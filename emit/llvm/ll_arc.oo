@@ -68,7 +68,7 @@ fn ll_arc_rr(kind: String, ptr: String, ssa0: Int, is_ret: Int) -> Int {
     if is_ret != 0 { op = "retain"; }
     if kind == "str" {
         let s: Int = ssa0 + 1;
-        println("  " + ll_ssa(s) + " = load { ptr, i64 }, ptr " + ptr);
+        println("  " + ll_ssa(s) + " = load { ptr, i64 }, ptr " + ptr + ", align 8");
         println("  call void @oo_str_" + op + "({ ptr, i64 } " + ll_ssa(s) + ")");
         return s;
     }
@@ -83,8 +83,8 @@ fn ll_arc_rr(kind: String, ptr: String, ssa0: Int, is_ret: Int) -> Int {
     if kind == "ress" || kind == "opts" || kind == "resi" {
         let s: Int = ssa0 + 1;
         let tag: String = s.to_string();
-        println("  " + ll_ssa(s) + " = getelementptr " + ll_ir_alloc(kind) + ", ptr " + ptr + ", i32 0, i32 0");
-        println("  " + ll_ssa(s + 1) + " = load i32, ptr " + ll_ssa(s));
+        println("  " + ll_ssa(s) + " = getelementptr inbounds " + ll_ir_alloc(kind) + ", ptr " + ptr + ", i32 0, i32 0");
+        println("  " + ll_ssa(s + 1) + " = load i32, ptr " + ll_ssa(s) + ", align 4");
         let mut pred: String = "ne";
         if kind == "resi" { pred = "eq"; }
         println("  " + ll_ssa(s + 2) + " = icmp " + pred + " i32 " + ll_ssa(s + 1) + ", 0");
@@ -92,8 +92,8 @@ fn ll_arc_rr(kind: String, ptr: String, ssa0: Int, is_ret: Int) -> Int {
         println("arcy" + tag + ":");
         let mut fi: String = "1";
         if kind == "resi" { fi = "2"; }
-        println("  " + ll_ssa(s + 3) + " = getelementptr " + ll_ir_alloc(kind) + ", ptr " + ptr + ", i32 0, i32 " + fi);
-        println("  " + ll_ssa(s + 4) + " = load { ptr, i64 }, ptr " + ll_ssa(s + 3));
+        println("  " + ll_ssa(s + 3) + " = getelementptr inbounds " + ll_ir_alloc(kind) + ", ptr " + ptr + ", i32 0, i32 " + fi);
+        println("  " + ll_ssa(s + 4) + " = load { ptr, i64 }, ptr " + ll_ssa(s + 3) + ", align 8");
         println("  call void @oo_str_" + op + "({ ptr, i64 } " + ll_ssa(s + 4) + ")");
         println("  br label %arcn" + tag);
         println("arcn" + tag + ":");

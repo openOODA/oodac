@@ -14,6 +14,8 @@ import "ll_ty.oo";
 import "ll_stmt.oo";
 import "ll_ifexpr.oo";
 import "ll_contract.oo";
+import "ll_slot.oo";
+import "ll_fn_main.oo";
 import "types/types_core.oo";
 
 pub fn ll_fn_name_at(toks: List[String], pos: Int, n: Int) -> String {
@@ -76,6 +78,7 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String, stab: Stri
     let mut form: String = "";
     let mut plist: String = "";
     let mut refs: String = ";";
+    let mut use_args: Bool = false;
     while p < n && ll_k(toks, p) != "RPAREN" {
         if ll_k(toks, p) == "COMMA" { p = p + 1; continue; }
         if ll_k(toks, p) == "IDENT" {
@@ -88,6 +91,7 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String, stab: Stri
                 let isref: Bool = p < n && ll_k(toks, p) == "AMP";
                 let k: String = ll_ty_at(toks, p, n, stab);
                 env = type_env_put(env, pn, k);
+                if pn == "args" { use_args = true; }
                 if isref { refs = refs + pn + ";"; }
                 if g != "" { caps = caps + pn + "=" + g + ";"; }
                 if form != "" { form = form + "\t"; }
@@ -116,56 +120,7 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String, stab: Stri
     if ll_k(toks, p) != "LBRACE" { return p; }
     p = p + 1;
     if name == "main" {
-        println("define hidden i32 @main(i32 %argc, ptr %argv) {");
-        println("entry:");
-        let mut i: Int = 0;
-        let cn: Int = chars_len(caps);
-        while i < cn {
-            if char_at(caps, i) == "=" {
-                let mut s: Int = i;
-                while s > 0 && char_at(caps, s - 1) != ";" { s = s - 1; }
-                let nm: String = str_slice(caps, s, i);
-                let mut e: Int = i + 1;
-                while e < cn && char_at(caps, e) != ";" { e = e + 1; }
-                let suf: String = str_slice(caps, i + 1, e);
-                println("  " + ll_var(nm) + " = alloca i64, align 8");
-                println("  %g_" + nm + " = call i64 @oo_cap_grant_" + suf + "()");
-                println("  store i64 %g_" + nm + ", ptr " + ll_var(nm));
-            }
-            i = i + 1;
-        }
-        println("  %v_args = alloca %OoSList, align 8");
-        println("  call void @oo_slist_new(ptr sret(%OoSList) align 8 %v_args)");
-        println("  br label %args0");
-        println("args0:");
-        println("  %ai = phi i32 [ 1, %entry ], [ %ai2, %args1 ]");
-        println("  %acmp = icmp slt i32 %ai, %argc");
-        println("  br i1 %acmp, label %args1, label %args2");
-        println("args1:");
-        println("  %ap = getelementptr ptr, ptr %argv, i32 %ai");
-        println("  %astr = load ptr, ptr %ap");
-        println("  %alit = call { ptr, i64 } @oo_str_lit(ptr %astr)");
-        println("  %anew = alloca %OoSList, align 8");
-        println("  call void @oo_slist_push(ptr sret(%OoSList) align 8 %anew, ptr byval(%OoSList) align 8 %v_args, { ptr, i64 } %alit)");
-        println("  %acpy = load %OoSList, ptr %anew");
-        println("  store %OoSList %acpy, ptr %v_args");
-        println("  %ai2 = add i32 %ai, 1");
-        println("  br label %args0");
-        println("args2:");
-        env = type_env_put(env, "args", "slist");
-        let mut mrk: String = "main_i32";
-        if rk == "resi" { mrk = "resim"; }
-        if rk == "opti" { mrk = "optim"; }
-        if rk == "opts" { mrk = "optsm"; }
-        env = type_env_put(env, "__rk__", mrk);
-        if type_env_get(env, "__creq__") != "" || type_env_get(env, "__cens__") != "" {
-            println("ERR\tllvm\tcontracts on main not lowered");
-            process_exit(1);
-        }
-        let mb: String = ll_emit_stmts(toks, p, n, mrk, env, 10, stab);
-        if ll_pterm(mb) == 0 { println("  ret i32 0"); }
-        println("}");
-        return ll_skip_fn(toks, pos, n);
+        return ll_emit_main(toks, pos, n, p, env, caps, rk, stab, use_args);
     }
     let mut vis: String = "internal ";
     if is_pub { vis = "hidden "; }
@@ -181,6 +136,7 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String, stab: Stri
     } else {
         println("define " + vis + ll_ir_val(rk) + " @" + name + "(" + plist + ") {");
     }
+    ll_heap();
     let mut fi: Int = 0;
     let fnn: Int = chars_len(form);
     let mut start: Int = 0;
@@ -192,16 +148,18 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String, stab: Stri
                 let col: Int = str_index_of(pair, ":");
                 let pn: String = str_slice(pair, 0, col);
                 let k: String = str_slice(pair, col + 1, chars_len(pair));
-                if str_index_of(refs, ";" + pn + ";") >= 0 && ll_is_mem(k) {
+                if str_index_of(refs, ";" + pn + ";") >= 0 && (ll_is_mem(k) || ll_is_refk(k)) {
                     env = type_env_put(env, "__l__" + pn, "%p_" + pn);
                 } else {
-                    println("  " + ll_var(pn) + " = alloca " + ll_ir_alloc(k) + ", align 8");
+                    ll_slot_name(ll_var(pn));
                     if ll_is_mem(k) {
                         ssa = ssa + 1;
-                        println("  " + ll_ssa(ssa) + " = load " + ll_ir_val(k) + ", ptr %p_" + pn);
-                        println("  store " + ll_ir_val(k) + " " + ll_ssa(ssa) + ", ptr " + ll_var(pn));
+                        println("  " + ll_ssa(ssa) + " = load " + ll_ir_val(k) + ", ptr %p_" + pn + ", align 8");
+                        println("  store " + ll_ir_val(k) + " " + ll_ssa(ssa) + ", ptr " + ll_var(pn) + ", align 8");
+                    } else if ll_is_refk(k) {
+                        println("  store ptr %p_" + pn + ", ptr " + ll_var(pn) + ", align 8");
                     } else {
-                        println("  store " + ll_ir_val(k) + " %p_" + pn + ", ptr " + ll_var(pn));
+                        println("  store " + ll_ir_val(k) + " %p_" + pn + ", ptr " + ll_var(pn) + ", align 8");
                     }
                 }
             }

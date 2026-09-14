@@ -12,6 +12,7 @@
 import "ll_tok.oo";
 import "ll_ty.oo";
 import "ll_int.oo";
+import "ll_slot.oo";
 
 fn ll_tok_cap(args: List[String]) -> String {
     return ll_ssa(ll_pssa(list_get(args, 0)));
@@ -34,7 +35,7 @@ fn ll_int_slist2(callee: String, args: List[String], ssa0: Int) -> String {
     let a1: String = ll_as_val(list_get(args, 1), ssa0);
     let s: Int = ll_pssa(a1) + 1;
     let out: String = ll_tmpa(s);
-    println("  " + out + " = alloca %OoSList, align 8");
+    ll_slot_name(out);
     println("  call void @" + callee + "(ptr sret(%OoSList) align 8 " + out + ", i64 " + ll_tok_cap(args) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ")");
     return ll_pack(0, s, "slist", out);
 }
@@ -43,7 +44,7 @@ fn ll_int_resv2(callee: String, args: List[String], ssa0: Int) -> String {
     let a1: String = ll_as_val(list_get(args, 1), ssa0);
     let s: Int = ll_pssa(a1) + 1;
     let out: String = ll_tmpa(s);
-    println("  " + out + " = alloca %OoResV, align 8");
+    ll_slot_name(out);
     println("  call void @" + callee + "(ptr sret(%OoResV) align 8 " + out + ", i64 " + ll_tok_cap(args) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ")");
     return ll_pack(0, s, "ress", out);
 }
@@ -53,7 +54,7 @@ fn ll_int_resv3(callee: String, args: List[String], ssa0: Int) -> String {
     let a2: String = ll_as_val(list_get(args, 2), ll_pssa(a1));
     let s: Int = ll_pssa(a2) + 1;
     let out: String = ll_tmpa(s);
-    println("  " + out + " = alloca %OoResV, align 8");
+    ll_slot_name(out);
     println("  call void @" + callee + "(ptr sret(%OoResV) align 8 " + out + ", i64 " + ll_tok_cap(args) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a2)) + ")");
     return ll_pack(0, s, "ress", out);
 }

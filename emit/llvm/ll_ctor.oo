@@ -2,8 +2,7 @@
 //
 // Logline: Wrap payload into Option/Result aggregates. Refuse unknown kinds.
 //
-// Setup: expect is __e__ from let or return. Aggregates live in allocas.
-//
+// Setup: expect is __e__ from let or return.
 // Beats:
 //   1. None requires opti or opts.
 //   2. Some/Ok/Err wrap Int, String, list, or struct.
@@ -13,6 +12,7 @@ import "ll_tok.oo";
 import "ll_ty.oo";
 import "ll_int.oo";
 import "ll_struct.oo";
+import "ll_slot.oo";
 
 fn ll_resst_base(expect: String) -> String {
     if chars_len(expect) >= 6 && str_slice(expect, 0, 6) == "resSt_" {
@@ -41,8 +41,8 @@ pub fn ll_ret_resi(v: String, ssa0: Int) -> Int {
     }
     let p: String = ll_ensure_ptr(v, ssa0);
     let s: Int = ll_pssa(p) + 1;
-    println("  " + ll_ssa(s) + " = load %OoResI, ptr " + ll_pptr(p));
-    println("  store %OoResI " + ll_ssa(s) + ", ptr %ret");
+    println("  " + ll_ssa(s) + " = load %OoResI, ptr " + ll_pptr(p) + ", align 8");
+    println("  store %OoResI " + ll_ssa(s) + ", ptr %ret, align 8");
     println("  ret void");
     return s;
 }
@@ -54,8 +54,8 @@ pub fn ll_ret_opt(v: String, kind: String, ssa0: Int) -> Int {
     }
     let p: String = ll_ensure_ptr(v, ssa0);
     let s: Int = ll_pssa(p) + 1;
-    println("  " + ll_ssa(s) + " = load " + ll_ir_alloc(kind) + ", ptr " + ll_pptr(p));
-    println("  store " + ll_ir_alloc(kind) + " " + ll_ssa(s) + ", ptr %ret");
+    println("  " + ll_ssa(s) + " = load " + ll_ir_alloc(kind) + ", ptr " + ll_pptr(p) + ", align 8");
+    println("  store " + ll_ir_alloc(kind) + " " + ll_ssa(s) + ", ptr %ret, align 8");
     println("  ret void");
     return s;
 }
@@ -67,9 +67,9 @@ pub fn ll_ret_resim(v: String, ssa0: Int) -> Int {
     }
     let p: String = ll_ensure_ptr(v, ssa0);
     let s: Int = ll_pssa(p) + 1;
-    println("  " + ll_ssa(s) + " = getelementptr %OoResI, ptr " + ll_pptr(p) + ", i32 0, i32 0");
+    println("  " + ll_ssa(s) + " = getelementptr inbounds %OoResI, ptr " + ll_pptr(p) + ", i32 0, i32 0");
     let s2: Int = s + 1;
-    println("  " + ll_ssa(s2) + " = load i32, ptr " + ll_ssa(s));
+    println("  " + ll_ssa(s2) + " = load i32, ptr " + ll_ssa(s) + ", align 4");
     let s3: Int = s2 + 1;
     println("  " + ll_ssa(s3) + " = icmp eq i32 " + ll_ssa(s2) + ", 0");
     let s4: Int = s3 + 1;
@@ -84,8 +84,8 @@ pub fn ll_ctor(name: String, arg: String, ssa0: Int, expect: String) -> String {
         if nb != "" {
             let a: String = ll_tmpa(ssa0 + 1);
             let s: Int = ssa0 + 1;
-            println("  " + a + " = alloca %OoOpt_St_" + nb + ", align 8");
-            println("  store %OoOpt_St_" + nb + " { i32 0, %St_" + nb + " zeroinitializer }, ptr " + a);
+            ll_slot_name(a);
+            println("  store %OoOpt_St_" + nb + " { i32 0, %St_" + nb + " zeroinitializer }, ptr " + a + ", align 8");
             return ll_pack(0, s, expect, a);
         }
         if expect != "opti" && expect != "opts" {
@@ -94,11 +94,11 @@ pub fn ll_ctor(name: String, arg: String, ssa0: Int, expect: String) -> String {
         }
         let a: String = ll_tmpa(ssa0 + 1);
         let s: Int = ssa0 + 1;
-        println("  " + a + " = alloca " + ll_ir_alloc(expect) + ", align 8");
+        ll_slot_name(a);
         if expect == "opts" {
-            println("  store %OoOptS { i32 0, %OoStr { ptr null, i64 0 } }, ptr " + a);
+            println("  store %OoOptS { i32 0, %OoStr { ptr null, i64 0 } }, ptr " + a + ", align 8");
         } else {
-            println("  store %OoOptI { i32 0, i64 0 }, ptr " + a);
+            println("  store %OoOptI { i32 0, i64 0 }, ptr " + a + ", align 8");
         }
         return ll_pack(0, s, expect, a);
     }
@@ -128,20 +128,20 @@ fn ll_ctor_some(arg: String, ssa0: Int, expect: String) -> String {
     if ll_pk(sav) == "i64" && (expect == "opti" || expect == "") {
         let a: String = ll_tmpa(sab + 1);
         let s: Int = sab + 1;
-        println("  " + a + " = alloca %OoOptI, align 8");
+        ll_slot_name(a);
         let s2: Int = s + 1;
         println("  " + ll_ssa(s2) + " = insertvalue %OoOptI { i32 1, i64 0 }, i64 " + ll_ssa(ll_pssa(sav)) + ", 1");
-        println("  store %OoOptI " + ll_ssa(s2) + ", ptr " + a);
+        println("  store %OoOptI " + ll_ssa(s2) + ", ptr " + a + ", align 8");
         return ll_pack(0, s2, "opti", a);
     }
     if ll_pk(arg) == "str" && (expect == "opts" || expect == "") {
         let av: String = ll_as_val(arg, ssa0);
         let a: String = ll_tmpa(ll_pssa(av) + 1);
-        println("  " + a + " = alloca %OoOptS, align 8");
+        ll_slot_name(a);
         let os: Int = ll_oostr_from_pair(ll_pssa(av));
         let s2: Int = os + 1;
         println("  " + ll_ssa(s2) + " = insertvalue %OoOptS { i32 1, %OoStr { ptr null, i64 0 } }, %OoStr " + ll_ssa(os) + ", 1");
-        println("  store %OoOptS " + ll_ssa(s2) + ", ptr " + a);
+        println("  store %OoOptS " + ll_ssa(s2) + ", ptr " + a + ", align 8");
         return ll_pack(0, s2, "opts", a);
     }
     if ll_is_struct(ll_pk(arg)) {
@@ -150,10 +150,10 @@ fn ll_ctor_some(arg: String, ssa0: Int, expect: String) -> String {
         if rb != "" && (expect == "optSt_" + rb || expect == "") {
             let av: String = ll_as_val(arg, ssa0);
             let a: String = ll_tmpa(ll_pssa(av) + 1);
-            println("  " + a + " = alloca %OoOpt_St_" + rb + ", align 8");
+            ll_slot_name(a);
             let os: Int = ll_pssa(av) + 1;
             println("  " + ll_ssa(os) + " = insertvalue %OoOpt_St_" + rb + " { i32 1, %St_" + rb + " zeroinitializer }, %St_" + rb + " " + ll_ssa(ll_pssa(av)) + ", 1");
-            println("  store %OoOpt_St_" + rb + " " + ll_ssa(os) + ", ptr " + a);
+            println("  store %OoOpt_St_" + rb + " " + ll_ssa(os) + ", ptr " + a + ", align 8");
             return ll_pack(0, os, "optSt_" + rb, a);
         }
     }
@@ -165,8 +165,8 @@ fn ll_ctor_some(arg: String, ssa0: Int, expect: String) -> String {
 fn ll_ctor_ok(arg: String, ssa0: Int, expect: String) -> String {
     if ll_pk(arg) == "void" {
         let a: String = ll_tmpa(ssa0 + 1);
-        println("  " + a + " = alloca %OoResS, align 8");
-        println("  store %OoResS { i32 1, %OoStr { ptr null, i64 0 } }, ptr " + a);
+        ll_slot_name(a);
+        println("  store %OoResS { i32 1, %OoStr { ptr null, i64 0 } }, ptr " + a + ", align 8");
         return ll_pack(0, ssa0 + 1, "ress", a);
     }
     let oav: String = ll_int_convert(arg, ssa0, "i64");
@@ -174,29 +174,29 @@ fn ll_ctor_ok(arg: String, ssa0: Int, expect: String) -> String {
     if ll_pk(oav) == "i64" && (expect == "resi" || expect == "resim" || expect == "") {
         let a: String = ll_tmpa(oab + 1);
         let s: Int = oab + 1;
-        println("  " + a + " = alloca %OoResI, align 8");
+        ll_slot_name(a);
         let s2: Int = s + 1;
         println("  " + ll_ssa(s2) + " = insertvalue %OoResI { i32 1, i64 0, %OoStr { ptr null, i64 0 } }, i64 " + ll_ssa(ll_pssa(oav)) + ", 1");
-        println("  store %OoResI " + ll_ssa(s2) + ", ptr " + a);
+        println("  store %OoResI " + ll_ssa(s2) + ", ptr " + a + ", align 8");
         return ll_pack(0, s2, "resi", a);
     }
     if ll_pk(arg) == "str" && (expect == "ress" || expect == "") {
         let av: String = ll_as_val(arg, ssa0);
         let a: String = ll_tmpa(ll_pssa(av) + 1);
-        println("  " + a + " = alloca %OoResS, align 8");
+        ll_slot_name(a);
         let os: Int = ll_oostr_from_pair(ll_pssa(av));
         let s2: Int = os + 1;
         println("  " + ll_ssa(s2) + " = insertvalue %OoResS { i32 1, %OoStr { ptr null, i64 0 } }, %OoStr " + ll_ssa(os) + ", 1");
-        println("  store %OoResS " + ll_ssa(s2) + ", ptr " + a);
+        println("  store %OoResS " + ll_ssa(s2) + ", ptr " + a + ", align 8");
         return ll_pack(0, s2, "ress", a);
     }
     if ll_pk(arg) == "slist" || ll_pk(arg) == "ilist" || (chars_len(ll_pk(arg)) >= 6 && str_slice(ll_pk(arg), 0, 6) == "olist_") {
         let av: String = ll_as_val(arg, ssa0);
         let a: String = ll_tmpa(ll_pssa(av) + 1);
-        println("  " + a + " = alloca %OoResL, align 8");
+        ll_slot_name(a);
         let os: Int = ll_pssa(av) + 1;
         println("  " + ll_ssa(os) + " = insertvalue %OoResL { i32 1, %OoSList zeroinitializer, %OoStr { ptr null, i64 0 } }, %OoSList " + ll_ssa(ll_pssa(av)) + ", 1");
-        println("  store %OoResL " + ll_ssa(os) + ", ptr " + a);
+        println("  store %OoResL " + ll_ssa(os) + ", ptr " + a + ", align 8");
         return ll_pack(0, os, "resl", a);
     }
     if ll_is_struct(ll_pk(arg)) {
@@ -210,10 +210,10 @@ fn ll_ctor_ok(arg: String, ssa0: Int, expect: String) -> String {
         if rb != "" {
             let av: String = ll_as_val(arg, ssa0);
             let a: String = ll_tmpa(ll_pssa(av) + 1);
-            println("  " + a + " = alloca %OoRes_St_" + rb + ", align 8");
+            ll_slot_name(a);
             let os: Int = ll_pssa(av) + 1;
             println("  " + ll_ssa(os) + " = insertvalue %OoRes_St_" + rb + " { i32 1, %St_" + rb + " zeroinitializer, %OoStr { ptr null, i64 0 } }, %St_" + rb + " " + ll_ssa(ll_pssa(av)) + ", 1");
-            println("  store %OoRes_St_" + rb + " " + ll_ssa(os) + ", ptr " + a);
+            println("  store %OoRes_St_" + rb + " " + ll_ssa(os) + ", ptr " + a + ", align 8");
             return ll_pack(0, os, "resSt_" + rb, a);
         }
     }
@@ -231,26 +231,26 @@ fn ll_ctor_err(arg: String, ssa0: Int, expect: String) -> String {
     if ll_resst_base(expect) != "" {
         let rb: String = ll_resst_base(expect);
         let a: String = ll_tmpa(ll_pssa(av) + 1);
-        println("  " + a + " = alloca %OoRes_St_" + rb + ", align 8");
+        ll_slot_name(a);
         let os: Int = ll_oostr_from_pair(ll_pssa(av));
         let s2: Int = os + 1;
         println("  " + ll_ssa(s2) + " = insertvalue %OoRes_St_" + rb + " { i32 0, %St_" + rb + " zeroinitializer, %OoStr { ptr null, i64 0 } }, %OoStr " + ll_ssa(os) + ", 2");
-        println("  store %OoRes_St_" + rb + " " + ll_ssa(s2) + ", ptr " + a);
+        println("  store %OoRes_St_" + rb + " " + ll_ssa(s2) + ", ptr " + a + ", align 8");
         return ll_pack(0, s2, expect, a);
     }
     if expect == "ress" {
         let a: String = ll_tmpa(ll_pssa(av) + 1);
-        println("  " + a + " = alloca %OoResS, align 8");
+        ll_slot_name(a);
         let os: Int = ll_oostr_from_pair(ll_pssa(av));
         let s2: Int = os + 1;
         println("  " + ll_ssa(s2) + " = insertvalue %OoResS { i32 0, %OoStr { ptr null, i64 0 } }, %OoStr " + ll_ssa(os) + ", 1");
-        println("  store %OoResS " + ll_ssa(s2) + ", ptr " + a);
+        println("  store %OoResS " + ll_ssa(s2) + ", ptr " + a + ", align 8");
         return ll_pack(0, s2, "ress", a);
     }
     let a: String = ll_tmpa(ll_pssa(av) + 1);
-    println("  " + a + " = alloca %OoResI, align 8");
+    ll_slot_name(a);
     let os: Int = ll_oostr_from_pair(ll_pssa(av)); let s2: Int = os + 1;
     println("  " + ll_ssa(s2) + " = insertvalue %OoResI { i32 0, i64 0, %OoStr { ptr null, i64 0 } }, %OoStr " + ll_ssa(os) + ", 2");
-    println("  store %OoResI " + ll_ssa(s2) + ", ptr " + a);
+    println("  store %OoResI " + ll_ssa(s2) + ", ptr " + a + ", align 8");
     return ll_pack(0, s2, "resi", a);
 }

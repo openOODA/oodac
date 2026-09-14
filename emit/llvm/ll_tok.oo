@@ -83,6 +83,29 @@ pub fn ll_ssa(n: Int) -> String {
     return "%t" + n.to_string();
 }
 
+pub fn ll_is_imm(v: String) -> Bool {
+    let p: String = ll_pptr(v);
+    return chars_len(p) >= 2 && char_at(p, 0) == "#";
+}
+
+pub fn ll_has_slot(v: String) -> Bool {
+    if ll_pptr(v) == "" { return false; }
+    return !ll_is_imm(v);
+}
+
+pub fn ll_opnd(v: String) -> String {
+    if ll_is_imm(v) {
+        return str_slice(ll_pptr(v), 1, chars_len(ll_pptr(v)));
+    }
+    return ll_ssa(ll_pssa(v));
+}
+
+pub fn ll_is_refk(kind: String) -> Bool {
+    if kind == "ri64" || kind == "ru64" { return true; }
+    if kind == "ri32" || kind == "ru32" { return true; }
+    return false;
+}
+
 pub fn ll_var(name: String) -> String {
     return "%v_" + name;
 }

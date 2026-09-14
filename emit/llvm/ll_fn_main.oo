@@ -1,0 +1,73 @@
+// # LLVM main function body
+//
+// Logline: hidden i32 main; cap grants; argv List only if args is bound.
+//
+// Setup: Called from ll_emit_fn after the signature walk.
+//
+// Beats:
+//   1. %heap in entry. Caps are i64 slots.
+//   2. No oo_slist argv construction when args is unused.
+
+import "ll_tok.oo";
+import "ll_ty.oo";
+import "ll_stmt.oo";
+import "ll_slot.oo";
+import "types/types_core.oo";
+
+pub fn ll_emit_main(toks: List[String], pos: Int, n: Int, p: Int, env0: String, caps: String, rk: String, stab: String, use_args: Bool) -> Int {
+    let mut env: String = env0;
+    println("define hidden i32 @main(i32 %argc, ptr %argv) {");
+    println("entry:");
+    ll_heap();
+    let mut i: Int = 0;
+    let cn: Int = chars_len(caps);
+    while i < cn {
+        if char_at(caps, i) == "=" {
+            let mut s: Int = i;
+            while s > 0 && char_at(caps, s - 1) != ";" { s = s - 1; }
+            let nm: String = str_slice(caps, s, i);
+            let mut e: Int = i + 1;
+            while e < cn && char_at(caps, e) != ";" { e = e + 1; }
+            let suf: String = str_slice(caps, i + 1, e);
+            ll_slot_name(ll_var(nm));
+            println("  %g_" + nm + " = call i64 @oo_cap_grant_" + suf + "()");
+            println("  store i64 %g_" + nm + ", ptr " + ll_var(nm) + ", align 8");
+        }
+        i = i + 1;
+    }
+    if use_args {
+        ll_slot_name("%v_args");
+        println("  call void @oo_slist_new(ptr sret(%OoSList) align 8 %v_args)");
+        println("  br label %args0");
+        println("args0:");
+        println("  %ai = phi i32 [ 1, %entry ], [ %ai2, %args1 ]");
+        println("  %acmp = icmp slt i32 %ai, %argc");
+        println("  br i1 %acmp, label %args1, label %args2");
+        println("args1:");
+        println("  %ap = getelementptr inbounds ptr, ptr %argv, i32 %ai");
+        println("  %astr = load ptr, ptr %ap, align 8");
+        println("  %alit = call { ptr, i64 } @oo_str_lit(ptr %astr)");
+        ll_slot_name("%anew");
+        println("  call void @oo_slist_push(ptr sret(%OoSList) align 8 %anew, ptr byval(%OoSList) align 8 %v_args, { ptr, i64 } %alit)");
+        println("  %acpy = load %OoSList, ptr %anew, align 8");
+        println("  store %OoSList %acpy, ptr %v_args, align 8");
+        println("  %ai2 = add i32 %ai, 1");
+        println("  br label %args0");
+        println("args2:");
+        env = type_env_put(env, "args", "slist");
+        env = type_env_put(env, "__l__args", "%v_args");
+    }
+    let mut mrk: String = "main_i32";
+    if rk == "resi" { mrk = "resim"; }
+    if rk == "opti" { mrk = "optim"; }
+    if rk == "opts" { mrk = "optsm"; }
+    env = type_env_put(env, "__rk__", mrk);
+    if type_env_get(env, "__creq__") != "" || type_env_get(env, "__cens__") != "" {
+        println("ERR\tllvm\tcontracts on main not lowered");
+        process_exit(1);
+    }
+    let mb: String = ll_emit_stmts(toks, p, n, mrk, env, 10, stab);
+    if ll_pterm(mb) == 0 { println("  ret i32 0"); }
+    println("}");
+    return ll_skip_fn(toks, pos, n);
+}
