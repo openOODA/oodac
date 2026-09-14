@@ -62,10 +62,10 @@ pub fn ll_if_value_at(toks: List[String], pos: Int, n: Int, ssa0: Int, env: Stri
         return ll_if_dead_merge(fp, ts, tk, ll_pk(er), env, cid);
     }
     if t1 != 0 {
-        return ll_pack(fp, ll_pssa(er), ll_pk(er), "vend" + cid.to_string());
+        return ll_pack(fp, ll_pssa(er), ll_pk(er), "");
     }
     if t2 != 0 {
-        return ll_pack(fp, ts, tk, "vend" + cid.to_string());
+        return ll_pack(fp, ts, tk, "");
     }
     let tkt: String = ll_ir_val(tk);
     let ekt: String = ll_ir_val(ll_pk(er));
@@ -75,7 +75,7 @@ pub fn ll_if_value_at(toks: List[String], pos: Int, n: Int, ssa0: Int, env: Stri
     }
     let ph: Int = ll_pssa(er) + 1;
     println("  " + ll_ssa(ph) + " = phi " + ll_ir_val(tk) + " [ " + ll_ssa(ts) + ", %tj" + cid.to_string() + " ], [ " + ll_ssa(ll_pssa(er)) + ", %ej" + cid.to_string() + " ]");
-    return ll_pack(fp, ph, tk, "vend" + cid.to_string());
+    return ll_pack(fp, ph, tk, "");
 }
 
 fn ll_if_dead_merge(fp: Int, ssa0: Int, tk: String, ek: String, env: String, cid: Int) -> String {
