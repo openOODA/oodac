@@ -231,7 +231,8 @@ fn ll_primary(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> S
     if k == "KW_MATCH" { return ll_match_expr(toks, pos, n, ssa0, env); }
     if k == "KW_IF" { return ll_if_value_at(toks, pos, n, ssa0, env); }
     if k == "KW_RETURN" {
-        return ll_return_stmt(toks, pos, n, ssa0, env, type_env_get(env, "__rk__"), ll_struct_tab_of(env));
+        let r: String = ll_return_stmt(toks, pos, n, ssa0, env, type_env_get(env, "__rk__"), "");
+        return ll_pack(ll_ppos(r), ll_pssa(r), "noret", "") + "\t1";
     }
     if k == "IDENT" {
         let nm: String = ll_t(toks, pos);
