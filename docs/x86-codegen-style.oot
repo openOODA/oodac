@@ -1,13 +1,13 @@
-# Attach contract — new ISA is not a copy of emit/c
+# Attach contract — new ISA is not a copy of emit/llvm
 
 File: oodac/docs/x86-codegen-style.oot
 
-Product oodac emits C99 and gcc. That C path is the reference, not a forever ban on other ISAs.
+Product oodac emits LLVM IR and clang. That LLVM path is the reference, not a forever ban on other ISAs.
 
-The C reference gate is: four product mains `check`, product `build` of ooda/lsp/mcp, and the unique_fns host rebuild of `oodac/main.oo` (`OK_PURE_MULTI`, `PURE_SKIP_CHECK` unset). Concat of `oodac/main.oo` as the only compiler ELF is a fail.
+The LLVM reference gate is: four product mains `check`, product `build` of cli/ooda/opm, and llvm-self-host of `oodac/main.oo`. Concat of `oodac/main.oo` as the only compiler ELF is a fail (unique_fns host rebuild).
 
-`--backend llvm` lives in `emit/llvm/` and consumes the same typed artifact C uses. Shared type names live in `types/`. If C and llvm disagree, llvm is wrong. Residual wasm/x86 stay exit 2. Kind drivers stay C; llvm tests victims including landlock run, short-circuit, and Option/Result match.
+`--backend llvm` lives in `emit/llvm/` and consumes the typed artifact. Shared type names live in `types/`. Residual c/wasm/x86 stay exit 2. Kind drivers and landlock run on LLVM.
 
-Do not restore `x86_emit_*.oo` as product. Do not put GNU statement-expr or `__typeof__` in C lowering.
+Do not restore `emit/c/` or `x86_emit_*.oo` as product.
 
-Status: C is the reference. llvm is a second consumer of the typed artifact.
+Status: LLVM is the reference. A later ISA is a second consumer of the typed artifact.

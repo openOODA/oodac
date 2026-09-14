@@ -88,7 +88,7 @@ fn ll_if_dead_merge(fp: Int, ssa0: Int, tk: String, ek: String, env: String, cid
     println("  " + a + " = alloca " + ll_ir_alloc(kk) + ", align 8");
     let s2: Int = s + 1;
     println("  " + ll_ssa(s2) + " = load " + ll_ir_val(kk) + ", ptr " + a);
-    return ll_pack(fp, s2, kk, "vend" + cid.to_string());
+    return ll_pack(fp, s2, kk, "");
 }
 
 fn ll_if_arm(toks: List[String], lb: Int, n: Int, ssa0: Int, env: String, rk: String, stab: String, tk: String) -> String {
