@@ -190,7 +190,7 @@ jobs:
           "$HOST" build oodac/qa/probe_no_chs_rt.oo -o .ooda-cache/ooda-tmp/ci_no_chs.bin
           .ooda-cache/ooda-tmp/ci_no_chs.bin
           echo "=== four product mains ==="
-          "$HOST" build --backend c oodac/qa/probe_four_mains.oo -o .ooda-cache/ooda-tmp/ci_four.bin
+          "$HOST" build oodac/qa/probe_four_mains.oo -o .ooda-cache/ooda-tmp/ci_four.bin
           .ooda-cache/ooda-tmp/ci_four.bin
           echo "=== ecap capless-net refuse (Task 2a) ==="
           "$HOST" build oodac/qa/probe_ecap_capless_net.oo -o .ooda-cache/ooda-tmp/ci_ecap.bin

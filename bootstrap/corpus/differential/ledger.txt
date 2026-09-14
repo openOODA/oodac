@@ -76,7 +76,7 @@ bootstrap/corpus/emit-llvm/pass/verify_ctor.oo parity 4355a46b19d348dc 4355a46b1
 bootstrap/corpus/emit-llvm/pass/while_if_else.oo parity 8773ceae2539ef37 8773ceae2539ef37  # ported from emit-c/pass; C and LLVM byte-identical
 bootstrap/corpus/emit-llvm/pass/and_or_paren.oo parity 88fb1949a818a3ac 88fb1949a818a3ac  # prints 1/0/0; nested a && (b || c) PHI join matches C
 bootstrap/corpus/emit-llvm/pass/ifexpr_and.oo parity 5d90ef7fc0d040fd 5d90ef7fc0d040fd  # prints 1/0; if-expr AND/OR arms PHI from tj/ej
-bootstrap/corpus/emit-llvm/pass/oo_path_exists.oo llvm-fail - -  # seed lacks oo_path_exists alias; S1 host lowers
-bootstrap/corpus/emit-llvm/pass/oo_fs_is_dir.oo llvm-fail - -  # seed lacks oo_fs_is_dir; S1 host lowers
-bootstrap/corpus/emit-llvm/pass/ok_unit.oo llvm-fail - -  # seed lacks Ok(()); S1 host lowers
-bootstrap/corpus/emit-llvm/pass/match_err_block.oo llvm-fail - -  # seed lacks match-expr noret block arm; S1 host lowers
+bootstrap/corpus/emit-llvm/pass/oo_path_exists.oo parity 4355a46b19d348dc 4355a46b19d348dc  # prints 1; oo_path_exists(".")
+bootstrap/corpus/emit-llvm/pass/oo_fs_is_dir.oo parity 4355a46b19d348dc 4355a46b19d348dc  # prints 1; oo_fs_is_dir(".")
+bootstrap/corpus/emit-llvm/pass/ok_unit.oo parity 4355a46b19d348dc 4355a46b19d348dc  # prints 1; Ok(())
+bootstrap/corpus/emit-llvm/pass/match_err_block.oo parity dc51b8c96c2d745d dc51b8c96c2d745d  # prints ok; Err block arm noret

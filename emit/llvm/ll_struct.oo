@@ -220,9 +220,14 @@ pub fn ll_struct_lit_at(toks: List[String], pos: Int, n: Int, ssa0: Int, env: St
         if p >= n || ll_k(toks, p) != "COLON" { println("ERR\tllvm\tstruct lit colon"); process_exit(1); }
         p = p + 1;
         let v0: String = ll_expr(toks, p, n, s, env); p = ll_ppos(v0); s = ll_pssa(v0);
-        let v: String = ll_int_convert(v0, s, fk);
+        let mut v: String = ll_int_convert(v0, s, fk);
         s = ll_pssa(v);
-        let pk: String = ll_pk(v);
+        let mut pk: String = ll_pk(v);
+        if pk == "slist" && chars_len(fk) >= 6 && str_slice(fk, 0, 6) == "olist_" {
+            v = ll_olist_new(fk, s);
+            s = ll_pssa(v);
+            pk = ll_pk(v);
+        }
         if pk != fk {
             let mut same: Bool = false;
             if ll_is_struct(pk) && ll_is_struct(fk) {
