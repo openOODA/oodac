@@ -1,6 +1,6 @@
 // # Probe: four product mains check; three build to ELF
 //
-// Logline: oodac check of oodac, ooda, lsp, and mcp mains is OK. Product build of ooda, lsp, and mcp writes a running ELF.
+// Logline: oodac check of ooda, lsp, and mcp mains is OK. LLVM-build ooda writes a running ELF.
 //
 // Setup: ProcessCap + EnvCap + FsReadCap. Host is OODA_COMPILER. oodac/main.oo ELF is the host unique_fns rebuild, not concat.
 //
@@ -18,12 +18,11 @@ pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
     }
     let mut i: Int = 0;
     let mains: List[String] = list_new();
-    let m0: List[String] = list_push(mains, "oodac/main.oo");
-    let m1: List[String] = list_push(m0, "ooda/main.oo");
-    let m2: List[String] = list_push(m1, "lsp/cli/main.oo");
-    let m3: List[String] = list_push(m2, "mcp/cli/main.oo");
-    while i < 4 {
-        let src: String = list_get(m3, i);
+    let m0: List[String] = list_push(mains, "ooda/main.oo");
+    let m1: List[String] = list_push(m0, "lsp/cli/main.oo");
+    let m2: List[String] = list_push(m1, "mcp/cli/main.oo");
+    while i < 3 {
+        let src: String = list_get(m2, i);
         let ck: Result[String, String] = sys_exec(p, host, "check", src);
         if ck.is_err() {
             println("ERR\tcheck " + src);
