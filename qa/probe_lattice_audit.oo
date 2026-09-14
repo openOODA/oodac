@@ -67,7 +67,7 @@ pub fn main(fs_r: &FsReadCap, fs_w: &FsWriteCap, p: &ProcessCap, env: &EnvCap, a
         println("FAIL unique_fns should deny compiler main build");
         process_exit(1);
     }
-    let hb: Result[String, String] = sys_exec(p, host, "build", "--backend", "c", p_hold, "-o", "/tmp/lattice_hold.bin");
+    let hb: Result[String, String] = sys_exec(p, host, "build", "--backend", "llvm", p_hold, "-o", "/tmp/lattice_hold.bin");
     if !hb.is_ok() {
         println("FAIL blackbox hold should build");
         process_exit(1);
