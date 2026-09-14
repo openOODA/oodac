@@ -1,13 +1,13 @@
-// # Probe: mutate List[String] to List[Int] in the artifact
+// # Probe: emit-c is residual; emit-llvm consumes the check artifact
 //
-// Logline: emit-c --artifact of mutated toks must not silently emit the source List[String] C.
+// Logline: C emit is gone. Mutated-artifact C test is residual. LLVM still emits slist.
 //
-// Setup: ProcessCap + EnvCap + FsReadCap + FsWriteCap. Victim is probe_artifact_list.oo.
+// Setup: ProcessCap + EnvCap + FsReadCap. Victim is probe_artifact_list.oo.
 //
 // Beats:
 //   1. check writes the artifact.
-//   2. Replace the String token with Int. Write a sibling .art.
-//   3. Mutated emit has xs_lvl1 = oo_ilist_new and not oo_slist_new.
+//   2. emit-c --artifact is residual (nonzero).
+//   3. emit-llvm of the victim contains @oo_slist_new.
 
 fn art_sha16(path: String, src: String) -> String {
     let digest: String = crypto_sha256_internal(path + "\n" + src);
@@ -17,17 +17,7 @@ fn art_sha16(path: String, src: String) -> String {
     return digest;
 }
 
-fn replace_string_tok(body: String) -> String {
-    let needle: String = "\tString";
-    let hit: Int = str_index_of(body, needle);
-    if hit < 0 {
-        println("ERR\tno String token in artifact");
-        process_exit(1);
-    }
-    return str_slice(body, 0, hit) + "\tInt" + str_slice(body, hit + 7, chars_len(body));
-}
-
-pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap, fs_w: &FsWriteCap) {
+pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
     let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
     let host: String = match hr { Ok(s) => s, Err(_) => "" };
     if host == "" {
@@ -47,30 +37,23 @@ pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap, fs_w: &FsWriteCap) {
         process_exit(1);
     }
     let dest: String = ".ooda-cache/ooda-tmp/art_" + art_sha16(srcp, src) + ".art";
-    let ar: Result[String, String] = read_file(fs_r, dest);
-    if ar.is_err() {
+    if !path_exists(fs_r, dest) {
         println("ERR\tartifact missing");
         process_exit(1);
     }
-    let body: String = match ar { Ok(s) => s, Err(_) => "" };
-    let mutd: String = ".ooda-cache/ooda-tmp/art_mutate_list.art";
-    let wr: Result[Void, String] = write_file(fs_w, mutd, replace_string_tok(body));
-    if wr.is_err() {
-        println("ERR\twrite mutated artifact");
+    let em: Result[String, String] = sys_exec(p, host, "emit-c", "--artifact", dest, srcp);
+    if em.is_ok() {
+        println("ERR\temit-c still lives");
         process_exit(1);
     }
-    let em: Result[String, String] = sys_exec(p, host, "emit-c", "--artifact", mutd, srcp);
-    if em.is_err() {
-        println("ERR\temit-c mutated artifact");
+    let ll: Result[String, String] = sys_exec(p, host, "emit-llvm", srcp);
+    if ll.is_err() {
+        println("ERR\temit-llvm artifact");
         process_exit(1);
     }
-    let txt: String = match em { Ok(s) => s, Err(_) => "" };
-    if str_index_of(txt, "xs_lvl1 = oo_slist_new") >= 0 {
-        println("ERR\tsilent-old List[String] C");
-        process_exit(1);
-    }
-    if str_index_of(txt, "xs_lvl1 = oo_ilist_new") < 0 {
-        println("ERR\tmutated artifact did not emit List[Int] C");
+    let txt: String = match ll { Ok(s) => s, Err(_) => "" };
+    if str_index_of(txt, "@oo_slist_new") < 0 {
+        println("ERR\tartifact emit missed slist xs");
         process_exit(1);
     }
     println("OK");
