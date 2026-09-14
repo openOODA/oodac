@@ -80,6 +80,20 @@ pub fn ll_match_expr(toks: List[String], pos: Int, n: Int, ssa0: Int, env: Strin
     }
     let erarm: String = ll_expr(toks, p, n, ll_pssa(eb) + 1, env3);
     p = ll_ppos(erarm);
+    if ll_pk(erarm) == "noret" || ll_pterm(erarm) != 0 {
+        if p < n && ll_k(toks, p) == "SEMI" { p = p + 1; }
+        if p < n && ll_k(toks, p) == "COMMA" { p = p + 1; }
+        if p < n && ll_k(toks, p) == "RBRACE" { p = p + 1; }
+        println("mend" + id.to_string() + ":");
+        let pk0: String = ll_pk(okarm);
+        let hw0: Int = ll_hw(oks, ll_pssa(erarm)) + 1;
+        let a0: String = ll_tmpa(hw0);
+        println("  " + a0 + " = alloca " + ll_ir_alloc(pk0) + ", align 8");
+        println("  store " + ll_ir_val(pk0) + " " + ll_ssa(oks) + ", ptr " + a0);
+        let s3: Int = hw0 + 1;
+        println("  " + ll_ssa(s3) + " = load " + ll_ir_val(pk0) + ", ptr " + a0);
+        return ll_pack(p, s3, pk0, a0);
+    }
     let ers0: Int = ll_arm_val(erarm, ll_pssa(erarm));
     let pk: String = ll_pk(okarm);
     let ek: String = ll_pk(erarm);
