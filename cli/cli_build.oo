@@ -83,7 +83,14 @@ fn path_is_compiler_main(path: String) -> Bool {
 fn cache_dir(env: &EnvCap) -> String {
     let wd: Result[String, String] = env_get(env, "OODA_FS_WRITEDIR");
     if wd.is_ok() {
-        if wd.val != "" { return wd.val + "/.ooda-cache/ooda-tmp"; }
+        let s: String = wd.val;
+        if s != "" {
+            let mut end: Int = chars_len(s);
+            let col: Int = str_index_of(s, ":");
+            if col >= 0 { end = col; }
+            let base: String = str_slice(s, 0, end);
+            if base != "" { return base + "/.ooda-cache/ooda-tmp"; }
+        }
     }
     return ".ooda-cache/ooda-tmp";
 }
