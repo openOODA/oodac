@@ -1,0 +1,21 @@
+// # Ok(()) unit payload
+//
+// Logline: Result[Void] Ok(()) must lower, not unsupported expr RPAREN.
+//
+// Setup: Default llvm. Prints 1 on Ok.
+//
+// Beats:
+//   1. Empty parens are unit. Ok(()) is ress.
+
+pub fn go() -> Result[Void, String] {
+    return Ok(());
+}
+
+pub fn main() {
+    let r: Result[Void, String] = go();
+    if r.is_ok() {
+        println(1);
+    } else {
+        println(0);
+    }
+}

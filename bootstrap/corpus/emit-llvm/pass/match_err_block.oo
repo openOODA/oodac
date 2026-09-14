@@ -1,0 +1,20 @@
+// # Match-expr Err block arm
+//
+// Logline: Err(e) => { process_exit } must lower, not unsupported expr LBRACE.
+//
+// Setup: Default llvm. Ok arm is the value. Err arm is noret.
+//
+// Beats:
+//   1. Match-expr block arm is statements, not a primary.
+
+pub fn go() -> Result[String, String] {
+    return Ok("ok");
+}
+
+pub fn main() {
+    let s: String = match go() {
+        Ok(v) => v,
+        Err(e) => { println(e); process_exit(1); }
+    };
+    println(s);
+}

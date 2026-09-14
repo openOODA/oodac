@@ -1,0 +1,16 @@
+// # Host oo_fs_is_dir from std/fs
+//
+// Logline: Language fs_is_dir and std's oo_fs_is_dir must both lower.
+//
+// Setup: Default llvm. Needs FsReadCap. Prints 1 if cwd is a directory.
+//
+// Beats:
+//   1. oo_fs_is_dir is not unknown call.
+
+pub fn main(fs: &FsReadCap) {
+    if oo_fs_is_dir(fs, ".") {
+        println(1);
+    } else {
+        println(0);
+    }
+}
