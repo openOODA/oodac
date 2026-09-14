@@ -1,0 +1,11 @@
+// # LLVM TU A: internal add
+//
+// Logline: Internal add must mangle so concat with TU B is legal.
+
+fn add(x: Int, y: Int) -> Int {
+    return x + y;
+}
+
+pub fn main() {
+    println(add(1, 2));
+}

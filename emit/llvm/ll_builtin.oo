@@ -18,6 +18,7 @@ import "ll_struct_list.oo";
 import "ll_builtin_host.oo";
 import "ll_print.oo";
 import "ll_slot.oo";
+import "ll_vec.oo";
 
 pub fn ll_arg(args: List[String], i: Int) -> String {
     return list_get(args, i);
@@ -37,6 +38,8 @@ pub fn ll_list_new(expect: String, ssa0: Int) -> String {
 }
 
 pub fn ll_builtin(name: String, args: List[String], ssa0: Int, expect: String) -> String {
+    let vx: String = ll_vec_builtin(name, args, ssa0);
+    if vx != "" { return vx; }
     if name == "list_new" && ll_is_olist(expect) {
         return ll_olist_new(expect, ssa0);
     }

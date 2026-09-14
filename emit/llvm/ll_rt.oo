@@ -11,6 +11,7 @@
 
 import "ll_need.oo";
 import "ll_rt_decl.oo";
+import "ll_ir.oo";
 
 pub fn ll_c_esc(s: String) -> String {
     let n: Int = chars_len(s);
@@ -50,11 +51,14 @@ pub fn ll_c_esc(s: String) -> String {
 pub fn ll_rt_header(toks: List[String]) {
     println("target datalayout = \"e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128\"");
     println("target triple = \"x86_64-unknown-linux-gnu\"");
-    println("!llvm.module.flags = !{!0, !1}");
+    println("!llvm.module.flags = !{!0, !1, !12}");
     println("!0 = !{i32 1, !\"wchar_size\", i32 4}");
     println("!1 = !{i32 8, !\"PIC Level\", i32 2}");
     println("declare void @llvm.lifetime.start.p0(i64 immarg, ptr nocapture) nounwind");
     println("declare void @llvm.lifetime.end.p0(i64 immarg, ptr nocapture) nounwind");
+    println("declare void @llvm.assume(i1) nounwind");
+    ll_ir_begin(toks);
+    ll_ir_subty();
     println("%OoStr = type { ptr, i64 }");
     println("%OoSList = type { ptr, i64, i64 }");
     println("%OoIList = type { ptr, i64, i64 }");

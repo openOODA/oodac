@@ -1,0 +1,11 @@
+// # LLVM TU B: internal add
+//
+// Logline: Second TU also defines add; mangled names must differ.
+
+fn add(x: Int, y: Int) -> Int {
+    return x * y;
+}
+
+pub fn main() {
+    println(add(3, 4));
+}

@@ -16,6 +16,7 @@ import "ll_ifexpr.oo";
 import "ll_contract.oo";
 import "ll_slot.oo";
 import "ll_fn_main.oo";
+import "ll_ir.oo";
 import "types/types_core.oo";
 
 pub fn ll_fn_name_at(toks: List[String], pos: Int, n: Int) -> String {
@@ -125,16 +126,21 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String, stab: Stri
     let mut vis: String = "internal ";
     if is_pub { vis = "hidden "; }
     if is_export { vis = "default "; }
+    let mut gnm: String = type_env_get(fenv, "__sym__" + name);
+    if gnm == "" { gnm = name; }
+    let db: Int = pos + 20;
+    ll_ir_sub(name, pos, db);
+    let ds: String = " !dbg !" + db.to_string();
     if ll_is_mem(rk) {
         if plist != "" {
-            println("define " + vis + "void @" + name + "(ptr noalias sret(" + ll_ir_alloc(rk) + ") align 8 %ret, " + plist + ") nounwind {");
+            println("define " + vis + "void @" + gnm + "(ptr noalias sret(" + ll_ir_alloc(rk) + ") align 8 %ret, " + plist + ") nounwind" + ds + " {");
         } else {
-            println("define " + vis + "void @" + name + "(ptr noalias sret(" + ll_ir_alloc(rk) + ") align 8 %ret) nounwind {");
+            println("define " + vis + "void @" + gnm + "(ptr noalias sret(" + ll_ir_alloc(rk) + ") align 8 %ret) nounwind" + ds + " {");
         }
     } else if rk == "void" {
-        println("define " + vis + "void @" + name + "(" + plist + ") nounwind {");
+        println("define " + vis + "void @" + gnm + "(" + plist + ") nounwind" + ds + " {");
     } else {
-        println("define " + vis + ll_ir_val(rk) + " @" + name + "(" + plist + ") nounwind {");
+        println("define " + vis + ll_ir_val(rk) + " @" + gnm + "(" + plist + ") nounwind" + ds + " {");
     }
     ll_heap();
     let mut fi: Int = 0;

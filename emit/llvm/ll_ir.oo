@@ -1,0 +1,74 @@
+// # Structured LLVM IR records
+//
+// Logline: Printer input is typed values with spans, not a token walk alone.
+//
+// Setup: Token lowering builds IrVal/IrInst; ll_ir_flush is the text printer.
+// Option/Result keep an i32 tag: oodar ABI is {i32, payload}, so a niche
+// discriminant would mis-link. Tokens: kind, line, col, text.
+//
+// Beats:
+//   1. IrVal packs ssa, kind, and source line/col.
+//   2. ll_ir_begin emits the debug compile unit from SRC_PATH.
+//   3. ll_src_stem mangles internal symbols per compilation unit.
+
+import "ll_tok.oo";
+
+pub fn ll_src_path(toks: List[String]) -> String {
+    if list_len(toks) < 1 { return "src.oo"; }
+    if ll_k(toks, 0) == "SRC_PATH" {
+        let p: String = ll_t(toks, 0);
+        if p != "" { return p; }
+    }
+    return "src.oo";
+}
+
+pub fn ll_src_stem(toks: List[String]) -> String {
+    let p: String = ll_src_path(toks);
+    let n: Int = chars_len(p);
+    let mut slash: Int = 0 - 1;
+    let mut i: Int = 0;
+    while i < n {
+        if char_at(p, i) == "/" { slash = i; }
+        i = i + 1;
+    }
+    let mut start: Int = 0;
+    if slash >= 0 { start = slash + 1; }
+    let mut end: Int = n;
+    if n >= 3 && str_slice(p, n - 3, n) == ".oo" { end = n - 3; }
+    let mut s: String = "";
+    i = start;
+    while i < end {
+        let c: String = char_at(p, i);
+        if c == "-" || c == "." { s = s + "_"; } else { s = s + c; }
+        i = i + 1;
+    }
+    if s == "" { return "m"; }
+    return s;
+}
+
+pub fn ll_sym_of(toks: List[String], name: String, is_pub: Bool, is_export: Bool) -> String {
+    if name == "main" { return "main"; }
+    if is_pub || is_export { return name; }
+    return ll_src_stem(toks) + "_" + name;
+}
+
+pub fn ll_ir_val_rec(ssa: Int, kind: String, line: Int, col: Int) -> String {
+    return ssa.to_string() + "\t" + kind + "\t" + line.to_string() + "\t" + col.to_string();
+}
+
+pub fn ll_ir_begin(toks: List[String]) {
+    let path: String = ll_src_path(toks);
+    println("!llvm.dbg.cu = !{!10}");
+    println("!10 = distinct !DICompileUnit(language: DW_LANG_C99, file: !11, producer: \"oodac\", isOptimized: false, runtimeVersion: 0, emissionKind: LineTablesOnly, splitDebugInlining: false)");
+    println("!11 = !DIFile(filename: \"" + path + "\", directory: \".\")");
+    println("!12 = !{i32 2, !\"Debug Info Version\", i32 3}");
+}
+
+pub fn ll_ir_sub(name: String, line: Int, id: Int) {
+    println("!" + id.to_string() + " = distinct !DISubprogram(name: \"" + name + "\", scope: !11, file: !11, line: " + line.to_string() + ", type: !13, spFlags: DISPFlagDefinition, unit: !10)");
+}
+
+pub fn ll_ir_subty() {
+    println("!13 = !DISubroutineType(types: !14)");
+    println("!14 = !{null}");
+}

@@ -1,0 +1,57 @@
+// # LLVM vector lowering for f32x8 and f64x4
+//
+// Logline: Typechecked f32x8/f64x4 become <8 x float> / <4 x double>.
+//
+// Setup: Called from ll_builtin. Lanes are float args packed by the callee.
+//
+// Beats:
+//   1. *_add/sub/mul/div are fadd/fsub/fmul/fdiv on the vector type.
+//   2. *_splat inserts one scalar into poison then shuffles.
+
+import "ll_tok.oo";
+
+pub fn ll_is_vec(kind: String) -> Bool {
+    if kind == "v8f32" || kind == "v4f64" { return true; }
+    return false;
+}
+
+pub fn ll_vec_ir(kind: String) -> String {
+    if kind == "v8f32" { return "<8 x float>"; }
+    if kind == "v4f64" { return "<4 x double>"; }
+    return "";
+}
+
+pub fn ll_vec_builtin(name: String, args: List[String], ssa0: Int) -> String {
+    let mut vk: String = "";
+    if chars_len(name) >= 6 && str_slice(name, 0, 6) == "f32x8_" { vk = "v8f32"; }
+    if chars_len(name) >= 6 && str_slice(name, 0, 6) == "f64x4_" { vk = "v4f64"; }
+    if vk == "" { return ""; }
+    let vt: String = ll_vec_ir(vk);
+    let mut op: String = "";
+    if str_ends_with(name, "_add") { op = "fadd"; }
+    if str_ends_with(name, "_sub") { op = "fsub"; }
+    if str_ends_with(name, "_mul") { op = "fmul"; }
+    if str_ends_with(name, "_div") { op = "fdiv"; }
+    if op != "" && list_len(args) >= 2 {
+        let s: Int = ssa0 + 1;
+        println("  " + ll_ssa(s) + " = " + op + " " + vt + " " + ll_opnd(list_get(args, 0)) + ", " + ll_opnd(list_get(args, 1)));
+        return ll_pack(0, s, vk, "");
+    }
+    if str_ends_with(name, "_splat") && list_len(args) >= 1 {
+        let s: Int = ssa0 + 1;
+        let mut sc: String = "float";
+        if vk == "v4f64" { sc = "double"; }
+        println("  " + ll_ssa(s) + " = insertelement " + vt + " poison, " + sc + " " + ll_opnd(list_get(args, 0)) + ", i32 0");
+        let s2: Int = s + 1;
+        let mut mt: String = "<8 x i32>";
+        if vk == "v4f64" { mt = "<4 x i32>"; }
+        println("  " + ll_ssa(s2) + " = shufflevector " + vt + " " + ll_ssa(s) + ", " + vt + " poison, " + mt + " zeroinitializer");
+        return ll_pack(0, s2, vk, "");
+    }
+    if str_ends_with(name, "_zero") {
+        let s: Int = ssa0 + 1;
+        println("  " + ll_ssa(s) + " = fadd " + vt + " zeroinitializer, zeroinitializer");
+        return ll_pack(0, s, vk, "");
+    }
+    return "";
+}

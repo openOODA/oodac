@@ -1,0 +1,13 @@
+// # LLVM f64x4 / f32x8 vector lowering
+//
+// Logline: f64x4_add typechecks and lowers to <4 x double>.
+//
+// Beats:
+//   1. splat two vectors, add them, print 1.
+
+pub fn main() {
+    let a: f64x4 = f64x4_splat(1.0);
+    let b: f64x4 = f64x4_splat(2.0);
+    let _c: f64x4 = f64x4_add(a, b);
+    println(1);
+}

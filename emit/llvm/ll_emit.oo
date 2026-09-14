@@ -12,6 +12,7 @@
 import "ll_tok.oo";
 import "ll_rt.oo";
 import "ll_fn.oo";
+import "ll_ir.oo";
 import "ll_int.oo";
 import "ll_user_call.oo";
 import "ll_struct.oo";
@@ -38,6 +39,8 @@ pub fn ll_collect_sigs(toks: List[String], stab: String) -> String {
                 let rest: String = str_slice(sig, eq + 1, chars_len(sig));
                 if type_env_get(env, "__fn__" + nm) == "" {
                     env = type_env_put(env, "__fn__" + nm, rest);
+                    let mut pubp: Bool = ll_k(toks, pos) == "KW_PUB" || ll_k(toks, pos) == "KW_EXPORT";
+                    env = type_env_put(env, "__sym__" + nm, ll_sym_of(toks, nm, pubp, false));
                 }
             }
             pos = ll_skip_fn(toks, pos, n);
@@ -135,7 +138,12 @@ fn ll_prune_sigs(sigs: String, stenv: String, want: String) -> String {
     let n: Int = chars_len(sigs); let mut o: String = ""; let mut i: Int = 0;
     while i < n {
         let at: Bool = i == 0 || char_at(sigs, i - 1) == ";";
-        if at && i + 6 <= n && str_slice(sigs, i, i + 6) == "__fn__" {
+        if at && i + 7 <= n && str_slice(sigs, i, i + 7) == "__sym__" {
+            let mut m: Int = i;
+            while m < n && char_at(sigs, m) != ";" { m = m + 1; }
+            o = o + str_slice(sigs, i, m) + ";";
+            i = m;
+        } else if at && i + 6 <= n && str_slice(sigs, i, i + 6) == "__fn__" {
             let mut k: Int = i + 6;
             while k < n && char_at(sigs, k) != "=" { k = k + 1; }
             if ll_in_set(want, str_slice(sigs, i + 6, k)) {

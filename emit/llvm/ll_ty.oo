@@ -2,8 +2,6 @@
 //
 // Logline: Map IDENT types to slist, ilist, str, i64, i1, resi, opti. Caps are i64.
 //
-// Setup: ll_k/ll_t. No emit/c import.
-
 import "ll_tok.oo";
 import "ll_slot.oo";
 
@@ -39,6 +37,8 @@ pub fn ll_ty_at(toks: List[String], pos: Int, n: Int, stab: String) -> String {
         process_exit(1);
     }
     if t == "Bool" { return "i1"; }
+    if t == "f32x8" { return "v8f32"; }
+    if t == "f64x4" { return "v4f64"; }
     if t == "String" { return "str"; }
     if t == "Void" { return "void"; }
     if t == "ProcessCap" || t == "EnvCap" || t == "FsReadCap" || t == "FsWriteCap" { return "i64"; }
@@ -46,8 +46,7 @@ pub fn ll_ty_at(toks: List[String], pos: Int, n: Int, stab: String) -> String {
     if t == "TcpCap" || t == "UdpCap" || t == "NetCap" || t == "FsCap" { return "i64"; }
     if t == "RandCap" || t == "ArenaCap" || t == "FfiCap" || t == "ThreadCap" { return "i64"; }
     if t == "GpuCap" || t == "CompilerReadCap" || t == "SignCap" || t == "AudioCap" { return "i64"; }
-    if t == "CameraCap" || t == "UsbCap" || t == "HidCap" || t == "WindowCap" { return "i64"; }
-    if t == "FrameCap" || t == "MetricsCap" { return "i64"; }
+    if t == "CameraCap" || t == "UsbCap" || t == "HidCap" || t == "WindowCap" || t == "FrameCap" || t == "MetricsCap" { return "i64"; }
     if t == "List" {
         if p + 2 < n && ll_k(toks, p + 1) == "LBRACKET" && ll_k(toks, p + 2) == "IDENT" {
             let e: String = ll_t(toks, p + 2);
@@ -176,6 +175,8 @@ pub fn ll_ir_alloc(kind: String) -> String {
     if kind == "i32" || kind == "u32" { return "i32"; }
     if kind == "i64" || kind == "u64" { return "i64"; }
     if kind == "f64" { return "double"; }
+    if kind == "v8f32" { return "<8 x float>"; }
+    if kind == "v4f64" { return "<4 x double>"; }
     if chars_len(kind) >= 3 && str_slice(kind, 0, 3) == "St_" {
         let h: Int = str_index_of(kind, "#");
         if h < 0 { return "%" + kind; }

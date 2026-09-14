@@ -2,7 +2,7 @@
 //
 // Logline: Wrap payload into Option/Result aggregates. Refuse unknown kinds.
 //
-// Setup: expect is __e__ from let or return.
+// Setup: expect is __e__. Option/Result keep i32 tags (oodar ABI; no niche).
 // Beats:
 //   1. None requires opti or opts.
 //   2. Some/Ok/Err wrap Int, String, list, or struct.

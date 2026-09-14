@@ -163,6 +163,31 @@ PY
   grep -q 'nounwind' "$d/add.ll" && grep -q 'oo_process_exit' "$d/add.ll"
   record "P-DECL-03" "declares attributed" "$?"
 
+  grep -q '!dbg' "$d/add.ll"
+  record "P-DBG-01" "debug locations present" "$?"
+  grep -q 'llvm.assume' "$d/sd.ll"
+  record "P-ASSUME-01" "div ok path llvm.assume" "$?"
+  grep -q '@fn_ret_int_add\|@add(' "$d/add.ll"
+  record "P-MANGLE-01" "internal add is a defined symbol" "$?"
+
+  emit "$CORPUS/ir_vec_f32x8.oo" "$d/vec.ll"
+  llvm-as "$d/vec.ll" -o "$d/vec.bc"
+  record "P-VEC-01" "vector program llvm-as" "$?"
+  grep -q '<4 x double>\|<8 x float>' "$d/vec.ll"
+  record "P-VEC-02" "LLVM vector type present" "$?"
+
+  emit "$CORPUS/ir_add_a.oo" "$d/adda.ll"
+  emit "$CORPUS/ir_add_b.oo" "$d/addb.ll"
+  cat "$d/adda.ll" "$d/addb.ll" > "$d/addab.ll"
+  python3 - "$d/adda.ll" "$d/addb.ll" << 'PY' && mg=0 || mg=1
+import sys,re
+def internals(p):
+    return set(re.findall(r'define internal[^{]+@([A-Za-z0-9_]+)\(', open(p).read()))
+a,b=internals(sys.argv[1]),internals(sys.argv[2])
+sys.exit(0 if a.isdisjoint(b) else 1)
+PY
+  record "P-MANGLE-02" "two-TU add symbols do not clobber" "$mg"
+
   python3 - "$d/add.ll" "$d/hello.ll" "$d/st.ll" "$d/ver.ll" "$d/bor.ll" "$d/sd.ll" << 'PY' && al_ok=0 || al_ok=1
 import sys, re
 ok=True

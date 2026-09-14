@@ -113,6 +113,8 @@ pub fn ll_call_at(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) 
         println("ERR\tllvm\tunknown call " + nm);
         process_exit(1);
     }
-    let u: String = ll_user_call(nm, sig, args, ssa);
+    let mut gnm: String = type_env_get(env, "__sym__" + nm);
+    if gnm == "" { gnm = nm; }
+    let u: String = ll_user_call(gnm, sig, args, ssa);
     return ll_pack(p, ll_pssa(u), ll_pk(u), ll_pptr(u));
 }

@@ -18,6 +18,8 @@ pub fn ll_int_div(op: String, inst: String, t: String, le: String, re: String, s
     println("  call void @oo_process_exit(i64 1)");
     println("  unreachable");
     println("divok" + tag + ":");
-    println("  " + ll_ssa(s + 1) + " = " + inst + " " + t + " " + ll_opnd(le) + ", " + ll_opnd(re));
-    return ll_pack(ll_ppos(re), s + 1, ck, "");
+    println("  " + ll_ssa(s + 1) + " = xor i1 " + ll_ssa(s) + ", true");
+    println("  call void @llvm.assume(i1 " + ll_ssa(s + 1) + ")");
+    println("  " + ll_ssa(s + 2) + " = " + inst + " " + t + " " + ll_opnd(le) + ", " + ll_opnd(re));
+    return ll_pack(ll_ppos(re), s + 2, ck, "");
 }
