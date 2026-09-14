@@ -13,17 +13,20 @@
 import "ll_tok.oo";
 import "ll_ty.oo";
 import "ll_int.oo";
+import "ll_builtin_fs.oo";
+import "ll_builtin_sys.oo";
+import "ll_builtin_tui.oo";
 
 pub fn ll_builtin_host(name: String, args: List[String], ssa0: Int, expect: String) -> String {
     let na: Int = list_len(args);
-    if name == "byte_at" && na >= 2 {
+    if (name == "byte_at" || name == "oo_byte_at") && na >= 2 {
         let a0: String = ll_as_val(list_get(args, 0), ssa0);
         let bx: String = ll_i64arg(args, 1, ll_pssa(a0));
         let s: Int = ll_hw(ll_pssa(a0), ll_pssa(bx)) + 1;
         println("  " + ll_ssa(s) + " = call i64 @oo_byte_at({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ", i64 " + ll_ssa(ll_pssa(bx)) + ")");
         return ll_pack(0, s, "i64", "");
     }
-    if name == "byte_slice" && na >= 3 {
+    if (name == "byte_slice" || name == "oo_byte_slice") && na >= 3 {
         let a0: String = ll_as_val(list_get(args, 0), ssa0);
         let b1: String = ll_i64arg(args, 1, ll_pssa(a0));
         let b2: String = ll_i64arg(args, 2, ll_pssa(b1));
@@ -31,9 +34,10 @@ pub fn ll_builtin_host(name: String, args: List[String], ssa0: Int, expect: Stri
         println("  " + ll_ssa(s) + " = call { ptr, i64 } @oo_byte_slice({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ", i64 " + ll_ssa(ll_pssa(b1)) + ", i64 " + ll_ssa(ll_pssa(b2)) + ")");
         return ll_pack(0, s, "str", "");
     }
-    if (name == "char_is_digit" || name == "char_is_alpha") && na >= 1 {
+    if (name == "char_is_digit" || name == "oo_char_is_digit" || name == "char_is_alpha" || name == "oo_char_is_alpha" || name == "char_is_space" || name == "oo_char_is_space") && na >= 1 {
         let mut callee: String = "oo_char_is_digit";
-        if name == "char_is_alpha" { callee = "oo_char_is_alpha"; }
+        if name == "char_is_alpha" || name == "oo_char_is_alpha" { callee = "oo_char_is_alpha"; }
+        if name == "char_is_space" || name == "oo_char_is_space" { callee = "oo_char_is_space"; }
         let a0: String = ll_as_val(list_get(args, 0), ssa0);
         let s: Int = ll_pssa(a0) + 1;
         println("  " + ll_ssa(s) + " = call i32 @" + callee + "({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ")");
@@ -41,7 +45,7 @@ pub fn ll_builtin_host(name: String, args: List[String], ssa0: Int, expect: Stri
         println("  " + ll_ssa(s2) + " = icmp ne i32 " + ll_ssa(s) + ", 0");
         return ll_pack(0, s2, "i1", "");
     }
-    if name == "str_contains" && na >= 2 {
+    if (name == "str_contains" || name == "oo_str_contains") && na >= 2 {
         let a0: String = ll_as_val(list_get(args, 0), ssa0);
         let a1: String = ll_as_val(list_get(args, 1), ll_pssa(a0));
         let s: Int = ll_pssa(a1) + 1;
@@ -59,7 +63,7 @@ pub fn ll_builtin_host(name: String, args: List[String], ssa0: Int, expect: Stri
         println("  call void @str_split(ptr sret(%OoSList) align 8 " + out + ", { ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ")");
         return ll_pack(0, s, "slist", out);
     }
-    if name == "str_trim" && na >= 1 {
+    if (name == "str_trim" || name == "oo_str_trim") && na >= 1 {
         let a0: String = ll_as_val(list_get(args, 0), ssa0);
         let s: Int = ll_pssa(a0) + 1;
         println("  " + ll_ssa(s) + " = call { ptr, i64 } @oo_str_trim({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ")");
@@ -71,7 +75,7 @@ pub fn ll_builtin_host(name: String, args: List[String], ssa0: Int, expect: Stri
         println("  " + ll_ssa(s) + " = call { ptr, i64 } @crypto_sha256_internal({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ")");
         return ll_pack(0, s, "str", "");
     }
-    if name == "bytes_new" {
+    if name == "bytes_new" || name == "oo_bytes_new" {
         if na != 0 {
             println("ERR\tllvm\tbytes_new takes no args");
             process_exit(1);
@@ -81,7 +85,7 @@ pub fn ll_builtin_host(name: String, args: List[String], ssa0: Int, expect: Stri
         println("  call void @oo_bytes_new(ptr sret(%OoIList) align 8 " + a + ")");
         return ll_pack(0, ssa0 + 1, "ilist", a);
     }
-    if name == "bytes_push" && na >= 2 {
+    if (name == "bytes_push" || name == "oo_bytes_push") && na >= 2 {
         let a0: String = ll_ensure_ptr(list_get(args, 0), ssa0);
         if ll_pk(a0) != "ilist" {
             println("ERR\tllvm\tbytes_push needs List[Int]");
@@ -94,7 +98,7 @@ pub fn ll_builtin_host(name: String, args: List[String], ssa0: Int, expect: Stri
         println("  call void @oo_bytes_push(ptr sret(%OoIList) align 8 " + out + ", ptr byval(%OoIList) align 8 " + ll_pptr(a0) + ", i64 " + ll_ssa(ll_pssa(bp)) + ")");
         return ll_pack(0, s, "ilist", out);
     }
-    if name == "bytes_to_str" && na >= 1 {
+    if (name == "bytes_to_str" || name == "oo_bytes_to_str") && na >= 1 {
         let a0: String = ll_ensure_ptr(list_get(args, 0), ssa0);
         if ll_pk(a0) != "ilist" {
             println("ERR\tllvm\tbytes_to_str needs List[Int]");
@@ -159,5 +163,36 @@ pub fn ll_builtin_host(name: String, args: List[String], ssa0: Int, expect: Stri
         println("  " + ll_ssa(s) + " = call i64 @oo_hot_reload({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ")");
         return ll_pack(0, s, "i64", "");
     }
+    if (name == "int_to_str" || name == "oo_int_to_str" || name == "to_string") && na >= 1 {
+        let a0: String = ll_i64arg(args, 0, ssa0);
+        let s: Int = ll_pssa(a0) + 1;
+        println("  " + ll_ssa(s) + " = call { ptr, i64 } @oo_int_to_str(i64 " + ll_ssa(ll_pssa(a0)) + ")");
+        return ll_pack(0, s, "str", "");
+    }
+    if (name == "str_repeat" || name == "oo_str_repeat") && na >= 2 {
+        let a0: String = ll_as_val(list_get(args, 0), ssa0);
+        let n: String = ll_i64arg(args, 1, ll_pssa(a0));
+        let s: Int = ll_hw(ll_pssa(a0), ll_pssa(n)) + 1;
+        println("  " + ll_ssa(s) + " = call { ptr, i64 } @oo_str_repeat({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ", i64 " + ll_ssa(ll_pssa(n)) + ")");
+        return ll_pack(0, s, "str", "");
+    }
+    if (name == "str_to_uppercase" || name == "oo_str_to_uppercase" || name == "to_uppercase") && na >= 1 {
+        let a0: String = ll_as_val(list_get(args, 0), ssa0);
+        let s: Int = ll_pssa(a0) + 1;
+        println("  " + ll_ssa(s) + " = call { ptr, i64 } @oo_str_to_uppercase({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ")");
+        return ll_pack(0, s, "str", "");
+    }
+    if (name == "str_to_lowercase" || name == "oo_str_to_lowercase" || name == "to_lowercase") && na >= 1 {
+        let a0: String = ll_as_val(list_get(args, 0), ssa0);
+        let s: Int = ll_pssa(a0) + 1;
+        println("  " + ll_ssa(s) + " = call { ptr, i64 } @oo_str_to_lowercase({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ")");
+        return ll_pack(0, s, "str", "");
+    }
+    let fs: String = ll_builtin_fs(name, args, ssa0, expect);
+    if fs != "" { return fs; }
+    let sy: String = ll_builtin_sys(name, args, ssa0, expect);
+    if sy != "" { return sy; }
+    let tu: String = ll_builtin_tui(name, args, ssa0, expect);
+    if tu != "" { return tu; }
     return "";
 }

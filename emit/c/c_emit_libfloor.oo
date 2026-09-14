@@ -231,5 +231,8 @@ if netio != "" { return netio;
     }
     if t == "pow" { return "oo_pow(" + args + ")";
     }
+    if chars_len(t) >= 6 {
+        if str_slice(t, 0, 6) == "oo_tui" { return t + "(" + args + ")"; }
+    }
     return "";
 }

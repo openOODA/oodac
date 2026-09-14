@@ -14,6 +14,7 @@ import "ll_int.oo";
 import "types/types_core.oo";
 import "ll_call.oo";
 import "ll_method.oo";
+import "ll_match_expr.oo";
 import "ll_builtin.oo";
 import "ll_ctor.oo";
 import "ll_struct.oo";
@@ -207,13 +208,10 @@ fn ll_primary(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> S
         println("  " + ll_ssa(s) + " = add i64 0, " + ll_t(toks, pos));
         return ll_pack(pos + 1, s, "i64", "");
     }
-    if k == "FLOAT" {
-        return ll_float_lit(toks, pos, ssa0);
-    }
+    if k == "FLOAT" { return ll_float_lit(toks, pos, ssa0); }
     if k == "KW_TRUE" || k == "KW_FALSE" {
         let s: Int = ssa0 + 1;
-        let mut bit: String = "0";
-        if k == "KW_TRUE" { bit = "1"; }
+        let bit: String = if k == "KW_TRUE" { "1" } else { "0" };
         println("  " + ll_ssa(s) + " = add i1 0, " + bit);
         return ll_pack(pos + 1, s, "i1", "");
     }
@@ -221,12 +219,14 @@ fn ll_primary(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> S
         return ll_str_gep(toks, pos, ssa0);
     }
     if k == "LPAREN" {
-        let r: String = ll_expr(toks, pos + 1, n, ssa0, env);
-        let p: Int = ll_ppos(r);
+        let mut p: Int = pos + 1;
         if p < n && ll_k(toks, p) == "RPAREN" {
-            return ll_pack(p + 1, ll_pssa(r), ll_pk(r), ll_pptr(r));
+            return ll_pack(p + 1, ssa0, "void", "");
         }
-        return r;
+        let r: String = ll_expr(toks, p, n, ssa0, env);
+        p = ll_ppos(r);
+        if p < n && ll_k(toks, p) == "RPAREN" { p = p + 1; }
+        return ll_pack(p, ll_pssa(r), ll_pk(r), ll_pptr(r));
     }
     if k == "KW_MATCH" {
         return ll_match_expr(toks, pos, n, ssa0, env);

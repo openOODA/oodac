@@ -24,7 +24,7 @@ process_exit(1);
         }
         return "oo_sys_wait(" + a0 + ", " + a1 + ")";
     }
-    if t == "sys_exec_wait" {
+    if t == "sys_exec_wait" || t == "oo_sys_exec_wait" {
         if a1 == "" || !c_arg_is_cap_ident(a0) {
             println("ERR\tc_emit\tsys_exec_wait requires &ProcessCap first arg");
             process_exit(1);

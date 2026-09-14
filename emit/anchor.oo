@@ -14,7 +14,9 @@ import "c/anchor.oo";
 import "llvm/anchor.oo";
 
 pub fn emit_backend(backend: String, src: String, toks: List[String], mode: String, path: String, is_plain: Bool) {
-    if list_len(toks) < 1 {
+    let mut anchor_mark: Int = 0;
+    anchor_mark = list_len(toks);
+    if anchor_mark < 1 {
         println("ERR\temit\tempty artifact");
         process_exit(1);
     }

@@ -163,6 +163,12 @@ fn ll_ctor_some(arg: String, ssa0: Int, expect: String) -> String {
 }
 
 fn ll_ctor_ok(arg: String, ssa0: Int, expect: String) -> String {
+    if ll_pk(arg) == "void" {
+        let a: String = ll_tmpa(ssa0 + 1);
+        println("  " + a + " = alloca %OoResS, align 8");
+        println("  store %OoResS { i32 1, %OoStr { ptr null, i64 0 } }, ptr " + a);
+        return ll_pack(0, ssa0 + 1, "ress", a);
+    }
     let oav: String = ll_int_convert(arg, ssa0, "i64");
     let oab: Int = ll_hw(ssa0, ll_pssa(oav));
     if ll_pk(oav) == "i64" && (expect == "resi" || expect == "resim" || expect == "") {

@@ -232,5 +232,13 @@ pub fn is_known_name(name: String) -> Bool {
     if name == "import_c" || name == "ffi_gen" || name == "lto_xlang_link"
         || name == "oo_import_c" || name == "oo_ffi_gen" || name == "oo_lto_xlang_link" { return true;
         }
+    // v0.2.0+: ooda-tui full-screen terminal host shim (oodar/app/xlang/tui_host.c).
+    if name == "oo_tui_enable_raw" || name == "oo_tui_disable_raw"
+        || name == "oo_tui_get_size" || name == "oo_tui_alt_screen_enter"
+        || name == "oo_tui_alt_screen_leave" || name == "oo_tui_show_cursor"
+        || name == "oo_tui_clear" || name == "oo_tui_write"
+        || name == "oo_tui_read_byte" || name == "oo_tui_read_byte_timeout"
+        || name == "oo_tui_signal_winch_install" || name == "oo_tui_signal_winch_poll" { return true;
+        }
     return false;
 }

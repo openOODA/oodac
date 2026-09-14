@@ -1,0 +1,92 @@
+// # LLVM sys host ABI
+//
+// Logline: Lower sys_args, sys_exec_wait, spawn/wait/kill, and stdin to oodar IR.
+//
+// Setup: Caps are i64. argv is byval %OoSList. Result[Int] sret %OoResI.
+//
+// Beats:
+//   1. sys_args sret a string list. sys_exec_wait sret resi.
+//   2. spawn/wait/kill/epoll/inotify/prctl sret ress.
+//   3. landlock_is_available is a 0-arg i32. stdin returns str or ress.
+
+import "ll_tok.oo";
+import "ll_ty.oo";
+import "ll_int.oo";
+
+fn ll_tok_sys_cap(args: List[String]) -> String {
+    return ll_ssa(ll_pssa(list_get(args, 0)));
+}
+
+fn ll_ty_ress(callee: String, args: List[String], ssa0: Int, extra: String) -> String {
+    let s: Int = ssa0 + 1;
+    let out: String = ll_tmpa(s);
+    println("  " + out + " = alloca %OoResS, align 8");
+    println("  call void @" + callee + "(ptr sret(%OoResS) align 8 " + out + ", i64 " + ll_tok_sys_cap(args) + extra + ")");
+    return ll_pack(0, s, "ress", out);
+}
+
+pub fn ll_builtin_sys(name: String, args: List[String], ssa0: Int, expect: String) -> String {
+    let na: Int = list_len(args);
+    if expect == "noret" { return ""; }
+    if (name == "sys_args" || name == "oo_sys_args") && na >= 1 {
+        let s: Int = ll_pssa(list_get(args, 0)) + 1;
+        let out: String = ll_tmpa(s);
+        println("  " + out + " = alloca %OoSList, align 8");
+        println("  call void @oo_sys_args(ptr sret(%OoSList) align 8 " + out + ", i64 " + ll_tok_sys_cap(args) + ")");
+        return ll_pack(0, s, "slist", out);
+    }
+    if (name == "sys_exec_wait" || name == "oo_sys_exec_wait") && na >= 3 {
+        let a1: String = ll_as_val(list_get(args, 1), ssa0);
+        let a2: String = ll_ensure_ptr(list_get(args, 2), ll_pssa(a1));
+        let s: Int = ll_hw(ll_pssa(a1), ll_pssa(a2)) + 1;
+        let out: String = ll_tmpa(s);
+        println("  " + out + " = alloca %OoResI, align 8");
+        println("  call void @oo_sys_exec_wait(ptr sret(%OoResI) align 8 " + out + ", i64 " + ll_tok_sys_cap(args) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ", ptr byval(%OoSList) align 8 " + ll_pptr(a2) + ")");
+        return ll_pack(0, s, "resi", out);
+    }
+    if (name == "sys_spawn" || name == "oo_sys_spawn") && na >= 2 {
+        let a1: String = ll_as_val(list_get(args, 1), ssa0);
+        return ll_ty_ress("oo_sys_spawn", args, ll_pssa(a1), ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)));
+    }
+    if (name == "sys_wait" || name == "oo_sys_wait") && na >= 2 {
+        let pid: String = ll_i64arg(args, 1, ssa0);
+        return ll_ty_ress("oo_sys_wait", args, ll_pssa(pid), ", i64 " + ll_ssa(ll_pssa(pid)));
+    }
+    if (name == "sys_kill" || name == "oo_sys_kill") && na >= 3 {
+        let pid: String = ll_i64arg(args, 1, ssa0);
+        let sig: String = ll_i64arg(args, 2, ll_pssa(pid));
+        return ll_ty_ress("oo_sys_kill", args, ll_pssa(sig), ", i64 " + ll_ssa(ll_pssa(pid)) + ", i64 " + ll_ssa(ll_pssa(sig)));
+    }
+    if (name == "sys_epoll_create" || name == "oo_sys_epoll_create") && na >= 2 {
+        let fl: String = ll_i64arg(args, 1, ssa0);
+        return ll_ty_ress("oo_sys_epoll_create", args, ll_pssa(fl), ", i64 " + ll_ssa(ll_pssa(fl)));
+    }
+    if (name == "sys_inotify_init" || name == "oo_sys_inotify_init") && na >= 1 {
+        return ll_ty_ress("oo_sys_inotify_init", args, ssa0, "");
+    }
+    if (name == "sys_prctl" || name == "oo_sys_prctl") && na >= 2 {
+        let op: String = ll_i64arg(args, 1, ssa0);
+        return ll_ty_ress("oo_sys_prctl", args, ll_pssa(op), ", i64 " + ll_ssa(ll_pssa(op)));
+    }
+    if name == "landlock_is_available" || name == "oo_landlock_is_available" {
+        let s: Int = ssa0 + 1;
+        println("  " + ll_ssa(s) + " = call i32 @oo_landlock_is_available()");
+        let s2: Int = s + 1;
+        println("  " + ll_ssa(s2) + " = icmp ne i32 " + ll_ssa(s) + ", 0");
+        return ll_pack(0, s2, "i1", "");
+    }
+    if (name == "oo_read_stdin" || name == "read_stdin") && na >= 1 {
+        let s: Int = ll_pssa(list_get(args, 0)) + 1;
+        println("  " + ll_ssa(s) + " = call { ptr, i64 } @oo_read_stdin(i64 " + ll_tok_sys_cap(args) + ")");
+        return ll_pack(0, s, "str", "");
+    }
+    if (name == "oo_read_stdin_chunk" || name == "read_stdin_chunk") && na >= 2 {
+        let ms: String = ll_i64arg(args, 1, ssa0);
+        let s: Int = ll_pssa(ms) + 1;
+        let out: String = ll_tmpa(s);
+        println("  " + out + " = alloca %OoResS, align 8");
+        println("  call void @oo_read_stdin_chunk(ptr sret(%OoResS) align 8 " + out + ", i64 " + ll_tok_sys_cap(args) + ", i64 " + ll_ssa(ll_pssa(ms)) + ")");
+        return ll_pack(0, s, "ress", out);
+    }
+    return "";
+}

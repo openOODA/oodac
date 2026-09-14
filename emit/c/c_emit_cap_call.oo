@@ -35,14 +35,14 @@ pub fn c_emit_cap_call(t: String, a0: String, a1: String, a2g: String, args: Str
         }
         return "oo_file_append_sync(" + args + ")";
     }
-    if t == "path_exists" {
+    if t == "path_exists" || t == "oo_path_exists" {
         if a1 == "" || !c_arg_is_cap_ident(a0) {
             println("ERR\tc_emit\tpath_exists requires &FsReadCap as first arg (not int/lit)");
             process_exit(1);
         }
         return "oo_path_exists(" + a0 + ", " + a1 + ")";
     }
-    if t == "file_size" {
+    if t == "file_size" || t == "oo_file_size" {
         if a1 == "" || !c_arg_is_cap_ident(a0) {
             println("ERR\tc_emit\tfile_size requires &FsReadCap as first arg (not int/lit)");
             process_exit(1);
