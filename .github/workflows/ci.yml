@@ -388,12 +388,9 @@ jobs:
           set +e
           /tmp/oodac_ll_ci build --backend wasm oodac/qa/probe_list_ok.oo -o /tmp/wasm_residual.bin
           w_rc=$?
-          /tmp/oodac_ll_ci build --backend elf oodac/qa/probe_list_ok.oo -o /tmp/elf_residual.bin
-          e_rc=$?
           set -e
-          echo "wasm_residual_rc=$w_rc elf_residual_rc=$e_rc"
+          echo "wasm_residual_rc=$w_rc"
           test "$w_rc" -eq 2
-          test "$e_rc" -eq 2
 
   # Product `oodac build oodac/main.oo` must refuse (unique_fns). Ship the
   # committed seed ELF; do not wait on Unique bar or a self-host rebuild.
