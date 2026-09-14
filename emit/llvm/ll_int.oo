@@ -117,6 +117,8 @@ pub fn ll_apply_intop(op: String, lhs: String, rhs: String) -> String {
     else if op == "AMP" { inst = "and"; }
     else if op == "PIPE" { inst = "or"; }
     else if op == "CARET" { inst = "xor"; }
+    else if op == "LSHIFT" { inst = "shl"; }
+    else if op == "RSHIFT" { if uns { inst = "lshr"; } else { inst = "ashr"; } }
     else { println("ERR\tllvm\tintop " + op); process_exit(1); }
     if op == "EQEQ" || op == "NEQ" || op == "LT" || op == "GT" || op == "LTE" || op == "GTE" {
         println("  " + ll_ssa(s) + " = " + inst + " " + t + " " + ll_ssa(ll_pssa(le)) + ", " + ll_ssa(ll_pssa(re)));

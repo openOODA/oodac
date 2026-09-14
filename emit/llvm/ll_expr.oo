@@ -125,7 +125,7 @@ fn ll_add(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> Strin
     let mut p: Int = ll_ppos(r);
     while p < n {
         let op: String = ll_k(toks, p);
-        if op != "PLUS" && op != "MINUS" {
+        if op != "PLUS" && op != "MINUS" && op != "LSHIFT" && op != "RSHIFT" {
             return r;
         }
         p = p + 1;

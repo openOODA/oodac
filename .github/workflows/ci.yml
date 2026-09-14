@@ -383,6 +383,8 @@ jobs:
           test "$(/tmp/s1_resl.bin)" = "1"
           /tmp/oodac_ll_ci build --backend llvm oodac/bootstrap/corpus/emit-llvm/s1/dup_fn.oo -o /tmp/s1_dup.bin
           test "$(/tmp/s1_dup.bin)" = "1"
+          /tmp/oodac_ll_ci build --backend llvm oodac/bootstrap/corpus/emit-llvm/s1/shift_bit.oo -o /tmp/s1_shl.bin
+          test "$(/tmp/s1_shl.bin)" = "8"
           /tmp/oodac_ll_ci build --backend elf oodac/bootstrap/corpus/emit-llvm/pass/fn_ret_int.oo -o /tmp/s6_elf.bin
           test -x /tmp/s6_elf.bin
           test "$(/tmp/s6_elf.bin)" = "42"

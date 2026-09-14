@@ -1,0 +1,13 @@
+// # LLVM Int left shift
+//
+// Logline: 1 << 3 prints 8. mcp concat uses 1 << bit.
+//
+// Setup: No caps. S1-only; seed emit does not lower LSHIFT.
+//
+// Beats:
+//   1. main evaluates 1 << 3.
+//   2. stdout is 8.
+
+pub fn main() {
+    println((1 << 3).to_string());
+}
