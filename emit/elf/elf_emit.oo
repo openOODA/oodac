@@ -8,12 +8,12 @@
 //   1. elf_eval_println_add. Decimal plus newline.
 //   2. ehdr/phdr plus write/exit image. bytes_to_str.
 
-import "elf_eval.oo";
+import "elf_stmt.oo";
 import "elf_hdr.oo";
 import "elf_x64.oo";
 
 pub fn elf_emit_program(src: String) -> String {
-    let n: Int = elf_eval_println_add(src);
+    let n: Int = elf_eval_main(src);
     let msg: String = n.to_string() + "\n";
     let body: List[Int] = elf_x64_write_exit(msg);
     let hdr: List[Int] = elf_ehdr_phdr(list_len(body));

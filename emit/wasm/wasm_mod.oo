@@ -1,0 +1,183 @@
+// # Minimal WASI module that fd_writes a decimal line
+//
+// Logline: Magic \\0asm, import fd_write, memory, data, exported _start.
+//
+// Setup: Message is ASCII plus newline. iovec at addr 0, nwritten at 16.
+//
+// Beats:
+//   1. Type/import/func/memory/export/code/data sections.
+//   2. _start stores iov then calls fd_write(1, 0, 1, 16).
+
+import "emit/elf/elf_u.oo";
+
+fn leb(b: List[Int], n0: Int) -> List[Int] {
+    let mut n: Int = n0;
+    let mut out: List[Int] = b;
+    while n >= 128 {
+        let lo: Int = n - (n / 128) * 128;
+        out = elf_u8(out, lo + 128);
+        n = n / 128;
+    }
+    return elf_u8(out, n);
+}
+
+fn wasm_vec(b: List[Int], payload: List[Int]) -> List[Int] {
+    let mut out: List[Int] = leb(b, list_len(payload));
+    let mut i: Int = 0;
+    while i < list_len(payload) {
+        out = elf_u8(out, list_get(payload, i));
+        i = i + 1;
+    }
+    return out;
+}
+
+fn wasm_name(b: List[Int], s: String) -> List[Int] {
+    let mut payload: List[Int] = bytes_new();
+    let mut i: Int = 0;
+    while i < chars_len(s) {
+        payload = elf_u8(payload, wasm_ch(char_at(s, i)));
+        i = i + 1;
+    }
+    return wasm_vec(b, payload);
+}
+
+fn wasm_ch(c: String) -> Int {
+    if c == "w" { return 119; }
+    if c == "a" { return 97; }
+    if c == "s" { return 115; }
+    if c == "i" { return 105; }
+    if c == "_" { return 95; }
+    if c == "n" { return 110; }
+    if c == "p" { return 112; }
+    if c == "h" { return 104; }
+    if c == "o" { return 111; }
+    if c == "t" { return 116; }
+    if c == "d" { return 100; }
+    if c == "f" { return 102; }
+    if c == "r" { return 114; }
+    if c == "e" { return 101; }
+    if c == "m" { return 109; }
+    if c == "y" { return 121; }
+    if c == "c" { return 99; }
+    if c == "l" { return 108; }
+    if c == "u" { return 117; }
+    if c == "g" { return 103; }
+    if c == "v" { return 118; }
+    if c == "k" { return 107; }
+    if c == "b" { return 98; }
+    if c == "j" { return 106; }
+    if c == "q" { return 113; }
+    if c == "x" { return 120; }
+    if c == "z" { return 122; }
+    if c == "0" { return 48; }
+    if c == "1" { return 49; }
+    if c == "2" { return 50; }
+    if c == "3" { return 51; }
+    if c == "4" { return 52; }
+    if c == "5" { return 53; }
+    if c == "6" { return 54; }
+    if c == "7" { return 55; }
+    if c == "8" { return 56; }
+    if c == "9" { return 57; }
+    if c == "." { return 46; }
+    println("ERR\temit\twasm: bad name char");
+    process_exit(1);
+    return 0;
+}
+
+fn section(b: List[Int], id: Int, payload: List[Int]) -> List[Int] {
+    let mut out: List[Int] = elf_u8(b, id);
+    return wasm_vec(out, payload);
+}
+
+pub fn wasm_wasi_print(msg: String) -> List[Int] {
+    let mut b: List[Int] = bytes_new();
+    b = elf_u8(b, 0); b = elf_u8(b, 97); b = elf_u8(b, 115); b = elf_u8(b, 109);
+    b = elf_u8(b, 1); b = elf_u8(b, 0); b = elf_u8(b, 0); b = elf_u8(b, 0);
+    let mut tfix: List[Int] = bytes_new();
+    tfix = leb(tfix, 2);
+    tfix = elf_u8(tfix, 96);
+    tfix = leb(tfix, 4);
+    tfix = elf_u8(tfix, 127); tfix = elf_u8(tfix, 127); tfix = elf_u8(tfix, 127); tfix = elf_u8(tfix, 127);
+    tfix = leb(tfix, 1); tfix = elf_u8(tfix, 127);
+    tfix = elf_u8(tfix, 96);
+    tfix = leb(tfix, 0);
+    tfix = leb(tfix, 0);
+    b = section(b, 1, tfix);
+    let mut imp: List[Int] = bytes_new();
+    imp = leb(imp, 1);
+    imp = wasm_name(imp, "wasi_snapshot_preview1");
+    imp = wasm_name(imp, "fd_write");
+    imp = elf_u8(imp, 0);
+    imp = leb(imp, 0);
+    b = section(b, 2, imp);
+    let mut fns: List[Int] = bytes_new();
+    fns = leb(fns, 1);
+    fns = leb(fns, 1);
+    b = section(b, 3, fns);
+    let mut mem: List[Int] = bytes_new();
+    mem = leb(mem, 1);
+    mem = elf_u8(mem, 0);
+    mem = leb(mem, 1);
+    b = section(b, 5, mem);
+    let mut exp: List[Int] = bytes_new();
+    exp = leb(exp, 2);
+    exp = wasm_name(exp, "memory");
+    exp = elf_u8(exp, 2);
+    exp = leb(exp, 0);
+    exp = wasm_name(exp, "_start");
+    exp = elf_u8(exp, 0);
+    exp = leb(exp, 1);
+    b = section(b, 7, exp);
+    let mut body: List[Int] = bytes_new();
+    body = elf_u8(body, 0);
+    body = elf_u8(body, 65); body = leb(body, 0);
+    body = elf_u8(body, 65); body = leb(body, 8);
+    body = elf_u8(body, 54); body = elf_u8(body, 2); body = elf_u8(body, 0);
+    body = elf_u8(body, 65); body = leb(body, 4);
+    body = elf_u8(body, 65); body = leb(body, chars_len(msg));
+    body = elf_u8(body, 54); body = elf_u8(body, 2); body = elf_u8(body, 0);
+    body = elf_u8(body, 65); body = leb(body, 1);
+    body = elf_u8(body, 65); body = leb(body, 0);
+    body = elf_u8(body, 65); body = leb(body, 1);
+    body = elf_u8(body, 65); body = leb(body, 16);
+    body = elf_u8(body, 16); body = leb(body, 0);
+    body = elf_u8(body, 26);
+    body = elf_u8(body, 11);
+    let mut code: List[Int] = bytes_new();
+    code = leb(code, 1);
+    code = wasm_vec(code, body);
+    b = section(b, 10, code);
+    let mut data: List[Int] = bytes_new();
+    data = leb(data, 1);
+    data = elf_u8(data, 0);
+    data = elf_u8(data, 65); data = leb(data, 8);
+    data = elf_u8(data, 11);
+    let mut msgb: List[Int] = bytes_new();
+    let mut i: Int = 0;
+    while i < chars_len(msg) {
+        msgb = elf_u8(msgb, wasm_msg_ch(char_at(msg, i)));
+        i = i + 1;
+    }
+    data = wasm_vec(data, msgb);
+    b = section(b, 11, data);
+    return b;
+}
+
+fn wasm_msg_ch(c: String) -> Int {
+    if c == "0" { return 48; }
+    if c == "1" { return 49; }
+    if c == "2" { return 50; }
+    if c == "3" { return 51; }
+    if c == "4" { return 52; }
+    if c == "5" { return 53; }
+    if c == "6" { return 54; }
+    if c == "7" { return 55; }
+    if c == "8" { return 56; }
+    if c == "9" { return 57; }
+    if c == "-" { return 45; }
+    if c == "\n" { return 10; }
+    println("ERR\temit\twasm: bad msg char");
+    process_exit(1);
+    return 0;
+}

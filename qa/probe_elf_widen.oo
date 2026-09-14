@@ -1,0 +1,46 @@
+// # Probe: --backend elf on let/if/println/return
+//
+// Logline: if_lit.oo prints 7 twice. Not the add() special case.
+//
+// Setup: ProcessCap + EnvCap + FsReadCap. Host is OODA_COMPILER (S1).
+//
+// Beats:
+//   1. build --backend elf of if_lit writes an executable.
+//   2. Two runs print 7.
+
+pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
+    let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
+    let host: String = match hr { Ok(s) => s, Err(_) => "" };
+    if host == "" {
+        println("ERR\tOODA_COMPILER required");
+        process_exit(1);
+    }
+    let src: String = "oodac/bootstrap/corpus/emit-elf/pass/if_lit.oo";
+    let out: String = ".ooda-cache/ooda-tmp/native_elf_if_lit.bin";
+    let br: Result[String, String] = sys_exec(p, host, "build", "--backend", "elf", src, "-o", out);
+    if br.is_err() {
+        println("ERR\telf-widen build");
+        let bt: String = match br { Ok(s) => s, Err(e) => e };
+        println(bt);
+        process_exit(1);
+    }
+    if !path_exists(fs_r, out) {
+        println("ERR\telf-widen missing");
+        process_exit(1);
+    }
+    let r1: Result[String, String] = sys_exec(p, out);
+    let r2: Result[String, String] = sys_exec(p, out);
+    if r1.is_err() || r2.is_err() {
+        println("ERR\telf-widen run");
+        process_exit(1);
+    }
+    let t1: String = match r1 { Ok(s) => s, Err(_) => "" };
+    let t2: String = match r2 { Ok(s) => s, Err(_) => "" };
+    if str_index_of(t1, "7") < 0 || str_index_of(t2, "7") < 0 {
+        println("ERR\telf-widen stdout");
+        println(t1);
+        println(t2);
+        process_exit(1);
+    }
+    println("OK");
+}

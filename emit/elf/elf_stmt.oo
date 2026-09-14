@@ -1,0 +1,145 @@
+// # Tiny statements for native ELF const-interp
+//
+// Logline: let, println, return, if/else blocks. Result is last println.
+//
+// Setup: Packs printed\\tpos\\tenv\\tdone. Brace skip for the untaken arm.
+//
+// Beats:
+//   1. Taken if-arm runs exec_block. Else skipped or run.
+//   2. return sets done. Unknown stmt fails closed.
+
+import "lex/token_parse_int.oo";
+import "elf_lex.oo";
+import "elf_expr.oo";
+
+fn skip_block(src: String, p0: Int) -> Int {
+    let mut p: Int = elf_sk(src, p0);
+    if !elf_starts(src, p, "{") {
+        println("ERR\temit\telf: expected {");
+        process_exit(1);
+    }
+    p = p + 1;
+    let mut d: Int = 1;
+    while p < chars_len(src) && d > 0 {
+        p = elf_sk(src, p);
+        if elf_starts(src, p, "{") { d = d + 1; p = p + 1; continue; }
+        if elf_starts(src, p, "}") { d = d - 1; p = p + 1; continue; }
+        p = p + 1;
+    }
+    return p;
+}
+
+fn pack4(printed: Int, p: Int, env: String, done: Int) -> String {
+    return printed.to_string() + "\t" + p.to_string() + "\t" + env + "\t" + done.to_string();
+}
+
+fn exec_block(src: String, p0: Int, env0: String, printed0: Int, done0: Int) -> String {
+    let mut p: Int = elf_sk(src, p0);
+    if !elf_starts(src, p, "{") {
+        println("ERR\temit\telf: expected {");
+        process_exit(1);
+    }
+    p = p + 1;
+    let mut env: String = env0;
+    let mut printed: Int = printed0;
+    let mut done: Int = done0;
+    while p < chars_len(src) && done == 0 {
+        p = elf_sk(src, p);
+        if elf_starts(src, p, "}") { return pack4(printed, p + 1, env, done); }
+        if elf_starts(src, p, "let ") {
+            let idp: String = elf_take_ident(src, p + 4);
+            let ti: Int = str_index_of(idp, "\t");
+            let id: String = str_slice(idp, 0, ti);
+            p = parse_int(str_slice(idp, ti + 1, chars_len(idp)));
+            p = elf_sk(src, p);
+            if elf_starts(src, p, ":") {
+                p = elf_sk(src, p + 1);
+                let tp: String = elf_take_ident(src, p);
+                p = parse_int(str_slice(tp, str_index_of(tp, "\t") + 1, chars_len(tp)));
+            }
+            p = elf_sk(src, p);
+            if !elf_starts(src, p, "=") {
+                println("ERR\temit\telf: let =");
+                process_exit(1);
+            }
+            let e: String = elf_parse_expr(src, p + 1, env);
+            p = elf_un_p(e);
+            p = elf_sk(src, p);
+            if elf_starts(src, p, ";") { p = p + 1; }
+            env = elf_env_put(env, id, elf_un_v(e));
+            continue;
+        }
+        if elf_starts(src, p, "println(") {
+            let e: String = elf_parse_expr(src, p + 8, env);
+            printed = elf_un_v(e);
+            p = elf_sk(src, elf_un_p(e));
+            if elf_starts(src, p, ")") { p = p + 1; }
+            p = elf_sk(src, p);
+            if elf_starts(src, p, ";") { p = p + 1; }
+            continue;
+        }
+        if elf_starts(src, p, "return") {
+            p = p + 6;
+            p = elf_sk(src, p);
+            if elf_starts(src, p, ";") { p = p + 1; done = 1; continue; }
+            let e: String = elf_parse_expr(src, p, env);
+            printed = elf_un_v(e);
+            p = elf_sk(src, elf_un_p(e));
+            if elf_starts(src, p, ";") { p = p + 1; }
+            done = 1;
+            continue;
+        }
+        if elf_starts(src, p, "if ") {
+            let e: String = elf_parse_expr(src, p + 3, env);
+            let cond: Int = elf_un_v(e);
+            p = elf_un_p(e);
+            if cond != 0 {
+                let r: String = exec_block(src, p, env, printed, done);
+                printed = elf_un_v(r);
+                let rest: String = str_slice(r, str_index_of(r, "\t") + 1, chars_len(r));
+                let t2: Int = str_index_of(rest, "\t");
+                p = parse_int(str_slice(rest, 0, t2));
+                let rest2: String = str_slice(rest, t2 + 1, chars_len(rest));
+                let t3: Int = str_index_of(rest2, "\t");
+                env = str_slice(rest2, 0, t3);
+                done = parse_int(str_slice(rest2, t3 + 1, chars_len(rest2)));
+                p = elf_sk(src, p);
+                if elf_starts(src, p, "else") { p = skip_block(src, elf_sk(src, p + 4)); }
+            } else {
+                p = skip_block(src, p);
+                p = elf_sk(src, p);
+                if elf_starts(src, p, "else") {
+                    let r2: String = exec_block(src, elf_sk(src, p + 4), env, printed, done);
+                    printed = elf_un_v(r2);
+                    let rs: String = str_slice(r2, str_index_of(r2, "\t") + 1, chars_len(r2));
+                    let u2: Int = str_index_of(rs, "\t");
+                    p = parse_int(str_slice(rs, 0, u2));
+                    let rs2: String = str_slice(rs, u2 + 1, chars_len(rs));
+                    let u3: Int = str_index_of(rs2, "\t");
+                    env = str_slice(rs2, 0, u3);
+                    done = parse_int(str_slice(rs2, u3 + 1, chars_len(rs2)));
+                }
+            }
+            continue;
+        }
+        println("ERR\temit\telf unsupported stmt");
+        process_exit(1);
+    }
+    return pack4(printed, p, env, done);
+}
+
+pub fn elf_eval_main(src: String) -> Int {
+    let key: String = "fn main";
+    let at: Int = str_index_of(src, key);
+    if at < 0 {
+        println("ERR\temit\telf: no main");
+        process_exit(1);
+    }
+    let mut p: Int = elf_sk(src, at + chars_len(key));
+    if elf_starts(src, p, "(") {
+        p = elf_sk(src, p + 1);
+        if elf_starts(src, p, ")") { p = p + 1; }
+    }
+    let r: String = exec_block(src, p, "", 0, 0);
+    return elf_un_v(r);
+}

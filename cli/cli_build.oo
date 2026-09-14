@@ -13,6 +13,7 @@ import "lex/token_fmt.oo";
 import "lex/token_parse_int.oo";
 import "cli_oodar.oo";
 import "emit/elf/elf_emit.oo";
+import "emit/wasm/wasm_emit.oo";
 
 // Probe mirrors the link invocation: --no-default-config keeps distro
 // /etc configs (unreadable under the jail) from failing the version check.
@@ -110,7 +111,7 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
     let mut out: String = path + ".bin";
     if is_shared { out = path + ".so"; }
     if out_arg != "" { out = out_arg; }
-    if backend != "" && backend != "llvm" && backend != "elf" {
+    if backend != "" && backend != "llvm" && backend != "elf" && backend != "wasm" {
         println("ERR\tbuild\tbackend residual: " + backend);
         process_exit(2);
     }
@@ -152,17 +153,21 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
         process_exit(1);
     }
     let mut b: String = backend;
-    if b == "elf" {
-        let blob: String = elf_emit_program(src);
+    if b == "elf" || b == "wasm" {
+        let mut blob: String = "";
+        if b == "elf" { blob = elf_emit_program(src); }
+        else { blob = wasm_emit_program(src); }
         let wr: Result[Void, String] = write_file(fs_w, out, blob);
         if wr.is_err() {
-            println("ERR\tbuild\twrite ELF failed");
+            println("ERR\tbuild\twrite " + b + " failed");
             process_exit(1);
         }
-        let ch: Result[String, String] = sys_exec(sys, "/usr/bin/chmod", "+x", out);
-        if ch.is_err() {
-            println("ERR\tbuild\tchmod ELF failed");
-            process_exit(1);
+        if b == "elf" {
+            let ch: Result[String, String] = sys_exec(sys, "/usr/bin/chmod", "+x", out);
+            if ch.is_err() {
+                println("ERR\tbuild\tchmod ELF failed");
+                process_exit(1);
+            }
         }
         println("OK\tbuild\t" + out);
         return;

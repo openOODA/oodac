@@ -1,0 +1,99 @@
+// # Tiny lexer helpers for native ELF const-interp
+//
+// Logline: Skip whitespace/comments, take idents and ints, env name=int;
+//
+// Setup: parse_int from lex. Fail closed on empty int tokens.
+//
+// Beats:
+//   1. sk eats // comments. take_ident is alnum_.
+//   2. env_get_i / env_put_i on semicolon maps.
+
+import "lex/token_parse_int.oo";
+
+pub fn elf_sk(src: String, p0: Int) -> Int {
+    let mut p: Int = p0;
+    let n: Int = chars_len(src);
+    while p < n {
+        let c: String = char_at(src, p);
+        if p + 1 < n && c == "/" && char_at(src, p + 1) == "/" {
+            p = p + 2;
+            while p < n && char_at(src, p) != "\n" { p = p + 1; }
+            continue;
+        }
+        if c != " " && c != "\t" && c != "\n" && c != "\r" { return p; }
+        p = p + 1;
+    }
+    return p;
+}
+
+pub fn elf_starts(src: String, p: Int, w: String) -> Bool {
+    let n: Int = chars_len(w);
+    if p + n > chars_len(src) { return false; }
+    return str_slice(src, p, p + n) == w;
+}
+
+pub fn elf_take_ident(src: String, p0: Int) -> String {
+    let mut p: Int = elf_sk(src, p0);
+    let n: Int = chars_len(src);
+    let mut s: String = "";
+    while p < n {
+        let c: String = char_at(src, p);
+        if char_is_digit(c) && s == "" { break; }
+        if char_is_digit(c) || char_is_alpha(c) || c == "_" {
+            s = s + c;
+            p = p + 1;
+            continue;
+        }
+        break;
+    }
+    return s + "\t" + p.to_string();
+}
+
+pub fn elf_env_get(env: String, name: String) -> Int {
+    let key: String = name + "=";
+    let at: Int = str_index_of(env, key);
+    if at < 0 {
+        println("ERR\temit\telf: unknown " + name);
+        process_exit(1);
+    }
+    let rest: String = str_slice(env, at + chars_len(key), chars_len(env));
+    let sc: Int = str_index_of(rest, ";");
+    if sc < 0 { return parse_int(rest); }
+    return parse_int(str_slice(rest, 0, sc));
+}
+
+pub fn elf_env_put(env: String, name: String, v: Int) -> String {
+    return env + name + "=" + v.to_string() + ";";
+}
+
+pub fn elf_parse_int_at(src: String, p0: Int) -> String {
+    let mut p: Int = elf_sk(src, p0);
+    let n: Int = chars_len(src);
+    let mut s: String = "";
+    if p < n && char_at(src, p) == "-" { s = "-"; p = p + 1; }
+    while p < n {
+        let c: String = char_at(src, p);
+        if !char_is_digit(c) { break; }
+        s = s + c;
+        p = p + 1;
+    }
+    if s == "" || s == "-" {
+        println("ERR\temit\telf: expected int");
+        process_exit(1);
+    }
+    return s + "\t" + p.to_string();
+}
+
+pub fn elf_pack_i(v: Int, p: Int) -> String {
+    return v.to_string() + "\t" + p.to_string();
+}
+
+pub fn elf_un_v(pack: String) -> Int {
+    let t: Int = str_index_of(pack, "\t");
+    return parse_int(str_slice(pack, 0, t));
+}
+
+pub fn elf_un_p(pack: String) -> Int {
+    let t: Int = str_index_of(pack, "\t");
+    return parse_int(str_slice(pack, t + 1, chars_len(pack)));
+}

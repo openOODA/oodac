@@ -323,6 +323,18 @@ jobs:
         with:
           repository: openOODA/opm
           path: opm
+      - uses: actions/checkout@v4
+        with:
+          repository: openOODA/lsp
+          path: lsp
+      - uses: actions/checkout@v4
+        with:
+          repository: openOODA/mcp
+          path: mcp
+      - uses: actions/checkout@v4
+        with:
+          repository: openOODA/tui
+          path: tui
       - name: Configure swap
         run: |
           echo "=== Initial Memory & Swap ==="
@@ -370,6 +382,14 @@ jobs:
           PATH=/bin:/usr/bin /tmp/s6_elf.bin | grep -q '^42$'
           /tmp/oodac_ll_ci build oodac/qa/probe_native_elf.oo -o /tmp/probe_native_elf.bin
           /tmp/probe_native_elf.bin
+          /tmp/oodac_ll_ci build --backend elf oodac/bootstrap/corpus/emit-elf/pass/if_lit.oo -o /tmp/s6_if.bin
+          test "$(/tmp/s6_if.bin)" = "7"
+          /tmp/oodac_ll_ci build oodac/qa/probe_elf_widen.oo -o /tmp/probe_elf_widen.bin
+          /tmp/probe_elf_widen.bin
+          /tmp/oodac_ll_ci build --backend wasm oodac/bootstrap/corpus/emit-llvm/pass/fn_ret_int.oo -o /tmp/s6.wasm
+          python3 -c "d=open('/tmp/s6.wasm','rb').read(); assert d[:4]==b'\\0asm', d[:8]"
+          /tmp/oodac_ll_ci build oodac/qa/probe_native_wasm.oo -o /tmp/probe_native_wasm.bin
+          /tmp/probe_native_wasm.bin
           /tmp/oodac_ll_ci build --backend llvm cli/main.oo -o /tmp/cli_ll
           test -x /tmp/cli_ll
           /tmp/cli_ll --help | head -5
@@ -379,18 +399,20 @@ jobs:
           /tmp/oodac_ll_ci build --backend llvm opm/cli/main.oo -o /tmp/opm_ll
           test -x /tmp/opm_ll
           /tmp/opm_ll --help | head -5 || true
+          /tmp/oodac_ll_ci build --backend llvm lsp/cli/main.oo -o /tmp/lsp_ll
+          test -x /tmp/lsp_ll
+          /tmp/lsp_ll --help | head -5 || true
+          /tmp/oodac_ll_ci build --backend llvm mcp/cli/main.oo -o /tmp/mcp_ll
+          test -x /tmp/mcp_ll
+          /tmp/mcp_ll --help | head -5 || true
+          /tmp/oodac_ll_ci build --backend llvm tui/main.oo -o /tmp/tui_ll
+          test -x /tmp/tui_ll
           set +e
           /tmp/oodac_ll_ci build --backend c oodac/qa/probe_list_ok.oo -o /tmp/c_residual.bin
           c_rc=$?
           set -e
           echo "c_residual_rc=$c_rc"
           test "$c_rc" -eq 2
-          set +e
-          /tmp/oodac_ll_ci build --backend wasm oodac/qa/probe_list_ok.oo -o /tmp/wasm_residual.bin
-          w_rc=$?
-          set -e
-          echo "wasm_residual_rc=$w_rc"
-          test "$w_rc" -eq 2
 
   # Product `oodac build oodac/main.oo` must refuse (unique_fns). Ship the
   # committed seed ELF; do not wait on Unique bar or a self-host rebuild.

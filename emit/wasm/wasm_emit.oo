@@ -1,0 +1,25 @@
+// # Native WASM emit
+//
+// Logline: Const-interp main then emit a WASI module that prints the result.
+//
+// Setup: Shares elf_eval_main. No clang. Magic is \\0asm.
+//
+// Beats:
+//   1. Evaluate main. Format decimal plus newline.
+//   2. wasm_wasi_print. bytes_to_str.
+
+import "emit/elf/elf_stmt.oo";
+import "wasm_mod.oo";
+
+pub fn wasm_emit_program(src: String) -> String {
+    let n: Int = elf_eval_main(src);
+    let msg: String = n.to_string() + "\n";
+    let body: List[Int] = wasm_wasi_print(msg);
+    let mut i: Int = 0;
+    let mut all: List[Int] = bytes_new();
+    while i < list_len(body) {
+        all = bytes_push(all, list_get(body, i));
+        i = i + 1;
+    }
+    return bytes_to_str(all);
+}

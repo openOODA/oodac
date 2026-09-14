@@ -1,0 +1,70 @@
+// # Tiny expressions for native ELF const-interp
+//
+// Logline: Int literals, idents, add(), +, >, <, ==.
+//
+// Setup: Packs are val\\tpos. Env is name=int;
+//
+// Beats:
+//   1. add(e,e) and binary ops of two primaries.
+//   2. Unknown tokens fail closed.
+
+import "lex/token_parse_int.oo";
+import "elf_lex.oo";
+
+fn elf_parse_prim(src: String, p0: Int, env: String) -> String {
+    let p: Int = elf_sk(src, p0);
+    if elf_starts(src, p, "add(") {
+        let a: String = elf_parse_expr(src, p + 4, env);
+        let pa: Int = elf_sk(src, elf_un_p(a));
+        if !elf_starts(src, pa, ",") {
+            println("ERR\temit\telf: add comma");
+            process_exit(1);
+        }
+        let b: String = elf_parse_expr(src, pa + 1, env);
+        let pb: Int = elf_sk(src, elf_un_p(b));
+        if !elf_starts(src, pb, ")") {
+            println("ERR\temit\telf: add )");
+            process_exit(1);
+        }
+        return elf_pack_i(elf_un_v(a) + elf_un_v(b), pb + 1);
+    }
+    if p < chars_len(src) && (char_is_digit(char_at(src, p)) || char_at(src, p) == "-") {
+        let pack: String = elf_parse_int_at(src, p);
+        return elf_pack_i(elf_un_v(pack), elf_un_p(pack));
+    }
+    let idp: String = elf_take_ident(src, p);
+    let ti: Int = str_index_of(idp, "\t");
+    let id: String = str_slice(idp, 0, ti);
+    let np: Int = parse_int(str_slice(idp, ti + 1, chars_len(idp)));
+    if id == "" {
+        println("ERR\temit\telf: expected expr");
+        process_exit(1);
+    }
+    return elf_pack_i(elf_env_get(env, id), np);
+}
+
+pub fn elf_parse_expr(src: String, p0: Int, env: String) -> String {
+    let a: String = elf_parse_prim(src, p0, env);
+    let p: Int = elf_sk(src, elf_un_p(a));
+    let av: Int = elf_un_v(a);
+    if elf_starts(src, p, "+") {
+        let b: String = elf_parse_prim(src, p + 1, env);
+        return elf_pack_i(av + elf_un_v(b), elf_un_p(b));
+    }
+    if elf_starts(src, p, ">") {
+        let b: String = elf_parse_prim(src, p + 1, env);
+        let r: Int = if av > elf_un_v(b) { 1 } else { 0 };
+        return elf_pack_i(r, elf_un_p(b));
+    }
+    if elf_starts(src, p, "<") {
+        let b: String = elf_parse_prim(src, p + 1, env);
+        let r: Int = if av < elf_un_v(b) { 1 } else { 0 };
+        return elf_pack_i(r, elf_un_p(b));
+    }
+    if elf_starts(src, p, "==") {
+        let b: String = elf_parse_prim(src, p + 2, env);
+        let r: Int = if av == elf_un_v(b) { 1 } else { 0 };
+        return elf_pack_i(r, elf_un_p(b));
+    }
+    return a;
+}

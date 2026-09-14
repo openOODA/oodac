@@ -6,7 +6,7 @@
 //
 // Beats:
 //   1. None requires opti or opts.
-//   2. Some/Ok/Err wrap Int or String payloads only.
+//   2. Some/Ok/Err wrap Int, String, list, or struct.
 //   3. Result return copies a wrapped resi; bare i64 is ERR.
 
 import "ll_tok.oo";
@@ -190,6 +190,15 @@ fn ll_ctor_ok(arg: String, ssa0: Int, expect: String) -> String {
         println("  store %OoResS " + ll_ssa(s2) + ", ptr " + a);
         return ll_pack(0, s2, "ress", a);
     }
+    if ll_pk(arg) == "slist" || ll_pk(arg) == "ilist" || (chars_len(ll_pk(arg)) >= 6 && str_slice(ll_pk(arg), 0, 6) == "olist_") {
+        let av: String = ll_as_val(arg, ssa0);
+        let a: String = ll_tmpa(ll_pssa(av) + 1);
+        println("  " + a + " = alloca %OoResL, align 8");
+        let os: Int = ll_pssa(av) + 1;
+        println("  " + ll_ssa(os) + " = insertvalue %OoResL { i32 1, %OoSList zeroinitializer, %OoStr { ptr null, i64 0 } }, %OoSList " + ll_ssa(ll_pssa(av)) + ", 1");
+        println("  store %OoResL " + ll_ssa(os) + ", ptr " + a);
+        return ll_pack(0, os, "resl", a);
+    }
     if ll_is_struct(ll_pk(arg)) {
         let mut rb: String = ll_resst_base(expect);
         if rb == "" {
@@ -240,8 +249,7 @@ fn ll_ctor_err(arg: String, ssa0: Int, expect: String) -> String {
     }
     let a: String = ll_tmpa(ll_pssa(av) + 1);
     println("  " + a + " = alloca %OoResI, align 8");
-    let os: Int = ll_oostr_from_pair(ll_pssa(av));
-    let s2: Int = os + 1;
+    let os: Int = ll_oostr_from_pair(ll_pssa(av)); let s2: Int = os + 1;
     println("  " + ll_ssa(s2) + " = insertvalue %OoResI { i32 0, i64 0, %OoStr { ptr null, i64 0 } }, %OoStr " + ll_ssa(os) + ", 2");
     println("  store %OoResI " + ll_ssa(s2) + ", ptr " + a);
     return ll_pack(0, s2, "resi", a);

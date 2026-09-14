@@ -1,0 +1,10 @@
+// # Native WASM backend index
+//
+// Logline: Re-export wasm_emit_program. Concat skips *anchor.oo.
+//
+// Setup: Bodies live in wasm_emit.oo.
+//
+// Beats:
+//   1. Import wasm_emit.oo.
+
+import "wasm_emit.oo";

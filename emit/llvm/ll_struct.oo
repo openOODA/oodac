@@ -216,7 +216,7 @@ pub fn ll_struct_lit_at(toks: List[String], pos: Int, n: Int, ssa0: Int, env: St
         let fld2: String = ll_t(toks, p); let fe2: String = type_env_get(env, "__stf__" + nm + "." + fld2);
         if fe2 == "" { println("ERR\tllvm\tunknown field " + fld2); process_exit(1); }
         let cj2: Int = str_index_of(fe2, ":");
-        let fk: String = str_slice(fe2, cj2 + 1, chars_len(fe2)); p = p + 1;
+        let fk: String = ll_st_map(str_slice(fe2, cj2 + 1, chars_len(fe2)), ",", "|"); p = p + 1;
         if p >= n || ll_k(toks, p) != "COLON" { println("ERR\tllvm\tstruct lit colon"); process_exit(1); }
         p = p + 1;
         let v0: String = ll_expr(toks, p, n, s, env); p = ll_ppos(v0); s = ll_pssa(v0);

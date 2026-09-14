@@ -1,0 +1,17 @@
+// # Native ELF widen: let, if, println, return
+//
+// Logline: Not println(add). Prints 7 via if x > 3.
+//
+// Setup: Default elf. No caps.
+//
+// Beats:
+//   1. Taken if-arm prints x and returns. Else is dead.
+
+pub fn main() {
+    let x: Int = 7;
+    if x > 3 {
+        println(x);
+        return;
+    }
+    println(0);
+}

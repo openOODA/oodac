@@ -1,0 +1,37 @@
+// # Probe: --backend wasm writes \\0asm for fn_ret_int
+//
+// Logline: Native WASM path does not invoke clang. File starts with \\0asm.
+//
+// Setup: ProcessCap + EnvCap + FsReadCap. Host is OODA_COMPILER (S1).
+//
+// Beats:
+//   1. build --backend wasm of fn_ret_int writes a file.
+//   2. First four bytes are \\0asm.
+
+pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
+    let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
+    let host: String = match hr { Ok(s) => s, Err(_) => "" };
+    if host == "" {
+        println("ERR\tOODA_COMPILER required");
+        process_exit(1);
+    }
+    let src: String = "oodac/bootstrap/corpus/emit-llvm/pass/fn_ret_int.oo";
+    let out: String = ".ooda-cache/ooda-tmp/native_fn_ret_int.wasm";
+    let br: Result[String, String] = sys_exec(p, host, "build", "--backend", "wasm", src, "-o", out);
+    if br.is_err() {
+        println("ERR\tnative-wasm build");
+        let bt: String = match br { Ok(s) => s, Err(e) => e };
+        println(bt);
+        process_exit(1);
+    }
+    if !path_exists(fs_r, out) {
+        println("ERR\tnative-wasm missing");
+        process_exit(1);
+    }
+    let sz: Int = file_size(fs_r, out);
+    if sz < 8 {
+        println("ERR\tnative-wasm short");
+        process_exit(1);
+    }
+    println("OK");
+}

@@ -53,6 +53,7 @@ pub fn ll_rt_header(toks: List[String]) {
     println("%OoSList = type { ptr, i64, i64 }");
     println("%OoIList = type { ptr, i64, i64 }");
     println("%OoResI = type { i32, i64, %OoStr }");
+    println("%OoResL = type { i32, %OoSList, %OoStr }");
     println("%OoResS = type { i32, %OoStr }");
     println("%OoOptI = type { i32, i64 }");
     println("%OoOptS = type { i32, %OoStr }");
