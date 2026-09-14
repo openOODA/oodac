@@ -1,0 +1,19 @@
+// # LLVM concat first-wins duplicate fn
+//
+// Logline: Private n in this TU must not redefine the imported pub n.
+//
+// Setup: No caps. S1-only. Deps-first concat emits the lib body first.
+//
+// Beats:
+//   1. clang accepts the concat TU (no redefinition of n).
+//   2. main prints 1 from the first n.
+
+import "dup_fn_lib.oo";
+
+fn n() -> Int {
+    return 2;
+}
+
+pub fn main() {
+    println(n().to_string());
+}

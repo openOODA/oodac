@@ -7,7 +7,7 @@
 // Beats:
 //   1. ll_rt_header emits types and STRING globals.
 //   2. Programs with main keep reachable fns; one-TU libraries keep every fn.
-//   3. Walk KW_FN / KW_PUB fn items that are in the keep set.
+//   3. Walk keep-set fns; duplicate names first-wins (concat unique_fns).
 
 import "ll_tok.oo";
 import "ll_rt.oo";
@@ -35,7 +35,9 @@ pub fn ll_collect_sigs(toks: List[String], stab: String) -> String {
                 let eq: Int = str_index_of(sig, "=");
                 let nm: String = str_slice(sig, 0, eq);
                 let rest: String = str_slice(sig, eq + 1, chars_len(sig));
-                env = type_env_put(env, "__fn__" + nm, rest);
+                if type_env_get(env, "__fn__" + nm) == "" {
+                    env = type_env_put(env, "__fn__" + nm, rest);
+                }
             }
             pos = ll_skip_fn(toks, pos, n);
         } else {
@@ -181,6 +183,7 @@ pub fn ll_emit_stream_plus(toks: List[String], extra: String) {
     }
     ll_emit_import_decls(extra, local_fns, want);
     let mut pos: Int = 0;
+    let mut seen_fn: String = "\t";
     while pos < n {
         let k: String = ll_k(toks, pos);
         if k == "EOF" {
@@ -193,7 +196,8 @@ pub fn ll_emit_stream_plus(toks: List[String], extra: String) {
             pos = skip_until_semi(toks, pos);
         } else if k == "KW_PUB" || k == "KW_EXPORT" || k == "KW_FN" {
             let nm: String = ll_fn_name_at(toks, pos, n);
-            if ll_in_set(keep, nm) {
+            if ll_in_set(keep, nm) && !ll_in_set(seen_fn, nm) {
+                seen_fn = seen_fn + nm + "\t";
                 println("; FN " + nm);
                 ll_emit_fn_strings(toks, pos, n);
                 let penv: String = ll_prune_sigs(sigs, stenv, ll_callee_set(toks, pos, n));

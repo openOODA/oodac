@@ -1,0 +1,13 @@
+// # First-wins helper
+//
+// Logline: pub n returns 1. Concat with dup_fn.oo must keep this body.
+//
+// Setup: No caps. Imported by dup_fn.oo. S1-only.
+//
+// Beats:
+//   1. n is a pub Int fn.
+//   2. Body returns 1.
+
+pub fn n() -> Int {
+    return 1;
+}
