@@ -157,7 +157,7 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String, stab: Stri
                 if str_index_of(refs, ";" + pn + ";") >= 0 && (ll_is_mem(k) || ll_is_refk(k)) {
                     env = type_env_put(env, "__l__" + pn, "%p_" + pn);
                 } else {
-                    ll_slot_name(ll_var(pn), ir);
+                    ll_slot_ty(ll_var(pn), ll_ir_alloc(k), ir);
                     if ll_is_mem(k) {
                         ssa = ssa + 1;
                         ll_ir_text(ir, "  " + ll_ssa(ssa) + " = load " + ll_ir_val(k) + ", ptr %p_" + pn + ", align 8");

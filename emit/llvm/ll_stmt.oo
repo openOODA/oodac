@@ -57,7 +57,7 @@ pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String, env
             if ll_is_int(ann) && ll_is_int(ty) && ann != ty { ty = ann; }
             let dst: String = ll_var(name) + "_s" + site.to_string();
             env = type_env_put(env, "__l__" + name, dst);
-            ll_slot_name(dst, ir);
+            ll_slot_ty(dst, ll_ir_alloc(ty), ir);
             ssa = ll_store(name, ty, v, ssa, env, ir);
             env = type_env_put(env, name, ty);
             if ll_pk(v) == "ilist" || ll_pk(v) == "slist" { env = type_env_put(env, name, ll_pk(v)); }

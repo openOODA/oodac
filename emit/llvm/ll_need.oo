@@ -10,6 +10,7 @@
 //   3. String/list/cap/verify add retain and grant helpers.
 
 import "ll_tok.oo";
+import "ll_need_list.oo";
 
 fn ll_need_add(need: String, name: String) -> String {
     if str_index_of(need, "\t" + name + "\t") >= 0 { return need; }
@@ -203,7 +204,7 @@ pub fn ll_need_scan(toks: List[String]) -> String {
         need = ll_need_add(need, "oo_print_double");
     }
     need = ll_need_caps(toks, need);
-    return need;
+    return ll_need_refine_list(toks, need);
 }
 
 fn ll_need_caps(toks: List[String], need0: String) -> String {

@@ -1,22 +1,27 @@
 // # LLVM entry-block heap slots
 //
-// Logline: One entry alloca per function; later slots are inbounds GEPs.
+// Logline: Per-local entry allocas; A records flushed before other insts.
 //
-// Setup: Call ll_heap after `{`. Named and temp storage uses ll_slot.
+// Setup: ll_slot_ty emits A records. ll_heap is a no-op.
 //
 // Beats:
-//   1. %heap is the only alloca.
-//   2. Temps use ssa*64. Named uses a hashed offset above 20000.
+//   1. Named Int slots are alloca i64.
+//   2. Other slots are alloca [256 x i8].
 
 import "ll_ir.oo";
 
 pub fn ll_heap(ir: &mut IrBuf) {
-    ll_ir_inst(ir, "alloca", "[4194304 x i8]", "%heap", "align 16", 0, 0);
-    ll_ir_inst(ir, "call", "void", "", "@llvm.lifetime.start.p0(i64 4194304, ptr %heap)", 0, 0);
+    ir.recs = ir.recs + "";
 }
 
 pub fn ll_heap_end(ir: &mut IrBuf) {
-    ll_ir_inst(ir, "call", "void", "", "@llvm.lifetime.end.p0(i64 4194304, ptr %heap)", 0, 0);
+    ir.recs = ir.recs + "";
+}
+
+pub fn ll_slot_ty(dst: String, ty: String, ir: &mut IrBuf) {
+    let mut t: String = ty;
+    if t == "" { t = "i64"; }
+    ll_ir_push(ir, "A\t" + t + "\t" + dst);
 }
 
 pub fn ll_nhash(s: String) -> Int {
@@ -32,9 +37,8 @@ pub fn ll_nhash(s: String) -> Int {
 }
 
 pub fn ll_slot(dst: String, n: Int, ir: &mut IrBuf) {
-    let mut off: Int = n * 64;
-    if off < 0 { off = 0 - off; }
-    ll_ir_inst(ir, "getelementptr inbounds", "[4194304 x i8]", dst, "ptr %heap, i64 0, i64 " + off.to_string(), 0, 0);
+    if n < 0 { ll_slot_ty(dst, "i64", ir); return; }
+    ll_slot_ty(dst, "[256 x i8]", ir);
 }
 
 pub fn ll_slot_tmp(n: Int, ir: &mut IrBuf) -> String {
@@ -44,7 +48,7 @@ pub fn ll_slot_tmp(n: Int, ir: &mut IrBuf) -> String {
 }
 
 pub fn ll_slot_name(dst: String, ir: &mut IrBuf) {
-    ll_slot(dst, ll_nhash(dst), ir);
+    ll_slot_ty(dst, "[256 x i8]", ir);
 }
 
 pub fn ll_trap(ir: &mut IrBuf) {

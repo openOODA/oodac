@@ -106,9 +106,9 @@ pub fn ll_apply_intop(op: String, lhs: String, rhs: String, ir: &mut IrBuf) -> S
     if ll_int_wide(ck) == "i32" { t = "i32"; }
     let uns: Bool = ll_is_uint(ck);
     let mut inst: String = "";
-    if op == "PLUS" { inst = "add"; }
-    else if op == "MINUS" { inst = "sub"; }
-    else if op == "STAR" { inst = "mul"; }
+    if op == "PLUS" { if uns { inst = "add"; } else { inst = "add nsw"; } }
+    else if op == "MINUS" { if uns { inst = "sub"; } else { inst = "sub nsw"; } }
+    else if op == "STAR" { if uns { inst = "mul"; } else { inst = "mul nsw"; } }
     else if op == "SLASH" { if uns { inst = "udiv"; } else { inst = "sdiv"; } }
     else if op == "PERCENT" { if uns { inst = "urem"; } else { inst = "srem"; } }
     else if op == "EQEQ" { inst = "icmp eq"; }

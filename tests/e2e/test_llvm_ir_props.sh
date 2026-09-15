@@ -61,13 +61,10 @@ sys.exit(0 if ok else 1)
 PY
   record "P-ALLOCA-01" "allocas before non-alloca in each fn" "$as_ok"
 
-  grep -q "getelementptr inbounds" "$d/add.ll"
-  record "P-GEP-01" "inbounds GEP present" "$?"
-  if grep -qE 'getelementptr [^i]' "$d/add.ll"; then
-    record "P-GEP-02" "no GEP without inbounds" 1
-  else
-    record "P-GEP-02" "no GEP without inbounds" 0
-  fi
+  grep -q '4194304' "$d/add.ll" && h=1 || h=0
+  record "P-HEAP-01" "no 4MiB heap blob" "$h"
+  grep -q 'add nsw' "$d/add.ll"
+  record "P-NSW-01" "signed add is nsw" "$?"
 
   if grep -q 'add i64 0,' "$d/add.ll" || grep -q 'fadd double 0.0,' "$d/add.ll"; then
     record "P-CONST-01" "no dummy add-zero constants" 1
@@ -119,6 +116,10 @@ PY
   else
     record "P-IMM-01" "struct_field has no ptr #imm" 0
   fi
+  grep -q "getelementptr inbounds" "$d/st.ll"
+  record "P-GEP-01" "inbounds GEP present" "$?"
+  grep -qE 'getelementptr [^i]' "$d/st.ll" && g=1 || g=0
+  record "P-GEP-02" "no GEP without inbounds" "$g"
 
   emit "$CORPUS/ir_two_verify.oo" "$d/ver.ll"
   llvm-as "$d/ver.ll" -o "$d/ver.bc"
@@ -156,6 +157,12 @@ PY
   record "P-LIST-01" "list_push uses i64 10 constant" "$?"
   grep -q '@oo_ilist_get' "$d/li.ll" && grep -q ', i64 0)' "$d/li.ll"
   record "P-LIST-02" "list_get uses i64 0 constant" "$?"
+  grep -q 'oo_slist_' "$d/li.ll" && ls=1 || ls=0
+  record "P-LIST-03" "int list_new is ilist" "$ls"
+  grep -E 'call ' "$d/add.ll" | grep -v '^declare ' | grep -qv '!dbg' && db=1 || db=0
+  record "P-DBG-02" "calls have !dbg" "$db"
+  grep -q 'scope: !10)' "$d/add.ll" && di=1 || di=0
+  record "P-DBG-03" "DILocation scope is not CU" "$di"
 
   opt -O2 -S "$d/add.ll" -o "$d/add.opt.ll"
   record "P-OPT-01" "opt -O2 fn_ret_int" "$?"

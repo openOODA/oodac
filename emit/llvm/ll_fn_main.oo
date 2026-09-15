@@ -5,7 +5,7 @@
 // Setup: Called from ll_emit_fn after the signature walk.
 //
 // Beats:
-//   1. %heap in entry. Caps are i64 slots.
+//   1. Per-local allocas in entry. Caps are i64 slots.
 //   2. No oo_slist argv construction when args is unused.
 
 import "ll_tok.oo";
@@ -32,14 +32,14 @@ pub fn ll_emit_main(toks: List[String], pos: Int, n: Int, p: Int, env0: String, 
             let mut e: Int = i + 1;
             while e < cn && char_at(caps, e) != ";" { e = e + 1; }
             let suf: String = str_slice(caps, i + 1, e);
-            ll_slot_name(ll_var(nm), ir);
+            ll_slot_ty(ll_var(nm), "i64", ir);
             ll_ir_text(ir, "  %g_" + nm + " = call i64 @oo_cap_grant_" + suf + "()");
             ll_ir_text(ir, "  store i64 %g_" + nm + ", ptr " + ll_var(nm) + ", align 8");
         }
         i = i + 1;
     }
     if use_args {
-        ll_slot_name("%v_args", ir);
+        ll_slot_ty("%v_args", "%OoSList", ir);
         ll_ir_text(ir, "  call void @oo_slist_new(ptr sret(%OoSList) align 8 %v_args)");
         ll_ir_text(ir, "  br label %args0");
         ll_ir_text(ir, "args0:");

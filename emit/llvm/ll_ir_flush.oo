@@ -2,19 +2,106 @@
 //
 // Logline: The only function-body LLVM printer. Consumes IrBuf records.
 //
-// Setup: I records are typed insts (op, ty, dst, args, span via ll_ir_val_rec).
-//   L is a block label. F/E wrap a function. T is a raw line.
+// Setup: I records are typed insts. L is a label. F/E wrap a function.
+//   T is a raw line. A is a per-local alloca hoisted to entry.
 //
 // Beats:
-//   1. Split recs on newline.
-//   2. I with dst prints `%dst = op ty args`; I without dst prints `op ty args`.
-//   3. Attach !dbg from the packed span when line > 0.
+//   1. Collect every A record, then print all allocas before other insts.
+//   2. lifetime.start comes after the alloca prefix, not between allocas.
+//   3. !dbg DILocation scope is the function DISubprogram, not the CU.
 
 import "ll_ir.oo";
 import "lex/token_fmt.oo";
 import "lex/token_parse_int.oo";
 
-fn ll_ir_print_i(op: String, ty: String, dst: String, args: String, line: Int, col: Int) {
+fn ll_dbg_loc(line: Int, col: Int, scope: Int) -> String {
+    let mut ln: Int = line;
+    let mut cn: Int = col;
+    let mut sc: Int = scope;
+    if ln < 1 { ln = 1; }
+    if cn < 1 { cn = 1; }
+    if sc < 1 { sc = 10; }
+    return ", !dbg !DILocation(line: " + ln.to_string() + ", column: " + cn.to_string() + ", scope: !" + sc.to_string() + ")";
+}
+
+fn ll_t_is_label(s: String) -> Bool {
+    let n: Int = chars_len(s);
+    if n < 1 { return false; }
+    return char_at(s, n - 1) == ":";
+}
+
+fn ll_t_is_call(s: String) -> Bool {
+    if str_index_of(s, " = call ") >= 0 { return true; }
+    if str_index_of(s, "  call ") >= 0 { return true; }
+    return false;
+}
+
+fn ll_fn_scope(chunk: String) -> Int {
+    let p: Int = str_index_of(chunk, "!dbg !");
+    if p < 0 { return 10; }
+    let n: Int = chars_len(chunk);
+    let mut i: Int = p + 6;
+    let mut s: String = "";
+    while i < n {
+        let c: String = char_at(chunk, i);
+        if str_index_of("0123456789", c) < 0 { break; }
+        s = s + c;
+        i = i + 1;
+    }
+    if s == "" { return 10; }
+    return parse_int(s);
+}
+
+fn ll_print_t(s: String, scope: Int) {
+    if ll_t_is_call(s) && str_index_of(s, "!dbg") < 0 {
+        println(s + ll_dbg_loc(1, 1, scope));
+        return;
+    }
+    println(s);
+}
+
+fn ll_print_a(ty: String, dst: String) {
+    println("  " + dst + " = alloca " + ty + ", align 8");
+}
+
+fn ll_print_life(ty: String, dst: String, scope: Int) {
+    let mut sz: String = "8";
+    if ty == "i32" { sz = "4"; }
+    if ty == "i1" { sz = "1"; }
+    if chars_len(ty) >= 3 && str_slice(ty, 0, 1) == "[" { sz = "256"; }
+    println("  call void @llvm.lifetime.start.p0(i64 " + sz + ", ptr " + dst + ")" + ll_dbg_loc(1, 1, scope));
+}
+
+fn ll_each_a(hold: String, life: Bool, scope: Int) {
+    let n: Int = chars_len(hold);
+    let mut i: Int = 0;
+    let mut rec: String = "";
+    while i <= n {
+        let e: Bool = i == n;
+        let mut c: String = "";
+        if !e { c = char_at(hold, i); }
+        if e || c == "\n" {
+            if rec != "" {
+                if life {
+                    ll_print_life(field_at(rec, 1), field_at(rec, 2), scope);
+                } else {
+                    ll_print_a(field_at(rec, 1), field_at(rec, 2));
+                }
+            }
+            rec = "";
+        } else {
+            rec = rec + c;
+        }
+        i = i + 1;
+    }
+}
+
+fn ll_dump_as(hold: String, scope: Int) {
+    ll_each_a(hold, false, scope);
+    ll_each_a(hold, true, scope);
+}
+
+fn ll_ir_print_i(op: String, ty: String, dst: String, args: String, line: Int, col: Int, scope: Int) {
     let comma: Bool = op == "load" || op == "alloca" || op == "getelementptr" || op == "getelementptr inbounds" || op == "extractvalue" || op == "insertelement" || op == "shufflevector";
     let mut body: String = op;
     if ty != "" { body = body + " " + ty; }
@@ -25,10 +112,7 @@ fn ll_ir_print_i(op: String, ty: String, dst: String, args: String, line: Int, c
             body = body + " " + args;
         }
     }
-    let mut loc: String = "";
-    if line > 0 {
-        loc = ", !dbg !DILocation(line: " + line.to_string() + ", column: " + col.to_string() + ", scope: !10)";
-    }
+    let loc: String = ll_dbg_loc(line, col, scope);
     if dst != "" {
         println("  " + dst + " = " + body + loc);
     } else {
@@ -36,34 +120,82 @@ fn ll_ir_print_i(op: String, ty: String, dst: String, args: String, line: Int, c
     }
 }
 
-fn ll_ir_print_rec(rec: String) {
+fn ll_ir_print_rec(rec: String, scope: Int) {
     let k: String = field_at(rec, 0);
-    if k == "T" {
-        println(field_at(rec, 1));
-        return;
-    }
-    if k == "L" {
-        println(field_at(rec, 1) + ":");
-        return;
-    }
-    if k == "F" {
-        println(field_at(rec, 1));
-        return;
-    }
-    if k == "E" {
-        println("}");
-        return;
-    }
+    if k == "T" { ll_print_t(field_at(rec, 1), scope); return; }
+    if k == "L" { println(field_at(rec, 1) + ":"); return; }
+    if k == "F" { println(field_at(rec, 1)); return; }
+    if k == "E" { println("}"); return; }
     if k == "I" {
-        let op: String = field_at(rec, 1);
-        let ty: String = field_at(rec, 2);
-        let dst: String = field_at(rec, 3);
-        let args: String = field_at(rec, 4);
-        let line: Int = parse_int(field_at(rec, 7));
-        let col: Int = parse_int(field_at(rec, 8));
-        ll_ir_print_i(op, ty, dst, args, line, col);
-        return;
+        ll_ir_print_i(field_at(rec, 1), field_at(rec, 2), field_at(rec, 3), field_at(rec, 4), parse_int(field_at(rec, 7)), parse_int(field_at(rec, 8)), scope);
     }
+}
+
+fn ll_is_hdr(rec: String) -> Bool {
+    let k: String = field_at(rec, 0);
+    if k == "L" || k == "F" { return true; }
+    if k == "T" {
+        let s: String = field_at(rec, 1);
+        if ll_t_is_label(s) { return true; }
+        if str_index_of(s, "define ") >= 0 { return true; }
+    }
+    return false;
+}
+
+fn ll_collect_a(chunk: String) -> String {
+    let n: Int = chars_len(chunk);
+    let mut i: Int = 0;
+    let mut rec: String = "";
+    let mut hold: String = "";
+    while i <= n {
+        let e: Bool = i == n;
+        let mut c: String = "";
+        if !e { c = char_at(chunk, i); }
+        if e || c == "\n" {
+            if rec != "" {
+                if field_at(rec, 0) == "A" { hold = hold + rec + "\n"; }
+            }
+            rec = "";
+        } else {
+            rec = rec + c;
+        }
+        i = i + 1;
+    }
+    return hold;
+}
+
+fn ll_flush_fn(chunk: String) {
+    let hold: String = ll_collect_a(chunk);
+    let scope: Int = ll_fn_scope(chunk);
+    let n: Int = chars_len(chunk);
+    let mut i: Int = 0;
+    let mut rec: String = "";
+    let mut dumped: Bool = false;
+    while i <= n {
+        let e: Bool = i == n;
+        let mut c: String = "";
+        if !e { c = char_at(chunk, i); }
+        if e || c == "\n" {
+            if rec != "" {
+                if field_at(rec, 0) != "A" {
+                    if ll_is_hdr(rec) {
+                        ll_ir_print_rec(rec, scope);
+                    } else {
+                        if !dumped {
+                            ll_dump_as(hold, scope);
+                            dumped = true;
+                        }
+                        ll_ir_print_rec(rec, scope);
+                    }
+                }
+            }
+            rec = "";
+        } else {
+            rec = rec + c;
+        }
+        i = i + 1;
+    }
+    if !dumped { ll_dump_as(hold, scope); }
 }
 
 pub fn ll_ir_flush(b: &IrBuf) {
@@ -71,16 +203,30 @@ pub fn ll_ir_flush(b: &IrBuf) {
     let n: Int = chars_len(s);
     let mut i: Int = 0;
     let mut rec: String = "";
+    let mut chunk: String = "";
     while i <= n {
         let e: Bool = i == n;
         let mut c: String = "";
         if !e { c = char_at(s, i); }
         if e || c == "\n" {
-            if rec != "" { ll_ir_print_rec(rec); }
+            if rec != "" {
+                let k: String = field_at(rec, 0);
+                let is_def: Bool = k == "F" || (k == "T" && str_index_of(field_at(rec, 1), "define ") >= 0);
+                if is_def && chunk != "" {
+                    ll_flush_fn(chunk);
+                    chunk = "";
+                }
+                chunk = chunk + rec + "\n";
+                if k == "E" || (k == "T" && field_at(rec, 1) == "}") {
+                    ll_flush_fn(chunk);
+                    chunk = "";
+                }
+            }
             rec = "";
         } else {
             rec = rec + c;
         }
         i = i + 1;
     }
+    if chunk != "" { ll_flush_fn(chunk); }
 }

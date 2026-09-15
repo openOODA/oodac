@@ -218,19 +218,19 @@ pub fn ll_store(name: String, kind: String, v: String, ssa0: Int, env: String, i
     if ll_is_agg(kind) {
         if ll_has_slot(v) {
             let s: Int = ssa0 + 1;
-            ll_ir_text(ir, "  " + ll_ssa(s) + " = load " + ll_ir_val(kind) + ", ptr " + ll_pptr(v) + ", align 8");
-            ll_ir_text(ir, "  store " + ll_ir_val(kind) + " " + ll_ssa(s) + ", ptr " + dst + ", align 8");
+            ll_ir_inst(ir, "load", ll_ir_val(kind), ll_ssa(s), "ptr " + ll_pptr(v) + ", align 8", 1, 1);
+            ll_ir_inst(ir, "store", ll_ir_val(kind), "", ll_ssa(s) + ", ptr " + dst + ", align 8", 1, 1);
             return s;
         }
-        ll_ir_text(ir, "  store " + ll_ir_val(kind) + " " + ll_opnd(v) + ", ptr " + dst + ", align 8");
+        ll_ir_inst(ir, "store", ll_ir_val(kind), "", ll_opnd(v) + ", ptr " + dst + ", align 8", 1, 1);
         return ssa0;
     }
     if ll_is_int(kind) && ll_is_int(ll_pk(v)) && ll_pk(v) != kind {
         let cv: String = ll_int_convert(v, ll_hw(ssa0, ll_pssa(v)), kind, ir);
-        ll_ir_text(ir, "  store " + ll_ir_val(kind) + " " + ll_opnd(cv) + ", ptr " + dst + ", align 8");
+        ll_ir_inst(ir, "store", ll_ir_val(kind), "", ll_opnd(cv) + ", ptr " + dst + ", align 8", 1, 1);
         return ll_pssa(cv);
     }
-    ll_ir_text(ir, "  store " + ll_ir_val(kind) + " " + ll_opnd(v) + ", ptr " + dst + ", align 8");
+    ll_ir_inst(ir, "store", ll_ir_val(kind), "", ll_opnd(v) + ", ptr " + dst + ", align 8", 1, 1);
     return ssa0;
 }
 
