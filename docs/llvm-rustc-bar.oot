@@ -1,0 +1,171 @@
+# Attach contract — 10/10 LLVM IR vs rustc (do not move the target)
+
+File: oodac/docs/llvm-rustc-bar.oot
+
+This is the rustc bar. Product path P1–P5 and P7 stay in
+`docs/llvm-product-path.oot`. This path does not start until P1
+(Unique bar green). It does not restore emit-c. It does not take
+libLLVM.
+
+## Target (never changes)
+
+On the openOODA **product language** (ooda.ebnf product productions,
+not Rust generics/traits):
+
+1. LLVM IR matches a frozen 10-item checklist (the 10/10).
+2. `clang -O2` of that IR is as fast as or faster than `rustc -C
+   opt-level=3` on a frozen 6-program suite (geometric mean of
+   median-of-3 runtimes).
+3. oodac still has no C lowering compiler. clang + oodar.c remain.
+
+"Better than rust" on caps, contracts, Landlock, and double-run is
+true of the language. It is **not** an IR score and must not be used
+to pass R6 if the suite is slower.
+
+## Frozen 10/10 checklist (no 11th item)
+
+A Unique-bar TU plus `fn_ret_int` must satisfy all ten:
+
+1. `llvm-as` and `opt -verify` exit 0. No `ignoring invalid debug info`.
+2. Entry-block **typed** allocas only. After `opt -O2`, Int/Bool/Float
+   scalars in `fn_ret_int` `add` are SSA (no alloca/load/store).
+3. No dummy `add i64 0` / `fadd double 0.0`. Literals are immediates.
+4. GEPs are `inbounds`. Loads/stores have `align`.
+5. Only referenced `@oo_*` are `declare`d.
+6. Attrs from the checker: `nounwind`; `noundef` on Int; `noalias` on
+   `&T` / `&mut T` / `sret` when the checker says so.
+7. UB policy in IR: signed `nsw` where the checker knows; div zero-trap;
+   shift amount masked (current law).
+8. Debug: one `DISubprogram` per function; `DILocation` scope is that
+   subprogram; named lets are `DILocalVariable`.
+9. Function-body printer consumes **MIR only** (Red 1: no token-bag
+   body lowering). Token rows may build MIR; they must not print LLVM.
+10. Proven contracts appear as `llvm.assume` and/or `!range`.
+
+All ten PASS, or the bar is not 10/10. Do not add an 11th.
+
+## Frozen vs-rustc suite (no 7th program)
+
+Pairs live under `bootstrap/corpus/vs-rustc/` (added in R6, not before).
+Each pair is one `.oo` and one `.rs` with the same observable output.
+
+| Name | Source |
+|---|---|
+| add | `fn_ret_int` (20+22) |
+| range | `for_range_sum` |
+| list | `list_int_basic` |
+| struct | `struct_field` |
+| result | `result_val_err` |
+| concat | `str_concat` |
+
+rustc flags (frozen): `-C opt-level=3 -C lto=thin -C panic=abort`.
+oodac: product `oodac build` (`clang -O2`). Host rustc version recorded
+in the gate log, not pinned to a moving nightly.
+
+Metric: geometric mean of (oodac median / rustc median) over the six.
+Gate: mean ≤ 1.00. A single program may lose if the mean still ≤ 1.00
+and the loss is named in the R6 log. Do not drop a suite member to pass.
+
+## Layout law (frozen)
+
+- Caps stay i64 in IR. Do not change the lattice.
+- oodar call boundary keeps `{i32, payload}` for Option/Result
+  (`OoResI`, `OoOptI`, …). Niche at that boundary would mis-link.
+- Intra-function Option/Result of **ptr or ref** may use null niche.
+  Lower to the tagged struct at the oodar call.
+
+## Remaining phases (order is the path)
+
+### R0 — Prerequisite
+
+P1 Unique bar is green on `main`. Do not rewrite lowering while the
+product execute bar is red.
+
+Gate: Unique bar run URL on a shipped tag.
+
+### R1 — MIR
+
+Self-hosted MIR: blocks, typed values, source spans, borrow/cap facts
+from the typed artifact. `ll_ir_flush` prints MIR. Token walk may
+**build** MIR; it must not emit LLVM text for bodies.
+
+Gate: Unique bar still green. `fn_ret_int` body records are I/L/A/F/E
+only. A grep of `emit/llvm` for body `println(` of instruction text is
+zero (flush is the only printer). Split files for the 256-line law.
+
+### R2 — Canonical form
+
+Typed per-local allocas (no `[256 x i8]` for known types). `opt -O2`
+mem2reg on scalars. `lifetime.start` / `lifetime.end` around those
+allocas.
+
+Gate: `opt -O2 -S` of `fn_ret_int` `add` is SSA `add nsw` with no
+alloca in that function. Unique bar green.
+
+### R3 — Checker facts in IR
+
+`noundef` / `noalias` / `nocapture` / `readonly` from typenv. SMT
+section of the artifact → `llvm.assume` and/or `!range`.
+
+Gate: checklist items 6 and 10 PASS on Unique-bar TUs. A contract
+fixture keeps `llvm.assume` through `opt -O2`. Unique bar green.
+
+### R4 — Debug
+
+Valid `DILocalScope`. `DILocalVariable` for named lets. No CU-as-scope.
+
+Gate: checklist items 1 and 8 PASS. `llvm-dwarfdump` shows `a` and `b`
+for `fn_ret_int` `add`. Unique bar green.
+
+### R5 — Intra-function niche
+
+Option/Result of ptr/ref: null niche in SSA. Store/call to oodar still
+tagged. Caps i64.
+
+Gate: IR test that `None` of `&Int` is `null`. `oo_read_file` still
+`{i32, ...}`. Unique bar links and runs.
+
+### R6 — Measure vs rustc
+
+Add the six pairs. Script: median of 3 runs each side, geo-mean ratio,
+write `vs-rustc` log. Record rustc and clang versions.
+
+Gate: geo-mean ≤ 1.00. All ten checklist items PASS. Unique bar green.
+P7 need not be done to take this gate; the "no C compiler" claim is
+already true of oodac.
+
+### R7 — Declare 10/10
+
+Only after R6. Update this status line and `target_scorecard.oot`
+compiler/LLVM evidence. Do not declare from greps without the suite.
+
+Gate: this file's status says DONE with the R6 tag and log path.
+
+## Non-goals (this path never includes)
+
+- libLLVM / LLVM C++ API
+- Restore emit-c
+- `oodac build oodac/main.oo` concat
+- Implementing Rust (generics, traits, iterators) so the languages
+  match. Comparison is the openOODA product language only.
+- Breaking oodar tagged Option/Result at the C ABI
+- Caps as pointers
+- Whole-file golden `.ll`
+- Using Landlock/caps as a substitute for a slower suite
+- A 7th vs-rustc program or an 11th checklist item
+
+## How we work so the target cannot move
+
+1. R0 before any R1 code. One R-phase in flight.
+2. Unique bar must stay green at every R tag. A faster `add` that
+   breaks list/match is a fail.
+3. A skeptic finding not in the 10 items or the 6 programs is a new
+   path, written here first.
+4. Rebuild from source before claiming IR or timings.
+
+## Status
+
+Blocked on: P1 Unique bar.
+In flight: none.
+Next: R1 after R0.
+Locked: 2026-09-15 against oodac v0.2.93 (`7f477ef`).

@@ -1,0 +1,152 @@
+# Attach contract — locked LLVM product path (do not move the target)
+
+File: oodac/docs/llvm-product-path.oot
+
+This file is the SSoT for remaining oodac LLVM work. Phases A–D and v0.2.93
+IR greps are closed. New IR property tests are not a phase.
+
+## Target (never changes)
+
+A user who installs openOODA compiles, runs, and tests `.oo` through
+`oodac build` = LLVM IR + clang + oodar. `ooda`, `std`, and `mcp` use
+that path. The compiler rebuilds itself the same way. No C lowering
+compiler exists.
+
+`oodar.c` / `liboodar.a` stay. They are the runtime, not a compiler.
+
+## Done means (one gate)
+
+All of these are true on one shipped tag:
+
+1. Unique bar in `oodac/.github/workflows/ci.yml` (`test` job) is green
+   twice (double-run law).
+2. `llvm-self-host` job is green. HOST is the previous shipped `bin/oodac`,
+   not a frozen pre-A seed.
+3. Live callers in `ooda`, `mcp`, `std`, `openOODA/qa` invoke `oodac build`
+   (LLVM default). `build --backend c` / `emit-c` appear only in tests
+   that assert residual exit 2.
+4. Roadmap LLVM row is DONE. `requirements.oot` does not list C99 as a
+   compiler backend (C is oodar only).
+
+IR beauty is not the target. Programs that run, CI that is green, and
+callers that use LLVM are the target.
+
+## Closed (do not reopen)
+
+| Closed | Evidence |
+|---|---|
+| C lowering | no `emit/c/`; `emit-c` / `--backend c` / `--gcc` exit 2 |
+| IR A–D | tags v0.2.87–v0.2.90 |
+| Skeptic IR | v0.2.91–v0.2.93; `tests/e2e/test_llvm_ir_props.sh` PASS=106 FAIL=0 |
+
+Do not add IR greps unless a Unique-bar execute bug requires one named
+invariant. Then add that one grep next to the execute test. Do not start
+a new "IR quality" phase.
+
+## Remaining phases (order is the path)
+
+Pass a phase only when its Gate is true. Do not start the next phase's
+scope until the gate is recorded (tag + this file's status line).
+
+### P1 — Unique bar executes
+
+Make every program the CI Unique bar already builds actually run.
+
+Includes (already in ci.yml, not a new list): json-errors, borrow, list /
+option / result kind drivers, build-is-check, landlock, std-import,
+tokenize-once / artifact mutate, emit-needs-check, no-chs_rt, four-mains,
+ecap, attach-contract, struct-field-arc, llvm-bar, llvm-ty-refuse, and
+the `llvm_pass` corpus (fn_ret_int through str_escapes and later lines
+in that job).
+
+Gate: `test` job Unique bar section exits 0 on `main`. Capture the run
+URL. Do not add programs to Unique bar in this phase.
+
+### P2 — Product packages
+
+`oodac check` of the four product mains. Product `oodac build` of
+`cli`, `ooda`, and `opm` (see `docs/x86-codegen-style.oot`). Each binary
+runs its smoke twice with identical output.
+
+Gate: three build+run pairs recorded. Concat of `oodac/main.oo` as the
+compiler ELF still fails (unique_fns).
+
+### P3 — Self-host
+
+`bootstrap/oodac_pure_build` with HOST = previous release `bin/oodac`.
+One generation in CI (`llvm-self-host`). Local S1==S2 is required before
+calling self-host done; CI may keep one generation if timeout demands it,
+but local fixed-point must be run and logged.
+
+Gate: `llvm-self-host` green; local `--fixed-point` log shows S1==S2.
+
+### P4 — Polyrepo cutover
+
+Change live commands only:
+
+- `ooda` qa / spawn / docs
+- `mcp` `oodac_build` / emit tools
+- `std` qa scripts (`--backend c`)
+- `openOODA/qa/polyrepo_suite.oo`
+
+Default `oodac build` is LLVM. Residual tests keep `--backend c` and
+expect exit 2.
+
+Gate: `rg 'build --backend c|oodac emit-c' ` on those repos hits only
+residual-exit tests and history docs.
+
+### P5 — Docs match the binary
+
+- `openOODA/roadmap.oot`: LLVM lowering DONE
+- `openOODA/requirements.oot`: backends are LLVM + residual ELF/WASM;
+  C99 is oodar, not oodac emit
+- `openOODA/scripts/target_scorecard.oot`: no `emit/c/` as default
+- `mcp/docs`, `std/readme.oot`, `lsp` docs: LLVM
+
+Gate: those files say LLVM is product. No file in those repos tells a
+user to `emit-c`.
+
+### P6 — superseded
+
+IR leftovers moved to `docs/llvm-rustc-bar.oot` (R2/R4). Do not run a
+separate P6. After P1, IR work is the R-path only.
+
+### P7 — Residual name sunset (after P4)
+
+Keep `emit-c` as a named command that exits 2 (stable argv) or delete it
+in the same tag as mcp/ooda already stopped sending it. Archive
+`bootstrap/corpus/emit-c/` out of Unique bar (it is not product). Rename
+comments (`c_emit_env.oo`) only if they confuse check.
+
+Gate: no product path reads emit-c corpus.
+
+## Non-goals (this path never includes)
+
+- libLLVM / LLVM C++ API (keep the self-hosted textual printer)
+- Restore `emit/c/` or `emit-c` as product
+- `oodac build oodac/main.oo` concat (unique_fns stays)
+- WASM / ELF / GPU as product (they stay residual exit 2 until a later
+  named path that consumes the typed artifact)
+- Cap tokens as anything but i64 in IR
+- Breaking oodar Option/Result `{i32, payload}` at the runtime boundary
+  (intra-function niche is R5 in llvm-rustc-bar.oot)
+- MIR lives in llvm-rustc-bar.oot, not here
+- Whole-file golden `.ll` snapshots
+- Manual VERSION / manual tags (RFC 0006)
+
+## How we work so the target cannot move
+
+1. One phase in flight. Status line at the bottom of this file is the
+   only "what are we doing."
+2. Gate evidence is a GitHub tag plus a Unique-bar or self-host run URL.
+3. A skeptic finding that is not in P1–P7 is a new path, written here
+   first, never a silent extra grep on an in-flight phase.
+4. Rebuild from source before claiming IR or execute. In-tree `bin/oodac`
+   is not evidence until copied after the gate tests pass.
+
+## Status
+
+Closed: C residual, IR A–D, v0.2.93 property suite. P6 cancelled.
+In flight: P1 Unique bar executes.
+Next: P2 after P1 gate. R-path after P1 (see llvm-rustc-bar.oot).
+Locked: 2026-09-15 against oodac v0.2.93 (`7f477ef`).
