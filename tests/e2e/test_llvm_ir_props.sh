@@ -149,6 +149,14 @@ PY
   llvm-as "$d/sd.ll" -o "$d/sd.bc"
   record "P-AS-02" "shift/div llvm-as" "$?"
 
+  emit "$CORPUS/list_int_basic.oo" "$d/li.ll"
+  llvm-as "$d/li.ll" -o "$d/li.bc"
+  record "P-AS-LIST" "list_int_basic llvm-as" "$?"
+  grep -q 'call void @oo_ilist_push(ptr sret(%OoIList) align 8 %a' "$d/li.ll" && grep -q ', i64 10)' "$d/li.ll"
+  record "P-LIST-01" "list_push uses i64 10 constant" "$?"
+  grep -q '@oo_ilist_get' "$d/li.ll" && grep -q ', i64 0)' "$d/li.ll"
+  record "P-LIST-02" "list_get uses i64 0 constant" "$?"
+
   opt -O2 -S "$d/add.ll" -o "$d/add.opt.ll"
   record "P-OPT-01" "opt -O2 fn_ret_int" "$?"
   clang --no-default-config -c -O2 --target=x86_64-unknown-linux-gnu "$d/add.ll" -o "$d/add.o"
@@ -201,7 +209,7 @@ sys.exit(0 if a.isdisjoint(b) else 1)
 PY
   record "P-MANGLE-02" "two-TU add symbols do not clobber" "$mg"
 
-  python3 - "$d/add.ll" "$d/hello.ll" "$d/st.ll" "$d/ver.ll" "$d/bor.ll" "$d/sd.ll" << 'PY' && al_ok=0 || al_ok=1
+  python3 - "$d/add.ll" "$d/hello.ll" "$d/st.ll" "$d/ver.ll" "$d/bor.ll" "$d/sd.ll" "$d/li.ll" << 'PY' && al_ok=0 || al_ok=1
 import sys, re
 ok=True
 for path in sys.argv[1:]:

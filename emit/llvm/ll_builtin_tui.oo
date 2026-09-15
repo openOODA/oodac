@@ -41,11 +41,11 @@ pub fn ll_builtin_tui(name: String, args: List[String], ssa0: Int, expect: Strin
     if name == "oo_tui_read_byte_timeout" && na >= 3 {
         let a1: String = ll_as_val(list_get(args, 1), ssa0, ir);
         let ms: String = ll_i64arg(args, 2, ll_pssa(a1), ir);
-        return ll_ty_tui_ress(name, ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ", i64 " + ll_ssa(ll_pssa(ms)), ll_pssa(ms), args, ir);
+        return ll_ty_tui_ress(name, ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ", i64 " + ll_opnd(ms), ll_pssa(ms), args, ir);
     }
     if name == "oo_tui_show_cursor" && na >= 2 {
         let vis: String = ll_i64arg(args, 1, ssa0, ir);
-        return ll_ty_tui_ress(name, ", i64 " + ll_ssa(ll_pssa(vis)), ll_pssa(vis), args, ir);
+        return ll_ty_tui_ress(name, ", i64 " + ll_opnd(vis), ll_pssa(vis), args, ir);
     }
     if name == "oo_tui_get_size" || name == "oo_tui_alt_screen_enter" || name == "oo_tui_alt_screen_leave" || name == "oo_tui_clear" || name == "oo_tui_signal_winch_install" || name == "oo_tui_signal_winch_poll" {
         if na >= 1 {

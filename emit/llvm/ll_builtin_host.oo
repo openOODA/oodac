@@ -39,7 +39,7 @@ pub fn ll_builtin_host(name: String, args: List[String], ssa0: Int, expect: Stri
         let a0: String = ll_as_val(list_get(args, 0), ssa0, ir);
         let bx: String = ll_i64arg(args, 1, ll_pssa(a0), ir);
         let s: Int = ll_hw(ll_pssa(a0), ll_pssa(bx)) + 1;
-        ll_ir_text(ir, "  " + ll_ssa(s) + " = call i64 @oo_byte_at({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ", i64 " + ll_ssa(ll_pssa(bx)) + ")");
+        ll_ir_text(ir, "  " + ll_ssa(s) + " = call i64 @oo_byte_at({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ", i64 " + ll_opnd(bx) + ")");
         return ll_pack(0, s, "i64", "");
     }
     if (name == "byte_slice" || name == "oo_byte_slice") && na >= 3 {
@@ -47,7 +47,7 @@ pub fn ll_builtin_host(name: String, args: List[String], ssa0: Int, expect: Stri
         let b1: String = ll_i64arg(args, 1, ll_pssa(a0), ir);
         let b2: String = ll_i64arg(args, 2, ll_pssa(b1), ir);
         let s: Int = ll_hw(ll_hw(ll_pssa(a0), ll_pssa(b1)), ll_pssa(b2)) + 1;
-        ll_ir_text(ir, "  " + ll_ssa(s) + " = call { ptr, i64 } @oo_byte_slice({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ", i64 " + ll_ssa(ll_pssa(b1)) + ", i64 " + ll_ssa(ll_pssa(b2)) + ")");
+        ll_ir_text(ir, "  " + ll_ssa(s) + " = call { ptr, i64 } @oo_byte_slice({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ", i64 " + ll_opnd(b1) + ", i64 " + ll_opnd(b2) + ")");
         return ll_pack(0, s, "str", "");
     }
     if (name == "char_is_digit" || name == "oo_char_is_digit" || name == "char_is_alpha" || name == "oo_char_is_alpha" || name == "char_is_space" || name == "oo_char_is_space") && na >= 1 {
@@ -124,7 +124,7 @@ pub fn ll_builtin_host(name: String, args: List[String], ssa0: Int, expect: Stri
         let s: Int = ll_hw(ll_pssa(a0), ll_pssa(bp)) + 1;
         let out: String = ll_tmpa(s);
         ll_slot_name(out, ir);
-        ll_ir_text(ir, "  call void @oo_bytes_push(ptr sret(%OoIList) align 8 " + out + ", ptr byval(%OoIList) align 8 " + ll_pptr(a0) + ", i64 " + ll_ssa(ll_pssa(bp)) + ")");
+        ll_ir_text(ir, "  call void @oo_bytes_push(ptr sret(%OoIList) align 8 " + out + ", ptr byval(%OoIList) align 8 " + ll_pptr(a0) + ", i64 " + ll_opnd(bp) + ")");
         return ll_pack(0, s, "ilist", out);
     }
     if (name == "bytes_to_str" || name == "oo_bytes_to_str") && na >= 1 {
@@ -156,7 +156,7 @@ pub fn ll_builtin_host(name: String, args: List[String], ssa0: Int, expect: Stri
     }
     if (name == "sleep_ms" || name == "oo_sleep_ms") && na >= 2 {
         let ms: String = ll_i64arg(args, 1, ll_pssa(list_get(args, 0)), ir);
-        ll_ir_text(ir, "  call void @oo_sleep_ms(i64 " + ll_ssa(ll_pssa(list_get(args, 0))) + ", i64 " + ll_ssa(ll_pssa(ms)) + ")");
+        ll_ir_text(ir, "  call void @oo_sleep_ms(i64 " + ll_opnd(list_get(args, 0)) + ", i64 " + ll_opnd(ms) + ")");
         return ll_pack(0, ll_pssa(ms), "void", "");
     }
     if (name == "now_ms" || name == "oo_now_ms") && na >= 1 {
@@ -183,7 +183,7 @@ pub fn ll_builtin_host(name: String, args: List[String], ssa0: Int, expect: Stri
     }
     if (name == "alloc_bytes" || name == "oo_alloc_bytes") && na >= 2 {
         let s: Int = ll_hw(ll_pssa(list_get(args, 0)), ll_pssa(list_get(args, 1))) + 1;
-        ll_ir_text(ir, "  " + ll_ssa(s) + " = call i64 @oo_alloc_bytes(i64 " + ll_ssa(ll_pssa(list_get(args, 0))) + ", i64 " + ll_ssa(ll_pssa(list_get(args, 1))) + ")");
+        ll_ir_text(ir, "  " + ll_ssa(s) + " = call i64 @oo_alloc_bytes(i64 " + ll_opnd(list_get(args, 0)) + ", i64 " + ll_opnd(list_get(args, 1)) + ")");
         return ll_pack(0, s, "i64", "");
     }
     if (name == "hot_reload" || name == "oo_hot_reload") && na >= 1 {
@@ -195,14 +195,14 @@ pub fn ll_builtin_host(name: String, args: List[String], ssa0: Int, expect: Stri
     if (name == "int_to_str" || name == "oo_int_to_str" || name == "to_string") && na >= 1 {
         let a0: String = ll_i64arg(args, 0, ssa0, ir);
         let s: Int = ll_pssa(a0) + 1;
-        ll_ir_text(ir, "  " + ll_ssa(s) + " = call { ptr, i64 } @oo_int_to_str(i64 " + ll_ssa(ll_pssa(a0)) + ")");
+        ll_ir_text(ir, "  " + ll_ssa(s) + " = call { ptr, i64 } @oo_int_to_str(i64 " + ll_opnd(a0) + ")");
         return ll_pack(0, s, "str", "");
     }
     if (name == "str_repeat" || name == "oo_str_repeat") && na >= 2 {
         let a0: String = ll_as_val(list_get(args, 0), ssa0, ir);
         let n: String = ll_i64arg(args, 1, ll_pssa(a0), ir);
         let s: Int = ll_hw(ll_pssa(a0), ll_pssa(n)) + 1;
-        ll_ir_text(ir, "  " + ll_ssa(s) + " = call { ptr, i64 } @oo_str_repeat({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ", i64 " + ll_ssa(ll_pssa(n)) + ")");
+        ll_ir_text(ir, "  " + ll_ssa(s) + " = call { ptr, i64 } @oo_str_repeat({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ", i64 " + ll_opnd(n) + ")");
         return ll_pack(0, s, "str", "");
     }
     if (name == "str_to_uppercase" || name == "oo_str_to_uppercase" || name == "to_uppercase") && na >= 1 {

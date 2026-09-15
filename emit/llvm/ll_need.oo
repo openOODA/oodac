@@ -164,6 +164,7 @@ pub fn ll_need_scan(toks: List[String]) -> String {
             if nm == "args" { has_args = true; }
             if i + 1 < n && ll_k(toks, i + 1) == "LPAREN" {
                 need = ll_need_call(need, nm);
+                if nm == "list_new" || nm == "list_len" || nm == "list_get" || nm == "list_push" || nm == "list_slice" { has_list = true; }
             }
             if i > 0 && ll_k(toks, i - 1) == "DOT" && i + 1 < n && ll_k(toks, i + 1) == "LPAREN" {
                 need = ll_need_call(need, nm);

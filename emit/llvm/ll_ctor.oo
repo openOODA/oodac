@@ -129,7 +129,7 @@ fn ll_ctor_some(arg: String, ssa0: Int, expect: String, ir: &mut IrBuf) -> Strin
         let s: Int = sab + 1;
         ll_slot_name(a, ir);
         let s2: Int = s + 1;
-        ll_ir_text(ir, "  " + ll_ssa(s2) + " = insertvalue %OoOptI { i32 1, i64 0 }, i64 " + ll_ssa(ll_pssa(sav)) + ", 1");
+        ll_ir_text(ir, "  " + ll_ssa(s2) + " = insertvalue %OoOptI { i32 1, i64 0 }, i64 " + ll_opnd(sav) + ", 1");
         ll_ir_text(ir, "  store %OoOptI " + ll_ssa(s2) + ", ptr " + a + ", align 8");
         return ll_pack(0, s2, "opti", a);
     }
@@ -175,7 +175,7 @@ fn ll_ctor_ok(arg: String, ssa0: Int, expect: String, ir: &mut IrBuf) -> String 
         let s: Int = oab + 1;
         ll_slot_name(a, ir);
         let s2: Int = s + 1;
-        ll_ir_text(ir, "  " + ll_ssa(s2) + " = insertvalue %OoResI { i32 1, i64 0, %OoStr { ptr null, i64 0 } }, i64 " + ll_ssa(ll_pssa(oav)) + ", 1");
+        ll_ir_text(ir, "  " + ll_ssa(s2) + " = insertvalue %OoResI { i32 1, i64 0, %OoStr { ptr null, i64 0 } }, i64 " + ll_opnd(oav) + ", 1");
         ll_ir_text(ir, "  store %OoResI " + ll_ssa(s2) + ", ptr " + a + ", align 8");
         return ll_pack(0, s2, "resi", a);
     }

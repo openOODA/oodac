@@ -159,7 +159,7 @@ pub fn ll_olist_get(arg: String, idx: String, ssa0: Int, expect: String, ir: &mu
     let nm: String = ll_olist_nm(ll_pk(arg));
     let a0: String = ll_ensure_ptr(arg, ssa0, ir);
     let s: Int = ll_pssa(a0) + 1;
-    ll_ir_text(ir, "  " + ll_ssa(s) + " = call %St_" + nm + " @oo_l_" + nm + "_get(ptr " + ll_pptr(a0) + ", i64 " + ll_ssa(ll_pssa(idx)) + ")");
+    ll_ir_text(ir, "  " + ll_ssa(s) + " = call %St_" + nm + " @oo_l_" + nm + "_get(ptr " + ll_pptr(a0) + ", i64 " + ll_opnd(idx) + ")");
     let mut rk: String = "St_" + nm;
     if ll_is_struct(expect) { rk = expect; }
     return ll_pack(0, s, rk, "");

@@ -52,23 +52,23 @@ pub fn ll_builtin_sys(name: String, args: List[String], ssa0: Int, expect: Strin
     }
     if (name == "sys_wait" || name == "oo_sys_wait") && na >= 2 {
         let pid: String = ll_i64arg(args, 1, ssa0, ir);
-        return ll_ty_ress("oo_sys_wait", args, ll_pssa(pid), ", i64 " + ll_ssa(ll_pssa(pid)), ir);
+        return ll_ty_ress("oo_sys_wait", args, ll_pssa(pid), ", i64 " + ll_opnd(pid), ir);
     }
     if (name == "sys_kill" || name == "oo_sys_kill") && na >= 3 {
         let pid: String = ll_i64arg(args, 1, ssa0, ir);
         let sig: String = ll_i64arg(args, 2, ll_pssa(pid), ir);
-        return ll_ty_ress("oo_sys_kill", args, ll_pssa(sig), ", i64 " + ll_ssa(ll_pssa(pid)) + ", i64 " + ll_ssa(ll_pssa(sig)), ir);
+        return ll_ty_ress("oo_sys_kill", args, ll_pssa(sig), ", i64 " + ll_opnd(pid) + ", i64 " + ll_opnd(sig), ir);
     }
     if (name == "sys_epoll_create" || name == "oo_sys_epoll_create") && na >= 2 {
         let fl: String = ll_i64arg(args, 1, ssa0, ir);
-        return ll_ty_ress("oo_sys_epoll_create", args, ll_pssa(fl), ", i64 " + ll_ssa(ll_pssa(fl)), ir);
+        return ll_ty_ress("oo_sys_epoll_create", args, ll_pssa(fl), ", i64 " + ll_opnd(fl), ir);
     }
     if (name == "sys_inotify_init" || name == "oo_sys_inotify_init") && na >= 1 {
         return ll_ty_ress("oo_sys_inotify_init", args, ssa0, "", ir);
     }
     if (name == "sys_prctl" || name == "oo_sys_prctl") && na >= 2 {
         let op: String = ll_i64arg(args, 1, ssa0, ir);
-        return ll_ty_ress("oo_sys_prctl", args, ll_pssa(op), ", i64 " + ll_ssa(ll_pssa(op)), ir);
+        return ll_ty_ress("oo_sys_prctl", args, ll_pssa(op), ", i64 " + ll_opnd(op), ir);
     }
     if name == "landlock_is_available" || name == "oo_landlock_is_available" {
         let s: Int = ssa0 + 1;
@@ -87,7 +87,7 @@ pub fn ll_builtin_sys(name: String, args: List[String], ssa0: Int, expect: Strin
         let s: Int = ll_pssa(ms) + 1;
         let out: String = ll_tmpa(s);
         ll_slot_name(out, ir);
-        ll_ir_text(ir, "  call void @oo_read_stdin_chunk(ptr sret(%OoResS) align 8 " + out + ", i64 " + ll_tok_sys_cap(args) + ", i64 " + ll_ssa(ll_pssa(ms)) + ")");
+        ll_ir_text(ir, "  call void @oo_read_stdin_chunk(ptr sret(%OoResS) align 8 " + out + ", i64 " + ll_tok_sys_cap(args) + ", i64 " + ll_opnd(ms) + ")");
         return ll_pack(0, s, "ress", out);
     }
     return "";

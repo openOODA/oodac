@@ -46,7 +46,7 @@ pub fn ll_method(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, env:
             tk = ll_int_convert(tk, ssa0, "i64", ir);
         }
         let s: Int = ll_hw(ssa0, ll_pssa(tk)) + 1;
-        ll_ir_text(ir, "  " + ll_ssa(s) + " = call { ptr, i64 } @oo_int_to_str(i64 " + ll_ssa(ll_pssa(tk)) + ")");
+        ll_ir_text(ir, "  " + ll_ssa(s) + " = call { ptr, i64 } @oo_int_to_str(i64 " + ll_opnd(tk) + ")");
         return ll_pack(0, s, "str", "");
     }
     if m == "is_some" || m == "is_ok" || m == "is_none" || m == "is_err" {
