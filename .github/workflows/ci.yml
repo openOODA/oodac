@@ -291,9 +291,11 @@ jobs:
 
   # LLVM self-host smoke (one generation). S1==S2 is local-mandatory
   # (`oodac_pure_build --fixed-point`); CI timeout cannot absorb two full emits.
+  # v0.2.97 run 34998800801: 180 min cancelled at llvm 61/198 still in emit.
+  # 360 + emit-cache so a rerun skips finished TUs (GHA job cap is 6h).
   llvm-self-host:
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 360
     env:
       OO_LIST_AMBIENT_QUOTA: "8589934592"
     defaults:
@@ -350,6 +352,13 @@ jobs:
           swapon --show
       - name: Install clang
         run: sudo apt-get update && sudo apt-get install -y clang
+      - name: Cache LLVM emit TUs
+        uses: actions/cache@v4
+        with:
+          path: oodac/.ooda-cache/oodac_emit
+          key: llvm-emit-${{ hashFiles('oodac/bin/oodac') }}-${{ github.sha }}
+          restore-keys: |
+            llvm-emit-${{ hashFiles('oodac/bin/oodac') }}-
       - name: LLVM oodac_pure_build
         env:
           OODAC_BIN: ${{ github.workspace }}/oodac/bin/oodac
