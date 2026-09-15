@@ -165,7 +165,7 @@ fn ll_binop(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String, ir: &m
         let ls: Int = ll_pssa(r);
         let id: Int = ls;
         if op == "ANDAND" {
-            ll_ir_text(ir, "  br i1 " + ll_ssa(ls) + ", label %ar" + id.to_string() + ", label %af" + id.to_string());
+            ll_ir_text(ir, "  br i1 " + ll_opnd(r) + ", label %ar" + id.to_string() + ", label %af" + id.to_string());
             ll_ir_text(ir, "ar" + id.to_string() + ":");
             let rhs: String = ll_cmp(toks, p, n, ls, env, ir);
             p = ll_ppos(rhs);
@@ -177,10 +177,10 @@ fn ll_binop(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String, ir: &m
             ll_ir_text(ir, "  br label %ae" + id.to_string());
             ll_ir_text(ir, "ae" + id.to_string() + ":");
             let ph: Int = rs + 1;
-            ll_ir_text(ir, "  " + ll_ssa(ph) + " = phi i1 [ " + ll_ssa(rs) + ", %aj" + id.to_string() + " ], [ false, %af" + id.to_string() + " ]");
+            ll_ir_text(ir, "  " + ll_ssa(ph) + " = phi i1 [ " + ll_opnd(rhs) + ", %aj" + id.to_string() + " ], [ false, %af" + id.to_string() + " ]");
             r = ll_pack(p, ph, "i1", "");
         } else {
-            ll_ir_text(ir, "  br i1 " + ll_ssa(ls) + ", label %ot" + id.to_string() + ", label %or" + id.to_string());
+            ll_ir_text(ir, "  br i1 " + ll_opnd(r) + ", label %ot" + id.to_string() + ", label %or" + id.to_string());
             ll_ir_text(ir, "or" + id.to_string() + ":");
             let rhs: String = ll_cmp(toks, p, n, ls, env, ir);
             p = ll_ppos(rhs);
@@ -192,7 +192,7 @@ fn ll_binop(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String, ir: &m
             ll_ir_text(ir, "  br label %ae" + id.to_string());
             ll_ir_text(ir, "ae" + id.to_string() + ":");
             let ph: Int = rs + 1;
-            ll_ir_text(ir, "  " + ll_ssa(ph) + " = phi i1 [ true, %ot" + id.to_string() + " ], [ " + ll_ssa(rs) + ", %oj" + id.to_string() + " ]");
+            ll_ir_text(ir, "  " + ll_ssa(ph) + " = phi i1 [ true, %ot" + id.to_string() + " ], [ " + ll_opnd(rhs) + ", %oj" + id.to_string() + " ]");
             r = ll_pack(p, ph, "i1", "");
         }
     }

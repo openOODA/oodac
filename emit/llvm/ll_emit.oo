@@ -218,6 +218,8 @@ pub fn ll_emit_stream_plus_t(toks: List[String], extra: String, triple: String) 
                 ll_emit_fn_strings(toks, pos, n, ir);
                 let penv: String = ll_prune_sigs(sigs, stenv, ll_callee_set(toks, pos, n));
                 pos = ll_emit_fn(toks, pos, n, penv, stab, ir);
+                ll_ir_flush(ir);
+                ir.recs = "";
             } else {
                 pos = ll_skip_fn(toks, pos, n);
             }

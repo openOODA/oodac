@@ -14,6 +14,15 @@ import "ll_ir.oo";
 import "lex/token_fmt.oo";
 import "lex/token_parse_int.oo";
 
+fn ll_nl(s: String, i: Int) -> Int {
+    let n: Int = chars_len(s);
+    while i < n {
+        if char_at(s, i) == "\n" { return i; }
+        i = i + 1;
+    }
+    return n;
+}
+
 fn ll_dbg_loc(line: Int, col: Int, scope: Int) -> String {
     let mut ln: Int = line;
     let mut cn: Int = col;
@@ -40,10 +49,12 @@ fn ll_fn_scope(chunk: String) -> Int {
     let p: Int = str_index_of(chunk, "!dbg !");
     if p < 0 { return 10; }
     let n: Int = chars_len(chunk);
-    let mut i: Int = p + 6;
+    let e: Int = ll_nl(chunk, p);
+    let digits: String = str_slice(chunk, p + 6, e);
+    let mut i: Int = 0;
     let mut s: String = "";
-    while i < n {
-        let c: String = char_at(chunk, i);
+    while i < chars_len(digits) {
+        let c: String = char_at(digits, i);
         if str_index_of("0123456789", c) < 0 { break; }
         s = s + c;
         i = i + 1;
@@ -75,24 +86,17 @@ fn ll_print_life(ty: String, dst: String, scope: Int) {
 fn ll_each_a(hold: String, life: Bool, scope: Int) {
     let n: Int = chars_len(hold);
     let mut i: Int = 0;
-    let mut rec: String = "";
-    while i <= n {
-        let e: Bool = i == n;
-        let mut c: String = "";
-        if !e { c = char_at(hold, i); }
-        if e || c == "\n" {
-            if rec != "" {
-                if life {
-                    ll_print_life(field_at(rec, 1), field_at(rec, 2), scope);
-                } else {
-                    ll_print_a(field_at(rec, 1), field_at(rec, 2));
-                }
+    while i < n {
+        let e: Int = ll_nl(hold, i);
+        if e > i {
+            let rec: String = str_slice(hold, i, e);
+            if life {
+                ll_print_life(field_at(rec, 1), field_at(rec, 2), scope);
+            } else {
+                ll_print_a(field_at(rec, 1), field_at(rec, 2));
             }
-            rec = "";
-        } else {
-            rec = rec + c;
         }
-        i = i + 1;
+        i = e + 1;
     }
 }
 
@@ -145,21 +149,14 @@ fn ll_is_hdr(rec: String) -> Bool {
 fn ll_collect_a(chunk: String) -> String {
     let n: Int = chars_len(chunk);
     let mut i: Int = 0;
-    let mut rec: String = "";
     let mut hold: String = "";
-    while i <= n {
-        let e: Bool = i == n;
-        let mut c: String = "";
-        if !e { c = char_at(chunk, i); }
-        if e || c == "\n" {
-            if rec != "" {
-                if field_at(rec, 0) == "A" { hold = hold + rec + "\n"; }
-            }
-            rec = "";
-        } else {
-            rec = rec + c;
+    while i < n {
+        let e: Int = ll_nl(chunk, i);
+        if e > i {
+            let rec: String = str_slice(chunk, i, e);
+            if field_at(rec, 0) == "A" { hold = hold + rec + "\n"; }
         }
-        i = i + 1;
+        i = e + 1;
     }
     return hold;
 }
@@ -169,31 +166,24 @@ fn ll_flush_fn(chunk: String) {
     let scope: Int = ll_fn_scope(chunk);
     let n: Int = chars_len(chunk);
     let mut i: Int = 0;
-    let mut rec: String = "";
     let mut dumped: Bool = false;
-    while i <= n {
-        let e: Bool = i == n;
-        let mut c: String = "";
-        if !e { c = char_at(chunk, i); }
-        if e || c == "\n" {
-            if rec != "" {
-                if field_at(rec, 0) != "A" {
-                    if ll_is_hdr(rec) {
-                        ll_ir_print_rec(rec, scope);
-                    } else {
-                        if !dumped {
-                            ll_dump_as(hold, scope);
-                            dumped = true;
-                        }
-                        ll_ir_print_rec(rec, scope);
+    while i < n {
+        let e: Int = ll_nl(chunk, i);
+        if e > i {
+            let rec: String = str_slice(chunk, i, e);
+            if field_at(rec, 0) != "A" {
+                if ll_is_hdr(rec) {
+                    ll_ir_print_rec(rec, scope);
+                } else {
+                    if !dumped {
+                        ll_dump_as(hold, scope);
+                        dumped = true;
                     }
+                    ll_ir_print_rec(rec, scope);
                 }
             }
-            rec = "";
-        } else {
-            rec = rec + c;
         }
-        i = i + 1;
+        i = e + 1;
     }
     if !dumped { ll_dump_as(hold, scope); }
 }
@@ -202,31 +192,24 @@ pub fn ll_ir_flush(b: &IrBuf) {
     let s: String = b.recs;
     let n: Int = chars_len(s);
     let mut i: Int = 0;
-    let mut rec: String = "";
     let mut chunk: String = "";
-    while i <= n {
-        let e: Bool = i == n;
-        let mut c: String = "";
-        if !e { c = char_at(s, i); }
-        if e || c == "\n" {
-            if rec != "" {
-                let k: String = field_at(rec, 0);
-                let is_def: Bool = k == "F" || (k == "T" && str_index_of(field_at(rec, 1), "define ") >= 0);
-                if is_def && chunk != "" {
-                    ll_flush_fn(chunk);
-                    chunk = "";
-                }
-                chunk = chunk + rec + "\n";
-                if k == "E" || (k == "T" && field_at(rec, 1) == "}") {
-                    ll_flush_fn(chunk);
-                    chunk = "";
-                }
+    while i < n {
+        let e: Int = ll_nl(s, i);
+        if e > i {
+            let rec: String = str_slice(s, i, e);
+            let k: String = field_at(rec, 0);
+            let is_def: Bool = k == "F" || (k == "T" && str_index_of(field_at(rec, 1), "define ") >= 0);
+            if is_def && chunk != "" {
+                ll_flush_fn(chunk);
+                chunk = "";
             }
-            rec = "";
-        } else {
-            rec = rec + c;
+            chunk = chunk + rec + "\n";
+            if k == "E" || (k == "T" && field_at(rec, 1) == "}") {
+                ll_flush_fn(chunk);
+                chunk = "";
+            }
         }
-        i = i + 1;
+        i = e + 1;
     }
     if chunk != "" { ll_flush_fn(chunk); }
 }

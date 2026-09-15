@@ -57,7 +57,8 @@ fn ll_need_call(need: String, nm: String) -> String {
         n = ll_need_add(n, "oo_ilist_slice");
         return n;
     }
-    if nm == "chars_len" { return ll_need_add(n, "oo_chars_len"); }
+    if nm == "len" || nm == "chars_len" { return ll_need_add(ll_need_add(ll_need_add(n, "oo_chars_len"), "oo_slist_len"), "oo_ilist_len"); }
+    if nm == "contains" { return ll_need_add(n, "oo_str_contains"); }
     if nm == "bytes_len" { return ll_need_add(n, "oo_bytes_len"); }
     if nm == "char_at" { return ll_need_add(n, "oo_char_at"); }
     if nm == "str_slice" { return ll_need_add(n, "oo_str_slice"); }
@@ -153,7 +154,7 @@ pub fn ll_need_scan(toks: List[String]) -> String {
         let k: String = ll_k(toks, i);
         if k == "STRING" { has_str = true; }
         if k == "FLOAT" { has_float = true; }
-        if k == "KW_VERIFY" { has_verify = true; }
+        if k == "KW_VERIFY" || k == "KW_ENSURES" || k == "KW_REQUIRES" { has_verify = true; }
         if k == "SLASH" || k == "PERCENT" {
             need = ll_need_add(need, "oo_process_exit");
         }
@@ -162,6 +163,10 @@ pub fn ll_need_scan(toks: List[String]) -> String {
             if nm == "String" { has_str = true; }
             if nm == "Float" { has_float = true; }
             if nm == "List" { has_list = true; }
+            if nm == "List" && i + 2 < n && ll_k(toks, i + 1) == "LBRACKET" && ll_k(toks, i + 2) == "IDENT" {
+                let el: String = ll_t(toks, i + 2);
+                if el != "Int" && el != "String" { need = ll_need_add(need, "oo_process_exit"); }
+            }
             if nm == "args" { has_args = true; }
             if i + 1 < n && ll_k(toks, i + 1) == "LPAREN" {
                 need = ll_need_call(need, nm);
@@ -199,6 +204,7 @@ pub fn ll_need_scan(toks: List[String]) -> String {
         need = ll_need_add(need, "oo_print_str");
         need = ll_need_add(need, "oo_println");
         need = ll_need_add(need, "oo_str_lit");
+        need = ll_need_add(need, "oo_process_exit");
     }
     if has_float {
         need = ll_need_add(need, "oo_print_double");

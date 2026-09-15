@@ -80,3 +80,10 @@ bootstrap/corpus/emit-llvm/pass/oo_path_exists.oo parity 4355a46b19d348dc 4355a4
 bootstrap/corpus/emit-llvm/pass/oo_fs_is_dir.oo parity 4355a46b19d348dc 4355a46b19d348dc  # prints 1; oo_fs_is_dir(".")
 bootstrap/corpus/emit-llvm/pass/ok_unit.oo parity 4355a46b19d348dc 4355a46b19d348dc  # prints 1; Ok(())
 bootstrap/corpus/emit-llvm/pass/match_err_block.oo parity dc51b8c96c2d745d dc51b8c96c2d745d  # prints ok; Err block arm noret
+bootstrap/corpus/emit-llvm/pass/ir_add_a.oo parity 1121cfccd5913f0a 1121cfccd5913f0a  # two-TU mangle fixture A
+bootstrap/corpus/emit-llvm/pass/ir_add_b.oo parity a1fb50e6c86fae16 a1fb50e6c86fae16  # two-TU mangle fixture B
+bootstrap/corpus/emit-llvm/pass/ir_borrow_int.oo parity 2e6d31a5983a9125 2e6d31a5983a9125  # Int borrow is ptr
+bootstrap/corpus/emit-llvm/pass/ir_noargs_hello.oo parity 10159baf262b43a9 10159baf262b43a9  # no-args main prints 7
+bootstrap/corpus/emit-llvm/pass/ir_shift_div.oo parity 026018c74d53b418 026018c74d53b418  # shift mask and div zero-trap
+bootstrap/corpus/emit-llvm/pass/ir_two_verify.oo parity 4355a46b19d348dc 4355a46b19d348dc  # two verify blocks
+bootstrap/corpus/emit-llvm/pass/ir_vec_f32x8.oo parity 4355a46b19d348dc 4355a46b19d348dc  # f32x8 vector lowering
