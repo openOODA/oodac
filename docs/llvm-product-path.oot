@@ -146,7 +146,11 @@ Gate: no product path reads emit-c corpus.
 
 ## Status
 
-Closed: C residual, IR A–D, v0.2.93 property suite. P6 cancelled.
-In flight: P1 Unique bar executes.
-Next: P2 after P1 gate. R-path after P1 (see llvm-rustc-bar.oot).
-Locked: 2026-09-15 against oodac v0.2.93 (`7f477ef`).
+Closed: C residual, IR A–D, v0.2.93 properties, P1 Unique bar (v0.2.95).
+In flight: P3 llvm-self-host. Local HOST rebuild linked (`OK_PURE_MULTI`);
+Unique bar `UNIQUE_BAR_OK` twice; IR props PASS=106 FAIL=0 twice.
+Local `--fixed-point` S1==S2 still running. CI `llvm-self-host` needs
+this `bin/oodac` on `main`.
+Next: P3 S1==S2 + CI green, then P2 packages, P4 cutover, P5 docs, P7.
+R-path: R1 after P3 can rebuild (see llvm-rustc-bar.oot).
+Locked: 2026-09-15 against oodac v0.2.95 (`77a1d0c`).

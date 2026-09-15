@@ -50,10 +50,14 @@ pub fn ll_olist_wanted(toks: List[String], nm: String) -> Bool {
     return false;
 }
 
-pub fn ll_olist_emit_one(nm: String, ir: &mut IrBuf) {
-    ll_ir_text(ir, "%OoL_" + nm + " = type { ptr, i64, i64 }");
+pub fn ll_st_wrap_emit(nm: String, toks: List[String], ir: &mut IrBuf) {
     ll_ir_text(ir, "%OoRes_St_" + nm + " = type { i32, %St_" + nm + ", %OoStr }");
     ll_ir_text(ir, "%OoOpt_St_" + nm + " = type { i32, %St_" + nm + " }");
+    if ll_olist_wanted(toks, nm) { ll_olist_emit_one(nm, ir); }
+}
+
+pub fn ll_olist_emit_one(nm: String, ir: &mut IrBuf) {
+    ll_ir_text(ir, "%OoL_" + nm + " = type { ptr, i64, i64 }");
     ll_ir_text(ir, "define hidden void @oo_l_" + nm + "_new(ptr sret(%OoL_" + nm + ") align 8 %out) {");
     ll_heap(ir);
     ll_ir_text(ir, "  store %OoL_" + nm + " { ptr null, i64 0, i64 0 }, ptr %out, align 8");

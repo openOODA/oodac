@@ -58,7 +58,17 @@ pub fn ll_emit_import_decls(extra: String, local: String, want: String) {
             if str_index_of(local, "\t" + nm + "\t") < 0 && str_index_of(want, "\t" + nm + "\t") >= 0 {
                 if str_index_of(seen, "\t" + nm + "\t") < 0 {
                     seen = seen + nm + "\t";
-                    ll_emit_one_decl(nm, str_slice(extra, k + 1, m));
+                    let mut gnm: String = nm;
+                    let sk: String = "__sym__" + nm + "=";
+                    let sp: Int = str_index_of(extra, sk);
+                    if sp >= 0 {
+                        let ss: Int = sp + chars_len(sk);
+                        let mut se: Int = ss;
+                        while se < n && char_at(extra, se) != ";" { se = se + 1; }
+                        let gs: String = str_slice(extra, ss, se);
+                        if gs != "" { gnm = gs; }
+                    }
+                    ll_emit_one_decl(gnm, str_slice(extra, k + 1, m));
                 }
             }
             i = m;

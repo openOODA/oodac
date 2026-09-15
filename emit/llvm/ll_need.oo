@@ -89,7 +89,7 @@ fn ll_need_call(need: String, nm: String) -> String {
     if nm == "monotonic_us" { return ll_need_add(n, "oo_monotonic_us"); }
     if nm == "read_file" { return ll_need_add(n, "oo_read_file"); }
     if nm == "write_file" { return ll_need_add(n, "oo_write_file"); }
-    if nm == "file_stamp" { return ll_need_add(n, "oo_file_stamp"); }
+    if nm == "file_stamp" || nm == "oo_file_stamp" { return ll_need_add(n, "oo_file_stamp"); }
     if nm == "fs_is_dir" || nm == "oo_fs_is_dir" { return ll_need_add(n, "oo_fs_is_dir"); }
     if nm == "fs_read_dir" { return ll_need_add(n, "oo_fs_read_dir"); }
     if nm == "fs_mkdir" { return ll_need_add(n, "oo_fs_mkdir"); }
@@ -117,6 +117,7 @@ fn ll_need_call(need: String, nm: String) -> String {
     if nm == "hot_reload" { return ll_need_add(n, "oo_hot_reload"); }
     if nm == "alloc_bytes" { return ll_need_add(n, "oo_alloc_bytes"); }
     if nm == "int_to_str" { return ll_need_add(n, "oo_int_to_str"); }
+    if chars_len(nm) >= 3 && str_slice(nm, 0, 3) == "oo_" { return ll_need_add(n, nm); }
     n = ll_need_tui(n, nm);
     return n;
 }

@@ -165,7 +165,7 @@ Gate: this file's status says DONE with the R6 tag and log path.
 
 ## Status
 
-Blocked on: P1 Unique bar.
-In flight: none.
-Next: R1 after R0.
-Locked: 2026-09-15 against oodac v0.2.93 (`7f477ef`).
+R0 (P1 Unique bar): done, v0.2.95.
+In flight: none. P3 local generation linked; Unique bar green on that
+HOST. R1 starts after CI `llvm-self-host` is green with shipped HOST.
+Locked: 2026-09-15 against oodac v0.2.95 (`77a1d0c`).

@@ -94,7 +94,7 @@ pub fn run_emit_llvm(fs: &FsReadCap, fs_w: &FsWriteCap, env: &EnvCap, path: Stri
                         if path_exists(fs, auto) {
                             let itoks: List[String] = ll_toks_file(fs, ip, isrc);
                             st_all = ll_struct_declare(itoks, st_all);
-                            extra = extra + ll_collect_sigs(itoks, ll_struct_tab_of(st_all));
+                            extra = extra + ll_collect_pub_sigs(itoks, ll_struct_tab_of(st_all));
                         }
                     }
                 }

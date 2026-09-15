@@ -182,7 +182,7 @@ pub fn ll_struct_emit_types(env: String, toks: List[String], ir: &mut IrBuf) {
             ll_heap_end(ir);
             ll_ir_text(ir, "  ret void");
             ll_ir_text(ir, "}");
-            if ll_olist_wanted(toks, nm) { ll_olist_emit_one(nm, ir); }
+            ll_st_wrap_emit(nm, toks, ir);
             i = c;
         }
         i = i + 1;
