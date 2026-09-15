@@ -13,42 +13,43 @@ import "ll_tok.oo";
 import "ll_ty.oo";
 import "ll_int.oo";
 import "ll_slot.oo";
+import "ll_ir.oo";
 
 fn ll_tok_tui_cap(args: List[String]) -> String {
     return ll_ssa(ll_pssa(list_get(args, 0)));
 }
 
-fn ll_ty_tui_ress(callee: String, extra: String, ssa0: Int, args: List[String]) -> String {
+fn ll_ty_tui_ress(callee: String, extra: String, ssa0: Int, args: List[String], ir: &mut IrBuf) -> String {
     let s: Int = ssa0 + 1;
     let out: String = ll_tmpa(s);
-    ll_slot_name(out);
-    println("  call void @" + callee + "(ptr sret(%OoResS) align 8 " + out + ", i64 " + ll_tok_tui_cap(args) + extra + ")");
+    ll_slot_name(out, ir);
+    ll_ir_text(ir, "  call void @" + callee + "(ptr sret(%OoResS) align 8 " + out + ", i64 " + ll_tok_tui_cap(args) + extra + ")");
     return ll_pack(0, s, "ress", out);
 }
 
-pub fn ll_builtin_tui(name: String, args: List[String], ssa0: Int, expect: String) -> String {
+pub fn ll_builtin_tui(name: String, args: List[String], ssa0: Int, expect: String, ir: &mut IrBuf) -> String {
     let na: Int = list_len(args);
     if expect == "noret" { return ""; }
     if (name == "oo_tui_enable_raw" || name == "oo_tui_disable_raw" || name == "oo_tui_read_byte") && na >= 2 {
-        let a1: String = ll_as_val(list_get(args, 1), ssa0);
-        return ll_ty_tui_ress(name, ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)), ll_pssa(a1), args);
+        let a1: String = ll_as_val(list_get(args, 1), ssa0, ir);
+        return ll_ty_tui_ress(name, ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)), ll_pssa(a1), args, ir);
     }
     if name == "oo_tui_write" && na >= 2 {
-        let a1: String = ll_as_val(list_get(args, 1), ssa0);
-        return ll_ty_tui_ress(name, ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)), ll_pssa(a1), args);
+        let a1: String = ll_as_val(list_get(args, 1), ssa0, ir);
+        return ll_ty_tui_ress(name, ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)), ll_pssa(a1), args, ir);
     }
     if name == "oo_tui_read_byte_timeout" && na >= 3 {
-        let a1: String = ll_as_val(list_get(args, 1), ssa0);
-        let ms: String = ll_i64arg(args, 2, ll_pssa(a1));
-        return ll_ty_tui_ress(name, ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ", i64 " + ll_ssa(ll_pssa(ms)), ll_pssa(ms), args);
+        let a1: String = ll_as_val(list_get(args, 1), ssa0, ir);
+        let ms: String = ll_i64arg(args, 2, ll_pssa(a1), ir);
+        return ll_ty_tui_ress(name, ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ", i64 " + ll_ssa(ll_pssa(ms)), ll_pssa(ms), args, ir);
     }
     if name == "oo_tui_show_cursor" && na >= 2 {
-        let vis: String = ll_i64arg(args, 1, ssa0);
-        return ll_ty_tui_ress(name, ", i64 " + ll_ssa(ll_pssa(vis)), ll_pssa(vis), args);
+        let vis: String = ll_i64arg(args, 1, ssa0, ir);
+        return ll_ty_tui_ress(name, ", i64 " + ll_ssa(ll_pssa(vis)), ll_pssa(vis), args, ir);
     }
     if name == "oo_tui_get_size" || name == "oo_tui_alt_screen_enter" || name == "oo_tui_alt_screen_leave" || name == "oo_tui_clear" || name == "oo_tui_signal_winch_install" || name == "oo_tui_signal_winch_poll" {
         if na >= 1 {
-            return ll_ty_tui_ress(name, "", ll_pssa(list_get(args, 0)), args);
+            return ll_ty_tui_ress(name, "", ll_pssa(list_get(args, 0)), args, ir);
         }
     }
     return "";

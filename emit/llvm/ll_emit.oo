@@ -13,6 +13,7 @@ import "ll_tok.oo";
 import "ll_rt.oo";
 import "ll_fn.oo";
 import "ll_ir.oo";
+import "ll_ir_flush.oo";
 import "ll_int.oo";
 import "ll_user_call.oo";
 import "ll_struct.oo";
@@ -107,14 +108,14 @@ fn ll_reachable(toks: List[String], known: String) -> String {    let n: Int = l
     return set;
 }
 
-fn ll_emit_fn_strings(toks: List[String], pos: Int, n: Int) {
+fn ll_emit_fn_strings(toks: List[String], pos: Int, n: Int, ir: &mut IrBuf) {
     let end: Int = ll_skip_fn(toks, pos, n);
     let mut i: Int = pos;
     while i < end {
         if ll_k(toks, i) == "STRING" {
             let tx: String = ll_t(toks, i);
             let ln: Int = bytes_len(tx) + 1;
-            println("@.s" + i.to_string() + " = private unnamed_addr constant [" + ln.to_string() + " x i8] c\"" + ll_c_esc(tx) + "\\00\"");
+            ll_ir_text(ir, "@.s" + i.to_string() + " = private unnamed_addr constant [" + ln.to_string() + " x i8] c\"" + ll_c_esc(tx) + "\\00\"");
         }
         i = i + 1;
     }
@@ -172,11 +173,12 @@ pub fn ll_emit_stream_plus_t(toks: List[String], extra: String, triple: String) 
         process_exit(1);
     }
     ll_rt_header_triple(toks, triple);
+    let mut ir: IrBuf = ll_ir_new();
     let extra_st: String = ll_struct_tab_of(extra);
     let stenv: String = ll_struct_declare(toks, extra_st);
     let local_st: String = ll_st_pick(stenv, ll_local_st_names(toks));
-    ll_struct_emit_imports(stenv, local_st, toks);
-    ll_struct_emit_types(local_st, toks);
+    ll_struct_emit_imports(stenv, local_st, toks, ir);
+    ll_struct_emit_types(local_st, toks, ir);
     let stab: String = ll_struct_tab_of(stenv);
     let local_sigs: String = ll_collect_sigs(toks, stab);
     let sigs: String = local_sigs + stenv + extra;
@@ -212,10 +214,10 @@ pub fn ll_emit_stream_plus_t(toks: List[String], extra: String, triple: String) 
             let nm: String = ll_fn_name_at(toks, pos, n);
             if ll_in_set(keep, nm) && !ll_in_set(seen_fn, nm) {
                 seen_fn = seen_fn + nm + "\t";
-                println("; FN " + nm);
-                ll_emit_fn_strings(toks, pos, n);
+                ll_ir_text(ir, "; FN " + nm);
+                ll_emit_fn_strings(toks, pos, n, ir);
                 let penv: String = ll_prune_sigs(sigs, stenv, ll_callee_set(toks, pos, n));
-                pos = ll_emit_fn(toks, pos, n, penv, stab);
+                pos = ll_emit_fn(toks, pos, n, penv, stab, ir);
             } else {
                 pos = ll_skip_fn(toks, pos, n);
             }
@@ -223,12 +225,13 @@ pub fn ll_emit_stream_plus_t(toks: List[String], extra: String, triple: String) 
             while pos < n && ll_k(toks, pos) != "LBRACE" && ll_k(toks, pos) != "EOF" { pos = pos + 1; }
             if pos < n && ll_k(toks, pos) == "LBRACE" { pos = skip_balanced(toks, pos); }
         } else if k == "KW_VERIFY" {
-            let vr: String = ll_emit_verify(toks, pos, n, stab);
+            let vr: String = ll_emit_verify(toks, pos, n, stab, ir);
             pos = ll_ppos(vr);
             if ll_pk(vr) != "" { ctors = ctors + ll_pk(vr) + "\t"; }
         } else {
             pos = pos + 1;
         }
     }
-    ll_emit_ctors(ctors);
+    ll_emit_ctors(ctors, ir);
+    ll_ir_flush(ir);
 }

@@ -20,6 +20,7 @@ import "types/types_core.oo";
 import "lex/token_parse_int.oo";
 import "check/smt_clause_query.oo";
 import "ll_slot.oo";
+import "ll_ir.oo";
 
 fn ll_con_end(toks: List[String], p: Int, n: Int) -> Int {
     let mut q: Int = p;
@@ -97,42 +98,42 @@ fn ll_con_global(name: String, idx: Int, kind: String) {
     println("@.con_" + idx.to_string() + "_" + name + " = private unnamed_addr constant [" + mlen.to_string() + " x i8] c\"ERR\\09contract\\09" + kind + "\\0A\\00\"");
 }
 
-fn ll_con_trap(ssa0: Int, cond: Int, name: String, idx: Int, kind: String) -> Int {
+fn ll_con_trap(ssa0: Int, cond: Int, name: String, idx: Int, kind: String, ir: &mut IrBuf) -> Int {
     let mut mlen: Int = 23;
     if kind == "spec" { mlen = 19; }
     if kind == "ensures" { mlen = 22; }
     let tag: String = idx.to_string() + "_" + name;
-    println("  br i1 " + ll_ssa(cond) + ", label %ctok" + tag + ", label %ctrap" + tag);
-    println("ctrap" + tag + ":");
+    ll_ir_text(ir, "  br i1 " + ll_ssa(cond) + ", label %ctok" + tag + ", label %ctrap" + tag);
+    ll_ir_text(ir, "ctrap" + tag + ":");
     let mut s: Int = ssa0;
     if cond > s { s = cond; }
     s = s + 1;
-    println("  " + ll_ssa(s) + " = getelementptr inbounds [" + mlen.to_string() + " x i8], ptr @.con_" + tag + ", i64 0, i64 0");
+    ll_ir_text(ir, "  " + ll_ssa(s) + " = getelementptr inbounds [" + mlen.to_string() + " x i8], ptr @.con_" + tag + ", i64 0, i64 0");
     s = s + 1;
-    println("  " + ll_ssa(s) + " = call { ptr, i64 } @oo_str_lit(ptr " + ll_ssa(s - 1) + ")");
+    ll_ir_text(ir, "  " + ll_ssa(s) + " = call { ptr, i64 } @oo_str_lit(ptr " + ll_ssa(s - 1) + ")");
     s = s + 1;
-    println("  " + ll_ssa(s) + " = extractvalue { ptr, i64 } " + ll_ssa(s - 1) + ", 0");
+    ll_ir_text(ir, "  " + ll_ssa(s) + " = extractvalue { ptr, i64 } " + ll_ssa(s - 1) + ", 0");
     s = s + 1;
-    println("  " + ll_ssa(s) + " = extractvalue { ptr, i64 } " + ll_ssa(s - 2) + ", 1");
-    println("  call void @oo_print_str(ptr " + ll_ssa(s - 1) + ", i64 " + ll_ssa(s) + ")");
-    println("  call void @oo_println()");
-    println("  call void @oo_process_exit(i64 1)");
-    println("  unreachable");
-    println("ctok" + tag + ":");
+    ll_ir_text(ir, "  " + ll_ssa(s) + " = extractvalue { ptr, i64 } " + ll_ssa(s - 2) + ", 1");
+    ll_ir_text(ir, "  call void @oo_print_str(ptr " + ll_ssa(s - 1) + ", i64 " + ll_ssa(s) + ")");
+    ll_ir_text(ir, "  call void @oo_println()");
+    ll_ir_text(ir, "  call void @oo_process_exit(i64 1)");
+    ll_ir_text(ir, "  unreachable");
+    ll_ir_text(ir, "ctok" + tag + ":");
     return s;
 }
 
-fn ll_con_check(toks: List[String], cs: Int, ce: Int, env: String, ssa0: Int, name: String, idx: Int, kind: String) -> Int {
-    let v: String = ll_expr(toks, cs, ce, ssa0, env);
+fn ll_con_check(toks: List[String], cs: Int, ce: Int, env: String, ssa0: Int, name: String, idx: Int, kind: String, ir: &mut IrBuf) -> Int {
+    let v: String = ll_expr(toks, cs, ce, ssa0, env, ir);
     if ll_pk(v) != "i1" && !ll_is_int(ll_pk(v)) && ll_pk(v) != "f64" {
         println("ERR\tllvm\tcontract clause kind " + ll_pk(v));
         process_exit(1);
     }
-    let c: Int = ll_cond_i1(v, ll_pssa(v));
-    return ll_con_trap(c, c, name, idx, kind);
+    let c: Int = ll_cond_i1(v, ll_pssa(v), ir);
+    return ll_con_trap(c, c, name, idx, kind, ir);
 }
 
-fn ll_con_walk(toks: List[String], spec: String, env: String, ssa0: Int, name: String, base: Int) -> Int {
+fn ll_con_walk(toks: List[String], spec: String, env: String, ssa0: Int, name: String, base: Int, ir: &mut IrBuf) -> Int {
     let mut ssa: Int = ssa0;
     let mut i: Int = 0;
     let n: Int = chars_len(spec);
@@ -147,7 +148,7 @@ fn ll_con_walk(toks: List[String], spec: String, env: String, ssa0: Int, name: S
             let cs: Int = parse_int(str_slice(cl, 0, c1));
             let ce: Int = parse_int(str_slice(cl, c1 + 1, c2));
             let kind: String = str_slice(cl, c2 + 1, chars_len(cl));
-            ssa = ll_con_check(toks, cs, ce, env, ssa, name, base + i, kind);
+            ssa = ll_con_check(toks, cs, ce, env, ssa, name, base + i, kind, ir);
             i = i + 1;
         }
         p = q + 1;
@@ -161,16 +162,16 @@ fn ll_con_colon(s: String, from: Int) -> Int {
     return q;
 }
 
-pub fn ll_contract_entry(toks: List[String], env0: String, ssa0: Int, name: String) -> String {
+pub fn ll_contract_entry(toks: List[String], env0: String, ssa0: Int, name: String, ir: &mut IrBuf) -> String {
     let mut env: String = env0;
     let mut ssa: Int = ssa0;
     let reqs: String = type_env_get(env, "__creq__");
-    if reqs != "" { ssa = ll_con_walk(toks, reqs, env, ssa, name, 0); }
+    if reqs != "" { ssa = ll_con_walk(toks, reqs, env, ssa, name, 0, ir); }
     if type_env_get(env, "__cens__") != "" { env = type_env_put(env, "__ens__", "1"); }
     return ll_pack(0, ssa, "", env);
 }
 
-pub fn ll_contract_return(toks: List[String], v: String, env0: String, ssa0: Int, ret_kind: String, site: Int) -> Int {
+pub fn ll_contract_return(toks: List[String], v: String, env0: String, ssa0: Int, ret_kind: String, site: Int, ir: &mut IrBuf) -> Int {
     let enss: String = type_env_get(env0, "__cens__");
     if enss == "" { return ssa0; }
     let mut env: String = env0;
@@ -180,25 +181,25 @@ pub fn ll_contract_return(toks: List[String], v: String, env0: String, ssa0: Int
         let mut rv: Int = ll_pssa(v);
         if ll_has_slot(v) {
             ssa = ssa + 1;
-            println("  " + ll_ssa(ssa) + " = load { ptr, i64 }, ptr " + ll_pptr(v) + ", align 8");
+            ll_ir_text(ir, "  " + ll_ssa(ssa) + " = load { ptr, i64 }, ptr " + ll_pptr(v) + ", align 8");
             rv = ssa;
         }
         ssa = ssa + 1;
-        println("  " + ll_ssa(ssa) + " = call i64 @oo_chars_len({ ptr, i64 } " + ll_ssa(rv) + ")");
-        ll_slot_name(slot);
-        println("  store i64 " + ll_ssa(ssa) + ", ptr " + slot + ", align 8");
+        ll_ir_text(ir, "  " + ll_ssa(ssa) + " = call i64 @oo_chars_len({ ptr, i64 } " + ll_ssa(rv) + ")");
+        ll_slot_name(slot, ir);
+        ll_ir_text(ir, "  store i64 " + ll_ssa(ssa) + ", ptr " + slot + ", align 8");
         env = type_env_put(env, "result", "i64");
         env = type_env_put(env, "__l__result", slot);
     } else if ll_is_int(ret_kind) || ret_kind == "f64" || ret_kind == "i1" {
-        ll_slot_name(slot);
-        println("  store " + ll_ir_val(ret_kind) + " " + ll_opnd(v) + ", ptr " + slot + ", align 8");
+        ll_slot_name(slot, ir);
+        ll_ir_text(ir, "  store " + ll_ir_val(ret_kind) + " " + ll_opnd(v) + ", ptr " + slot + ", align 8");
         env = type_env_put(env, "result", ret_kind);
         env = type_env_put(env, "__l__result", slot);
     } else {
         println("ERR\tllvm\tensures on kind " + ret_kind);
         process_exit(1);
     }
-    return ll_con_walk(toks, enss, env, ssa, name_of(env), 1000);
+    return ll_con_walk(toks, enss, env, ssa, name_of(env), 1000, ir);
 }
 
 fn name_of(env: String) -> String {

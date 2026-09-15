@@ -1,17 +1,54 @@
 // # Structured LLVM IR records
 //
-// Logline: Printer input is typed values with spans, not a token walk alone.
+// Logline: Token lowering builds typed insts; ll_ir_flush prints LLVM text.
 //
-// Setup: Token lowering builds IrVal/IrInst; ll_ir_flush is the text printer.
+// Setup: IrBuf holds I/L/F/E/T records with op, type, dest, args, spans.
 // Option/Result keep an i32 tag: oodar ABI is {i32, payload}, so a niche
-// discriminant would mis-link. Tokens: kind, line, col, text.
+// discriminant would mis-link.
 //
 // Beats:
-//   1. IrVal packs ssa, kind, and source line/col.
-//   2. ll_ir_begin emits the debug compile unit from SRC_PATH.
-//   3. ll_src_stem mangles internal symbols per compilation unit.
+//   1. ll_ir_val_rec packs ssa, kind, line, col.
+//   2. ll_ir_inst appends a typed instruction.
+//   3. ll_ir_flush is the only function-body LLVM printer.
 
 import "ll_tok.oo";
+
+pub type IrBuf = struct {
+    recs: String
+};
+
+pub fn ll_ir_new() -> IrBuf {
+    return IrBuf { recs: "" };
+}
+
+pub fn ll_ir_push(b: &mut IrBuf, rec: String) {
+    b.recs = b.recs + rec + "\n";
+}
+
+pub fn ll_ir_val_rec(ssa: Int, kind: String, line: Int, col: Int) -> String {
+    return ssa.to_string() + "\t" + kind + "\t" + line.to_string() + "\t" + col.to_string();
+}
+
+pub fn ll_ir_inst(b: &mut IrBuf, op: String, ty: String, dst: String, args: String, line: Int, col: Int) {
+    let vr: String = ll_ir_val_rec(0, ty, line, col);
+    ll_ir_push(b, "I\t" + op + "\t" + ty + "\t" + dst + "\t" + args + "\t" + vr);
+}
+
+pub fn ll_ir_label(b: &mut IrBuf, name: String) {
+    ll_ir_push(b, "L\t" + name);
+}
+
+pub fn ll_ir_text(b: &mut IrBuf, s: String) {
+    ll_ir_push(b, "T\t" + s);
+}
+
+pub fn ll_ir_fn_open(b: &mut IrBuf, line: String) {
+    ll_ir_push(b, "F\t" + line);
+}
+
+pub fn ll_ir_fn_close(b: &mut IrBuf) {
+    ll_ir_push(b, "E\t");
+}
 
 pub fn ll_src_path(toks: List[String]) -> String {
     if list_len(toks) < 1 { return "src.oo"; }
@@ -50,10 +87,6 @@ pub fn ll_sym_of(toks: List[String], name: String, is_pub: Bool, is_export: Bool
     if name == "main" { return "main"; }
     if is_pub || is_export { return name; }
     return ll_src_stem(toks) + "_" + name;
-}
-
-pub fn ll_ir_val_rec(ssa: Int, kind: String, line: Int, col: Int) -> String {
-    return ssa.to_string() + "\t" + kind + "\t" + line.to_string() + "\t" + col.to_string();
 }
 
 pub fn ll_ir_begin(toks: List[String]) {

@@ -61,7 +61,7 @@ pub fn ll_parse_sig(toks: List[String], pos: Int, n: Int, stab: String) -> Strin
     return name + "=" + aks + ">" + rk;
 }
 
-pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String, stab: String) -> Int {
+pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String, stab: String, ir: &mut IrBuf) -> Int {
     let mut p: Int = pos;
     let mut is_export: Bool = false;
     let mut is_pub: Bool = false;
@@ -121,7 +121,7 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String, stab: Stri
     if ll_k(toks, p) != "LBRACE" { return p; }
     p = p + 1;
     if name == "main" {
-        return ll_emit_main(toks, pos, n, p, env, caps, rk, stab, use_args);
+        return ll_emit_main(toks, pos, n, p, env, caps, rk, stab, use_args, ir);
     }
     let mut vis: String = "internal ";
     if is_pub { vis = "hidden "; }
@@ -133,16 +133,16 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String, stab: Stri
     let ds: String = " !dbg !" + db.to_string();
     if ll_is_mem(rk) {
         if plist != "" {
-            println("define " + vis + "void @" + gnm + "(ptr noalias sret(" + ll_ir_alloc(rk) + ") align 8 %ret, " + plist + ") nounwind" + ds + " {");
+            ll_ir_text(ir, "define " + vis + "void @" + gnm + "(ptr noalias sret(" + ll_ir_alloc(rk) + ") align 8 %ret, " + plist + ") nounwind" + ds + " {");
         } else {
-            println("define " + vis + "void @" + gnm + "(ptr noalias sret(" + ll_ir_alloc(rk) + ") align 8 %ret) nounwind" + ds + " {");
+            ll_ir_text(ir, "define " + vis + "void @" + gnm + "(ptr noalias sret(" + ll_ir_alloc(rk) + ") align 8 %ret) nounwind" + ds + " {");
         }
     } else if rk == "void" {
-        println("define " + vis + "void @" + gnm + "(" + plist + ") nounwind" + ds + " {");
+        ll_ir_text(ir, "define " + vis + "void @" + gnm + "(" + plist + ") nounwind" + ds + " {");
     } else {
-        println("define " + vis + ll_ir_val(rk) + " @" + gnm + "(" + plist + ") nounwind" + ds + " {");
+        ll_ir_text(ir, "define " + vis + ll_ir_val(rk) + " @" + gnm + "(" + plist + ") nounwind" + ds + " {");
     }
-    ll_heap();
+    ll_heap(ir);
     let mut fi: Int = 0;
     let fnn: Int = chars_len(form);
     let mut start: Int = 0;
@@ -157,15 +157,15 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String, stab: Stri
                 if str_index_of(refs, ";" + pn + ";") >= 0 && (ll_is_mem(k) || ll_is_refk(k)) {
                     env = type_env_put(env, "__l__" + pn, "%p_" + pn);
                 } else {
-                    ll_slot_name(ll_var(pn));
+                    ll_slot_name(ll_var(pn), ir);
                     if ll_is_mem(k) {
                         ssa = ssa + 1;
-                        println("  " + ll_ssa(ssa) + " = load " + ll_ir_val(k) + ", ptr %p_" + pn + ", align 8");
-                        println("  store " + ll_ir_val(k) + " " + ll_ssa(ssa) + ", ptr " + ll_var(pn) + ", align 8");
+                        ll_ir_text(ir, "  " + ll_ssa(ssa) + " = load " + ll_ir_val(k) + ", ptr %p_" + pn + ", align 8");
+                        ll_ir_text(ir, "  store " + ll_ir_val(k) + " " + ll_ssa(ssa) + ", ptr " + ll_var(pn) + ", align 8");
                     } else if ll_is_refk(k) {
-                        println("  store ptr %p_" + pn + ", ptr " + ll_var(pn) + ", align 8");
+                        ll_ir_text(ir, "  store ptr %p_" + pn + ", ptr " + ll_var(pn) + ", align 8");
                     } else {
-                        println("  store " + ll_ir_val(k) + " %p_" + pn + ", ptr " + ll_var(pn) + ", align 8");
+                        ll_ir_text(ir, "  store " + ll_ir_val(k) + " %p_" + pn + ", ptr " + ll_var(pn) + ", align 8");
                     }
                 }
             }
@@ -174,15 +174,15 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String, stab: Stri
         fi = fi + 1;
     }
     env = type_env_put(env, "__rk__", rk);
-    let ce: String = ll_contract_entry(toks, env, ssa, name);
+    let ce: String = ll_contract_entry(toks, env, ssa, name, ir);
     ssa = ll_pssa(ce);
     env = ll_pptr(ce);
-    let fb: String = ll_emit_stmts(toks, p, n, rk, env, ssa + 1, stab);
+    let fb: String = ll_emit_stmts(toks, p, n, rk, env, ssa + 1, stab, ir);
     if ll_pterm(fb) == 0 {
-        ll_heap_end();
-        if rk == "void" || ll_is_mem(rk) { println("  ret void"); }
-        else { println("  unreachable"); }
+        ll_heap_end(ir);
+        if rk == "void" || ll_is_mem(rk) { ll_ir_text(ir, "  ret void"); }
+        else { ll_ir_text(ir, "  unreachable"); }
     }
-    println("}");
+    ll_ir_text(ir, "}");
     return ll_skip_fn(toks, pos, n);
 }

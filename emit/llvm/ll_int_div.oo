@@ -9,17 +9,18 @@
 //   2. Defined wrapping add/mul stay in ll_int.oo; only div is checked.
 
 import "ll_tok.oo";
+import "ll_ir.oo";
 
-pub fn ll_int_div(op: String, inst: String, t: String, le: String, re: String, s: Int, ck: String) -> String {
+pub fn ll_int_div(op: String, inst: String, t: String, le: String, re: String, s: Int, ck: String, ir: &mut IrBuf) -> String {
     let tag: String = s.to_string();
-    println("  " + ll_ssa(s) + " = icmp eq " + t + " " + ll_opnd(re) + ", 0");
-    println("  br i1 " + ll_ssa(s) + ", label %div0" + tag + ", label %divok" + tag);
-    println("div0" + tag + ":");
-    println("  call void @oo_process_exit(i64 1)");
-    println("  unreachable");
-    println("divok" + tag + ":");
-    println("  " + ll_ssa(s + 1) + " = xor i1 " + ll_ssa(s) + ", true");
-    println("  call void @llvm.assume(i1 " + ll_ssa(s + 1) + ")");
-    println("  " + ll_ssa(s + 2) + " = " + inst + " " + t + " " + ll_opnd(le) + ", " + ll_opnd(re));
+    ll_ir_text(ir, "  " + ll_ssa(s) + " = icmp eq " + t + " " + ll_opnd(re) + ", 0");
+    ll_ir_text(ir, "  br i1 " + ll_ssa(s) + ", label %div0" + tag + ", label %divok" + tag);
+    ll_ir_text(ir, "div0" + tag + ":");
+    ll_ir_text(ir, "  call void @oo_process_exit(i64 1)");
+    ll_ir_text(ir, "  unreachable");
+    ll_ir_text(ir, "divok" + tag + ":");
+    ll_ir_text(ir, "  " + ll_ssa(s + 1) + " = xor i1 " + ll_ssa(s) + ", true");
+    ll_ir_text(ir, "  call void @llvm.assume(i1 " + ll_ssa(s + 1) + ")");
+    ll_ir_text(ir, "  " + ll_ssa(s + 2) + " = " + inst + " " + t + " " + ll_opnd(le) + ", " + ll_opnd(re));
     return ll_pack(ll_ppos(re), s + 2, ck, "");
 }

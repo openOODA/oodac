@@ -1,9 +1,9 @@
 // # LLVM type names from Ooda tokens
 //
 // Logline: Map IDENT types to slist, ilist, str, i64, i1, resi, opti. Caps are i64.
-//
 import "ll_tok.oo";
 import "ll_slot.oo";
+import "ll_ir.oo";
 
 pub fn ll_ty_at(toks: List[String], pos: Int, n: Int, stab: String) -> String {
     let mut p: Int = pos;
@@ -239,18 +239,18 @@ pub fn ll_pass(kind: String) -> String {
     return ll_ir_val(kind);
 }
 
-pub fn ll_ensure_ptr(v: String, ssa0: Int) -> String {
+pub fn ll_ensure_ptr(v: String, ssa0: Int, ir: &mut IrBuf) -> String {
     if ll_has_slot(v) { return ll_pack(ll_ppos(v), ssa0, ll_pk(v), ll_pptr(v)); }
     let a: String = ll_tmpa(ssa0 + 1);
     let s: Int = ssa0 + 1;
-    ll_slot_name(a);
-    println("  store " + ll_ir_val(ll_pk(v)) + " " + ll_opnd(v) + ", ptr " + a + ", align 8");
+    ll_slot_name(a, ir);
+    ll_ir_text(ir, "  store " + ll_ir_val(ll_pk(v)) + " " + ll_opnd(v) + ", ptr " + a + ", align 8");
     return ll_pack(ll_ppos(v), s, ll_pk(v), a);
 }
 
-pub fn ll_as_val(v: String, ssa0: Int) -> String {
-    let p: String = ll_ensure_ptr(v, ssa0);
+pub fn ll_as_val(v: String, ssa0: Int, ir: &mut IrBuf) -> String {
+    let p: String = ll_ensure_ptr(v, ssa0, ir);
     let s: Int = ll_pssa(p) + 1;
-    println("  " + ll_ssa(s) + " = load " + ll_ir_val(ll_pk(v)) + ", ptr " + ll_pptr(p) + ", align 8");
+    ll_ir_text(ir, "  " + ll_ssa(s) + " = load " + ll_ir_val(ll_pk(v)) + ", ptr " + ll_pptr(p) + ", align 8");
     return ll_pack(ll_ppos(v), s, ll_pk(v), "");
 }

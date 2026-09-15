@@ -13,6 +13,7 @@ import "ll_ty.oo";
 import "ll_float.oo";
 import "ll_int_div.oo";
 import "ll_slot.oo";
+import "ll_ir.oo";
 
 pub fn ll_is_int(kind: String) -> Bool {
     if kind == "i32" || kind == "u32" || kind == "i64" || kind == "u64" || kind == "i1" { return true; }
@@ -36,12 +37,12 @@ pub fn ll_int_common(a: String, b: String) -> String {
     return "i32";
 }
 
-pub fn ll_int_convert(v: String, ssa0: Int, target: String) -> String {
+pub fn ll_int_convert(v: String, ssa0: Int, target: String, ir: &mut IrBuf) -> String {
     let fk: String = ll_pk(v);
     if fk == target { return v; }
     if fk == "i1" && ll_is_int(target) {
         let mut s: Int = ll_hw(ssa0, ll_pssa(v)) + 1;
-        println("  " + ll_ssa(s) + " = zext i1 " + ll_opnd(v) + " to " + ll_ir_val(target));
+        ll_ir_text(ir, "  " + ll_ssa(s) + " = zext i1 " + ll_opnd(v) + " to " + ll_ir_val(target));
         return ll_pack(ll_ppos(v), s, target, "");
     }
     if !ll_is_int(fk) || !ll_is_int(target) { return v; }
@@ -49,7 +50,7 @@ pub fn ll_int_convert(v: String, ssa0: Int, target: String) -> String {
     let mut src: String = ll_opnd(v);
     if ll_pptr(v) != "" && (chars_len(ll_pptr(v)) < 1 || char_at(ll_pptr(v), 0) != "#") {
         s = s + 1;
-        println("  " + ll_ssa(s) + " = load " + ll_ir_alloc(fk) + ", ptr " + ll_pptr(v) + ", align 8");
+        ll_ir_text(ir, "  " + ll_ssa(s) + " = load " + ll_ir_alloc(fk) + ", ptr " + ll_pptr(v) + ", align 8");
         src = ll_ssa(s);
     }
     if ll_int_wide(fk) == ll_int_wide(target) {
@@ -60,36 +61,36 @@ pub fn ll_int_convert(v: String, ssa0: Int, target: String) -> String {
     }
     s = s + 1;
     if ll_int_wide(fk) == "i64" {
-        println("  " + ll_ssa(s) + " = trunc i64 " + src + " to i32");
+        ll_ir_text(ir, "  " + ll_ssa(s) + " = trunc i64 " + src + " to i32");
     } else if ll_is_uint(fk) {
-        println("  " + ll_ssa(s) + " = zext i32 " + src + " to i64");
+        ll_ir_text(ir, "  " + ll_ssa(s) + " = zext i32 " + src + " to i64");
     } else {
-        println("  " + ll_ssa(s) + " = sext i32 " + src + " to i64");
+        ll_ir_text(ir, "  " + ll_ssa(s) + " = sext i32 " + src + " to i64");
     }
     return ll_pack(ll_ppos(v), s, target, "");
 }
 
-pub fn ll_i64arg(args: List[String], i: Int, ssa0: Int) -> String {
+pub fn ll_i64arg(args: List[String], i: Int, ssa0: Int, ir: &mut IrBuf) -> String {
     let a: String = list_get(args, i);
     if !ll_is_int(ll_pk(a)) { return a; }
-    return ll_int_convert(a, ssa0, "i64");
+    return ll_int_convert(a, ssa0, "i64", ir);
 }
 
-pub fn ll_neg_int(r: String) -> String {
+pub fn ll_neg_int(r: String, ir: &mut IrBuf) -> String {
     let k: String = ll_pk(r);
     if k == "f64" {
-        return ll_pack(ll_ppos(r), ll_neg_float(r), "f64", "");
+        return ll_pack(ll_ppos(r), ll_neg_float(r, ir), "f64", "");
     }
     if !ll_is_int(k) || k == "i64" {
-        println("  " + ll_ssa(ll_pssa(r) + 1) + " = sub i64 0, " + ll_opnd(r));
+        ll_ir_text(ir, "  " + ll_ssa(ll_pssa(r) + 1) + " = sub i64 0, " + ll_opnd(r));
         return ll_pack(ll_ppos(r), ll_pssa(r) + 1, "i64", "");
     }
     let s: Int = ll_pssa(r) + 1;
-    println("  " + ll_ssa(s) + " = sub i32 0, " + ll_opnd(r));
+    ll_ir_text(ir, "  " + ll_ssa(s) + " = sub i32 0, " + ll_opnd(r));
     return ll_pack(ll_ppos(r), s, k, "");
 }
 
-pub fn ll_apply_intop(op: String, lhs: String, rhs: String) -> String {
+pub fn ll_apply_intop(op: String, lhs: String, rhs: String, ir: &mut IrBuf) -> String {
     let lk: String = ll_pk(lhs);
     let rk: String = ll_pk(rhs);
     if !ll_is_int(lk) || !ll_is_int(rk) {
@@ -98,8 +99,8 @@ pub fn ll_apply_intop(op: String, lhs: String, rhs: String) -> String {
     }
     let ck: String = ll_int_common(lk, rk);
     let s0: Int = ll_hw(ll_pssa(lhs), ll_pssa(rhs));
-    let le: String = ll_int_convert(lhs, s0, ck);
-    let re: String = ll_int_convert(rhs, ll_pssa(le), ck);
+    let le: String = ll_int_convert(lhs, s0, ck, ir);
+    let re: String = ll_int_convert(rhs, ll_pssa(le), ck, ir);
     let s: Int = ll_hw(ll_pssa(le), ll_pssa(re)) + 1;
     let mut t: String = "i64";
     if ll_int_wide(ck) == "i32" { t = "i32"; }
@@ -123,20 +124,20 @@ pub fn ll_apply_intop(op: String, lhs: String, rhs: String) -> String {
     else if op == "RSHIFT" { if uns { inst = "lshr"; } else { inst = "ashr"; } }
     else { println("ERR\tllvm\tintop " + op); process_exit(1); }
     if op == "EQEQ" || op == "NEQ" || op == "LT" || op == "GT" || op == "LTE" || op == "GTE" {
-        println("  " + ll_ssa(s) + " = " + inst + " " + t + " " + ll_opnd(le) + ", " + ll_opnd(re));
+        ll_ir_text(ir, "  " + ll_ssa(s) + " = " + inst + " " + t + " " + ll_opnd(le) + ", " + ll_opnd(re));
         return ll_pack(ll_ppos(rhs), s, "i1", "");
     }
     if op == "SLASH" || op == "PERCENT" {
-        return ll_int_div(op, inst, t, le, re, s, ck);
+        return ll_int_div(op, inst, t, le, re, s, ck, ir);
     }
     if op == "LSHIFT" || op == "RSHIFT" {
         let mut mask: String = "63";
         if t == "i32" { mask = "31"; }
-        println("  " + ll_ssa(s) + " = and " + t + " " + ll_opnd(re) + ", " + mask);
-        println("  " + ll_ssa(s + 1) + " = " + inst + " " + t + " " + ll_opnd(le) + ", " + ll_ssa(s));
+        ll_ir_text(ir, "  " + ll_ssa(s) + " = and " + t + " " + ll_opnd(re) + ", " + mask);
+        ll_ir_text(ir, "  " + ll_ssa(s + 1) + " = " + inst + " " + t + " " + ll_opnd(le) + ", " + ll_ssa(s));
         return ll_pack(ll_ppos(rhs), s + 1, ck, "");
     }
-    println("  " + ll_ssa(s) + " = " + inst + " " + t + " " + ll_opnd(le) + ", " + ll_opnd(re));
+    ll_ir_text(ir, "  " + ll_ssa(s) + " = " + inst + " " + t + " " + ll_opnd(le) + ", " + ll_opnd(re));
     return ll_pack(ll_ppos(rhs), s, ck, "");
 }
 

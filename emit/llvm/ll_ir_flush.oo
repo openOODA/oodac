@@ -1,0 +1,86 @@
+// # Print structured IR records as LLVM text
+//
+// Logline: The only function-body LLVM printer. Consumes IrBuf records.
+//
+// Setup: I records are typed insts (op, ty, dst, args, span via ll_ir_val_rec).
+//   L is a block label. F/E wrap a function. T is a raw line.
+//
+// Beats:
+//   1. Split recs on newline.
+//   2. I with dst prints `%dst = op ty args`; I without dst prints `op ty args`.
+//   3. Attach !dbg from the packed span when line > 0.
+
+import "ll_ir.oo";
+import "lex/token_fmt.oo";
+import "lex/token_parse_int.oo";
+
+fn ll_ir_print_i(op: String, ty: String, dst: String, args: String, line: Int, col: Int) {
+    let comma: Bool = op == "load" || op == "alloca" || op == "getelementptr" || op == "getelementptr inbounds" || op == "extractvalue" || op == "insertelement" || op == "shufflevector";
+    let mut body: String = op;
+    if ty != "" { body = body + " " + ty; }
+    if args != "" {
+        if comma {
+            body = body + ", " + args;
+        } else {
+            body = body + " " + args;
+        }
+    }
+    let mut loc: String = "";
+    if line > 0 {
+        loc = ", !dbg !DILocation(line: " + line.to_string() + ", column: " + col.to_string() + ", scope: !10)";
+    }
+    if dst != "" {
+        println("  " + dst + " = " + body + loc);
+    } else {
+        println("  " + body + loc);
+    }
+}
+
+fn ll_ir_print_rec(rec: String) {
+    let k: String = field_at(rec, 0);
+    if k == "T" {
+        println(field_at(rec, 1));
+        return;
+    }
+    if k == "L" {
+        println(field_at(rec, 1) + ":");
+        return;
+    }
+    if k == "F" {
+        println(field_at(rec, 1));
+        return;
+    }
+    if k == "E" {
+        println("}");
+        return;
+    }
+    if k == "I" {
+        let op: String = field_at(rec, 1);
+        let ty: String = field_at(rec, 2);
+        let dst: String = field_at(rec, 3);
+        let args: String = field_at(rec, 4);
+        let line: Int = parse_int(field_at(rec, 7));
+        let col: Int = parse_int(field_at(rec, 8));
+        ll_ir_print_i(op, ty, dst, args, line, col);
+        return;
+    }
+}
+
+pub fn ll_ir_flush(b: &IrBuf) {
+    let s: String = b.recs;
+    let n: Int = chars_len(s);
+    let mut i: Int = 0;
+    let mut rec: String = "";
+    while i <= n {
+        let e: Bool = i == n;
+        let mut c: String = "";
+        if !e { c = char_at(s, i); }
+        if e || c == "\n" {
+            if rec != "" { ll_ir_print_rec(rec); }
+            rec = "";
+        } else {
+            rec = rec + c;
+        }
+        i = i + 1;
+    }
+}

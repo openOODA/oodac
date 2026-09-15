@@ -14,6 +14,7 @@
 import "ll_tok.oo";
 import "ll_ty.oo";
 import "types/types_core.oo";
+import "ll_ir.oo";
 
 pub fn ll_arc_push(env: String) -> String {
     return type_env_put(env, "__sc__", "1");
@@ -63,59 +64,59 @@ fn ll_arc_ptr(name: String, env: String) -> String {
     return ll_var(name);
 }
 
-fn ll_arc_rr(kind: String, ptr: String, ssa0: Int, is_ret: Int) -> Int {
+fn ll_arc_rr(kind: String, ptr: String, ssa0: Int, is_ret: Int, ir: &mut IrBuf) -> Int {
     let mut op: String = "release";
     if is_ret != 0 { op = "retain"; }
     if kind == "str" {
         let s: Int = ssa0 + 1;
-        println("  " + ll_ssa(s) + " = load { ptr, i64 }, ptr " + ptr + ", align 8");
-        println("  call void @oo_str_" + op + "({ ptr, i64 } " + ll_ssa(s) + ")");
+        ll_ir_text(ir, "  " + ll_ssa(s) + " = load { ptr, i64 }, ptr " + ptr + ", align 8");
+        ll_ir_text(ir, "  call void @oo_str_" + op + "({ ptr, i64 } " + ll_ssa(s) + ")");
         return s;
     }
     if kind == "slist" {
-        println("  call void @oo_slist_" + op + "(ptr byval(%OoSList) align 8 " + ptr + ")");
+        ll_ir_text(ir, "  call void @oo_slist_" + op + "(ptr byval(%OoSList) align 8 " + ptr + ")");
         return ssa0;
     }
     if kind == "ilist" {
-        println("  call void @oo_ilist_" + op + "(ptr byval(%OoIList) align 8 " + ptr + ")");
+        ll_ir_text(ir, "  call void @oo_ilist_" + op + "(ptr byval(%OoIList) align 8 " + ptr + ")");
         return ssa0;
     }
     if kind == "ress" || kind == "opts" || kind == "resi" {
         let s: Int = ssa0 + 1;
         let tag: String = s.to_string();
-        println("  " + ll_ssa(s) + " = getelementptr inbounds " + ll_ir_alloc(kind) + ", ptr " + ptr + ", i32 0, i32 0");
-        println("  " + ll_ssa(s + 1) + " = load i32, ptr " + ll_ssa(s) + ", align 4");
+        ll_ir_text(ir, "  " + ll_ssa(s) + " = getelementptr inbounds " + ll_ir_alloc(kind) + ", ptr " + ptr + ", i32 0, i32 0");
+        ll_ir_text(ir, "  " + ll_ssa(s + 1) + " = load i32, ptr " + ll_ssa(s) + ", align 4");
         let mut pred: String = "ne";
         if kind == "resi" { pred = "eq"; }
-        println("  " + ll_ssa(s + 2) + " = icmp " + pred + " i32 " + ll_ssa(s + 1) + ", 0");
-        println("  br i1 " + ll_ssa(s + 2) + ", label %arcy" + tag + ", label %arcn" + tag);
-        println("arcy" + tag + ":");
+        ll_ir_text(ir, "  " + ll_ssa(s + 2) + " = icmp " + pred + " i32 " + ll_ssa(s + 1) + ", 0");
+        ll_ir_text(ir, "  br i1 " + ll_ssa(s + 2) + ", label %arcy" + tag + ", label %arcn" + tag);
+        ll_ir_text(ir, "arcy" + tag + ":");
         let mut fi: String = "1";
         if kind == "resi" { fi = "2"; }
-        println("  " + ll_ssa(s + 3) + " = getelementptr inbounds " + ll_ir_alloc(kind) + ", ptr " + ptr + ", i32 0, i32 " + fi);
-        println("  " + ll_ssa(s + 4) + " = load { ptr, i64 }, ptr " + ll_ssa(s + 3) + ", align 8");
-        println("  call void @oo_str_" + op + "({ ptr, i64 } " + ll_ssa(s + 4) + ")");
-        println("  br label %arcn" + tag);
-        println("arcn" + tag + ":");
+        ll_ir_text(ir, "  " + ll_ssa(s + 3) + " = getelementptr inbounds " + ll_ir_alloc(kind) + ", ptr " + ptr + ", i32 0, i32 " + fi);
+        ll_ir_text(ir, "  " + ll_ssa(s + 4) + " = load { ptr, i64 }, ptr " + ll_ssa(s + 3) + ", align 8");
+        ll_ir_text(ir, "  call void @oo_str_" + op + "({ ptr, i64 } " + ll_ssa(s + 4) + ")");
+        ll_ir_text(ir, "  br label %arcn" + tag);
+        ll_ir_text(ir, "arcn" + tag + ":");
         return s + 4;
     }
-    println("  call void @oo_" + op + "_St_" + ll_arc_st_nm(kind) + "(ptr " + ptr + ")");
+    ll_ir_text(ir, "  call void @oo_" + op + "_St_" + ll_arc_st_nm(kind) + "(ptr " + ptr + ")");
     return ssa0;
 }
 
-pub fn ll_arc_rel(name: String, kind: String, env: String, ssa0: Int) -> Int {
-    return ll_arc_rr(kind, ll_arc_ptr(name, env), ssa0, 0);
+pub fn ll_arc_rel(name: String, kind: String, env: String, ssa0: Int, ir: &mut IrBuf) -> Int {
+    return ll_arc_rr(kind, ll_arc_ptr(name, env), ssa0, 0, ir);
 }
 
-pub fn ll_arc_keep(name: String, kind: String, env: String, ssa0: Int) -> Int {
-    return ll_arc_rr(kind, ll_arc_ptr(name, env), ssa0, 1);
+pub fn ll_arc_keep(name: String, kind: String, env: String, ssa0: Int, ir: &mut IrBuf) -> Int {
+    return ll_arc_rr(kind, ll_arc_ptr(name, env), ssa0, 1, ir);
 }
 
-pub fn ll_arc_keep_ptr(kind: String, ptr: String, ssa0: Int) -> Int {
-    return ll_arc_rr(kind, ptr, ssa0, 1);
+pub fn ll_arc_keep_ptr(kind: String, ptr: String, ssa0: Int, ir: &mut IrBuf) -> Int {
+    return ll_arc_rr(kind, ptr, ssa0, 1, ir);
 }
 
-pub fn ll_arc_exit(env: String, ssa0: Int) -> Int {
+pub fn ll_arc_exit(env: String, ssa0: Int, ir: &mut IrBuf) -> Int {
     if type_env_get(env, "__no_arc__") == "1" { return ssa0; }
     let at: Int = ll_arc_frame_at(env);
     if at < 0 { return ssa0; }
@@ -149,7 +150,7 @@ pub fn ll_arc_exit(env: String, ssa0: Int) -> Int {
         if type_env_get(seen, name) != "" { skip = true; }
         if !skip {
             seen = type_env_put(seen, name, "1");
-            if ll_arc_owned(kind) { ssa = ll_arc_rel(name, kind, env, ssa); }
+            if ll_arc_owned(kind) { ssa = ll_arc_rel(name, kind, env, ssa, ir); }
         }
         i = i - 1;
     }

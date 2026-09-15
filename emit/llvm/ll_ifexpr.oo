@@ -21,46 +21,47 @@ import "ll_expr.oo";
 import "ll_call.oo";
 import "ll_stmt.oo";
 import "types/types_core.oo";
+import "ll_ir.oo";
 
-pub fn ll_if_value_at(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> String {
-    let c: String = ll_expr(toks, pos + 1, n, ssa0, env);
+pub fn ll_if_value_at(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String, ir: &mut IrBuf) -> String {
+    let c: String = ll_expr(toks, pos + 1, n, ssa0, env, ir);
     let p: Int = ll_ppos(c);
     let s: Int = ll_pssa(c);
     let cid: Int = s;
-    let cv: Int = ll_cond_i1(c, s);
-    println("  br i1 " + ll_ssa(cv) + ", label %vthen" + cid.to_string() + ", label %velse" + cid.to_string());
+    let cv: Int = ll_cond_i1(c, s, ir);
+    ll_ir_text(ir, "  br i1 " + ll_ssa(cv) + ", label %vthen" + cid.to_string() + ", label %velse" + cid.to_string());
     if p >= n || ll_k(toks, p) != "LBRACE" {
         println("ERR\tllvm\tif-expr needs brace");
         process_exit(1);
     }
-    println("vthen" + cid.to_string() + ":");
+    ll_ir_text(ir, "vthen" + cid.to_string() + ":");
     let rk: String = type_env_get(env, "__rk__");
     let stab: String = ll_struct_tab_of(env);
-    let th: String = ll_if_arm(toks, p, n, cv, env, rk, stab, "");
+    let th: String = ll_if_arm(toks, p, n, cv, env, rk, stab, "", ir);
     let tp: Int = ll_ppos(th);
     let t1: Int = ll_pterm(th);
     let tk: String = ll_pk(th);
     let ts: Int = ll_pssa(th);
     if t1 == 0 {
-        println("  br label %tj" + cid.to_string());
-        println("tj" + cid.to_string() + ":");
-        println("  br label %vend" + cid.to_string());
+        ll_ir_text(ir, "  br label %tj" + cid.to_string());
+        ll_ir_text(ir, "tj" + cid.to_string() + ":");
+        ll_ir_text(ir, "  br label %vend" + cid.to_string());
     }
-    println("velse" + cid.to_string() + ":");
+    ll_ir_text(ir, "velse" + cid.to_string() + ":");
     if tp >= n || ll_k(toks, tp) != "KW_ELSE" {
         println("ERR\tllvm\tif-expr needs else");
         process_exit(1);
     }
-    let er: String = ll_if_else_arm(toks, tp + 1, n, ts, env, cid, tk, rk, stab);
+    let er: String = ll_if_else_arm(toks, tp + 1, n, ts, env, cid, tk, rk, stab, ir);
     let fp: Int = ll_ppos(er);
     let t2: Int = ll_pterm(er);
     if t2 == 0 {
-        println("ej" + cid.to_string() + ":");
-        println("  br label %vend" + cid.to_string());
+        ll_ir_text(ir, "ej" + cid.to_string() + ":");
+        ll_ir_text(ir, "  br label %vend" + cid.to_string());
     }
-    println("vend" + cid.to_string() + ":");
+    ll_ir_text(ir, "vend" + cid.to_string() + ":");
     if t1 != 0 && t2 != 0 {
-        return ll_if_dead_merge(fp, ts, tk, ll_pk(er), env, cid);
+        return ll_if_dead_merge(fp, ts, tk, ll_pk(er), env, cid, ir);
     }
     if t1 != 0 {
         return ll_pack(fp, ll_pssa(er), ll_pk(er), "");
@@ -75,30 +76,30 @@ pub fn ll_if_value_at(toks: List[String], pos: Int, n: Int, ssa0: Int, env: Stri
         process_exit(1);
     }
     let ph: Int = ll_pssa(er) + 1;
-    println("  " + ll_ssa(ph) + " = phi " + ll_ir_val(tk) + " [ " + ll_ssa(ts) + ", %tj" + cid.to_string() + " ], [ " + ll_ssa(ll_pssa(er)) + ", %ej" + cid.to_string() + " ]");
+    ll_ir_text(ir, "  " + ll_ssa(ph) + " = phi " + ll_ir_val(tk) + " [ " + ll_ssa(ts) + ", %tj" + cid.to_string() + " ], [ " + ll_ssa(ll_pssa(er)) + ", %ej" + cid.to_string() + " ]");
     return ll_pack(fp, ph, tk, "");
 }
 
-fn ll_if_dead_merge(fp: Int, ssa0: Int, tk: String, ek: String, env: String, cid: Int) -> String {
+fn ll_if_dead_merge(fp: Int, ssa0: Int, tk: String, ek: String, env: String, cid: Int, ir: &mut IrBuf) -> String {
     let mut kk: String = tk;
     if kk == "" || kk == "void" { kk = ek; }
     if kk == "" || kk == "void" { kk = type_env_get(env, "__e__"); }
     if kk == "" || kk == "void" { kk = "i64"; }
     let a: String = ll_tmpa(ssa0 + 1);
     let s: Int = ssa0 + 1;
-    ll_slot_name(a);
+    ll_slot_name(a, ir);
     let s2: Int = s + 1;
-    println("  " + ll_ssa(s2) + " = load " + ll_ir_val(kk) + ", ptr " + a + ", align 8");
+    ll_ir_text(ir, "  " + ll_ssa(s2) + " = load " + ll_ir_val(kk) + ", ptr " + a + ", align 8");
     return ll_pack(fp, s2, kk, "");
 }
 
-fn ll_if_arm(toks: List[String], lb: Int, n: Int, ssa0: Int, env: String, rk: String, stab: String, tk: String) -> String {
+fn ll_if_arm(toks: List[String], lb: Int, n: Int, ssa0: Int, env: String, rk: String, stab: String, tk: String, ir: &mut IrBuf) -> String {
     if lb + 1 < n && ll_k(toks, lb + 1) == "KW_RETURN" {
-        let r: String = ll_return_stmt(toks, lb + 1, n, ssa0, env, rk, stab);
+        let r: String = ll_return_stmt(toks, lb + 1, n, ssa0, env, rk, stab, ir);
         return ll_pack(ll_ppos(r) + 1, ll_pssa(r), "void", "") + "\t1";
     }
     if lb + 1 < n && ll_k(toks, lb + 1) == "IDENT" && (ll_t(toks, lb + 1) == "break" || ll_t(toks, lb + 1) == "continue") {
-        let b: String = ll_break_stmt(toks, lb + 1, n, ssa0, env, rk);
+        let b: String = ll_break_stmt(toks, lb + 1, n, ssa0, env, rk, ir);
         return ll_pack(ll_ppos(b) + 1, ll_pssa(b), "void", "") + "\t1";
     }
     let sp: String = ll_arm_split(toks, lb, n);
@@ -108,7 +109,7 @@ fn ll_if_arm(toks: List[String], lb: Int, n: Int, ssa0: Int, env: String, rk: St
     let mut ssa: Int = ssa0;
     let mut e: String = str_slice(env, 0, chars_len(env));
     if mu != 0 {
-        let pre: String = ll_emit_stmts(toks, lb + 1, es, rk, e, ssa, stab);
+        let pre: String = ll_emit_stmts(toks, lb + 1, es, rk, e, ssa, stab, ir);
         ssa = ll_pssa(pre);
         e = field_at(pre, 3);
         if ll_pterm(pre) != 0 {
@@ -117,22 +118,22 @@ fn ll_if_arm(toks: List[String], lb: Int, n: Int, ssa0: Int, env: String, rk: St
         }
         if es >= rb {
             let uk: String = ll_if_unit_kind(tk, env);
-            let uz: Int = ll_if_zero(ssa, uk);
+            let uz: Int = ll_if_zero(ssa, uk, ir);
             let rb4: Int = rb + 1;
             return ll_pack(rb4, uz, uk, "");
         }
     }
     if mu == 0 {
-        let su: String = ll_if_single_unit(toks, es, rb, n, ssa, e);
+        let su: String = ll_if_single_unit(toks, es, rb, n, ssa, e, ir);
         if su != "" {
             let uk2: String = ll_if_unit_kind(tk, env);
-            let uz2: Int = ll_if_zero(ll_pssa(su), uk2);
+            let uz2: Int = ll_if_zero(ll_pssa(su), uk2, ir);
             let rb5: Int = rb + 1;
             return ll_pack(rb5, uz2, uk2, "");
         }
     }
-    let t: String = ll_expr(toks, es, n, ssa, e);
-    let ns: Int = ll_arm_val(t, ll_pssa(t));
+    let t: String = ll_expr(toks, es, n, ssa, e, ir);
+    let ns: Int = ll_arm_val(t, ll_pssa(t), ir);
     if ll_pk(t) == "noret" {
         let rb2: Int = rb + 1;
         return ll_pack(rb2, ns, "void", "") + "\t1";
@@ -152,32 +153,26 @@ fn ll_if_unit_kind(tk: String, env: String) -> String {
     return "i64";
 }
 
-fn ll_if_zero(ssa0: Int, kk: String) -> Int {
+fn ll_if_zero(ssa0: Int, kk: String, ir: &mut IrBuf) -> Int {
     let mut k: String = kk;
     if k == "" || k == "void" { k = "i64"; }
-    if k == "f64" {
-        let s: Int = ssa0 + 1;
-        println("  " + ll_ssa(s) + " = fadd double 0.0, 0.0");
-        return s;
-    }
-    if ll_is_int(k) || k == "i1" {
-        let s: Int = ssa0 + 1;
-        println("  " + ll_ssa(s) + " = add " + ll_ir_alloc(k) + " 0, 0");
-        return s;
-    }
     let a: String = ll_tmpa(ssa0 + 1);
     let s: Int = ssa0 + 1;
-    ll_slot_name(a);
-    println("  store " + ll_ir_val(k) + " zeroinitializer, ptr " + a + ", align 8");
+    ll_slot_name(a, ir);
+    let mut z: String = "zeroinitializer";
+    if k == "f64" { z = "0.0"; }
+    if k == "i1" { z = "false"; }
+    if ll_is_int(k) { z = "0"; }
+    ll_ir_text(ir, "  store " + ll_ir_val(k) + " " + z + ", ptr " + a + ", align 8");
     let s2: Int = s + 1;
-    println("  " + ll_ssa(s2) + " = load " + ll_ir_val(k) + ", ptr " + a + ", align 8");
+    ll_ir_text(ir, "  " + ll_ssa(s2) + " = load " + ll_ir_val(k) + ", ptr " + a + ", align 8");
     return s2;
 }
 
-fn ll_if_single_unit(toks: List[String], es: Int, rb: Int, n: Int, ssa: Int, env: String) -> String {
+fn ll_if_single_unit(toks: List[String], es: Int, rb: Int, n: Int, ssa: Int, env: String, ir: &mut IrBuf) -> String {
     if es >= n || ll_k(toks, es) != "IDENT" { return ""; }
     if ll_t(toks, es) == "println" {
-        let v: String = ll_expr(toks, es + 2, n, ssa, env);
+        let v: String = ll_expr(toks, es + 2, n, ssa, env, ir);
         let mut q: Int = ll_ppos(v);
         if q < n && ll_k(toks, q) == "RPAREN" { q = q + 1; }
         if q < n && ll_k(toks, q) == "SEMI" { q = q + 1; }
@@ -185,15 +180,15 @@ fn ll_if_single_unit(toks: List[String], es: Int, rb: Int, n: Int, ssa: Int, env
             println("ERR\tllvm\tif-expr arm must end at }");
             process_exit(1);
         }
-        let ns: Int = ll_print_val(ll_pk(v), ll_pssa(v), ll_pptr(v), ll_pssa(v));
+        let ns: Int = ll_print_val(ll_pk(v), ll_pssa(v), ll_pptr(v), ll_pssa(v), ir);
         return ll_pack(q, ns, "unit", "");
     }
     if es + 1 < n && ll_k(toks, es + 1) == "EQ" {
         let name: String = ll_t(toks, es);
         let ty: String = type_env_get(env, name);
-        let v2: String = ll_expr(toks, es + 2, n, ssa, type_env_put(env, "__e__", ty));
+        let v2: String = ll_expr(toks, es + 2, n, ssa, type_env_put(env, "__e__", ty), ir);
         let mut q2: Int = ll_ppos(v2);
-        let ns2: Int = ll_store(name, ty, v2, ll_pssa(v2), env);
+        let ns2: Int = ll_store(name, ty, v2, ll_pssa(v2), env, ir);
         if q2 < n && ll_k(toks, q2) == "SEMI" { q2 = q2 + 1; }
         if q2 != rb {
             println("ERR\tllvm\tif-expr arm must end at }");
@@ -204,13 +199,13 @@ fn ll_if_single_unit(toks: List[String], es: Int, rb: Int, n: Int, ssa: Int, env
     return "";
 }
 
-fn ll_if_arm_to_kind(arm: String, tk: String) -> String {
+fn ll_if_arm_to_kind(arm: String, tk: String, ir: &mut IrBuf) -> String {
     if tk == "" || !ll_is_int(tk) || !ll_is_int(ll_pk(arm)) || tk == ll_pk(arm) { return arm; }
     let tkw: String = ll_int_wide(tk);
     let akw: String = ll_int_wide(ll_pk(arm));
     if tkw == "i64" {
         if akw == "i32" {
-            return ll_int_convert(arm, ll_pssa(arm), tk);
+            return ll_int_convert(arm, ll_pssa(arm), tk, ir);
         }
     } else if akw == "i64" {
         println("ERR\tllvm\tmixed-width if arms need same kind");
@@ -219,22 +214,22 @@ fn ll_if_arm_to_kind(arm: String, tk: String) -> String {
     return arm;
 }
 
-fn ll_if_else_arm(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String, cid: Int, tk: String, rk: String, stab: String) -> String {
+fn ll_if_else_arm(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String, cid: Int, tk: String, rk: String, stab: String, ir: &mut IrBuf) -> String {
     if pos < n && ll_k(toks, pos) == "KW_IF" {
-        let r: String = ll_if_value_at(toks, pos, n, ssa0, env);
-        let rr: String = ll_if_arm_to_kind(r, tk);
-        println("  br label %ej" + cid.to_string());
+        let r: String = ll_if_value_at(toks, pos, n, ssa0, env, ir);
+        let rr: String = ll_if_arm_to_kind(r, tk, ir);
+        ll_ir_text(ir, "  br label %ej" + cid.to_string());
         return rr;
     }
     if pos >= n || ll_k(toks, pos) != "LBRACE" {
         println("ERR\tllvm\tif-expr needs brace");
         process_exit(1);
     }
-    let eb: String = ll_if_arm(toks, pos, n, ssa0, env, rk, stab, tk);
+    let eb: String = ll_if_arm(toks, pos, n, ssa0, env, rk, stab, tk, ir);
     if ll_pterm(eb) != 0 {
         return eb;
     }
-    let er2: String = ll_if_arm_to_kind(eb, tk);
-    println("  br label %ej" + cid.to_string());
+    let er2: String = ll_if_arm_to_kind(eb, tk, ir);
+    ll_ir_text(ir, "  br label %ej" + cid.to_string());
     return er2;
 }

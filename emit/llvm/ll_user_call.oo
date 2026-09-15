@@ -15,8 +15,9 @@ import "ll_slot.oo";
 import "ll_builtin.oo";
 import "ll_expr.oo";
 import "types/types_core.oo";
+import "ll_ir.oo";
 
-pub fn ll_user_call(name: String, sig: String, args: List[String], ssa0: Int) -> String {
+pub fn ll_user_call(name: String, sig: String, args: List[String], ssa0: Int, ir: &mut IrBuf) -> String {
     let gt: Int = str_index_of(sig, ">");
     if gt < 0 {
         println("ERR\tllvm\tbad sig " + name);
@@ -30,7 +31,7 @@ pub fn ll_user_call(name: String, sig: String, args: List[String], ssa0: Int) ->
     while i < na {
         let a: String = list_get(args, i);
         if ll_is_mem(ll_pk(a)) {
-            let ap: String = ll_ensure_ptr(a, s);
+            let ap: String = ll_ensure_ptr(a, s, ir);
             s = ll_pssa(ap);
             if call != "" { call = call + ", "; }
             call = call + ll_pass(ll_pk(ap)) + " " + ll_pptr(ap);
@@ -40,14 +41,14 @@ pub fn ll_user_call(name: String, sig: String, args: List[String], ssa0: Int) ->
                 if call != "" { call = call + ", "; }
                 call = call + "ptr " + ll_pptr(a);
             } else if k == "str" {
-                let av: String = ll_as_val(a, s);
+                let av: String = ll_as_val(a, s, ir);
                 s = ll_pssa(av);
                 if call != "" { call = call + ", "; }
                 call = call + ll_ir_val(k) + " " + ll_ssa(ll_pssa(av));
             } else {
                 let pk: String = ll_sig_param(sig, i);
                 if pk != "" && ll_is_int(k) && ll_is_int(pk) && k != pk {
-                    let av: String = ll_int_convert(a, ll_hw(s, ll_pssa(a)), pk);
+                    let av: String = ll_int_convert(a, ll_hw(s, ll_pssa(a)), pk, ir);
                     s = ll_pssa(av);
                     if call != "" { call = call + ", "; }
                     call = call + ll_ir_val(ll_pk(av)) + " " + ll_opnd(av);
@@ -60,26 +61,26 @@ pub fn ll_user_call(name: String, sig: String, args: List[String], ssa0: Int) ->
         i = i + 1;
     }
     if ret == "void" || ret == "" {
-        println("  call void @" + name + "(" + call + ")");
+        ll_ir_text(ir, "  call void @" + name + "(" + call + ")");
         return ll_pack(0, s, "void", "");
     }
     if ll_is_mem(ret) {
         let a: String = ll_tmpa(s + 1);
         s = s + 1;
-        ll_slot_name(a);
+        ll_slot_name(a, ir);
         if call != "" {
-            println("  call void @" + name + "(ptr sret(" + ll_ir_alloc(ret) + ") align 8 " + a + ", " + call + ")");
+            ll_ir_text(ir, "  call void @" + name + "(ptr sret(" + ll_ir_alloc(ret) + ") align 8 " + a + ", " + call + ")");
         } else {
-            println("  call void @" + name + "(ptr sret(" + ll_ir_alloc(ret) + ") align 8 " + a + ")");
+            ll_ir_text(ir, "  call void @" + name + "(ptr sret(" + ll_ir_alloc(ret) + ") align 8 " + a + ")");
         }
         return ll_pack(0, s, ret, a);
     }
     let s2: Int = s + 1;
-    println("  " + ll_ssa(s2) + " = call " + ll_ir_val(ret) + " @" + name + "(" + call + ")");
+    ll_ir_text(ir, "  " + ll_ssa(s2) + " = call " + ll_ir_val(ret) + " @" + name + "(" + call + ")");
     return ll_pack(0, s2, ret, "");
 }
 
-pub fn ll_call_at(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> String {
+pub fn ll_call_at(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String, ir: &mut IrBuf) -> String {
     let nm: String = ll_t(toks, pos);
     let mut p: Int = pos + 1;
     if p >= n || ll_k(toks, p) != "LPAREN" {
@@ -98,13 +99,13 @@ pub fn ll_call_at(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) 
             let pk: String = ll_sig_param(sig0, ai);
             if pk != "" { aenv = type_env_put(aenv, "__e__", pk); }
         }
-        let a: String = ll_expr(toks, p, n, ssa, aenv);
+        let a: String = ll_expr(toks, p, n, ssa, aenv, ir);
         args = list_push(args, a);
         p = ll_ppos(a); ssa = ll_pssa(a);
         ai = ai + 1;
     }
     if p < n && ll_k(toks, p) == "RPAREN" { p = p + 1; }
-    let b: String = ll_builtin(nm, args, ssa, type_env_get(env, "__e__"));
+    let b: String = ll_builtin(nm, args, ssa, type_env_get(env, "__e__"), ir);
     if b != "" {
         return ll_pack(p, ll_pssa(b), ll_pk(b), ll_pptr(b));
     }
@@ -115,6 +116,6 @@ pub fn ll_call_at(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) 
     }
     let mut gnm: String = type_env_get(env, "__sym__" + nm);
     if gnm == "" { gnm = nm; }
-    let u: String = ll_user_call(gnm, sig, args, ssa);
+    let u: String = ll_user_call(gnm, sig, args, ssa, ir);
     return ll_pack(p, ll_pssa(u), ll_pk(u), ll_pptr(u));
 }

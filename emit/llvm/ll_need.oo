@@ -2,10 +2,10 @@
 //
 // Logline: Collect @oo_* names that this TU will call from tokens.
 //
-// Setup: Call-shaped IDENT( and STRING/VERIFY/ARC/cap grants. Always exit.
+// Setup: Call-shaped IDENT(, STRING/VERIFY/ARC/cap grants, and / % traps.
 //
 // Beats:
-//   1. Tab-separated set. Always includes oo_process_exit.
+//   1. Tab-separated set of symbols this TU actually calls.
 //   2. Call names and methods map to runtime symbols.
 //   3. String/list/cap/verify add retain and grant helpers.
 
@@ -19,7 +19,6 @@ fn ll_need_add(need: String, name: String) -> String {
 fn ll_need_call(need: String, nm: String) -> String {
     let mut n: String = need;
     if nm == "println" || nm == "print" {
-        n = ll_need_add(n, "oo_print_str");
         n = ll_need_add(n, "oo_println");
         n = ll_need_add(n, "oo_print_int");
         return n;
@@ -29,6 +28,7 @@ fn ll_need_call(need: String, nm: String) -> String {
         n = ll_need_add(n, "oo_str_lit");
         n = ll_need_add(n, "oo_print_str");
         n = ll_need_add(n, "oo_println");
+        n = ll_need_add(n, "oo_process_exit");
         return n;
     }
     if nm == "list_new" {
@@ -141,7 +141,7 @@ pub fn ll_need_has(need: String, name: String) -> Bool {
 
 pub fn ll_need_scan(toks: List[String]) -> String {
     let n: Int = list_len(toks);
-    let mut need: String = "\too_process_exit\t";
+    let mut need: String = "\t";
     let mut i: Int = 0;
     let mut has_str: Bool = false;
     let mut has_list: Bool = false;
@@ -153,6 +153,9 @@ pub fn ll_need_scan(toks: List[String]) -> String {
         if k == "STRING" { has_str = true; }
         if k == "FLOAT" { has_float = true; }
         if k == "KW_VERIFY" { has_verify = true; }
+        if k == "SLASH" || k == "PERCENT" {
+            need = ll_need_add(need, "oo_process_exit");
+        }
         if k == "IDENT" {
             let nm: String = ll_t(toks, i);
             if nm == "String" { has_str = true; }

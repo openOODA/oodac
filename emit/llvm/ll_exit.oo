@@ -18,13 +18,14 @@ import "ll_call.oo";
 import "ll_arc.oo";
 import "ll_slot.oo";
 import "types/types_core.oo";
+import "ll_ir.oo";
 
-pub fn ll_return_stmt(toks: List[String], p: Int, n: Int, ssa: Int, env: String, ret_kind: String, stab: String) -> String {
+pub fn ll_return_stmt(toks: List[String], p: Int, n: Int, ssa: Int, env: String, ret_kind: String, stab: String, ir: &mut IrBuf) -> String {
     if p + 1 < n && ll_k(toks, p + 1) == "SEMI" {
         if ret_kind == "main_i32" || ret_kind == "optim" || ret_kind == "optsm" {
-            let ns: Int = ll_arc_exit(env, ssa);
-            ll_heap_end();
-            println("  ret i32 0");
+            let ns: Int = ll_arc_exit(env, ssa, ir);
+            ll_heap_end(ir);
+            ll_ir_text(ir, "  ret i32 0");
             let q: Int = ll_skip_to_rbrace(toks, p + 1, n);
             return ll_pack(q, ns, ret_kind, env) + "\t1";
         }
@@ -32,8 +33,8 @@ pub fn ll_return_stmt(toks: List[String], p: Int, n: Int, ssa: Int, env: String,
             println("ERR\tllvm\tbare return needs void");
             process_exit(1);
         }
-        ll_heap_end();
-        println("  ret void");
+        ll_heap_end(ir);
+        ll_ir_text(ir, "  ret void");
         let q: Int = ll_skip_to_rbrace(toks, p + 1, n);
         return ll_pack(q, ssa, ret_kind, env) + "\t1";
     }
@@ -46,48 +47,48 @@ pub fn ll_return_stmt(toks: List[String], p: Int, n: Int, ssa: Int, env: String,
         exp_kind = str_slice(ret_kind, 0, chars_len(ret_kind));
     }
     let envx: String = type_env_put(env, "__e__", exp_kind);
-    let v0: String = ll_expr(toks, p + 1, n, ssa, envx);
-    let v: String = ll_int_convert(v0, ll_pssa(v0), exp_kind);
+    let v0: String = ll_expr(toks, p + 1, n, ssa, envx, ir);
+    let v: String = ll_int_convert(v0, ll_pssa(v0), exp_kind, ir);
     let mut np: Int = ll_ppos(v); let mut ns: Int = ll_pssa(v);
     if np < n && ll_k(toks, np) == "SEMI" { np = np + 1; }
     if type_env_get(env, "__ens__") == "1" && ret_kind != "main_i32" && ret_kind != "void" && ret_kind != "optim" && ret_kind != "optsm" {
-        ns = ll_contract_return(toks, v, env, ns, exp_kind, p);
+        ns = ll_contract_return(toks, v, env, ns, exp_kind, p, ir);
     }
-    if ll_arc_owned(ll_pk(v)) && ll_pptr(v) != "" { ns = ll_arc_keep_ptr(ll_pk(v), ll_pptr(v), ns); }
-    ns = ll_arc_exit(env, ns);
-    ll_heap_end();
+    if ll_arc_owned(ll_pk(v)) && ll_pptr(v) != "" { ns = ll_arc_keep_ptr(ll_pk(v), ll_pptr(v), ns, ir); }
+    ns = ll_arc_exit(env, ns, ir);
+    ll_heap_end(ir);
     if ret_kind == "resim" {
-        ns = ll_ret_resim(v, ns);
+        ns = ll_ret_resim(v, ns, ir);
     } else if ret_kind == "optim" || ret_kind == "optsm" {
-        println("  ret i32 0");
+        ll_ir_text(ir, "  ret i32 0");
     } else if ret_kind == "resi" {
-        ns = ll_ret_resi(v, ns);
+        ns = ll_ret_resi(v, ns, ir);
     } else if ret_kind == "void" {
-        println("  ret void");
+        ll_ir_text(ir, "  ret void");
     } else if ret_kind == "opti" || ret_kind == "opts" {
-        ns = ll_ret_opt(v, ret_kind, ns);
+        ns = ll_ret_opt(v, ret_kind, ns, ir);
     } else if ret_kind == "main_i32" {
-        println("  ret i32 0");
+        ll_ir_text(ir, "  ret i32 0");
     } else if ll_has_slot(v) {
         ns = ns + 1;
-        println("  " + ll_ssa(ns) + " = load " + ll_ir_val(ret_kind) + ", ptr " + ll_pptr(v) + ", align 8");
+        ll_ir_text(ir, "  " + ll_ssa(ns) + " = load " + ll_ir_val(ret_kind) + ", ptr " + ll_pptr(v) + ", align 8");
         if ll_is_mem(ret_kind) {
-            println("  store " + ll_ir_val(ret_kind) + " " + ll_ssa(ns) + ", ptr %ret, align 8");
-            println("  ret void");
+            ll_ir_text(ir, "  store " + ll_ir_val(ret_kind) + " " + ll_ssa(ns) + ", ptr %ret, align 8");
+            ll_ir_text(ir, "  ret void");
         } else {
-            println("  ret " + ll_ir_val(ret_kind) + " " + ll_ssa(ns));
+            ll_ir_text(ir, "  ret " + ll_ir_val(ret_kind) + " " + ll_ssa(ns));
         }
     } else if ll_is_mem(ret_kind) {
-        println("  store " + ll_ir_val(ret_kind) + " " + ll_opnd(v) + ", ptr %ret, align 8");
-        println("  ret void");
+        ll_ir_text(ir, "  store " + ll_ir_val(ret_kind) + " " + ll_opnd(v) + ", ptr %ret, align 8");
+        ll_ir_text(ir, "  ret void");
     } else {
-        println("  ret " + ll_ir_val(ret_kind) + " " + ll_opnd(v));
+        ll_ir_text(ir, "  ret " + ll_ir_val(ret_kind) + " " + ll_opnd(v));
     }
     let rp: Int = ll_skip_to_rbrace(toks, np, n);
     return ll_pack(rp, ns, ret_kind, env) + "\t1";
 }
 
-pub fn ll_break_stmt(toks: List[String], p: Int, n: Int, ssa: Int, env: String, ret_kind: String) -> String {
+pub fn ll_break_stmt(toks: List[String], p: Int, n: Int, ssa: Int, env: String, ret_kind: String, ir: &mut IrBuf) -> String {
     let is_brk: Bool = ll_t(toks, p) == "break";
     let mut dst: String = type_env_get(env, "__brk__");
     if !is_brk { dst = type_env_get(env, "__cont__"); }
@@ -95,28 +96,28 @@ pub fn ll_break_stmt(toks: List[String], p: Int, n: Int, ssa: Int, env: String, 
         println("ERR\tllvm\tbreak outside loop");
         process_exit(1);
     }
-    println("  br label %" + dst);
+    ll_ir_text(ir, "  br label %" + dst);
     let mut np: Int = p + 1;
     if np < n && ll_k(toks, np) == "SEMI" { np = np + 1; }
     let rp: Int = ll_skip_to_rbrace(toks, np, n);
     return ll_pack(rp, ssa, ret_kind, env) + "\t1";
 }
 
-pub fn ll_store_deref_stmt(toks: List[String], p0: Int, n: Int, ssa0: Int, env: String) -> String {
+pub fn ll_store_deref_stmt(toks: List[String], p0: Int, n: Int, ssa0: Int, env: String, ir: &mut IrBuf) -> String {
     let name: String = ll_t(toks, p0 + 1);
     let ty: String = type_env_get(env, name);
     if ty == "" || ll_is_agg(ty) {
         println("ERR\tllvm\tstore through bad ref, align 8");
         process_exit(1);
     }
-    let mut vv: String = ll_expr(toks, p0 + 3, n, ssa0, type_env_put(env, "__e__", ty));
+    let mut vv: String = ll_expr(toks, p0 + 3, n, ssa0, type_env_put(env, "__e__", ty), ir);
     if ll_is_int(ty) && ll_is_int(ll_pk(vv)) && ll_pk(vv) != ty {
-        vv = ll_int_convert(vv, ll_hw(ssa0, ll_pssa(vv)), ty);
+        vv = ll_int_convert(vv, ll_hw(ssa0, ll_pssa(vv)), ty, ir);
     }
-    let la: String = ll_load_ident(name, env, ll_pssa(vv));
+    let la: String = ll_load_ident(name, env, ll_pssa(vv), ir);
     let pa: Int = ll_pssa(la) + 1;
-    println("  " + ll_ssa(pa) + " = inttoptr " + ll_ir_val(ty) + " " + ll_ssa(ll_pssa(la)) + " to ptr");
-    println("  store " + ll_ir_val(ty) + " " + ll_opnd(vv) + ", ptr " + ll_ssa(pa) + ", align 8");
+    ll_ir_text(ir, "  " + ll_ssa(pa) + " = inttoptr " + ll_ir_val(ty) + " " + ll_ssa(ll_pssa(la)) + " to ptr");
+    ll_ir_text(ir, "  store " + ll_ir_val(ty) + " " + ll_opnd(vv) + ", ptr " + ll_ssa(pa) + ", align 8");
     let mut p: Int = ll_ppos(vv);
     if p < n && ll_k(toks, p) == "SEMI" { p = p + 1; }
     return ll_pack(p, pa, ty, "");

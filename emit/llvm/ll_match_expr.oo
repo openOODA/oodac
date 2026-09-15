@@ -14,16 +14,17 @@ import "ll_ty.oo";
 import "ll_int.oo";
 import "ll_struct.oo";
 import "ll_slot.oo";
+import "ll_ir.oo";
 
-pub fn ll_match_expr(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String) -> String {
-    let scr: String = ll_expr(toks, pos + 1, n, ssa0, env);
+pub fn ll_match_expr(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String, ir: &mut IrBuf) -> String {
+    let scr: String = ll_expr(toks, pos + 1, n, ssa0, env, ir);
     let mut p: Int = ll_ppos(scr);
     if p < n && ll_k(toks, p) == "LBRACE" { p = p + 1; }
     let sk: String = ll_pk(scr);
-    let sp: String = ll_ensure_ptr(scr, ll_pssa(scr));
+    let sp: String = ll_ensure_ptr(scr, ll_pssa(scr), ir);
     let id: Int = ll_pssa(sp) + 1;
-    let cmp: Int = ll_match_tag(sk, ll_pptr(sp), ll_pssa(sp));
-    println("  br i1 " + ll_ssa(cmp) + ", label %mok" + id.to_string() + ", label %merr" + id.to_string());
+    let cmp: Int = ll_match_tag(sk, ll_pptr(sp), ll_pssa(sp), ir);
+    ll_ir_text(ir, "  br i1 " + ll_ssa(cmp) + ", label %mok" + id.to_string() + ", label %merr" + id.to_string());
     while p < n && ll_k(toks, p) != "IDENT" { p = p + 1; }
     if p < n { p = p + 1; }
     if p < n && ll_k(toks, p) == "LPAREN" { p = p + 1; }
@@ -31,8 +32,8 @@ pub fn ll_match_expr(toks: List[String], pos: Int, n: Int, ssa0: Int, env: Strin
     if p < n && ll_k(toks, p) == "IDENT" { bn = ll_t(toks, p); p = p + 1; }
     while p < n && ll_k(toks, p) != "FATARROW" { p = p + 1; }
     if p < n { p = p + 1; }
-    println("mok" + id.to_string() + ":");
-    let b: String = ll_match_bind(sk, ll_pptr(sp), bn, 1, id, cmp);
+    ll_ir_text(ir, "mok" + id.to_string() + ":");
+    let b: String = ll_match_bind(sk, ll_pptr(sp), bn, 1, id, cmp, ir);
     let mut env2: String = str_slice(env, 0, chars_len(env));
     if ll_pptr(b) != "" {
         let mut bk2: String = ll_pk(b);
@@ -41,19 +42,19 @@ pub fn ll_match_expr(toks: List[String], pos: Int, n: Int, ssa0: Int, env: Strin
         }
         env2 = type_env_put(type_env_put(env, bn, bk2), "__l__" + bn, ll_pptr(b));
     }
-    let okarm: String = ll_expr(toks, p, n, ll_pssa(b) + 1, env2);
+    let okarm: String = ll_expr(toks, p, n, ll_pssa(b) + 1, env2, ir);
     p = ll_ppos(okarm);
-    let oks: Int = ll_arm_val(okarm, ll_pssa(okarm));
+    let oks: Int = ll_arm_val(okarm, ll_pssa(okarm), ir);
     if p < n && ll_k(toks, p) == "COMMA" { p = p + 1; }
-    println("  br label %mend" + id.to_string());
+    ll_ir_text(ir, "  br label %mend" + id.to_string());
     if p < n && ll_k(toks, p) == "IDENT" { p = p + 1; }
     if p < n && ll_k(toks, p) == "LPAREN" { p = p + 1; }
     let mut ebn: String = "_";
     if p < n && ll_k(toks, p) == "IDENT" { ebn = ll_t(toks, p); p = p + 1; }
     while p < n && ll_k(toks, p) != "FATARROW" { p = p + 1; }
     if p < n { p = p + 1; }
-    println("merr" + id.to_string() + ":");
-    let eb: String = ll_match_bind(sk, ll_pptr(sp), ebn, 0, id, oks);
+    ll_ir_text(ir, "merr" + id.to_string() + ":");
+    let eb: String = ll_match_bind(sk, ll_pptr(sp), ebn, 0, id, oks, ir);
     let mut env3: String = str_slice(env, 0, chars_len(env));
     if ll_pptr(eb) != "" {
         let mut bk3: String = ll_pk(eb);
@@ -63,39 +64,39 @@ pub fn ll_match_expr(toks: List[String], pos: Int, n: Int, ssa0: Int, env: Strin
         env3 = type_env_put(type_env_put(env, ebn, bk3), "__l__" + ebn, ll_pptr(eb));
     }
     if p < n && ll_k(toks, p) == "LBRACE" {
-        let bd: String = ll_emit_stmts(toks, p + 1, n, type_env_get(env, "__rk__"), env3, ll_pssa(eb) + 1, ll_struct_tab_of(env));
+        let bd: String = ll_emit_stmts(toks, p + 1, n, type_env_get(env, "__rk__"), env3, ll_pssa(eb) + 1, ll_struct_tab_of(env), ir);
         p = ll_ppos(bd);
         if p < n && ll_k(toks, p) == "RBRACE" { p = p + 1; }
         if p < n && ll_k(toks, p) == "COMMA" { p = p + 1; }
         if p < n && ll_k(toks, p) == "RBRACE" { p = p + 1; }
-        if ll_pterm(bd) == 0 { println("  unreachable"); }
-        println("mend" + id.to_string() + ":");
+        if ll_pterm(bd) == 0 { ll_ir_text(ir, "  unreachable"); }
+        ll_ir_text(ir, "mend" + id.to_string() + ":");
         let pk: String = ll_pk(okarm);
         let hw: Int = ll_hw(oks, ll_pssa(bd)) + 1;
         let a: String = ll_tmpa(hw);
-        ll_slot_name(a);
-        println("  store " + ll_ir_val(pk) + " " + ll_ssa(oks) + ", ptr " + a + ", align 8");
+        ll_slot_name(a, ir);
+        ll_ir_text(ir, "  store " + ll_ir_val(pk) + " " + ll_ssa(oks) + ", ptr " + a + ", align 8");
         let s2: Int = hw + 1;
-        println("  " + ll_ssa(s2) + " = load " + ll_ir_val(pk) + ", ptr " + a + ", align 8");
+        ll_ir_text(ir, "  " + ll_ssa(s2) + " = load " + ll_ir_val(pk) + ", ptr " + a + ", align 8");
         return ll_pack(p, s2, pk, a);
     }
-    let erarm: String = ll_expr(toks, p, n, ll_pssa(eb) + 1, env3);
+    let erarm: String = ll_expr(toks, p, n, ll_pssa(eb) + 1, env3, ir);
     p = ll_ppos(erarm);
     if ll_pk(erarm) == "noret" || ll_pterm(erarm) != 0 {
         if p < n && ll_k(toks, p) == "SEMI" { p = p + 1; }
         if p < n && ll_k(toks, p) == "COMMA" { p = p + 1; }
         if p < n && ll_k(toks, p) == "RBRACE" { p = p + 1; }
-        println("mend" + id.to_string() + ":");
+        ll_ir_text(ir, "mend" + id.to_string() + ":");
         let pk0: String = ll_pk(okarm);
         let hw0: Int = ll_hw(oks, ll_pssa(erarm)) + 1;
         let a0: String = ll_tmpa(hw0);
-        ll_slot_name(a0);
-        println("  store " + ll_ir_val(pk0) + " " + ll_ssa(oks) + ", ptr " + a0 + ", align 8");
+        ll_slot_name(a0, ir);
+        ll_ir_text(ir, "  store " + ll_ir_val(pk0) + " " + ll_ssa(oks) + ", ptr " + a0 + ", align 8");
         let s3: Int = hw0 + 1;
-        println("  " + ll_ssa(s3) + " = load " + ll_ir_val(pk0) + ", ptr " + a0 + ", align 8");
+        ll_ir_text(ir, "  " + ll_ssa(s3) + " = load " + ll_ir_val(pk0) + ", ptr " + a0 + ", align 8");
         return ll_pack(p, s3, pk0, a0);
     }
-    let ers0: Int = ll_arm_val(erarm, ll_pssa(erarm));
+    let ers0: Int = ll_arm_val(erarm, ll_pssa(erarm), ir);
     let pk: String = ll_pk(okarm);
     let ek: String = ll_pk(erarm);
     let mut ers2: Int = ers0;
@@ -104,7 +105,7 @@ pub fn ll_match_expr(toks: List[String], pos: Int, n: Int, ssa0: Int, env: Strin
         let ekw: String = ll_int_wide(ek);
         if pkw == "i64" {
             if ekw == "i32" {
-                let ec: String = ll_int_convert(ll_pack(ll_ppos(erarm), ers0, ek, ""), ers0, pk);
+                let ec: String = ll_int_convert(ll_pack(ll_ppos(erarm), ers0, ek, ""), ers0, pk, ir);
                 ers2 = ll_pssa(ec);
             }
         } else if ekw == "i64" {
@@ -114,9 +115,9 @@ pub fn ll_match_expr(toks: List[String], pos: Int, n: Int, ssa0: Int, env: Strin
     }
     if p < n && ll_k(toks, p) == "COMMA" { p = p + 1; }
     if p < n && ll_k(toks, p) == "RBRACE" { p = p + 1; }
-    println("  br label %mend" + id.to_string());
-    println("mend" + id.to_string() + ":");
+    ll_ir_text(ir, "  br label %mend" + id.to_string());
+    ll_ir_text(ir, "mend" + id.to_string() + ":");
     let ph: Int = ll_hw(oks, ers2) + 1;
-    println("  " + ll_ssa(ph) + " = phi " + ll_ir_val(pk) + " [ " + ll_ssa(oks) + ", %mok" + id.to_string() + " ], [ " + ll_ssa(ers2) + ", %merr" + id.to_string() + " ]");
+    ll_ir_text(ir, "  " + ll_ssa(ph) + " = phi " + ll_ir_val(pk) + " [ " + ll_ssa(oks) + ", %mok" + id.to_string() + " ], [ " + ll_ssa(ers2) + ", %merr" + id.to_string() + " ]");
     return ll_pack(p, ph, pk, "");
 }

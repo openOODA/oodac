@@ -13,6 +13,7 @@ import "ll_tok.oo";
 import "ll_ty.oo";
 import "ll_struct_list.oo";
 import "types/types_core.oo";
+import "ll_ir.oo";
 
 pub fn ll_local_st_names(toks: List[String]) -> String {
     let n: Int = list_len(toks);
@@ -93,7 +94,7 @@ fn ll_st_fields(env: String, nm: String) -> String {
     return tys;
 }
 
-pub fn ll_struct_emit_imports(stenv: String, local_st: String, toks: List[String]) {
+pub fn ll_struct_emit_imports(stenv: String, local_st: String, toks: List[String], ir: &mut IrBuf) {
     let n: Int = chars_len(stenv);
     let mut i: Int = 0;
     while i < n {
@@ -105,17 +106,17 @@ pub fn ll_struct_emit_imports(stenv: String, local_st: String, toks: List[String
             let mut c: Int = e;
             while c < n && char_at(stenv, c) != ";" { c = c + 1; }
             if type_env_get(local_st, "__st__" + nm) == "" {
-                println("%St_" + nm + " = type { " + ll_st_fields(stenv, nm) + " }");
-                println("%OoL_" + nm + " = type { ptr, i64, i64 }");
-                println("%OoRes_St_" + nm + " = type { i32, %St_" + nm + ", %OoStr }");
-                println("%OoOpt_St_" + nm + " = type { i32, %St_" + nm + " }");
-                println("declare void @oo_retain_St_" + nm + "(ptr)");
-                println("declare void @oo_release_St_" + nm + "(ptr)");
+                ll_ir_text(ir, "%St_" + nm + " = type { " + ll_st_fields(stenv, nm) + " }");
+                ll_ir_text(ir, "%OoL_" + nm + " = type { ptr, i64, i64 }");
+                ll_ir_text(ir, "%OoRes_St_" + nm + " = type { i32, %St_" + nm + ", %OoStr }");
+                ll_ir_text(ir, "%OoOpt_St_" + nm + " = type { i32, %St_" + nm + " }");
+                ll_ir_text(ir, "declare void @oo_retain_St_" + nm + "(ptr)");
+                ll_ir_text(ir, "declare void @oo_release_St_" + nm + "(ptr)");
                 if ll_olist_wanted(toks, nm) {
-                    println("declare void @oo_l_" + nm + "_new(ptr sret(%OoL_" + nm + ") align 8)");
-                    println("declare i64 @oo_l_" + nm + "_len(ptr)");
-                    println("declare %St_" + nm + " @oo_l_" + nm + "_get(ptr, i64)");
-                    println("declare void @oo_l_" + nm + "_push(ptr sret(%OoL_" + nm + ") align 8, ptr, ptr)");
+                    ll_ir_text(ir, "declare void @oo_l_" + nm + "_new(ptr sret(%OoL_" + nm + ") align 8)");
+                    ll_ir_text(ir, "declare i64 @oo_l_" + nm + "_len(ptr)");
+                    ll_ir_text(ir, "declare %St_" + nm + " @oo_l_" + nm + "_get(ptr, i64)");
+                    ll_ir_text(ir, "declare void @oo_l_" + nm + "_push(ptr sret(%OoL_" + nm + ") align 8, ptr, ptr)");
                 }
             }
             i = c;

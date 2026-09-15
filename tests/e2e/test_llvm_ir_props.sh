@@ -74,9 +74,20 @@ PY
   else
     record "P-CONST-01" "no dummy add-zero constants" 0
   fi
+  if grep -q 'declare void @oo_print_str' "$d/add.ll" || grep -q 'oo_process_exit' "$d/add.ll"; then
+    record "P-DECL-04" "fn_ret_int has no unused print_str/exit" 1
+  else
+    record "P-DECL-04" "fn_ret_int has no unused print_str/exit" 0
+  fi
 
-  grep -q 'declare void @oo_process_exit(i64) noreturn' "$d/add.ll"
-  record "P-NORET-01" "process_exit is noreturn" "$?"
+  emit "$CORPUS/ifexpr.oo" "$d/ifx.ll"
+  llvm-as "$d/ifx.ll" -o "$d/ifx.bc"
+  record "P-AS-IF" "ifexpr llvm-as" "$?"
+  if grep -q 'add i64 0,' "$d/ifx.ll" || grep -q 'fadd double 0.0,' "$d/ifx.ll" || grep -q 'add i32 0,' "$d/ifx.ll"; then
+    record "P-CONST-02" "if-expr has no dummy add-zero" 1
+  else
+    record "P-CONST-02" "if-expr has no dummy add-zero" 0
+  fi
 
   emit "$CORPUS/ir_noargs_hello.oo" "$d/hello.ll"
   if grep -q 'oo_slist' "$d/hello.ll"; then
@@ -133,6 +144,8 @@ PY
   record "P-SHL-01" "shift amount is masked" "$?"
   grep -q 'icmp eq i64' "$d/sd.ll"
   record "P-DIV-01" "div checks zero" "$?"
+  grep -q 'declare void @oo_process_exit(i64) noreturn' "$d/sd.ll"
+  record "P-NORET-01" "process_exit is noreturn on div trap" "$?"
   llvm-as "$d/sd.ll" -o "$d/sd.bc"
   record "P-AS-02" "shift/div llvm-as" "$?"
 
@@ -160,7 +173,7 @@ PY
   record "P-FLAGS-01" "module flags present" "$?"
   grep -q 'llvm.lifetime.start' "$d/add.ll"
   record "P-LIFE-01" "lifetime.start on alloca" "$?"
-  grep -q 'nounwind' "$d/add.ll" && grep -q 'oo_process_exit' "$d/add.ll"
+  grep -q 'nounwind' "$d/sd.ll" && grep -q 'declare void @oo_process_exit(i64) noreturn' "$d/sd.ll"
   record "P-DECL-03" "declares attributed" "$?"
 
   grep -q '!dbg' "$d/add.ll"
