@@ -40,6 +40,7 @@ fn ll_t_is_label(s: String) -> Bool {
 }
 
 fn ll_t_is_call(s: String) -> Bool {
+    if chars_len(s) > 0 && char_at(s, 0) == "@" { return false; }
     if str_index_of(s, " = call ") >= 0 { return true; }
     if str_index_of(s, "  call ") >= 0 { return true; }
     return false;

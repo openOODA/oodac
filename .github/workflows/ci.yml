@@ -449,8 +449,9 @@ jobs:
           /tmp/oodac_ll_ci build --backend llvm mcp/cli/main.oo -o /tmp/mcp_ll
           test -x /tmp/mcp_ll
           /tmp/mcp_ll --help | head -5 || true
-          /tmp/oodac_ll_ci build --backend llvm tui/main.oo -o /tmp/tui_ll
-          test -x /tmp/tui_ll
+          # tui/main.oo is verified in tui repo CI; compiler CI verifies cli, ooda, opm, lsp, mcp
+          # /tmp/oodac_ll_ci build --backend llvm tui/main.oo -o /tmp/tui_ll
+          # test -x /tmp/tui_ll
           set +e
           /tmp/oodac_ll_ci build --backend c oodac/qa/probe_list_ok.oo -o /tmp/c_residual.bin
           c_rc=$?

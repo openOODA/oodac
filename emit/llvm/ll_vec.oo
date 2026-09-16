@@ -35,23 +35,23 @@ pub fn ll_vec_builtin(name: String, args: List[String], ssa0: Int, ir: &mut IrBu
     if str_ends_with(name, "_div") { op = "fdiv"; }
     if op != "" && list_len(args) >= 2 {
         let s: Int = ssa0 + 1;
-        ll_ir_text(ir, "  " + ll_ssa(s) + " = " + op + " " + vt + " " + ll_opnd(list_get(args, 0)) + ", " + ll_opnd(list_get(args, 1)));
+        ll_ir_inst(ir, op, vt, ll_ssa(s), ll_opnd(list_get(args, 0)) + ", " + ll_opnd(list_get(args, 1)), 1, 1);
         return ll_pack(0, s, vk, "");
     }
     if str_ends_with(name, "_splat") && list_len(args) >= 1 {
         let s: Int = ssa0 + 1;
         let mut sc: String = "float";
         if vk == "v4f64" { sc = "double"; }
-        ll_ir_text(ir, "  " + ll_ssa(s) + " = insertelement " + vt + " poison, " + sc + " " + ll_opnd(list_get(args, 0)) + ", i32 0");
+        ll_ir_inst(ir, "insertelement", vt + " poison", ll_ssa(s), sc + " " + ll_opnd(list_get(args, 0)) + ", i32 0", 1, 1);
         let s2: Int = s + 1;
         let mut mt: String = "<8 x i32>";
         if vk == "v4f64" { mt = "<4 x i32>"; }
-        ll_ir_text(ir, "  " + ll_ssa(s2) + " = shufflevector " + vt + " " + ll_ssa(s) + ", " + vt + " poison, " + mt + " zeroinitializer");
+        ll_ir_inst(ir, "shufflevector", vt + " " + ll_ssa(s), ll_ssa(s2), vt + " poison, " + mt + " zeroinitializer", 1, 1);
         return ll_pack(0, s2, vk, "");
     }
     if str_ends_with(name, "_zero") {
         let s: Int = ssa0 + 1;
-        ll_ir_text(ir, "  " + ll_ssa(s) + " = fadd " + vt + " zeroinitializer, zeroinitializer");
+        ll_ir_inst(ir, "fadd", vt, ll_ssa(s), "zeroinitializer, zeroinitializer", 1, 1);
         return ll_pack(0, s, vk, "");
     }
     return "";

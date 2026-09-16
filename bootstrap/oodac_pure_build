@@ -59,8 +59,8 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ ${#ARGS[@]} -lt 2 ]]; then
-  echo "usage: oodac_pure_build [--backend <target>] [--fixed-point] <main.oo> <out_bin>" >&2
+if [[ ${#ARGS[@]} -lt 1 ]]; then
+  echo "usage: oodac_pure_build [--backend <target>] [--fixed-point] <main.oo> [out_bin]" >&2
   exit 2
 fi
 if [[ "$USE_GCC" == "1" || "$SOVEREIGN_BACKEND" == "c" ]]; then
@@ -69,7 +69,7 @@ if [[ "$USE_GCC" == "1" || "$SOVEREIGN_BACKEND" == "c" ]]; then
 fi
 
 MAIN="$(oodac_abs "${ARGS[0]}")"
-OUT="$(oodac_abs "${ARGS[1]}")"
+OUT="$(oodac_abs "${ARGS[1]:-$ROOT/bin/oodac}")"
 
 if [[ -z "$SOVEREIGN_BACKEND" ]]; then
   # Product sovereign backend is llvm (clang -O2). C is --gcc. x86/aarch64/wasm are residual.

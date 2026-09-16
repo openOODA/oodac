@@ -244,13 +244,13 @@ pub fn ll_ensure_ptr(v: String, ssa0: Int, ir: &mut IrBuf) -> String {
     let a: String = ll_tmpa(ssa0 + 1);
     let s: Int = ssa0 + 1;
     ll_slot_ty(a, ll_ir_alloc(ll_pk(v)), ir);
-    ll_ir_text(ir, "  store " + ll_ir_val(ll_pk(v)) + " " + ll_opnd(v) + ", ptr " + a + ", align 8");
+    ll_ir_inst(ir, "store", ll_ir_val(ll_pk(v)), "", ll_opnd(v) + ", ptr " + a + ", align 8", 1, 1);
     return ll_pack(ll_ppos(v), s, ll_pk(v), a);
 }
 
 pub fn ll_as_val(v: String, ssa0: Int, ir: &mut IrBuf) -> String {
     let p: String = ll_ensure_ptr(v, ssa0, ir);
     let s: Int = ll_pssa(p) + 1;
-    ll_ir_text(ir, "  " + ll_ssa(s) + " = load " + ll_ir_val(ll_pk(v)) + ", ptr " + ll_pptr(p) + ", align 8");
+    ll_ir_inst(ir, "load", ll_ir_val(ll_pk(v)), ll_ssa(s), "ptr " + ll_pptr(p) + ", align 8", 1, 1);
     return ll_pack(ll_ppos(v), s, ll_pk(v), "");
 }

@@ -54,5 +54,5 @@ pub fn ll_slot_name(dst: String, ir: &mut IrBuf) {
 pub fn ll_trap(ir: &mut IrBuf) {
     ll_heap_end(ir);
     ll_ir_inst(ir, "call", "void", "", "@oo_process_exit(i64 1)", 0, 0);
-    ll_ir_text(ir, "  unreachable");
+    ll_ir_inst(ir, "unreachable", "", "", "", 0, 0);
 }

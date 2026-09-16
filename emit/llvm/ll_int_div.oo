@@ -13,14 +13,14 @@ import "ll_ir.oo";
 
 pub fn ll_int_div(op: String, inst: String, t: String, le: String, re: String, s: Int, ck: String, ir: &mut IrBuf) -> String {
     let tag: String = s.to_string();
-    ll_ir_text(ir, "  " + ll_ssa(s) + " = icmp eq " + t + " " + ll_opnd(re) + ", 0");
-    ll_ir_text(ir, "  br i1 " + ll_ssa(s) + ", label %div0" + tag + ", label %divok" + tag);
-    ll_ir_text(ir, "div0" + tag + ":");
-    ll_ir_text(ir, "  call void @oo_process_exit(i64 1)");
-    ll_ir_text(ir, "  unreachable");
-    ll_ir_text(ir, "divok" + tag + ":");
-    ll_ir_text(ir, "  " + ll_ssa(s + 1) + " = xor i1 " + ll_ssa(s) + ", true");
-    ll_ir_text(ir, "  call void @llvm.assume(i1 " + ll_ssa(s + 1) + ")");
-    ll_ir_text(ir, "  " + ll_ssa(s + 2) + " = " + inst + " " + t + " " + ll_opnd(le) + ", " + ll_opnd(re));
+    ll_ir_inst(ir, "icmp eq", t, ll_ssa(s), ll_opnd(re) + ", 0", 1, 1);
+    ll_ir_inst(ir, "br", "i1", "", ll_ssa(s) + ", label %div0" + tag + ", label %divok" + tag, 1, 1);
+    ll_ir_label(ir, "div0" + tag);
+    ll_ir_inst(ir, "call", "void", "", "@oo_process_exit(i64 1)", 1, 1);
+    ll_ir_inst(ir, "unreachable", "", "", "", 1, 1);
+    ll_ir_label(ir, "divok" + tag);
+    ll_ir_inst(ir, "xor", "i1", ll_ssa(s + 1), ll_ssa(s) + ", true", 1, 1);
+    ll_ir_inst(ir, "call", "void", "", "@llvm.assume(i1 " + ll_ssa(s + 1) + ")", 1, 1);
+    ll_ir_inst(ir, inst, t, ll_ssa(s + 2), ll_opnd(le) + ", " + ll_opnd(re), 1, 1);
     return ll_pack(ll_ppos(re), s + 2, ck, "");
 }

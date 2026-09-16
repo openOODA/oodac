@@ -1,0 +1,8 @@
+// # vs-rustc result
+// Logline: Frozen vs-rustc pair member result (result_val_err).
+pub fn main() {
+    let o: Result[Int, String] = Ok(42);
+    println(o.val);
+    let e: Result[Int, String] = Err("boom");
+    println(e.err);
+}

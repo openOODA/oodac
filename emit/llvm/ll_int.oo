@@ -42,7 +42,7 @@ pub fn ll_int_convert(v: String, ssa0: Int, target: String, ir: &mut IrBuf) -> S
     if fk == target { return v; }
     if fk == "i1" && ll_is_int(target) {
         let mut s: Int = ll_hw(ssa0, ll_pssa(v)) + 1;
-        ll_ir_text(ir, "  " + ll_ssa(s) + " = zext i1 " + ll_opnd(v) + " to " + ll_ir_val(target));
+        ll_ir_inst(ir, "zext", "i1", ll_ssa(s), ll_opnd(v) + " to " + ll_ir_val(target), 1, 1);
         return ll_pack(ll_ppos(v), s, target, "");
     }
     if !ll_is_int(fk) || !ll_is_int(target) { return v; }
@@ -50,7 +50,7 @@ pub fn ll_int_convert(v: String, ssa0: Int, target: String, ir: &mut IrBuf) -> S
     let mut src: String = ll_opnd(v);
     if ll_pptr(v) != "" && (chars_len(ll_pptr(v)) < 1 || char_at(ll_pptr(v), 0) != "#") {
         s = s + 1;
-        ll_ir_text(ir, "  " + ll_ssa(s) + " = load " + ll_ir_alloc(fk) + ", ptr " + ll_pptr(v) + ", align 8");
+        ll_ir_inst(ir, "load", ll_ir_alloc(fk), ll_ssa(s), "ptr " + ll_pptr(v) + ", align 8", 1, 1);
         src = ll_ssa(s);
     }
     if ll_int_wide(fk) == ll_int_wide(target) {
@@ -61,11 +61,11 @@ pub fn ll_int_convert(v: String, ssa0: Int, target: String, ir: &mut IrBuf) -> S
     }
     s = s + 1;
     if ll_int_wide(fk) == "i64" {
-        ll_ir_text(ir, "  " + ll_ssa(s) + " = trunc i64 " + src + " to i32");
+        ll_ir_inst(ir, "trunc", "i64", ll_ssa(s), src + " to i32", 1, 1);
     } else if ll_is_uint(fk) {
-        ll_ir_text(ir, "  " + ll_ssa(s) + " = zext i32 " + src + " to i64");
+        ll_ir_inst(ir, "zext", "i32", ll_ssa(s), src + " to i64", 1, 1);
     } else {
-        ll_ir_text(ir, "  " + ll_ssa(s) + " = sext i32 " + src + " to i64");
+        ll_ir_inst(ir, "sext", "i32", ll_ssa(s), src + " to i64", 1, 1);
     }
     return ll_pack(ll_ppos(v), s, target, "");
 }
@@ -82,11 +82,11 @@ pub fn ll_neg_int(r: String, ir: &mut IrBuf) -> String {
         return ll_pack(ll_ppos(r), ll_neg_float(r, ir), "f64", "");
     }
     if !ll_is_int(k) || k == "i64" {
-        ll_ir_text(ir, "  " + ll_ssa(ll_pssa(r) + 1) + " = sub i64 0, " + ll_opnd(r));
+        ll_ir_inst(ir, "sub nsw", "i64", ll_ssa(ll_pssa(r) + 1), "0, " + ll_opnd(r), 1, 1);
         return ll_pack(ll_ppos(r), ll_pssa(r) + 1, "i64", "");
     }
     let s: Int = ll_pssa(r) + 1;
-    ll_ir_text(ir, "  " + ll_ssa(s) + " = sub i32 0, " + ll_opnd(r));
+    ll_ir_inst(ir, "sub nsw", "i32", ll_ssa(s), "0, " + ll_opnd(r), 1, 1);
     return ll_pack(ll_ppos(r), s, k, "");
 }
 
@@ -124,7 +124,7 @@ pub fn ll_apply_intop(op: String, lhs: String, rhs: String, ir: &mut IrBuf) -> S
     else if op == "RSHIFT" { if uns { inst = "lshr"; } else { inst = "ashr"; } }
     else { println("ERR\tllvm\tintop " + op); process_exit(1); }
     if op == "EQEQ" || op == "NEQ" || op == "LT" || op == "GT" || op == "LTE" || op == "GTE" {
-        ll_ir_text(ir, "  " + ll_ssa(s) + " = " + inst + " " + t + " " + ll_opnd(le) + ", " + ll_opnd(re));
+        ll_ir_inst(ir, inst, t, ll_ssa(s), ll_opnd(le) + ", " + ll_opnd(re), 1, 1);
         return ll_pack(ll_ppos(rhs), s, "i1", "");
     }
     if op == "SLASH" || op == "PERCENT" {
@@ -133,11 +133,11 @@ pub fn ll_apply_intop(op: String, lhs: String, rhs: String, ir: &mut IrBuf) -> S
     if op == "LSHIFT" || op == "RSHIFT" {
         let mut mask: String = "63";
         if t == "i32" { mask = "31"; }
-        ll_ir_text(ir, "  " + ll_ssa(s) + " = and " + t + " " + ll_opnd(re) + ", " + mask);
-        ll_ir_text(ir, "  " + ll_ssa(s + 1) + " = " + inst + " " + t + " " + ll_opnd(le) + ", " + ll_ssa(s));
+        ll_ir_inst(ir, "and", t, ll_ssa(s), ll_opnd(re) + ", " + mask, 1, 1);
+        ll_ir_inst(ir, inst, t, ll_ssa(s + 1), ll_opnd(le) + ", " + ll_ssa(s), 1, 1);
         return ll_pack(ll_ppos(rhs), s + 1, ck, "");
     }
-    ll_ir_text(ir, "  " + ll_ssa(s) + " = " + inst + " " + t + " " + ll_opnd(le) + ", " + ll_opnd(re));
+    ll_ir_inst(ir, inst, t, ll_ssa(s), ll_opnd(le) + ", " + ll_opnd(re), 1, 1);
     return ll_pack(ll_ppos(rhs), s, ck, "");
 }
 

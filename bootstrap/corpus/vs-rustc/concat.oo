@@ -1,0 +1,6 @@
+// # vs-rustc concat
+// Logline: Frozen vs-rustc pair member concat (str_concat).
+pub fn main() {
+    let s: String = "foo" + "bar";
+    println(s);
+}

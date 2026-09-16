@@ -1,0 +1,8 @@
+// # vs-rustc struct
+// Logline: Frozen vs-rustc pair member struct (struct_field).
+// Setup: Minimal named struct with one Int field.
+pub type Boxy = struct { n: Int };
+pub fn main() {
+    let b: Boxy = Boxy { n: 41 };
+    println(b.n);
+}

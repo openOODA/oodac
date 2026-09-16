@@ -22,28 +22,28 @@ pub fn ll_print_val(kind: String, ssa: Int, ptr: String, ssa0: Int, ir: &mut IrB
         let n2: Int = ssa0 + 1;
         let mut b: String = ll_ssa(ssa);
         if chars_len(ptr) >= 2 && char_at(ptr, 0) == "#" { b = str_slice(ptr, 1, chars_len(ptr)); }
-        ll_ir_text(ir, "  " + ll_ssa(n2) + " = zext i1 " + b + " to i64");
+        ll_ir_inst(ir, "zext", "i1", ll_ssa(n2), b + " to i64", 1, 1);
         return ll_print_val("i64", n2, "", n2, ir);
     }
     if kind == "str" {
         let mut s: Int = ssa;
         if ptr != "" {
             s = ssa0 + 1;
-            ll_ir_text(ir, "  " + ll_ssa(s) + " = load { ptr, i64 }, ptr " + ptr + ", align 8");
+            ll_ir_inst(ir, "load", "{ ptr, i64 }", ll_ssa(s), "ptr " + ptr + ", align 8", 1, 1);
         }
         let p: Int = s + 1;
         let l: Int = s + 2;
-        ll_ir_text(ir, "  " + ll_ssa(p) + " = extractvalue { ptr, i64 } " + ll_ssa(s) + ", 0");
-        ll_ir_text(ir, "  " + ll_ssa(l) + " = extractvalue { ptr, i64 } " + ll_ssa(s) + ", 1");
-        ll_ir_text(ir, "  call void @oo_print_str(ptr " + ll_ssa(p) + ", i64 " + ll_ssa(l) + ")");
-        ll_ir_text(ir, "  call void @oo_println()");
+        ll_ir_inst(ir, "extractvalue", "{ ptr, i64 } " + ll_ssa(s), ll_ssa(p), "0", 1, 1);
+        ll_ir_inst(ir, "extractvalue", "{ ptr, i64 } " + ll_ssa(s), ll_ssa(l), "1", 1, 1);
+        ll_ir_inst(ir, "call", "void", "", "@oo_print_str(ptr " + ll_ssa(p) + ", i64 " + ll_ssa(l) + ")", 1, 1);
+        ll_ir_inst(ir, "call", "void", "", "@oo_println()", 1, 1);
         return l;
     }
     if kind == "i64" {
         let mut arg: String = ll_ssa(ssa);
         if chars_len(ptr) >= 2 && char_at(ptr, 0) == "#" { arg = str_slice(ptr, 1, chars_len(ptr)); }
-        ll_ir_text(ir, "  call void @oo_print_int(i64 " + arg + ")");
-        ll_ir_text(ir, "  call void @oo_println()");
+        ll_ir_inst(ir, "call", "void", "", "@oo_print_int(i64 " + arg + ")", 1, 1);
+        ll_ir_inst(ir, "call", "void", "", "@oo_println()", 1, 1);
         return ssa0;
     }
     if ll_is_int(kind) {

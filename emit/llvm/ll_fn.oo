@@ -133,14 +133,14 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String, stab: Stri
     let ds: String = " !dbg !" + db.to_string();
     if ll_is_mem(rk) {
         if plist != "" {
-            ll_ir_text(ir, "define " + vis + "void @" + gnm + "(ptr noalias sret(" + ll_ir_alloc(rk) + ") align 8 %ret, " + plist + ") nounwind" + ds + " {");
+            ll_ir_fn_open(ir, "define " + vis + "void @" + gnm + "(ptr noalias sret(" + ll_ir_alloc(rk) + ") align 8 %ret, " + plist + ") nounwind" + ds + " {");
         } else {
-            ll_ir_text(ir, "define " + vis + "void @" + gnm + "(ptr noalias sret(" + ll_ir_alloc(rk) + ") align 8 %ret) nounwind" + ds + " {");
+            ll_ir_fn_open(ir, "define " + vis + "void @" + gnm + "(ptr noalias sret(" + ll_ir_alloc(rk) + ") align 8 %ret) nounwind" + ds + " {");
         }
     } else if rk == "void" {
-        ll_ir_text(ir, "define " + vis + "void @" + gnm + "(" + plist + ") nounwind" + ds + " {");
+        ll_ir_fn_open(ir, "define " + vis + "void @" + gnm + "(" + plist + ") nounwind" + ds + " {");
     } else {
-        ll_ir_text(ir, "define " + vis + ll_ir_val(rk) + " @" + gnm + "(" + plist + ") nounwind" + ds + " {");
+        ll_ir_fn_open(ir, "define " + vis + ll_ir_val(rk) + " @" + gnm + "(" + plist + ") nounwind" + ds + " {");
     }
     ll_heap(ir);
     let mut fi: Int = 0;
@@ -160,12 +160,12 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String, stab: Stri
                     ll_slot_ty(ll_var(pn), ll_ir_alloc(k), ir);
                     if ll_is_mem(k) {
                         ssa = ssa + 1;
-                        ll_ir_text(ir, "  " + ll_ssa(ssa) + " = load " + ll_ir_val(k) + ", ptr %p_" + pn + ", align 8");
-                        ll_ir_text(ir, "  store " + ll_ir_val(k) + " " + ll_ssa(ssa) + ", ptr " + ll_var(pn) + ", align 8");
+                        ll_ir_inst(ir, "load", ll_ir_val(k), ll_ssa(ssa), "ptr %p_" + pn + ", align 8", 1, 1);
+                        ll_ir_inst(ir, "store", ll_ir_val(k), "", ll_ssa(ssa) + ", ptr " + ll_var(pn) + ", align 8", 1, 1);
                     } else if ll_is_refk(k) {
-                        ll_ir_text(ir, "  store ptr %p_" + pn + ", ptr " + ll_var(pn) + ", align 8");
+                        ll_ir_inst(ir, "store", "ptr", "", "%p_" + pn + ", ptr " + ll_var(pn) + ", align 8", 1, 1);
                     } else {
-                        ll_ir_text(ir, "  store " + ll_ir_val(k) + " %p_" + pn + ", ptr " + ll_var(pn) + ", align 8");
+                        ll_ir_inst(ir, "store", ll_ir_val(k), "", "%p_" + pn + ", ptr " + ll_var(pn) + ", align 8", 1, 1);
                     }
                 }
             }
@@ -180,9 +180,9 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String, stab: Stri
     let fb: String = ll_emit_stmts(toks, p, n, rk, env, ssa + 1, stab, ir);
     if ll_pterm(fb) == 0 {
         ll_heap_end(ir);
-        if rk == "void" || ll_is_mem(rk) { ll_ir_text(ir, "  ret void"); }
-        else { ll_ir_text(ir, "  unreachable"); }
+        if rk == "void" || ll_is_mem(rk) { ll_ir_inst(ir, "ret", "void", "", "", 1, 1); }
+        else { ll_ir_inst(ir, "unreachable", "", "", "", 1, 1); }
     }
-    ll_ir_text(ir, "}");
+    ll_ir_fn_close(ir);
     return ll_skip_fn(toks, pos, n);
 }

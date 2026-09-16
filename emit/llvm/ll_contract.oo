@@ -103,23 +103,23 @@ fn ll_con_trap(ssa0: Int, cond: Int, name: String, idx: Int, kind: String, ir: &
     if kind == "spec" { mlen = 19; }
     if kind == "ensures" { mlen = 22; }
     let tag: String = idx.to_string() + "_" + name;
-    ll_ir_text(ir, "  br i1 " + ll_ssa(cond) + ", label %ctok" + tag + ", label %ctrap" + tag);
-    ll_ir_text(ir, "ctrap" + tag + ":");
+    ll_ir_inst(ir, "br", "i1", "", ll_ssa(cond) + ", label %ctok" + tag + ", label %ctrap" + tag, 1, 1);
+    ll_ir_label(ir, "ctrap" + tag);
     let mut s: Int = ssa0;
     if cond > s { s = cond; }
     s = s + 1;
-    ll_ir_text(ir, "  " + ll_ssa(s) + " = getelementptr inbounds [" + mlen.to_string() + " x i8], ptr @.con_" + tag + ", i64 0, i64 0");
+    ll_ir_inst(ir, "getelementptr inbounds", "[" + mlen.to_string() + " x i8]", ll_ssa(s), "ptr @.con_" + tag + ", i64 0, i64 0", 1, 1);
     s = s + 1;
-    ll_ir_text(ir, "  " + ll_ssa(s) + " = call { ptr, i64 } @oo_str_lit(ptr " + ll_ssa(s - 1) + ")");
+    ll_ir_inst(ir, "call", "{ ptr, i64 }", ll_ssa(s), "@oo_str_lit(ptr " + ll_ssa(s - 1) + ")", 1, 1);
     s = s + 1;
-    ll_ir_text(ir, "  " + ll_ssa(s) + " = extractvalue { ptr, i64 } " + ll_ssa(s - 1) + ", 0");
+    ll_ir_inst(ir, "extractvalue", "{ ptr, i64 } " + ll_ssa(s - 1), ll_ssa(s), "0", 1, 1);
     s = s + 1;
-    ll_ir_text(ir, "  " + ll_ssa(s) + " = extractvalue { ptr, i64 } " + ll_ssa(s - 2) + ", 1");
-    ll_ir_text(ir, "  call void @oo_print_str(ptr " + ll_ssa(s - 1) + ", i64 " + ll_ssa(s) + ")");
-    ll_ir_text(ir, "  call void @oo_println()");
-    ll_ir_text(ir, "  call void @oo_process_exit(i64 1)");
-    ll_ir_text(ir, "  unreachable");
-    ll_ir_text(ir, "ctok" + tag + ":");
+    ll_ir_inst(ir, "extractvalue", "{ ptr, i64 } " + ll_ssa(s - 2), ll_ssa(s), "1", 1, 1);
+    ll_ir_inst(ir, "call", "void", "", "@oo_print_str(ptr " + ll_ssa(s - 1) + ", i64 " + ll_ssa(s) + ")", 1, 1);
+    ll_ir_inst(ir, "call", "void", "", "@oo_println()", 1, 1);
+    ll_ir_inst(ir, "call", "void", "", "@oo_process_exit(i64 1)", 1, 1);
+    ll_ir_inst(ir, "unreachable", "", "", "", 1, 1);
+    ll_ir_label(ir, "ctok" + tag);
     return s;
 }
 
@@ -181,18 +181,18 @@ pub fn ll_contract_return(toks: List[String], v: String, env0: String, ssa0: Int
         let mut rv: Int = ll_pssa(v);
         if ll_has_slot(v) {
             ssa = ssa + 1;
-            ll_ir_text(ir, "  " + ll_ssa(ssa) + " = load { ptr, i64 }, ptr " + ll_pptr(v) + ", align 8");
+            ll_ir_inst(ir, "load", "{ ptr, i64 }", ll_ssa(ssa), "ptr " + ll_pptr(v) + ", align 8", 1, 1);
             rv = ssa;
         }
         ssa = ssa + 1;
-        ll_ir_text(ir, "  " + ll_ssa(ssa) + " = call i64 @oo_chars_len({ ptr, i64 } " + ll_ssa(rv) + ")");
+        ll_ir_inst(ir, "call", "i64", ll_ssa(ssa), "@oo_chars_len({ ptr, i64 } " + ll_ssa(rv) + ")", 1, 1);
         ll_slot_name(slot, ir);
-        ll_ir_text(ir, "  store i64 " + ll_ssa(ssa) + ", ptr " + slot + ", align 8");
+        ll_ir_inst(ir, "store", "i64", "", ll_ssa(ssa) + ", ptr " + slot + ", align 8", 1, 1);
         env = type_env_put(env, "result", "i64");
         env = type_env_put(env, "__l__result", slot);
     } else if ll_is_int(ret_kind) || ret_kind == "f64" || ret_kind == "i1" {
         ll_slot_name(slot, ir);
-        ll_ir_text(ir, "  store " + ll_ir_val(ret_kind) + " " + ll_opnd(v) + ", ptr " + slot + ", align 8");
+        ll_ir_inst(ir, "store", ll_ir_val(ret_kind), "", ll_opnd(v) + ", ptr " + slot + ", align 8", 1, 1);
         env = type_env_put(env, "result", ret_kind);
         env = type_env_put(env, "__l__result", slot);
     } else {

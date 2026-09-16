@@ -184,7 +184,7 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
         }
         let obj: String = tmp_dir + "/oodar.o";
         if !is_shared {
-            let co: Result[String, String] = sys_exec(sys, "gcc", "-c", "-O2", "-g0", "-fno-ident", "-I" + od, od + "/oodar.c", "-o", obj);
+            let co: Result[String, String] = sys_exec(sys, "clang", "--no-default-config", "-c", "-O2", "-g0", "-fno-ident", "-I" + od, od + "/oodar.c", "-o", obj);
             if !co.is_ok() {
                 println("ERR\tbuild\toodar.o failed");
                 let ct: String = match co { Ok(s) => s, Err(e) => e };

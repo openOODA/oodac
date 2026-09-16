@@ -1,0 +1,5 @@
+# Archived C-lowering fixtures (not product)
+
+P7: `emit-c` is residual exit 2. These programs are historical
+inputs, not Unique bar, not `oodac build`. Do not restore
+`emit/c/` from this tree.

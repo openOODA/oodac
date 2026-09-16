@@ -150,23 +150,20 @@ fn ll_callee_set(toks: List[String], pos: Int, n: Int) -> String {
 fn ll_prune_sigs(sigs: String, stenv: String, want: String) -> String {
     let n: Int = chars_len(sigs); let mut o: String = ""; let mut i: Int = 0;
     while i < n {
-        let at: Bool = i == 0 || char_at(sigs, i - 1) == ";";
-        if at && i + 7 <= n && str_slice(sigs, i, i + 7) == "__sym__" {
-            let mut m: Int = i;
-            while m < n && char_at(sigs, m) != ";" { m = m + 1; }
-            o = o + str_slice(sigs, i, m) + ";";
-            i = m;
-        } else if at && i + 6 <= n && str_slice(sigs, i, i + 6) == "__fn__" {
-            let mut k: Int = i + 6;
-            while k < n && char_at(sigs, k) != "=" { k = k + 1; }
-            if ll_in_set(want, str_slice(sigs, i + 6, k)) {
-                let mut m: Int = k;
-                while m < n && char_at(sigs, m) != ";" { m = m + 1; }
+        let mut m: Int = i;
+        while m < n && char_at(sigs, m) != ";" { m = m + 1; }
+        if m > i {
+            if i + 7 <= m && str_slice(sigs, i, i + 7) == "__sym__" {
                 o = o + str_slice(sigs, i, m) + ";";
-                i = m;
+            } else if i + 6 <= m && str_slice(sigs, i, i + 6) == "__fn__" {
+                let mut k: Int = i + 6;
+                while k < m && char_at(sigs, k) != "=" { k = k + 1; }
+                if ll_in_set(want, str_slice(sigs, i + 6, k)) {
+                    o = o + str_slice(sigs, i, m) + ";";
+                }
             }
         }
-        i = i + 1;
+        i = m + 1;
     }
     return o + stenv;
 }

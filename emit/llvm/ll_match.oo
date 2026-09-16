@@ -45,10 +45,10 @@ pub fn ll_match_stmt(toks: List[String], p0: Int, n: Int, ssa0: Int, env: String
     let mut cond: Int = tag;
     if ok1 == 0 {
         cond = tag + 1;
-        ll_ir_text(ir, "  " + ll_ssa(cond) + " = xor i1 " + ll_ssa(tag) + ", true");
+        ll_ir_inst(ir, "xor", "i1", ll_ssa(cond), ll_ssa(tag) + ", true", 1, 1);
     }
-    ll_ir_text(ir, "  br i1 " + ll_ssa(cond) + ", label %marm1" + id.to_string() + ", label %marm2" + id.to_string());
-    ll_ir_text(ir, "marm1" + id.to_string() + ":");
+    ll_ir_inst(ir, "br", "i1", "", ll_ssa(cond) + ", label %marm1" + id.to_string() + ", label %marm2" + id.to_string(), 1, 1);
+    ll_ir_label(ir, "marm1" + id.to_string());
     let b1: String = ll_match_bind(sk, ptr, bind1, ok1, id, cond, ir);
     let e1: String = ll_match_arm_env(env, bind1, b1);
     let r1: String = ll_match_arm_body(toks, p, n, ll_pssa(b1) + 1, e1, ret_kind, stab, ir);
@@ -56,7 +56,7 @@ pub fn ll_match_stmt(toks: List[String], p0: Int, n: Int, ssa0: Int, env: String
     let mut ssa: Int = ll_pssa(r1);
     let t1: Int = ll_pterm(r1);
     if t1 == 0 {
-        ll_ir_text(ir, "  br label %mend" + id.to_string());
+        ll_ir_inst(ir, "br", "label", "", "%mend" + id.to_string(), 1, 1);
     }
     if p < n && ll_k(toks, p) == "COMMA" { p = p + 1; }
     let a2: String = ll_match_arm_head(toks, p, n);
@@ -68,7 +68,7 @@ pub fn ll_match_stmt(toks: List[String], p0: Int, n: Int, ssa0: Int, env: String
         println("ERR\tllvm\tmatch arms must pair ok with err");
         process_exit(1);
     }
-    ll_ir_text(ir, "marm2" + id.to_string() + ":");
+    ll_ir_label(ir, "marm2" + id.to_string());
     let b2: String = ll_match_bind(sk, ptr, bind2, ok2, id, ssa, ir);
     let e2: String = ll_match_arm_env(env, bind2, b2);
     let r2: String = ll_match_arm_body(toks, p, n, ll_pssa(b2) + 1, e2, ret_kind, stab, ir);
@@ -76,13 +76,13 @@ pub fn ll_match_stmt(toks: List[String], p0: Int, n: Int, ssa0: Int, env: String
     ssa = ll_pssa(r2);
     let t2: Int = ll_pterm(r2);
     if t2 == 0 {
-        ll_ir_text(ir, "  br label %mend" + id.to_string());
+        ll_ir_inst(ir, "br", "label", "", "%mend" + id.to_string(), 1, 1);
     }
     if p < n && ll_k(toks, p) == "COMMA" { p = p + 1; }
     if p < n && ll_k(toks, p) == "RBRACE" { p = p + 1; }
-    ll_ir_text(ir, "mend" + id.to_string() + ":");
+    ll_ir_label(ir, "mend" + id.to_string());
     if t1 != 0 && t2 != 0 {
-        ll_ir_text(ir, "  unreachable");
+        ll_ir_inst(ir, "unreachable", "", "", "", 1, 1);
         p = ll_skip_to_rbrace(toks, p, n);
         return ll_pack(p, ssa, ret_kind, env) + "\t1";
     }
@@ -219,12 +219,12 @@ fn ll_str_match_stmt(toks: List[String], scr: String, p: Int, n: Int, env: Strin
             let lp: String = ll_str_gep(toks, litpos, ssa, ir);
             ssa = ll_pssa(lp);
             let eq: Int = ssa + 1;
-            ll_ir_text(ir, "  " + ll_ssa(eq) + " = call i32 @oo_str_eq({ ptr, i64 } " + ll_ssa(ssv) + ", { ptr, i64 } " + ll_ssa(ssa) + ")");
+            ll_ir_inst(ir, "call", "i32", ll_ssa(eq), "@oo_str_eq({ ptr, i64 } " + ll_ssa(ssv) + ", { ptr, i64 } " + ll_ssa(ssa) + ")", 1, 1);
             let c: Int = eq + 1;
-            ll_ir_text(ir, "  " + ll_ssa(c) + " = icmp ne i32 " + ll_ssa(eq) + ", 0");
+            ll_ir_inst(ir, "icmp ne", "i32", ll_ssa(c), ll_ssa(eq) + ", 0", 1, 1);
             ssa = c;
-            ll_ir_text(ir, "  br i1 " + ll_ssa(c) + ", label %smA" + an + ", label %smN" + an);
-            ll_ir_text(ir, "smA" + an + ":");
+            ll_ir_inst(ir, "br", "i1", "", ll_ssa(c) + ", label %smA" + an + ", label %smN" + an, 1, 1);
+            ll_ir_label(ir, "smA" + an);
         }
         last_wild = is_wild;
         let rb: String = ll_match_arm_body(toks, q, n, ssa, env, ret_kind, stab, ir);
@@ -232,21 +232,21 @@ fn ll_str_match_stmt(toks: List[String], scr: String, p: Int, n: Int, env: Strin
         ssa = ll_pssa(rb);
         if ll_pterm(rb) == 0 {
             all_term = 0;
-            ll_ir_text(ir, "  br label %smEnd" + id.to_string());
+            ll_ir_inst(ir, "br", "label", "", "%smEnd" + id.to_string(), 1, 1);
         }
         if is_wild == 0 {
-            ll_ir_text(ir, "smN" + an + ":");
+            ll_ir_label(ir, "smN" + an);
         }
         if q < n && ll_k(toks, q) == "COMMA" { q = q + 1; }
         arm = arm + 1;
     }
     if q < n && ll_k(toks, q) == "RBRACE" { q = q + 1; }
     if last_wild == 0 {
-        ll_ir_text(ir, "  br label %smEnd" + id.to_string());
+        ll_ir_inst(ir, "br", "label", "", "%smEnd" + id.to_string(), 1, 1);
     }
-    ll_ir_text(ir, "smEnd" + id.to_string() + ":");
+    ll_ir_label(ir, "smEnd" + id.to_string());
     if arm != 0 && all_term != 0 {
-        ll_ir_text(ir, "  unreachable");
+        ll_ir_inst(ir, "unreachable", "", "", "", 1, 1);
         q = ll_skip_to_rbrace(toks, q, n);
         return ll_pack(q, ssa, ret_kind, env) + "\t1";
     }

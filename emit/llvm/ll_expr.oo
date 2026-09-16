@@ -29,19 +29,19 @@ fn ll_unary(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String, ir: &m
             let s2: Int = ll_pssa(r) + 1;
             let mut lk: String = "i64";
             if ll_pk(r) == "ri32" || ll_pk(r) == "ru32" { lk = "i32"; }
-            ll_ir_text(ir, "  " + ll_ssa(s2) + " = load " + lk + ", ptr " + ll_pptr(r) + ", align 8");
+            ll_ir_inst(ir, "load", lk, ll_ssa(s2), "ptr " + ll_pptr(r) + ", align 8", 1, 1);
             return ll_pack(ll_ppos(r), s2, lk, "");
         }
         let s1: Int = ll_pssa(r) + 1;
-        ll_ir_text(ir, "  " + ll_ssa(s1) + " = inttoptr " + ll_ir_val(ll_pk(r)) + " " + ll_opnd(r) + " to ptr");
+        ll_ir_inst(ir, "inttoptr", ll_ir_val(ll_pk(r)), ll_ssa(s1), ll_opnd(r) + " to ptr", 1, 1);
         let s2: Int = s1 + 1;
-        ll_ir_text(ir, "  " + ll_ssa(s2) + " = load " + ll_ir_val(ll_pk(r)) + ", ptr " + ll_ssa(s1) + ", align 8");
+        ll_ir_inst(ir, "load", ll_ir_val(ll_pk(r)), ll_ssa(s2), "ptr " + ll_ssa(s1) + ", align 8", 1, 1);
         return ll_pack(ll_ppos(r), s2, ll_pk(r), "");
     }
     if pos < n && ll_k(toks, pos) == "BANG" {
         let r: String = ll_unary(toks, pos + 1, n, ssa0, env, ir);
         let s: Int = ll_pssa(r) + 1;
-        ll_ir_text(ir, "  " + ll_ssa(s) + " = xor i1 " + ll_opnd(r) + ", true");
+        ll_ir_inst(ir, "xor", "i1", ll_ssa(s), ll_opnd(r) + ", true", 1, 1);
         return ll_pack(ll_ppos(r), s, "i1", "");
     }
     if pos < n && ll_k(toks, pos) == "MINUS" {
@@ -148,34 +148,34 @@ fn ll_binop(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String, ir: &m
         let ls: Int = ll_pssa(r);
         let id: Int = ls;
         if op == "ANDAND" {
-            ll_ir_text(ir, "  br i1 " + ll_opnd(r) + ", label %ar" + id.to_string() + ", label %af" + id.to_string());
-            ll_ir_text(ir, "ar" + id.to_string() + ":");
+            ll_ir_inst(ir, "br", "i1", "", ll_opnd(r) + ", label %ar" + id.to_string() + ", label %af" + id.to_string(), 1, 1);
+            ll_ir_label(ir, "ar" + id.to_string());
             let rhs: String = ll_cmp(toks, p, n, ls, env, ir);
             p = ll_ppos(rhs);
             let rs: Int = ll_pssa(rhs);
-            ll_ir_text(ir, "  br label %aj" + id.to_string());
-            ll_ir_text(ir, "aj" + id.to_string() + ":");
-            ll_ir_text(ir, "  br label %ae" + id.to_string());
-            ll_ir_text(ir, "af" + id.to_string() + ":");
-            ll_ir_text(ir, "  br label %ae" + id.to_string());
-            ll_ir_text(ir, "ae" + id.to_string() + ":");
+            ll_ir_inst(ir, "br", "", "", "label %aj" + id.to_string(), 1, 1);
+            ll_ir_label(ir, "aj" + id.to_string());
+            ll_ir_inst(ir, "br", "", "", "label %ae" + id.to_string(), 1, 1);
+            ll_ir_label(ir, "af" + id.to_string());
+            ll_ir_inst(ir, "br", "", "", "label %ae" + id.to_string(), 1, 1);
+            ll_ir_label(ir, "ae" + id.to_string());
             let ph: Int = rs + 1;
-            ll_ir_text(ir, "  " + ll_ssa(ph) + " = phi i1 [ " + ll_opnd(rhs) + ", %aj" + id.to_string() + " ], [ false, %af" + id.to_string() + " ]");
+            ll_ir_inst(ir, "phi", "i1", ll_ssa(ph), "[ " + ll_opnd(rhs) + ", %aj" + id.to_string() + " ], [ false, %af" + id.to_string() + " ]", 1, 1);
             r = ll_pack(p, ph, "i1", "");
         } else {
-            ll_ir_text(ir, "  br i1 " + ll_opnd(r) + ", label %ot" + id.to_string() + ", label %or" + id.to_string());
-            ll_ir_text(ir, "or" + id.to_string() + ":");
+            ll_ir_inst(ir, "br", "i1", "", ll_opnd(r) + ", label %ot" + id.to_string() + ", label %or" + id.to_string(), 1, 1);
+            ll_ir_label(ir, "or" + id.to_string());
             let rhs: String = ll_cmp(toks, p, n, ls, env, ir);
             p = ll_ppos(rhs);
             let rs: Int = ll_pssa(rhs);
-            ll_ir_text(ir, "  br label %oj" + id.to_string());
-            ll_ir_text(ir, "oj" + id.to_string() + ":");
-            ll_ir_text(ir, "  br label %ae" + id.to_string());
-            ll_ir_text(ir, "ot" + id.to_string() + ":");
-            ll_ir_text(ir, "  br label %ae" + id.to_string());
-            ll_ir_text(ir, "ae" + id.to_string() + ":");
+            ll_ir_inst(ir, "br", "", "", "label %oj" + id.to_string(), 1, 1);
+            ll_ir_label(ir, "oj" + id.to_string());
+            ll_ir_inst(ir, "br", "", "", "label %ae" + id.to_string(), 1, 1);
+            ll_ir_label(ir, "ot" + id.to_string());
+            ll_ir_inst(ir, "br", "", "", "label %ae" + id.to_string(), 1, 1);
+            ll_ir_label(ir, "ae" + id.to_string());
             let ph: Int = rs + 1;
-            ll_ir_text(ir, "  " + ll_ssa(ph) + " = phi i1 [ true, %ot" + id.to_string() + " ], [ " + ll_opnd(rhs) + ", %oj" + id.to_string() + " ]");
+            ll_ir_inst(ir, "phi", "i1", ll_ssa(ph), "[ true, %ot" + id.to_string() + " ], [ " + ll_opnd(rhs) + ", %oj" + id.to_string() + " ]", 1, 1);
             r = ll_pack(p, ph, "i1", "");
         }
     }

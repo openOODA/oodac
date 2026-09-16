@@ -31,7 +31,7 @@ pub fn ll_method(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, env:
         if ll_pptr(fr) == "" && ll_is_struct(ll_pk(fr)) {
             let a: String = ll_tmpa(ll_pssa(fr) + 1);
             ll_slot_name(a, ir);
-            ll_ir_text(ir, "  store " + ll_ir_val(ll_pk(fr)) + " " + ll_opnd(fr) + ", ptr " + a + ", align 8");
+            ll_ir_inst(ir, "store", ll_ir_val(ll_pk(fr)), "", ll_opnd(fr) + ", ptr " + a + ", align 8", 1, 1);
             return ll_pack(0, ll_pssa(fr) + 1, ll_pk(fr), a);
         }
         return fr;
@@ -47,14 +47,14 @@ pub fn ll_method(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, env:
             tk = ll_int_convert(tk, ssa0, "i64", ir);
         }
         let s: Int = ll_hw(ssa0, ll_pssa(tk)) + 1;
-        ll_ir_text(ir, "  " + ll_ssa(s) + " = call { ptr, i64 } @oo_int_to_str(i64 " + ll_opnd(tk) + ")");
+        ll_ir_inst(ir, "call", "{ ptr, i64 }", ll_ssa(s), "@oo_int_to_str(i64 " + ll_opnd(tk) + ")", 1, 1);
         return ll_pack(0, s, "str", "");
     }
     if m == "is_some" || m == "is_ok" || m == "is_none" || m == "is_err" {
         let s3: Int = ll_match_tag(kind, ptr, ssa0, ir);
         if m == "is_some" || m == "is_ok" { return ll_pack(0, s3, "i1", ""); }
         let nz: Int = s3 + 1;
-        ll_ir_text(ir, "  " + ll_ssa(nz) + " = xor i1 " + ll_ssa(s3) + ", true");
+        ll_ir_inst(ir, "xor", "i1", ll_ssa(nz), ll_ssa(s3) + ", true", 1, 1);
         return ll_pack(0, nz, "i1", "");
     }
     if m == "val" || m == "err" {
@@ -68,9 +68,9 @@ pub fn ll_method(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, env:
         let r0: String = ll_as_val(ll_pack(0, ssa, kind, ptr), ssa0, ir);
         let a0: String = ll_as_val(arg, ll_pssa(r0), ir);
         let s: Int = ll_pssa(a0) + 1;
-        ll_ir_text(ir, "  " + ll_ssa(s) + " = call i32 @oo_str_contains({ ptr, i64 } " + ll_ssa(ll_pssa(r0)) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ")");
+        ll_ir_inst(ir, "call", "i32", ll_ssa(s), "@oo_str_contains({ ptr, i64 } " + ll_ssa(ll_pssa(r0)) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ")", 1, 1);
         let s2: Int = s + 1;
-        ll_ir_text(ir, "  " + ll_ssa(s2) + " = icmp ne i32 " + ll_ssa(s) + ", 0");
+        ll_ir_inst(ir, "icmp ne", "i32", ll_ssa(s2), ll_ssa(s) + ", 0", 1, 1);
         return ll_pack(0, s2, "i1", "");
     }
     if m == "len" {
@@ -81,16 +81,16 @@ pub fn ll_method(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, env:
         if kind == "str" {
             let rv: String = ll_as_val(ll_pack(0, ssa, kind, ptr), ssa0, ir);
             let s: Int = ll_pssa(rv) + 1;
-            ll_ir_text(ir, "  " + ll_ssa(s) + " = call i64 @oo_chars_len({ ptr, i64 } " + ll_ssa(ll_pssa(rv)) + ")");
+            ll_ir_inst(ir, "call", "i64", ll_ssa(s), "@oo_chars_len({ ptr, i64 } " + ll_ssa(ll_pssa(rv)) + ")", 1, 1);
             return ll_pack(0, s, "i64", "");
         }
         if kind == "ilist" || kind == "slist" {
             let e: String = ll_ensure_ptr(ll_pack(0, ssa, kind, ptr), ssa0, ir);
             let s: Int = ll_pssa(e) + 1;
             if kind == "ilist" {
-                ll_ir_text(ir, "  " + ll_ssa(s) + " = call i64 @oo_ilist_len(ptr byval(%OoIList) align 8 " + ll_pptr(e) + ")");
+                ll_ir_inst(ir, "call", "i64", ll_ssa(s), "@oo_ilist_len(ptr byval(%OoIList) align 8 " + ll_pptr(e) + ")", 1, 1);
             } else {
-                ll_ir_text(ir, "  " + ll_ssa(s) + " = call i64 @oo_slist_len(ptr byval(%OoSList) align 8 " + ll_pptr(e) + ")");
+                ll_ir_inst(ir, "call", "i64", ll_ssa(s), "@oo_slist_len(ptr byval(%OoSList) align 8 " + ll_pptr(e) + ")", 1, 1);
             }
             return ll_pack(0, s, "i64", "");
         }
@@ -106,18 +106,18 @@ pub fn ll_method(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, env:
         let bp: String = ll_pptr(base);
         let tag: Int = ll_match_tag(kind, bp, ll_pssa(base), ir);
         let id: Int = tag + 1;
-        ll_ir_text(ir, "  br i1 " + ll_ssa(tag) + ", label %uok" + id.to_string() + ", label %uerr" + id.to_string());
-        ll_ir_text(ir, "uok" + id.to_string() + ":");
-        ll_ir_text(ir, "  br label %umerge" + id.to_string());
-        ll_ir_text(ir, "uerr" + id.to_string() + ":");
+        ll_ir_inst(ir, "br", "i1", "", ll_ssa(tag) + ", label %uok" + id.to_string() + ", label %uerr" + id.to_string(), 1, 1);
+        ll_ir_label(ir, "uok" + id.to_string());
+        ll_ir_inst(ir, "br", "label", "", "%umerge" + id.to_string(), 1, 1);
+        ll_ir_label(ir, "uerr" + id.to_string());
         let ms: Int = tag + 1;
-        ll_ir_text(ir, "  " + ll_ssa(ms) + " = getelementptr inbounds [12 x i8], ptr @.uunwrapmsg, i64 0, i64 0");
+        ll_ir_inst(ir, "getelementptr inbounds", "[12 x i8]", ll_ssa(ms), "ptr @.uunwrapmsg, i64 0, i64 0", 1, 1);
         let ml: Int = ms + 1;
-        ll_ir_text(ir, "  " + ll_ssa(ml) + " = call { ptr, i64 } @oo_str_lit(ptr " + ll_ssa(ms) + ")");
+        ll_ir_inst(ir, "call", "{ ptr, i64 }", ll_ssa(ml), "@oo_str_lit(ptr " + ll_ssa(ms) + ")", 1, 1);
         let pe: Int = ll_print_val("str", ml, "", ml, ir);
-        ll_ir_text(ir, "  call void @oo_process_exit(i64 1)");
-        ll_ir_text(ir, "  unreachable");
-        ll_ir_text(ir, "umerge" + id.to_string() + ":");
+        ll_ir_inst(ir, "call", "void", "", "@oo_process_exit(i64 1)", 1, 1);
+        ll_ir_inst(ir, "unreachable", "", "", "", 1, 1);
+        ll_ir_label(ir, "umerge" + id.to_string());
         let lv: String = ll_field_load(kind, ssa, bp, "val", pe, env, ir);
         return ll_pack(0, ll_pssa(lv), ll_pk(lv), ll_pptr(lv));
     }
@@ -151,24 +151,24 @@ pub fn ll_method(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, env:
         let dv: Int = ll_arm_val(arg, tag, ir);
         let top: Int = ll_hw(tag, dv);
         let id: Int = top + 1;
-        ll_ir_text(ir, "  br i1 " + ll_ssa(tag) + ", label %wok" + id.to_string() + ", label %werr" + id.to_string());
-        ll_ir_text(ir, "wok" + id.to_string() + ":");
+        ll_ir_inst(ir, "br", "i1", "", ll_ssa(tag) + ", label %wok" + id.to_string() + ", label %werr" + id.to_string(), 1, 1);
+        ll_ir_label(ir, "wok" + id.to_string());
         let lv: String = ll_field_load(kind, ssa, bp, "val", top, env, ir);
         let mut vs: Int = ll_pssa(lv);
         if ll_is_struct(ll_pk(lv)) && ll_pptr(lv) != "" {
             vs = vs + 1;
-            ll_ir_text(ir, "  " + ll_ssa(vs) + " = load " + ll_ir_val(ll_pk(lv)) + ", ptr " + ll_pptr(lv) + ", align 8");
+            ll_ir_inst(ir, "load", ll_ir_val(ll_pk(lv)), ll_ssa(vs), "ptr " + ll_pptr(lv) + ", align 8", 1, 1);
         }
-        ll_ir_text(ir, "  br label %wmerge" + id.to_string());
-        ll_ir_text(ir, "werr" + id.to_string() + ":");
-        ll_ir_text(ir, "  br label %wmerge" + id.to_string());
-        ll_ir_text(ir, "wmerge" + id.to_string() + ":");
+        ll_ir_inst(ir, "br", "label", "", "%wmerge" + id.to_string(), 1, 1);
+        ll_ir_label(ir, "werr" + id.to_string());
+        ll_ir_inst(ir, "br", "label", "", "%wmerge" + id.to_string(), 1, 1);
+        ll_ir_label(ir, "wmerge" + id.to_string());
         let ph: Int = ll_hw(vs, dv) + 1;
-        ll_ir_text(ir, "  " + ll_ssa(ph) + " = phi " + ll_ir_val(ll_pk(lv)) + " [ " + ll_ssa(vs) + ", %wok" + id.to_string() + " ], [ " + ll_ssa(dv) + ", %werr" + id.to_string() + " ]");
+        ll_ir_inst(ir, "phi", ll_ir_val(ll_pk(lv)), ll_ssa(ph), "[ " + ll_ssa(vs) + ", %wok" + id.to_string() + " ], [ " + ll_ssa(dv) + ", %werr" + id.to_string() + " ]", 1, 1);
         if ll_is_struct(ll_pk(lv)) {
             let wa: String = ll_tmpa(ph + 1);
             ll_slot_name(wa, ir);
-            ll_ir_text(ir, "  store " + ll_ir_val(ll_pk(lv)) + " " + ll_ssa(ph) + ", ptr " + wa + ", align 8");
+            ll_ir_inst(ir, "store", ll_ir_val(ll_pk(lv)), "", ll_ssa(ph) + ", ptr " + wa + ", align 8", 1, 1);
             return ll_pack(0, ph + 1, ll_pk(lv), wa);
         }
         return ll_pack(0, ph, ll_pk(lv), "");
@@ -183,14 +183,14 @@ pub fn ll_arm_val(arm: String, ssa0: Int, ir: &mut IrBuf) -> Int {
         let s: Int = ll_hw(ll_pssa(arm), ssa0) + 1;
         let a: String = ll_tmpa(s);
         ll_slot_name(a, ir);
-        ll_ir_text(ir, "  store " + ll_ir_val(ll_pk(arm)) + " " + ll_opnd(arm) + ", ptr " + a + ", align 8");
+        ll_ir_inst(ir, "store", ll_ir_val(ll_pk(arm)), "", ll_opnd(arm) + ", ptr " + a + ", align 8", 1, 1);
         let s2: Int = s + 1;
-        ll_ir_text(ir, "  " + ll_ssa(s2) + " = load " + ll_ir_val(ll_pk(arm)) + ", ptr " + a + ", align 8");
+        ll_ir_inst(ir, "load", ll_ir_val(ll_pk(arm)), ll_ssa(s2), "ptr " + a + ", align 8", 1, 1);
         return s2;
     }
     if !ll_has_slot(arm) { return ll_pssa(arm); }
     let s: Int = ll_hw(ll_pssa(arm), ssa0) + 1;
-    ll_ir_text(ir, "  " + ll_ssa(s) + " = load " + ll_ir_val(ll_pk(arm)) + ", ptr " + ll_pptr(arm) + ", align 8");
+    ll_ir_inst(ir, "load", ll_ir_val(ll_pk(arm)), ll_ssa(s), "ptr " + ll_pptr(arm) + ", align 8", 1, 1);
     return s;
 }
 
@@ -218,3 +218,4 @@ pub fn ll_borrow_addr(toks: List[String], pos: Int, n: Int, ssa0: Int, env: Stri
     }
     return ll_pack(ap, ll_pssa(ad), "ri64", ll_pptr(ad));
 }
+

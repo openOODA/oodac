@@ -61,7 +61,7 @@ pub fn ll_user_call(name: String, sig: String, args: List[String], ssa0: Int, ir
         i = i + 1;
     }
     if ret == "void" || ret == "" {
-        ll_ir_text(ir, "  call void @" + name + "(" + call + ")");
+        ll_ir_inst(ir, "call", "void", "", "@" + name + "(" + call + ")", 1, 1);
         return ll_pack(0, s, "void", "");
     }
     if ll_is_mem(ret) {
@@ -69,14 +69,14 @@ pub fn ll_user_call(name: String, sig: String, args: List[String], ssa0: Int, ir
         s = s + 1;
         ll_slot_name(a, ir);
         if call != "" {
-            ll_ir_text(ir, "  call void @" + name + "(ptr sret(" + ll_ir_alloc(ret) + ") align 8 " + a + ", " + call + ")");
+            ll_ir_inst(ir, "call", "void", "", "@" + name + "(ptr sret(" + ll_ir_alloc(ret) + ") align 8 " + a + ", " + call + ")", 1, 1);
         } else {
-            ll_ir_text(ir, "  call void @" + name + "(ptr sret(" + ll_ir_alloc(ret) + ") align 8 " + a + ")");
+            ll_ir_inst(ir, "call", "void", "", "@" + name + "(ptr sret(" + ll_ir_alloc(ret) + ") align 8 " + a + ")", 1, 1);
         }
         return ll_pack(0, s, ret, a);
     }
     let s2: Int = s + 1;
-    ll_ir_text(ir, "  " + ll_ssa(s2) + " = call " + ll_ir_val(ret) + " @" + name + "(" + call + ")");
+    ll_ir_inst(ir, "call", ll_ir_val(ret), ll_ssa(s2), "@" + name + "(" + call + ")", 1, 1);
     return ll_pack(0, s2, ret, "");
 }
 

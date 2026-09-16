@@ -61,9 +61,9 @@ pub fn ll_list_new(expect: String, ssa0: Int, ir: &mut IrBuf) -> String {
     let a: String = ll_tmpa(ssa0 + 1);
     ll_slot_ty(a, ll_ir_alloc(k), ir);
     if k == "ilist" {
-        ll_ir_text(ir, "  call void @oo_ilist_new(ptr sret(%OoIList) align 8 " + a + ")");
+        ll_ir_inst(ir, "call", "void", "", "@oo_ilist_new(ptr sret(%OoIList) align 8 " + a + ")", 1, 1);
     } else {
-        ll_ir_text(ir, "  call void @oo_slist_new(ptr sret(%OoSList) align 8 " + a + ")");
+        ll_ir_inst(ir, "call", "void", "", "@oo_slist_new(ptr sret(%OoSList) align 8 " + a + ")", 1, 1);
     }
     return ll_pack(0, ssa0 + 1, k, a);
 }
@@ -87,9 +87,9 @@ pub fn ll_builtin(name: String, args: List[String], ssa0: Int, expect: String, i
         let k: String = ll_pk(a0);
         let s: Int = ll_pssa(a0) + 1;
         if k == "ilist" {
-            ll_ir_text(ir, "  " + ll_ssa(s) + " = call i64 @oo_ilist_len(ptr byval(%OoIList) align 8 " + ll_pptr(a0) + ")");
+            ll_ir_inst(ir, "call", "i64", ll_ssa(s), "@oo_ilist_len(ptr byval(%OoIList) align 8 " + ll_pptr(a0) + ")", 1, 1);
         } else {
-            ll_ir_text(ir, "  " + ll_ssa(s) + " = call i64 @oo_slist_len(ptr byval(%OoSList) align 8 " + ll_pptr(a0) + ")");
+            ll_ir_inst(ir, "call", "i64", ll_ssa(s), "@oo_slist_len(ptr byval(%OoSList) align 8 " + ll_pptr(a0) + ")", 1, 1);
         }
         return ll_pack(0, s, "i64", "");
     }
@@ -98,10 +98,10 @@ pub fn ll_builtin(name: String, args: List[String], ssa0: Int, expect: String, i
         let ix: String = ll_i64arg(args, 1, ll_pssa(a0), ir);
         let s: Int = ll_hw(ll_pssa(a0), ll_pssa(ix)) + 1;
         if ll_pk(a0) == "ilist" {
-            ll_ir_text(ir, "  " + ll_ssa(s) + " = call i64 @oo_ilist_get(ptr byval(%OoIList) align 8 " + ll_pptr(a0) + ", i64 " + ll_opnd(ix) + ")");
+            ll_ir_inst(ir, "call", "i64", ll_ssa(s), "@oo_ilist_get(ptr byval(%OoIList) align 8 " + ll_pptr(a0) + ", i64 " + ll_opnd(ix) + ")", 1, 1);
             return ll_pack(0, s, "i64", "");
         }
-        ll_ir_text(ir, "  " + ll_ssa(s) + " = call { ptr, i64 } @oo_slist_get(ptr byval(%OoSList) align 8 " + ll_pptr(a0) + ", i64 " + ll_opnd(ix) + ")");
+        ll_ir_inst(ir, "call", "{ ptr, i64 }", ll_ssa(s), "@oo_slist_get(ptr byval(%OoSList) align 8 " + ll_pptr(a0) + ", i64 " + ll_opnd(ix) + ")", 1, 1);
         return ll_pack(0, s, "str", "");
     }
     if name == "list_push" && na >= 2 {
@@ -115,13 +115,13 @@ pub fn ll_builtin(name: String, args: List[String], ssa0: Int, expect: String, i
             let pv: String = ll_i64arg(args, 1, s, ir);
             s = ll_hw(s, ll_pssa(pv)) + 1;
             ll_slot_name(out, ir);
-            ll_ir_text(ir, "  call void @oo_ilist_push(ptr sret(%OoIList) align 8 " + out + ", ptr byval(%OoIList) align 8 " + ll_pptr(a0) + ", i64 " + ll_opnd(pv) + ")");
+            ll_ir_inst(ir, "call", "void", "", "@oo_ilist_push(ptr sret(%OoIList) align 8 " + out + ", ptr byval(%OoIList) align 8 " + ll_pptr(a0) + ", i64 " + ll_opnd(pv) + ")", 1, 1);
             return ll_pack(0, s, "ilist", out);
         }
         let a1: String = ll_as_val(a1r, s, ir);
         s = ll_pssa(a1);
         ll_slot_name(out, ir);
-        ll_ir_text(ir, "  call void @oo_slist_push(ptr sret(%OoSList) align 8 " + out + ", ptr byval(%OoSList) align 8 " + ll_pptr(a0) + ", { ptr, i64 } " + ll_ssa(s) + ")");
+        ll_ir_inst(ir, "call", "void", "", "@oo_slist_push(ptr sret(%OoSList) align 8 " + out + ", ptr byval(%OoSList) align 8 " + ll_pptr(a0) + ", { ptr, i64 } " + ll_ssa(s) + ")", 1, 1);
         return ll_pack(0, s, "slist", out);
     }
     if name == "list_slice" && na >= 3 {
@@ -134,10 +134,10 @@ pub fn ll_builtin(name: String, args: List[String], ssa0: Int, expect: String, i
         let a: String = ll_opnd(c1);
         let b: String = ll_opnd(c2);
         if ll_pk(a0) == "ilist" {
-            ll_ir_text(ir, "  call void @oo_ilist_slice(ptr sret(%OoIList) align 8 " + out + ", ptr byval(%OoIList) align 8 " + ll_pptr(a0) + ", i64 " + a + ", i64 " + b + ")");
+            ll_ir_inst(ir, "call", "void", "", "@oo_ilist_slice(ptr sret(%OoIList) align 8 " + out + ", ptr byval(%OoIList) align 8 " + ll_pptr(a0) + ", i64 " + a + ", i64 " + b + ")", 1, 1);
             return ll_pack(0, s, "ilist", out);
         }
-        ll_ir_text(ir, "  call void @oo_slist_slice(ptr sret(%OoSList) align 8 " + out + ", ptr byval(%OoSList) align 8 " + ll_pptr(a0) + ", i64 " + a + ", i64 " + b + ")");
+        ll_ir_inst(ir, "call", "void", "", "@oo_slist_slice(ptr sret(%OoSList) align 8 " + out + ", ptr byval(%OoSList) align 8 " + ll_pptr(a0) + ", i64 " + a + ", i64 " + b + ")", 1, 1);
         return ll_pack(0, s, "slist", out);
     }
     if (name == "chars_len" || name == "oo_chars_len" || name == "bytes_len" || name == "oo_bytes_len") && na >= 1 {
@@ -145,14 +145,14 @@ pub fn ll_builtin(name: String, args: List[String], ssa0: Int, expect: String, i
         if name == "bytes_len" || name == "oo_bytes_len" { callee = "oo_bytes_len"; }
         let a0: String = ll_as_val(ll_arg(args, 0), ssa0, ir);
         let s: Int = ll_pssa(a0) + 1;
-        ll_ir_text(ir, "  " + ll_ssa(s) + " = call i64 @" + callee + "({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ")");
+        ll_ir_inst(ir, "call", "i64", ll_ssa(s), "@" + callee + "({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ")", 1, 1);
         return ll_pack(0, s, "i64", "");
     }
     if (name == "char_at" || name == "oo_char_at") && na >= 2 {
         let a0: String = ll_as_val(ll_arg(args, 0), ssa0, ir);
         let cx: String = ll_i64arg(args, 1, ll_pssa(a0), ir);
         let s: Int = ll_hw(ll_pssa(a0), ll_pssa(cx)) + 1;
-        ll_ir_text(ir, "  " + ll_ssa(s) + " = call { ptr, i64 } @oo_char_at({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ", i64 " + ll_opnd(cx) + ")");
+        ll_ir_inst(ir, "call", "{ ptr, i64 }", ll_ssa(s), "@oo_char_at({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ", i64 " + ll_opnd(cx) + ")", 1, 1);
         return ll_pack(0, s, "str", "");
     }
     if (name == "str_starts_with" || name == "oo_str_starts_with" || name == "str_ends_with" || name == "oo_str_ends_with") && na >= 2 {
@@ -161,9 +161,9 @@ pub fn ll_builtin(name: String, args: List[String], ssa0: Int, expect: String, i
         let a0: String = ll_as_val(ll_arg(args, 0), ssa0, ir);
         let a1: String = ll_as_val(ll_arg(args, 1), ll_pssa(a0), ir);
         let s: Int = ll_pssa(a1) + 1;
-        ll_ir_text(ir, "  " + ll_ssa(s) + " = call i32 @" + callee + "({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ")");
+        ll_ir_inst(ir, "call", "i32", ll_ssa(s), "@" + callee + "({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ")", 1, 1);
         let s2: Int = s + 1;
-        ll_ir_text(ir, "  " + ll_ssa(s2) + " = icmp ne i32 " + ll_ssa(s) + ", 0");
+        ll_ir_inst(ir, "icmp ne", "i32", ll_ssa(s2), ll_ssa(s) + ", 0", 1, 1);
         return ll_pack(0, s2, "i1", "");
     }
     if (name == "str_slice" || name == "oo_str_slice") && na >= 3 {
@@ -171,34 +171,34 @@ pub fn ll_builtin(name: String, args: List[String], ssa0: Int, expect: String, i
         let d1: String = ll_i64arg(args, 1, ll_pssa(a0), ir);
         let d2: String = ll_i64arg(args, 2, ll_pssa(d1), ir);
         let s: Int = ll_hw(ll_hw(ll_pssa(a0), ll_pssa(d1)), ll_pssa(d2)) + 1;
-        ll_ir_text(ir, "  " + ll_ssa(s) + " = call { ptr, i64 } @oo_str_slice({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ", i64 " + ll_opnd(d1) + ", i64 " + ll_opnd(d2) + ")");
+        ll_ir_inst(ir, "call", "{ ptr, i64 }", ll_ssa(s), "@oo_str_slice({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ", i64 " + ll_opnd(d1) + ", i64 " + ll_opnd(d2) + ")", 1, 1);
         return ll_pack(0, s, "str", "");
     }
     if (name == "str_index_of" || name == "oo_str_index_of") && na >= 2 {
         let a0: String = ll_as_val(ll_arg(args, 0), ssa0, ir);
         let a1: String = ll_as_val(ll_arg(args, 1), ll_pssa(a0), ir);
         let s: Int = ll_pssa(a1) + 1;
-        ll_ir_text(ir, "  " + ll_ssa(s) + " = call i64 @oo_str_index_of({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ")");
+        ll_ir_inst(ir, "call", "i64", ll_ssa(s), "@oo_str_index_of({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ")", 1, 1);
         return ll_pack(0, s, "i64", "");
     }
     if (name == "path_exists" || name == "oo_path_exists") && na >= 2 {
         let a1: String = ll_as_val(ll_arg(args, 1), ssa0, ir);
         let s: Int = ll_pssa(a1) + 1;
-        ll_ir_text(ir, "  " + ll_ssa(s) + " = call i32 @oo_path_exists(i64 " + ll_ssa(ll_pssa(ll_arg(args, 0))) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ")");
+        ll_ir_inst(ir, "call", "i32", ll_ssa(s), "@oo_path_exists(i64 " + ll_ssa(ll_pssa(ll_arg(args, 0))) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ")", 1, 1);
         let s2: Int = s + 1;
-        ll_ir_text(ir, "  " + ll_ssa(s2) + " = icmp ne i32 " + ll_ssa(s) + ", 0");
+        ll_ir_inst(ir, "icmp ne", "i32", ll_ssa(s2), ll_ssa(s) + ", 0", 1, 1);
         return ll_pack(0, s2, "i1", "");
     }
     if (name == "file_size" || name == "oo_file_size") && na >= 2 {
         let a1: String = ll_as_val(ll_arg(args, 1), ssa0, ir);
         let s: Int = ll_pssa(a1) + 1;
-        ll_ir_text(ir, "  " + ll_ssa(s) + " = call i64 @oo_file_size(i64 " + ll_ssa(ll_pssa(ll_arg(args, 0))) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ")");
+        ll_ir_inst(ir, "call", "i64", ll_ssa(s), "@oo_file_size(i64 " + ll_ssa(ll_pssa(ll_arg(args, 0))) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ")", 1, 1);
         return ll_pack(0, s, "i64", "");
     }
     if name == "process_exit" && na >= 1 {
         let ex: String = ll_i64arg(args, 0, ssa0, ir);
-        ll_ir_text(ir, "  call void @oo_process_exit(i64 " + ll_opnd(ex) + ")");
-        ll_ir_text(ir, "  unreachable");
+        ll_ir_inst(ir, "call", "void", "", "@oo_process_exit(i64 " + ll_opnd(ex) + ")", 1, 1);
+        ll_ir_inst(ir, "unreachable", "", "", "", 1, 1);
         return ll_pack(0, ll_hw(ssa0, ll_pssa(ex)), "noret", "");
     }
     if (name == "env_get" || name == "oo_env_get") && na >= 2 {
@@ -206,7 +206,7 @@ pub fn ll_builtin(name: String, args: List[String], ssa0: Int, expect: String, i
         let a: String = ll_tmpa(ll_pssa(a1) + 1);
         let s: Int = ll_pssa(a1) + 1;
         ll_slot_name(a, ir);
-        ll_ir_text(ir, "  call void @oo_env_get(ptr sret(%OoResS) align 8 " + a + ", i64 " + ll_ssa(ll_pssa(ll_arg(args, 0))) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ")");
+        ll_ir_inst(ir, "call", "void", "", "@oo_env_get(ptr sret(%OoResS) align 8 " + a + ", i64 " + ll_ssa(ll_pssa(ll_arg(args, 0))) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ")", 1, 1);
         return ll_pack(0, s, "ress", a);
     }
     if name == "sys_exec" && na >= 2 {
@@ -234,10 +234,10 @@ fn ll_sys_exec(args: List[String], ssa0: Int, ir: &mut IrBuf) -> String {
         let a: String = ll_ensure_ptr(ll_arg(args, i), s, ir);
         s = ll_pssa(a);
         let sl: Int = s + 1;
-        ll_ir_text(ir, "  " + ll_ssa(sl) + " = load { ptr, i64 }, ptr " + ll_pptr(a) + ", align 8");
+        ll_ir_inst(ir, "load", "{ ptr, i64 }", ll_ssa(sl), "ptr " + ll_pptr(a) + ", align 8", 1, 1);
         let gp: Int = sl + 1;
-        ll_ir_text(ir, "  " + ll_ssa(gp) + " = getelementptr inbounds [" + argc.to_string() + " x %OoStr], ptr " + av + ", i64 0, i64 " + (i - 1).to_string());
-        ll_ir_text(ir, "  store { ptr, i64 } " + ll_ssa(sl) + ", ptr " + ll_ssa(gp) + ", align 8");
+        ll_ir_inst(ir, "getelementptr inbounds", "[" + argc.to_string() + " x %OoStr]", ll_ssa(gp), "ptr " + av + ", i64 0, i64 " + (i - 1).to_string(), 1, 1);
+        ll_ir_inst(ir, "store", "{ ptr, i64 }", "", ll_ssa(sl) + ", ptr " + ll_ssa(gp) + ", align 8", 1, 1);
         s = gp;
         i = i + 1;
     }
@@ -245,8 +245,8 @@ fn ll_sys_exec(args: List[String], ssa0: Int, ir: &mut IrBuf) -> String {
     s = s + 1;
     ll_slot_name(res, ir);
     let base: Int = s + 1;
-    ll_ir_text(ir, "  " + ll_ssa(base) + " = getelementptr inbounds [" + argc.to_string() + " x %OoStr], ptr " + av + ", i64 0, i64 0");
-    ll_ir_text(ir, "  call void @oo_sys_exec(ptr sret(%OoResS) align 8 " + res + ", i64 " + ll_ssa(ll_pssa(ll_arg(args, 0))) + ", i32 " + argc.to_string() + ", ptr " + ll_ssa(base) + ")");
+    ll_ir_inst(ir, "getelementptr inbounds", "[" + argc.to_string() + " x %OoStr]", ll_ssa(base), "ptr " + av + ", i64 0, i64 0", 1, 1);
+    ll_ir_inst(ir, "call", "void", "", "@oo_sys_exec(ptr sret(%OoResS) align 8 " + res + ", i64 " + ll_ssa(ll_pssa(ll_arg(args, 0))) + ", i32 " + argc.to_string() + ", ptr " + ll_ssa(base) + ")", 1, 1);
     return ll_pack(0, base, "ress", res);
 }
 

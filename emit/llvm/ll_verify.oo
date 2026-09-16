@@ -26,27 +26,27 @@ pub fn ll_emit_verify(toks: List[String], pos: Int, n: Int, stab: String, ir: &m
     if p >= n || ll_k(toks, p) != "LBRACE" { return ll_pack(p, 0, "", ""); }
     let id: String = pos.to_string();
     let fnn: String = "oo_verify_" + vname + "_" + id;
-    ll_ir_text(ir, "define internal void @" + fnn + "() nounwind {");
-    ll_ir_text(ir, "entry:");
+    ll_ir_fn_open(ir, "define internal void @" + fnn + "() nounwind {");
+    ll_ir_label(ir, "entry");
     ll_heap(ir);
-    ll_ir_text(ir, "  %g = call ptr @getenv(ptr @.oodatest)");
-    ll_ir_text(ir, "  %z = icmp eq ptr %g, null");
-    ll_ir_text(ir, "  br i1 %z, label %vskip" + id + ", label %vchk" + id);
-    ll_ir_text(ir, "vchk" + id + ":");
-    ll_ir_text(ir, "  %c = load i8, ptr %g, align 1");
-    ll_ir_text(ir, "  %e = icmp eq i8 %c, 0");
-    ll_ir_text(ir, "  br i1 %e, label %vskip" + id + ", label %vrun" + id);
-    ll_ir_text(ir, "vrun" + id + ":");
+    ll_ir_inst(ir, "call", "ptr", "%g", "@getenv(ptr @.oodatest)", 1, 1);
+    ll_ir_inst(ir, "icmp eq", "ptr", "%z", "%g, null", 1, 1);
+    ll_ir_inst(ir, "br", "i1", "", "%z, label %vskip" + id + ", label %vchk" + id, 1, 1);
+    ll_ir_label(ir, "vchk" + id);
+    ll_ir_inst(ir, "load", "i8", "%c", "ptr %g, align 1", 1, 1);
+    ll_ir_inst(ir, "icmp eq", "i8", "%e", "%c, 0", 1, 1);
+    ll_ir_inst(ir, "br", "i1", "", "%e, label %vskip" + id + ", label %vrun" + id, 1, 1);
+    ll_ir_label(ir, "vrun" + id);
     let body: String = ll_emit_stmts(toks, p + 1, n, "void", "", 10, stab, ir);
     if ll_pterm(body) == 0 {
-        ll_ir_text(ir, "  call void @oo_print_str(ptr getelementptr inbounds ([10 x i8], ptr @.vok, i64 0, i64 0), i64 9)");
-        ll_ir_text(ir, "  call void @oo_println()");
-        ll_ir_text(ir, "  br label %vskip" + id);
+        ll_ir_inst(ir, "call", "void", "", "@oo_print_str(ptr getelementptr inbounds ([10 x i8], ptr @.vok, i64 0, i64 0), i64 9)", 1, 1);
+        ll_ir_inst(ir, "call", "void", "", "@oo_println()", 1, 1);
+        ll_ir_inst(ir, "br", "label", "", "%vskip" + id, 1, 1);
     }
-    ll_ir_text(ir, "vskip" + id + ":");
+    ll_ir_label(ir, "vskip" + id);
     ll_heap_end(ir);
-    ll_ir_text(ir, "  ret void");
-    ll_ir_text(ir, "}");
+    ll_ir_inst(ir, "ret", "void", "", "", 1, 1);
+    ll_ir_fn_close(ir);
     return ll_pack(skip_balanced(toks, p), 0, fnn, "");
 }
 

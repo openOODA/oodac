@@ -85,7 +85,7 @@ pub fn ll_struct_field_ptr(kind: String, ptr: String, field: String, ssa0: Int, 
     if fi == "" || str_index_of(fi, ":") < 0 { println("ERR\tllvm\tunknown field " + field); process_exit(1); }
     let ci: Int = str_index_of(fi, ":");
     let idx: String = str_slice(fi, 0, ci); let fk: String = str_slice(fi, ci + 1, chars_len(fi)); let s: Int = ssa0 + 1;
-    ll_ir_text(ir, "  " + ll_ssa(s) + " = getelementptr inbounds %" + ll_st_basek(kind) + ", ptr " + ptr + ", i32 0, i32 " + idx);
+    ll_ir_inst(ir, "getelementptr inbounds", "%" + ll_st_basek(kind), ll_ssa(s), "ptr " + ptr + ", i32 0, i32 " + idx, 1, 1);
     return ll_pack(0, s, fk, ll_ssa(s));
 }
 pub fn ll_struct_field_load(kind: String, ssa: Int, ptr: String, field: String, ssa0: Int, ir: &mut IrBuf) -> String {
@@ -93,7 +93,7 @@ pub fn ll_struct_field_load(kind: String, ssa: Int, ptr: String, field: String, 
     let fp: String = ll_struct_field_ptr(kind, ptr, field, ssa0, ir);
     let fk: String = ll_pk(fp);
     let t: Int = ll_pssa(fp) + 1;
-    ll_ir_text(ir, "  " + ll_ssa(t) + " = load " + ll_ir_val(fk) + ", ptr " + ll_pptr(fp) + ", align 8");
+    ll_ir_inst(ir, "load", ll_ir_val(fk), ll_ssa(t), "ptr " + ll_pptr(fp) + ", align 8", 1, 1);
     return ll_pack(0, t, fk, "");
 }
 pub fn ll_struct_declare(toks: List[String], base: String) -> String {
@@ -170,18 +170,18 @@ pub fn ll_struct_emit_types(env: String, toks: List[String], ir: &mut IrBuf) {
                 j = j + 1;
             }
             ll_ir_text(ir, "%St_" + nm + " = type { " + tys + " }");
-            ll_ir_text(ir, "define hidden void @oo_retain_St_" + nm + "(ptr noalias nocapture noundef %p) nounwind {");
+            ll_ir_fn_open(ir, "define hidden void @oo_retain_St_" + nm + "(ptr noalias nocapture noundef %p) nounwind {");
             ll_heap(ir);
             ll_st_rr(fl, nm, 1, ir);
             ll_heap_end(ir);
-            ll_ir_text(ir, "  ret void");
-            ll_ir_text(ir, "}");
-            ll_ir_text(ir, "define hidden void @oo_release_St_" + nm + "(ptr noalias nocapture noundef %p) nounwind {");
+            ll_ir_inst(ir, "ret", "void", "", "", 1, 1);
+            ll_ir_fn_close(ir);
+            ll_ir_fn_open(ir, "define hidden void @oo_release_St_" + nm + "(ptr noalias nocapture noundef %p) nounwind {");
             ll_heap(ir);
             ll_st_rr(fl, nm, 0, ir);
             ll_heap_end(ir);
-            ll_ir_text(ir, "  ret void");
-            ll_ir_text(ir, "}");
+            ll_ir_inst(ir, "ret", "void", "", "", 1, 1);
+            ll_ir_fn_close(ir);
             ll_st_wrap_emit(nm, toks, ir);
             i = c;
         }
@@ -242,13 +242,13 @@ pub fn ll_struct_lit_at(toks: List[String], pos: Int, n: Int, ssa0: Int, env: St
         }
         let fi: String = ll_struct_field(rich, fld2); let idx: String = str_slice(fi, 0, str_index_of(fi, ":"));
         s = s + 1;
-        ll_ir_text(ir, "  " + ll_ssa(s) + " = getelementptr inbounds %St_" + nm + ", ptr " + a + ", i32 0, i32 " + idx);
+        ll_ir_inst(ir, "getelementptr inbounds", "%St_" + nm, ll_ssa(s), "ptr " + a + ", i32 0, i32 " + idx, 1, 1);
         if ll_has_slot(v) {
             s = s + 1;
-            ll_ir_text(ir, "  " + ll_ssa(s) + " = load " + ll_ir_val(fk) + ", ptr " + ll_pptr(v) + ", align 8");
-            ll_ir_text(ir, "  store " + ll_ir_val(fk) + " " + ll_ssa(s) + ", ptr " + ll_ssa(s - 1) + ", align 8");
+            ll_ir_inst(ir, "load", ll_ir_val(fk), ll_ssa(s), "ptr " + ll_pptr(v) + ", align 8", 1, 1);
+            ll_ir_inst(ir, "store", ll_ir_val(fk), "", ll_ssa(s) + ", ptr " + ll_ssa(s - 1) + ", align 8", 1, 1);
         } else {
-            ll_ir_text(ir, "  store " + ll_ir_val(fk) + " " + ll_opnd(v) + ", ptr " + ll_ssa(s) + ", align 8");
+            ll_ir_inst(ir, "store", ll_ir_val(fk), "", ll_opnd(v) + ", ptr " + ll_ssa(s) + ", align 8", 1, 1);
         }
     }
     if p >= n || ll_k(toks, p) != "RBRACE" { println("ERR\tllvm\tstruct lit rbrace"); process_exit(1); }

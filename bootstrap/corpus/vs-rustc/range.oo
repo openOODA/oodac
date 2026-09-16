@@ -1,0 +1,8 @@
+// # vs-rustc range
+// Logline: Frozen vs-rustc pair member range (for_range_sum).
+// Beats: 1. sum 0..5. 2. print 10.
+pub fn main() {
+    let mut s: Int = 0;
+    for i in 0..5 { s = s + i; }
+    println(s);
+}

@@ -19,8 +19,8 @@ pub fn ll_emit_main(toks: List[String], pos: Int, n: Int, p: Int, env0: String, 
     let mut env: String = env0;
     let db: Int = pos + 20;
     ll_ir_sub("main", pos, db);
-    ll_ir_text(ir, "define hidden i32 @main(i32 noundef %argc, ptr nocapture noundef %argv) nounwind !dbg !" + db.to_string() + " {");
-    ll_ir_text(ir, "entry:");
+    ll_ir_fn_open(ir, "define hidden i32 @main(i32 noundef %argc, ptr nocapture noundef %argv) nounwind !dbg !" + db.to_string() + " {");
+    ll_ir_label(ir, "entry");
     ll_heap(ir);
     let mut i: Int = 0;
     let cn: Int = chars_len(caps);
@@ -33,30 +33,30 @@ pub fn ll_emit_main(toks: List[String], pos: Int, n: Int, p: Int, env0: String, 
             while e < cn && char_at(caps, e) != ";" { e = e + 1; }
             let suf: String = str_slice(caps, i + 1, e);
             ll_slot_ty(ll_var(nm), "i64", ir);
-            ll_ir_text(ir, "  %g_" + nm + " = call i64 @oo_cap_grant_" + suf + "()");
-            ll_ir_text(ir, "  store i64 %g_" + nm + ", ptr " + ll_var(nm) + ", align 8");
+            ll_ir_inst(ir, "call", "i64", "%g_" + nm, "@oo_cap_grant_" + suf + "()", 1, 1);
+            ll_ir_inst(ir, "store", "i64", "", "%g_" + nm + ", ptr " + ll_var(nm) + ", align 8", 1, 1);
         }
         i = i + 1;
     }
     if use_args {
         ll_slot_ty("%v_args", "%OoSList", ir);
-        ll_ir_text(ir, "  call void @oo_slist_new(ptr sret(%OoSList) align 8 %v_args)");
-        ll_ir_text(ir, "  br label %args0");
-        ll_ir_text(ir, "args0:");
-        ll_ir_text(ir, "  %ai = phi i32 [ 1, %entry ], [ %ai2, %args1 ]");
-        ll_ir_text(ir, "  %acmp = icmp slt i32 %ai, %argc");
-        ll_ir_text(ir, "  br i1 %acmp, label %args1, label %args2");
-        ll_ir_text(ir, "args1:");
-        ll_ir_text(ir, "  %ap = getelementptr inbounds ptr, ptr %argv, i32 %ai");
-        ll_ir_text(ir, "  %astr = load ptr, ptr %ap, align 8");
-        ll_ir_text(ir, "  %alit = call { ptr, i64 } @oo_str_lit(ptr %astr)");
+        ll_ir_inst(ir, "call", "void", "", "@oo_slist_new(ptr sret(%OoSList) align 8 %v_args)", 1, 1);
+        ll_ir_inst(ir, "br", "label", "", "%args0", 1, 1);
+        ll_ir_label(ir, "args0");
+        ll_ir_inst(ir, "phi", "i32", "%ai", "[ 1, %entry ], [ %ai2, %args1 ]", 1, 1);
+        ll_ir_inst(ir, "icmp slt", "i32", "%acmp", "%ai, %argc", 1, 1);
+        ll_ir_inst(ir, "br", "i1", "", "%acmp, label %args1, label %args2", 1, 1);
+        ll_ir_label(ir, "args1");
+        ll_ir_inst(ir, "getelementptr inbounds", "ptr", "%ap", "ptr %argv, i32 %ai", 1, 1);
+        ll_ir_inst(ir, "load", "ptr", "%astr", "ptr %ap, align 8", 1, 1);
+        ll_ir_inst(ir, "call", "{ ptr, i64 }", "%alit", "@oo_str_lit(ptr %astr)", 1, 1);
         ll_slot_name("%anew", ir);
-        ll_ir_text(ir, "  call void @oo_slist_push(ptr sret(%OoSList) align 8 %anew, ptr byval(%OoSList) align 8 %v_args, { ptr, i64 } %alit)");
-        ll_ir_text(ir, "  %acpy = load %OoSList, ptr %anew, align 8");
-        ll_ir_text(ir, "  store %OoSList %acpy, ptr %v_args, align 8");
-        ll_ir_text(ir, "  %ai2 = add i32 %ai, 1");
-        ll_ir_text(ir, "  br label %args0");
-        ll_ir_text(ir, "args2:");
+        ll_ir_inst(ir, "call", "void", "", "@oo_slist_push(ptr sret(%OoSList) align 8 %anew, ptr byval(%OoSList) align 8 %v_args, { ptr, i64 } %alit)", 1, 1);
+        ll_ir_inst(ir, "load", "%OoSList", "%acpy", "ptr %anew, align 8", 1, 1);
+        ll_ir_inst(ir, "store", "%OoSList", "", "%acpy, ptr %v_args, align 8", 1, 1);
+        ll_ir_inst(ir, "add", "i32", "%ai2", "%ai, 1", 1, 1);
+        ll_ir_inst(ir, "br", "label", "", "%args0", 1, 1);
+        ll_ir_label(ir, "args2");
         env = type_env_put(env, "args", "slist");
         env = type_env_put(env, "__l__args", "%v_args");
     }
@@ -70,7 +70,7 @@ pub fn ll_emit_main(toks: List[String], pos: Int, n: Int, p: Int, env0: String, 
         process_exit(1);
     }
     let mb: String = ll_emit_stmts(toks, p, n, mrk, env, 10, stab, ir);
-    if ll_pterm(mb) == 0 { ll_heap_end(ir); ll_ir_text(ir, "  ret i32 0"); }
-    ll_ir_text(ir, "}");
+    if ll_pterm(mb) == 0 { ll_heap_end(ir); ll_ir_inst(ir, "ret", "i32", "", "0", 1, 1); }
+    ll_ir_fn_close(ir);
     return ll_skip_fn(toks, pos, n);
 }

@@ -22,7 +22,6 @@ fn ll_need_call(need: String, nm: String) -> String {
     if nm == "println" || nm == "print" {
         n = ll_need_add(n, "oo_println");
         n = ll_need_add(n, "oo_print_int");
-        n = ll_need_add(n, "oo_print_str");
         return n;
     }
     if nm == "unwrap" || nm == "unwrap_or" {
@@ -162,7 +161,7 @@ pub fn ll_need_scan(toks: List[String]) -> String {
         }
         if k == "IDENT" {
             let nm: String = ll_t(toks, i);
-            if nm == "String" { has_str = true; }
+            if nm == "String" || nm == "to_string" { has_str = true; }
             if nm == "Float" { has_float = true; }
             if nm == "List" { has_list = true; }
             if nm == "List" && i + 2 < n && ll_k(toks, i + 1) == "LBRACKET" && ll_k(toks, i + 2) == "IDENT" {

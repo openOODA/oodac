@@ -70,15 +70,15 @@ pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String, env
             let cid: Int = ssa;
             let cv: Int = ll_cond_i1(c, ssa, ir);
             ssa = cv;
-            ll_ir_text(ir, "  br i1 " + ll_ssa(cv) + ", label %then" + cid.to_string() + ", label %else" + cid.to_string());
+            ll_ir_inst(ir, "br", "i1", "", ll_ssa(cv) + ", label %then" + cid.to_string() + ", label %else" + cid.to_string(), 1, 1);
             if p < n && ll_k(toks, p) == "LBRACE" { p = p + 1; }
-            ll_ir_text(ir, "then" + cid.to_string() + ":");
+            ll_ir_label(ir, "then" + cid.to_string());
             let th: String = ll_emit_stmts(toks, p, n, ret_kind, type_env_put(env, "__one__", ""), ssa, stab, ir);
             p = ll_ppos(th);
             ssa = ll_pssa(th);
             if p < n && ll_k(toks, p) == "RBRACE" { p = p + 1; }
-            if ll_pterm(th) == 0 { ll_ir_text(ir, "  br label %end" + cid.to_string()); }
-            ll_ir_text(ir, "else" + cid.to_string() + ":");
+            if ll_pterm(th) == 0 { ll_ir_inst(ir, "br", "", "", "label %end" + cid.to_string(), 1, 1); }
+            ll_ir_label(ir, "else" + cid.to_string());
             let mut et: Int = 0;
             if p < n && ll_k(toks, p) == "KW_ELSE" {
                 p = p + 1;
@@ -93,31 +93,31 @@ pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String, env
                 if had_else_block && p < n && ll_k(toks, p) == "RBRACE" { p = p + 1; }
                 et = ll_pterm(el);
             }
-            if et == 0 { ll_ir_text(ir, "  br label %end" + cid.to_string()); }
-            ll_ir_text(ir, "end" + cid.to_string() + ":");
+            if et == 0 { ll_ir_inst(ir, "br", "", "", "label %end" + cid.to_string(), 1, 1); }
+            ll_ir_label(ir, "end" + cid.to_string());
             if ll_pterm(th) != 0 && et != 0 {
-                ll_ir_text(ir, "  unreachable");
+                ll_ir_inst(ir, "unreachable", "", "", "", 1, 1);
                 p = ll_skip_to_rbrace(toks, p, n);
                 return ll_pack(p, ssa, ret_kind, env) + "\t1";
             }
         } else if k == "KW_WHILE" {
             let wid: Int = ssa + 1;
-            ll_ir_text(ir, "  br label %wcond" + wid.to_string());
-            ll_ir_text(ir, "wcond" + wid.to_string() + ":");
+            ll_ir_inst(ir, "br", "", "", "label %wcond" + wid.to_string(), 1, 1);
+            ll_ir_label(ir, "wcond" + wid.to_string());
             let c: String = ll_expr(toks, p + 1, n, ssa, env, ir);
             p = ll_ppos(c);
             ssa = ll_pssa(c);
             let cv: Int = ll_cond_i1(c, ssa, ir);
             ssa = cv;
-            ll_ir_text(ir, "  br i1 " + ll_ssa(cv) + ", label %wbody" + wid.to_string() + ", label %wend" + wid.to_string());
+            ll_ir_inst(ir, "br", "i1", "", ll_ssa(cv) + ", label %wbody" + wid.to_string() + ", label %wend" + wid.to_string(), 1, 1);
             if p < n && ll_k(toks, p) == "LBRACE" { p = p + 1; }
-            ll_ir_text(ir, "wbody" + wid.to_string() + ":");
+            ll_ir_label(ir, "wbody" + wid.to_string());
             let envb: String = type_env_put(type_env_put(type_env_put(env, "__brk__", "wend" + wid.to_string()), "__cont__", "wcond" + wid.to_string()), "__one__", "");
             let bd: String = ll_emit_stmts(toks, p, n, ret_kind, envb, ssa, stab, ir);
             p = ll_ppos(bd); ssa = ll_pssa(bd);
             if p < n && ll_k(toks, p) == "RBRACE" { p = p + 1; }
-            if ll_pterm(bd) == 0 { ll_ir_text(ir, "  br label %wcond" + wid.to_string()); }
-            ll_ir_text(ir, "wend" + wid.to_string() + ":");
+            if ll_pterm(bd) == 0 { ll_ir_inst(ir, "br", "", "", "label %wcond" + wid.to_string(), 1, 1); }
+            ll_ir_label(ir, "wend" + wid.to_string());
         } else if k == "KW_FOR" {
             p = p + 1;
             if p >= n || ll_k(toks, p) != "IDENT" {
@@ -163,41 +163,41 @@ pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String, env
             let mut lo_op: String = ll_opnd(lo);
             if ll_pptr(lo) != "" && !ll_is_imm(lo) {
                 ssa = ssa + 1;
-                ll_ir_text(ir, "  " + ll_ssa(ssa) + " = load i64, ptr " + ll_pptr(lo) + ", align 8");
+                ll_ir_inst(ir, "load", "i64", ll_ssa(ssa), "ptr " + ll_pptr(lo) + ", align 8", 1, 1);
                 lo_op = ll_ssa(ssa);
             }
             let mut hi_op: String = ll_opnd(hi);
             if ll_pptr(hi) != "" && !ll_is_imm(hi) {
                 ssa = ssa + 1;
-                ll_ir_text(ir, "  " + ll_ssa(ssa) + " = load i64, ptr " + ll_pptr(hi) + ", align 8");
+                ll_ir_inst(ir, "load", "i64", ll_ssa(ssa), "ptr " + ll_pptr(hi) + ", align 8", 1, 1);
                 hi_op = ll_ssa(ssa);
             }
             let fid: Int = ssa + 1;
             let fvar: String = ll_var(fname) + "_" + fid.to_string();
             ll_slot_name(fvar, ir);
-            ll_ir_text(ir, "  store i64 " + lo_op + ", ptr " + fvar + ", align 8");
+            ll_ir_inst(ir, "store", "i64", "", lo_op + ", ptr " + fvar + ", align 8", 1, 1);
             let envf: String = type_env_put(type_env_put(type_env_put(type_env_put(type_env_put(env, fname, "i64"), "__l__" + fname, fvar), "__brk__", "fend" + fid.to_string()), "__cont__", "fcond" + fid.to_string()), "__one__", "");
-            ll_ir_text(ir, "  br label %fcond" + fid.to_string());
-            ll_ir_text(ir, "fcond" + fid.to_string() + ":");
+            ll_ir_inst(ir, "br", "", "", "label %fcond" + fid.to_string(), 1, 1);
+            ll_ir_label(ir, "fcond" + fid.to_string());
             ssa = ssa + 1;
-            ll_ir_text(ir, "  " + ll_ssa(ssa) + " = load i64, ptr " + fvar + ", align 8");
+            ll_ir_inst(ir, "load", "i64", ll_ssa(ssa), "ptr " + fvar + ", align 8", 1, 1);
             ssa = ssa + 1;
-            ll_ir_text(ir, "  " + ll_ssa(ssa) + " = icmp slt i64 " + ll_ssa(ssa - 1) + ", " + hi_op);
-            ll_ir_text(ir, "  br i1 " + ll_ssa(ssa) + ", label %fbody" + fid.to_string() + ", label %fend" + fid.to_string());
+            ll_ir_inst(ir, "icmp slt", "i64", ll_ssa(ssa), ll_ssa(ssa - 1) + ", " + hi_op, 1, 1);
+            ll_ir_inst(ir, "br", "i1", "", ll_ssa(ssa) + ", label %fbody" + fid.to_string() + ", label %fend" + fid.to_string(), 1, 1);
             if p < n && ll_k(toks, p) == "LBRACE" { p = p + 1; }
-            ll_ir_text(ir, "fbody" + fid.to_string() + ":");
+            ll_ir_label(ir, "fbody" + fid.to_string());
             let fb: String = ll_emit_stmts(toks, p, n, ret_kind, envf, ssa, stab, ir);
             p = ll_ppos(fb); ssa = ll_pssa(fb);
             if p < n && ll_k(toks, p) == "RBRACE" { p = p + 1; }
             if ll_pterm(fb) == 0 {
                 ssa = ssa + 1;
-                ll_ir_text(ir, "  " + ll_ssa(ssa) + " = load i64, ptr " + fvar + ", align 8");
+                ll_ir_inst(ir, "load", "i64", ll_ssa(ssa), "ptr " + fvar + ", align 8", 1, 1);
                 ssa = ssa + 1;
-                ll_ir_text(ir, "  " + ll_ssa(ssa) + " = add i64 " + ll_ssa(ssa - 1) + ", 1");
-                ll_ir_text(ir, "  store i64 " + ll_ssa(ssa) + ", ptr " + fvar + ", align 8");
-                ll_ir_text(ir, "  br label %fcond" + fid.to_string());
+                ll_ir_inst(ir, "add", "i64", ll_ssa(ssa), ll_ssa(ssa - 1) + ", 1", 1, 1);
+                ll_ir_inst(ir, "store", "i64", "", ll_ssa(ssa) + ", ptr " + fvar + ", align 8", 1, 1);
+                ll_ir_inst(ir, "br", "", "", "label %fcond" + fid.to_string(), 1, 1);
             }
-            ll_ir_text(ir, "fend" + fid.to_string() + ":");
+            ll_ir_label(ir, "fend" + fid.to_string());
         } else if k == "KW_MATCH" {
             let ms: String = ll_match_stmt(toks, p, n, ssa, env, ret_kind, stab, ir);
             p = ll_ppos(ms); ssa = ll_pssa(ms);

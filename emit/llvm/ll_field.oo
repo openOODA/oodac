@@ -37,10 +37,10 @@ pub fn ll_store_field_stmt(toks: List[String], p0: Int, n: Int, ssa0: Int, env: 
     let mut src: String = ll_opnd(rhs);
     if ll_has_slot(rhs) {
         ns = ns + 1;
-        ll_ir_text(ir, "  " + ll_ssa(ns) + " = load " + ll_ir_val(fk) + ", ptr " + ll_pptr(rhs) + ", align 8");
+        ll_ir_inst(ir, "load", ll_ir_val(fk), ll_ssa(ns), "ptr " + ll_pptr(rhs) + ", align 8", 1, 1);
         src = ll_ssa(ns);
     }
-    ll_ir_text(ir, "  store " + ll_ir_val(fk) + " " + src + ", ptr " + ll_pptr(fp) + ", align 8");
+    ll_ir_inst(ir, "store", ll_ir_val(fk), "", src + ", ptr " + ll_pptr(fp) + ", align 8", 1, 1);
     if np < n && ll_k(toks, np) == "SEMI" { np = np + 1; }
     return ll_pack(np, ns, fk, "");
 }

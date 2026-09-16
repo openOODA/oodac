@@ -23,7 +23,7 @@ fn ll_ty_tui_ress(callee: String, extra: String, ssa0: Int, args: List[String], 
     let s: Int = ssa0 + 1;
     let out: String = ll_tmpa(s);
     ll_slot_name(out, ir);
-    ll_ir_text(ir, "  call void @" + callee + "(ptr sret(%OoResS) align 8 " + out + ", i64 " + ll_tok_tui_cap(args) + extra + ")");
+    ll_ir_inst(ir, "call", "void", "", "@" + callee + "(ptr sret(%OoResS) align 8 " + out + ", i64 " + ll_tok_tui_cap(args) + extra + ")", 1, 1);
     return ll_pack(0, s, "ress", out);
 }
 

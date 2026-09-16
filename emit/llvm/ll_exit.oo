@@ -25,7 +25,7 @@ pub fn ll_return_stmt(toks: List[String], p: Int, n: Int, ssa: Int, env: String,
         if ret_kind == "main_i32" || ret_kind == "optim" || ret_kind == "optsm" {
             let ns: Int = ll_arc_exit(env, ssa, ir);
             ll_heap_end(ir);
-            ll_ir_text(ir, "  ret i32 0");
+            ll_ir_inst(ir, "ret", "i32", "", "0", 1, 1);
             let q: Int = ll_skip_to_rbrace(toks, p + 1, n);
             return ll_pack(q, ns, ret_kind, env) + "\t1";
         }
@@ -34,7 +34,7 @@ pub fn ll_return_stmt(toks: List[String], p: Int, n: Int, ssa: Int, env: String,
             process_exit(1);
         }
         ll_heap_end(ir);
-        ll_ir_text(ir, "  ret void");
+        ll_ir_inst(ir, "ret", "void", "", "", 1, 1);
         let q: Int = ll_skip_to_rbrace(toks, p + 1, n);
         return ll_pack(q, ssa, ret_kind, env) + "\t1";
     }
@@ -60,29 +60,29 @@ pub fn ll_return_stmt(toks: List[String], p: Int, n: Int, ssa: Int, env: String,
     if ret_kind == "resim" {
         ns = ll_ret_resim(v, ns, ir);
     } else if ret_kind == "optim" || ret_kind == "optsm" {
-        ll_ir_text(ir, "  ret i32 0");
+        ll_ir_inst(ir, "ret", "i32", "", "0", 1, 1);
     } else if ret_kind == "resi" {
         ns = ll_ret_resi(v, ns, ir);
     } else if ret_kind == "void" {
-        ll_ir_text(ir, "  ret void");
+        ll_ir_inst(ir, "ret", "void", "", "", 1, 1);
     } else if ret_kind == "opti" || ret_kind == "opts" {
         ns = ll_ret_opt(v, ret_kind, ns, ir);
     } else if ret_kind == "main_i32" {
-        ll_ir_text(ir, "  ret i32 0");
+        ll_ir_inst(ir, "ret", "i32", "", "0", 1, 1);
     } else if ll_has_slot(v) {
         ns = ns + 1;
-        ll_ir_text(ir, "  " + ll_ssa(ns) + " = load " + ll_ir_val(ret_kind) + ", ptr " + ll_pptr(v) + ", align 8");
+        ll_ir_inst(ir, "load", ll_ir_val(ret_kind), ll_ssa(ns), "ptr " + ll_pptr(v) + ", align 8", 1, 1);
         if ll_is_mem(ret_kind) {
-            ll_ir_text(ir, "  store " + ll_ir_val(ret_kind) + " " + ll_ssa(ns) + ", ptr %ret, align 8");
-            ll_ir_text(ir, "  ret void");
+            ll_ir_inst(ir, "store", ll_ir_val(ret_kind), "", ll_ssa(ns) + ", ptr %ret, align 8", 1, 1);
+            ll_ir_inst(ir, "ret", "void", "", "", 1, 1);
         } else {
-            ll_ir_text(ir, "  ret " + ll_ir_val(ret_kind) + " " + ll_ssa(ns));
+            ll_ir_inst(ir, "ret", ll_ir_val(ret_kind), "", ll_ssa(ns), 1, 1);
         }
     } else if ll_is_mem(ret_kind) {
-        ll_ir_text(ir, "  store " + ll_ir_val(ret_kind) + " " + ll_opnd(v) + ", ptr %ret, align 8");
-        ll_ir_text(ir, "  ret void");
+        ll_ir_inst(ir, "store", ll_ir_val(ret_kind), "", ll_opnd(v) + ", ptr %ret, align 8", 1, 1);
+        ll_ir_inst(ir, "ret", "void", "", "", 1, 1);
     } else {
-        ll_ir_text(ir, "  ret " + ll_ir_val(ret_kind) + " " + ll_opnd(v));
+        ll_ir_inst(ir, "ret", ll_ir_val(ret_kind), "", ll_opnd(v), 1, 1);
     }
     let rp: Int = ll_skip_to_rbrace(toks, np, n);
     return ll_pack(rp, ns, ret_kind, env) + "\t1";
@@ -96,7 +96,7 @@ pub fn ll_break_stmt(toks: List[String], p: Int, n: Int, ssa: Int, env: String, 
         println("ERR\tllvm\tbreak outside loop");
         process_exit(1);
     }
-    ll_ir_text(ir, "  br label %" + dst);
+    ll_ir_inst(ir, "br", "label", "", "%" + dst, 1, 1);
     let mut np: Int = p + 1;
     if np < n && ll_k(toks, np) == "SEMI" { np = np + 1; }
     let rp: Int = ll_skip_to_rbrace(toks, np, n);
@@ -116,8 +116,8 @@ pub fn ll_store_deref_stmt(toks: List[String], p0: Int, n: Int, ssa0: Int, env: 
     }
     let la: String = ll_load_ident(name, env, ll_pssa(vv), ir);
     let pa: Int = ll_pssa(la) + 1;
-    ll_ir_text(ir, "  " + ll_ssa(pa) + " = inttoptr " + ll_ir_val(ty) + " " + ll_ssa(ll_pssa(la)) + " to ptr");
-    ll_ir_text(ir, "  store " + ll_ir_val(ty) + " " + ll_opnd(vv) + ", ptr " + ll_ssa(pa) + ", align 8");
+    ll_ir_inst(ir, "inttoptr", ll_ir_val(ty), ll_ssa(pa), ll_ssa(ll_pssa(la)) + " to ptr", 1, 1);
+    ll_ir_inst(ir, "store", ll_ir_val(ty), "", ll_opnd(vv) + ", ptr " + ll_ssa(pa) + ", align 8", 1, 1);
     let mut p: Int = ll_ppos(vv);
     if p < n && ll_k(toks, p) == "SEMI" { p = p + 1; }
     return ll_pack(p, pa, ty, "");

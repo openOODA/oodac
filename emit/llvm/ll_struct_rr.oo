@@ -26,78 +26,78 @@ pub fn ll_st_rr(fl: String, nm: String, is_ret: Int, ir: &mut IrBuf) {
             if cur != "" {
                 let fk: String = ll_st_map(cur, "|", ",");
                 if fk != "i64" && fk != "i1" && fk != "opti" && !ll_is_int(fk) {
-                    ll_ir_text(ir, "  " + ll_ssa(s) + " = getelementptr inbounds %St_" + nm + ", ptr %p, i32 0, i32 " + idx.to_string());
+                    ll_ir_inst(ir, "getelementptr inbounds", "%St_" + nm, ll_ssa(s), "ptr %p, i32 0, i32 " + idx.to_string(), 1, 1);
                     if fk == "str" {
-                        ll_ir_text(ir, "  " + ll_ssa(s + 1) + " = load { ptr, i64 }, ptr " + ll_ssa(s) + ", align 8");
-                        ll_ir_text(ir, "  call void @oo_str_" + op + "({ ptr, i64 } " + ll_ssa(s + 1) + ")");
+                        ll_ir_inst(ir, "load", "{ ptr, i64 }", ll_ssa(s + 1), "ptr " + ll_ssa(s) + ", align 8", 1, 1);
+                        ll_ir_inst(ir, "call", "void", "", "@oo_str_" + op + "({ ptr, i64 } " + ll_ssa(s + 1) + ")", 1, 1);
                     } else if fk == "slist" || fk == "ilist" {
-                        ll_ir_text(ir, "  call void @oo_" + fk + "_" + op + "(ptr byval(" + ll_ir_alloc(fk) + ") align 8 " + ll_ssa(s) + ")");
+                        ll_ir_inst(ir, "call", "void", "", "@oo_" + fk + "_" + op + "(ptr byval(" + ll_ir_alloc(fk) + ") align 8 " + ll_ssa(s) + ")", 1, 1);
                     } else if ll_is_olist(fk) {
                         let onm: String = str_slice(fk, 6, chars_len(fk));
                         let otag: String = "rr_" + op + "_ol_" + nm + "_" + idx.to_string();
-                        ll_ir_text(ir, "  " + ll_ssa(s + 1) + " = getelementptr inbounds %OoL_" + onm + ", ptr " + ll_ssa(s) + ", i32 0, i32 1");
-                        ll_ir_text(ir, "  " + ll_ssa(s + 2) + " = load i64, ptr " + ll_ssa(s + 1) + ", align 8");
-                        ll_ir_text(ir, "  " + ll_ssa(s + 3) + " = getelementptr inbounds %OoL_" + onm + ", ptr " + ll_ssa(s) + ", i32 0, i32 0");
-                        ll_ir_text(ir, "  " + ll_ssa(s + 4) + " = load ptr, ptr " + ll_ssa(s + 3) + ", align 8");
+                        ll_ir_inst(ir, "getelementptr inbounds", "%OoL_" + onm, ll_ssa(s + 1), "ptr " + ll_ssa(s) + ", i32 0, i32 1", 1, 1);
+                        ll_ir_inst(ir, "load", "i64", ll_ssa(s + 2), "ptr " + ll_ssa(s + 1) + ", align 8", 1, 1);
+                        ll_ir_inst(ir, "getelementptr inbounds", "%OoL_" + onm, ll_ssa(s + 3), "ptr " + ll_ssa(s) + ", i32 0, i32 0", 1, 1);
+                        ll_ir_inst(ir, "load", "ptr", ll_ssa(s + 4), "ptr " + ll_ssa(s + 3) + ", align 8", 1, 1);
                         ll_slot_name(ll_ssa(s + 5), ir);
-                        ll_ir_text(ir, "  store i64 0, ptr " + ll_ssa(s + 5) + ", align 8");
-                        ll_ir_text(ir, "  br label %" + otag + "_loop");
-                        ll_ir_text(ir, otag + "_loop:");
-                        ll_ir_text(ir, "  " + ll_ssa(s + 6) + " = load i64, ptr " + ll_ssa(s + 5) + ", align 8");
-                        ll_ir_text(ir, "  " + ll_ssa(s + 7) + " = icmp ult i64 " + ll_ssa(s + 6) + ", " + ll_ssa(s + 2));
-                        ll_ir_text(ir, "  br i1 " + ll_ssa(s + 7) + ", label %" + otag + "_step, label %" + otag + "_done");
-                        ll_ir_text(ir, otag + "_step:");
-                        ll_ir_text(ir, "  " + ll_ssa(s + 8) + " = getelementptr inbounds %St_" + onm + ", ptr " + ll_ssa(s + 4) + ", i64 " + ll_ssa(s + 6));
-                        ll_ir_text(ir, "  call void @oo_" + op + "_St_" + onm + "(ptr " + ll_ssa(s + 8) + ")");
-                        ll_ir_text(ir, "  " + ll_ssa(s + 9) + " = add i64 " + ll_ssa(s + 6) + ", 1");
-                        ll_ir_text(ir, "  store i64 " + ll_ssa(s + 9) + ", ptr " + ll_ssa(s + 5) + ", align 8");
-                        ll_ir_text(ir, "  br label %" + otag + "_loop");
-                        ll_ir_text(ir, otag + "_done:");
+                        ll_ir_inst(ir, "store", "i64", "", "0, ptr " + ll_ssa(s + 5) + ", align 8", 1, 1);
+                        ll_ir_inst(ir, "br", "label", "", "%" + otag + "_loop", 1, 1);
+                        ll_ir_label(ir, otag + "_loop");
+                        ll_ir_inst(ir, "load", "i64", ll_ssa(s + 6), "ptr " + ll_ssa(s + 5) + ", align 8", 1, 1);
+                        ll_ir_inst(ir, "icmp ult", "i64", ll_ssa(s + 7), ll_ssa(s + 6) + ", " + ll_ssa(s + 2), 1, 1);
+                        ll_ir_inst(ir, "br", "i1", "", ll_ssa(s + 7) + ", label %" + otag + "_step, label %" + otag + "_done", 1, 1);
+                        ll_ir_label(ir, otag + "_step");
+                        ll_ir_inst(ir, "getelementptr inbounds", "%St_" + onm, ll_ssa(s + 8), "ptr " + ll_ssa(s + 4) + ", i64 " + ll_ssa(s + 6), 1, 1);
+                        ll_ir_inst(ir, "call", "void", "", "@oo_" + op + "_St_" + onm + "(ptr " + ll_ssa(s + 8) + ")", 1, 1);
+                        ll_ir_inst(ir, "add", "i64", ll_ssa(s + 9), ll_ssa(s + 6) + ", 1", 1, 1);
+                        ll_ir_inst(ir, "store", "i64", "", ll_ssa(s + 9) + ", ptr " + ll_ssa(s + 5) + ", align 8", 1, 1);
+                        ll_ir_inst(ir, "br", "label", "", "%" + otag + "_loop", 1, 1);
+                        ll_ir_label(ir, otag + "_done");
                         s = s + 10;
                     } else if chars_len(fk) >= 3 && str_slice(fk, 0, 3) == "St_" {
                         let h: Int = str_index_of(fk, "#");
                         if h < 0 {
-                            ll_ir_text(ir, "  call void @oo_" + op + "_" + fk + "(ptr " + ll_ssa(s) + ")");
+                            ll_ir_inst(ir, "call", "void", "", "@oo_" + op + "_" + fk + "(ptr " + ll_ssa(s) + ")", 1, 1);
                         } else {
-                            ll_ir_text(ir, "  call void @oo_" + op + "_" + str_slice(fk, 0, h) + "(ptr " + ll_ssa(s) + ")");
+                            ll_ir_inst(ir, "call", "void", "", "@oo_" + op + "_" + str_slice(fk, 0, h) + "(ptr " + ll_ssa(s) + ")", 1, 1);
                         }
                     } else if ll_is_optst(fk) {
                         let onm: String = str_slice(fk, 6, chars_len(fk));
                         let otag: String = "rr_" + op + "_" + nm + "_" + idx.to_string();
-                        ll_ir_text(ir, "  " + ll_ssa(s + 1) + " = getelementptr inbounds %OoOpt_St_" + onm + ", ptr " + ll_ssa(s) + ", i32 0, i32 0");
-                        ll_ir_text(ir, "  " + ll_ssa(s + 2) + " = load i32, ptr " + ll_ssa(s + 1) + ", align 4");
-                        ll_ir_text(ir, "  " + ll_ssa(s + 3) + " = icmp ne i32 " + ll_ssa(s + 2) + ", 0");
-                        ll_ir_text(ir, "  br i1 " + ll_ssa(s + 3) + ", label %" + otag + "_has, label %" + otag + "_skip");
-                        ll_ir_text(ir, otag + "_has:");
-                        ll_ir_text(ir, "  " + ll_ssa(s + 4) + " = getelementptr inbounds %OoOpt_St_" + onm + ", ptr " + ll_ssa(s) + ", i32 0, i32 1");
-                        ll_ir_text(ir, "  call void @oo_" + op + "_St_" + onm + "(ptr " + ll_ssa(s + 4) + ")");
-                        ll_ir_text(ir, "  br label %" + otag + "_skip");
-                        ll_ir_text(ir, otag + "_skip:");
+                        ll_ir_inst(ir, "getelementptr inbounds", "%OoOpt_St_" + onm, ll_ssa(s + 1), "ptr " + ll_ssa(s) + ", i32 0, i32 0", 1, 1);
+                        ll_ir_inst(ir, "load", "i32", ll_ssa(s + 2), "ptr " + ll_ssa(s + 1) + ", align 4", 1, 1);
+                        ll_ir_inst(ir, "icmp ne", "i32", ll_ssa(s + 3), ll_ssa(s + 2) + ", 0", 1, 1);
+                        ll_ir_inst(ir, "br", "i1", "", ll_ssa(s + 3) + ", label %" + otag + "_has, label %" + otag + "_skip", 1, 1);
+                        ll_ir_label(ir, otag + "_has");
+                        ll_ir_inst(ir, "getelementptr inbounds", "%OoOpt_St_" + onm, ll_ssa(s + 4), "ptr " + ll_ssa(s) + ", i32 0, i32 1", 1, 1);
+                        ll_ir_inst(ir, "call", "void", "", "@oo_" + op + "_St_" + onm + "(ptr " + ll_ssa(s + 4) + ")", 1, 1);
+                        ll_ir_inst(ir, "br", "label", "", "%" + otag + "_skip", 1, 1);
+                        ll_ir_label(ir, otag + "_skip");
                         s = s + 5;
                     } else if ll_is_resst(fk) {
                         let rnm: String = str_slice(fk, 6, chars_len(fk));
                         let rtag: String = "rr_" + op + "_" + nm + "_" + idx.to_string();
-                        ll_ir_text(ir, "  " + ll_ssa(s + 1) + " = getelementptr inbounds %OoRes_St_" + rnm + ", ptr " + ll_ssa(s) + ", i32 0, i32 0");
-                        ll_ir_text(ir, "  " + ll_ssa(s + 2) + " = load i32, ptr " + ll_ssa(s + 1) + ", align 4");
-                        ll_ir_text(ir, "  " + ll_ssa(s + 3) + " = icmp ne i32 " + ll_ssa(s + 2) + ", 0");
-                        ll_ir_text(ir, "  br i1 " + ll_ssa(s + 3) + ", label %" + rtag + "_ok, label %" + rtag + "_err");
-                        ll_ir_text(ir, rtag + "_ok:");
-                        ll_ir_text(ir, "  " + ll_ssa(s + 4) + " = getelementptr inbounds %OoRes_St_" + rnm + ", ptr " + ll_ssa(s) + ", i32 0, i32 1");
-                        ll_ir_text(ir, "  call void @oo_" + op + "_St_" + rnm + "(ptr " + ll_ssa(s + 4) + ")");
-                        ll_ir_text(ir, "  br label %" + rtag + "_end");
-                        ll_ir_text(ir, rtag + "_err:");
-                        ll_ir_text(ir, "  " + ll_ssa(s + 5) + " = getelementptr inbounds %OoRes_St_" + rnm + ", ptr " + ll_ssa(s) + ", i32 0, i32 2");
-                        ll_ir_text(ir, "  " + ll_ssa(s + 6) + " = load { ptr, i64 }, ptr " + ll_ssa(s + 5) + ", align 8");
-                        ll_ir_text(ir, "  call void @oo_str_" + op + "({ ptr, i64 } " + ll_ssa(s + 6) + ")");
-                        ll_ir_text(ir, "  br label %" + rtag + "_end");
-                        ll_ir_text(ir, rtag + "_end:");
+                        ll_ir_inst(ir, "getelementptr inbounds", "%OoRes_St_" + rnm, ll_ssa(s + 1), "ptr " + ll_ssa(s) + ", i32 0, i32 0", 1, 1);
+                        ll_ir_inst(ir, "load", "i32", ll_ssa(s + 2), "ptr " + ll_ssa(s + 1) + ", align 4", 1, 1);
+                        ll_ir_inst(ir, "icmp ne", "i32", ll_ssa(s + 3), ll_ssa(s + 2) + ", 0", 1, 1);
+                        ll_ir_inst(ir, "br", "i1", "", ll_ssa(s + 3) + ", label %" + rtag + "_ok, label %" + rtag + "_err", 1, 1);
+                        ll_ir_label(ir, rtag + "_ok");
+                        ll_ir_inst(ir, "getelementptr inbounds", "%OoRes_St_" + rnm, ll_ssa(s + 4), "ptr " + ll_ssa(s) + ", i32 0, i32 1", 1, 1);
+                        ll_ir_inst(ir, "call", "void", "", "@oo_" + op + "_St_" + rnm + "(ptr " + ll_ssa(s + 4) + ")", 1, 1);
+                        ll_ir_inst(ir, "br", "label", "", "%" + rtag + "_end", 1, 1);
+                        ll_ir_label(ir, rtag + "_err");
+                        ll_ir_inst(ir, "getelementptr inbounds", "%OoRes_St_" + rnm, ll_ssa(s + 5), "ptr " + ll_ssa(s) + ", i32 0, i32 2", 1, 1);
+                        ll_ir_inst(ir, "load", "{ ptr, i64 }", ll_ssa(s + 6), "ptr " + ll_ssa(s + 5) + ", align 8", 1, 1);
+                        ll_ir_inst(ir, "call", "void", "", "@oo_str_" + op + "({ ptr, i64 } " + ll_ssa(s + 6) + ")", 1, 1);
+                        ll_ir_inst(ir, "br", "label", "", "%" + rtag + "_end", 1, 1);
+                        ll_ir_label(ir, rtag + "_end");
                         s = s + 7;
                     } else {
                         let mut inner: Int = 1;
                         if fk == "resi" { inner = 2; }
-                        ll_ir_text(ir, "  " + ll_ssa(s + 1) + " = getelementptr inbounds " + ll_ir_alloc(fk) + ", ptr " + ll_ssa(s) + ", i32 0, i32 " + inner.to_string());
-                        ll_ir_text(ir, "  " + ll_ssa(s + 2) + " = load { ptr, i64 }, ptr " + ll_ssa(s + 1) + ", align 8");
-                        ll_ir_text(ir, "  call void @oo_str_" + op + "({ ptr, i64 } " + ll_ssa(s + 2) + ")");
+                        ll_ir_inst(ir, "getelementptr inbounds", ll_ir_alloc(fk), ll_ssa(s + 1), "ptr " + ll_ssa(s) + ", i32 0, i32 " + inner.to_string(), 1, 1);
+                        ll_ir_inst(ir, "load", "{ ptr, i64 }", ll_ssa(s + 2), "ptr " + ll_ssa(s + 1) + ", align 8", 1, 1);
+                        ll_ir_inst(ir, "call", "void", "", "@oo_str_" + op + "({ ptr, i64 } " + ll_ssa(s + 2) + ")", 1, 1);
                     }
                 }
                 if fk == "slist" || fk == "ilist" || (chars_len(fk) >= 3 && str_slice(fk, 0, 3) == "St_") {

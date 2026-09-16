@@ -69,38 +69,38 @@ fn ll_arc_rr(kind: String, ptr: String, ssa0: Int, is_ret: Int, ir: &mut IrBuf) 
     if is_ret != 0 { op = "retain"; }
     if kind == "str" {
         let s: Int = ssa0 + 1;
-        ll_ir_text(ir, "  " + ll_ssa(s) + " = load { ptr, i64 }, ptr " + ptr + ", align 8");
-        ll_ir_text(ir, "  call void @oo_str_" + op + "({ ptr, i64 } " + ll_ssa(s) + ")");
+        ll_ir_inst(ir, "load", "{ ptr, i64 }", ll_ssa(s), "ptr " + ptr + ", align 8", 1, 1);
+        ll_ir_inst(ir, "call", "void", "", "@oo_str_" + op + "({ ptr, i64 } " + ll_ssa(s) + ")", 1, 1);
         return s;
     }
     if kind == "slist" {
-        ll_ir_text(ir, "  call void @oo_slist_" + op + "(ptr byval(%OoSList) align 8 " + ptr + ")");
+        ll_ir_inst(ir, "call", "void", "", "@oo_slist_" + op + "(ptr byval(%OoSList) align 8 " + ptr + ")", 1, 1);
         return ssa0;
     }
     if kind == "ilist" {
-        ll_ir_text(ir, "  call void @oo_ilist_" + op + "(ptr byval(%OoIList) align 8 " + ptr + ")");
+        ll_ir_inst(ir, "call", "void", "", "@oo_ilist_" + op + "(ptr byval(%OoIList) align 8 " + ptr + ")", 1, 1);
         return ssa0;
     }
     if kind == "ress" || kind == "opts" || kind == "resi" {
         let s: Int = ssa0 + 1;
         let tag: String = s.to_string();
-        ll_ir_text(ir, "  " + ll_ssa(s) + " = getelementptr inbounds " + ll_ir_alloc(kind) + ", ptr " + ptr + ", i32 0, i32 0");
-        ll_ir_text(ir, "  " + ll_ssa(s + 1) + " = load i32, ptr " + ll_ssa(s) + ", align 4");
+        ll_ir_inst(ir, "getelementptr inbounds", ll_ir_alloc(kind), ll_ssa(s), "ptr " + ptr + ", i32 0, i32 0", 1, 1);
+        ll_ir_inst(ir, "load", "i32", ll_ssa(s + 1), "ptr " + ll_ssa(s) + ", align 4", 1, 1);
         let mut pred: String = "ne";
         if kind == "resi" { pred = "eq"; }
-        ll_ir_text(ir, "  " + ll_ssa(s + 2) + " = icmp " + pred + " i32 " + ll_ssa(s + 1) + ", 0");
-        ll_ir_text(ir, "  br i1 " + ll_ssa(s + 2) + ", label %arcy" + tag + ", label %arcn" + tag);
-        ll_ir_text(ir, "arcy" + tag + ":");
+        ll_ir_inst(ir, "icmp " + pred, "i32", ll_ssa(s + 2), ll_ssa(s + 1) + ", 0", 1, 1);
+        ll_ir_inst(ir, "br", "i1", "", ll_ssa(s + 2) + ", label %arcy" + tag + ", label %arcn" + tag, 1, 1);
+        ll_ir_label(ir, "arcy" + tag);
         let mut fi: String = "1";
         if kind == "resi" { fi = "2"; }
-        ll_ir_text(ir, "  " + ll_ssa(s + 3) + " = getelementptr inbounds " + ll_ir_alloc(kind) + ", ptr " + ptr + ", i32 0, i32 " + fi);
-        ll_ir_text(ir, "  " + ll_ssa(s + 4) + " = load { ptr, i64 }, ptr " + ll_ssa(s + 3) + ", align 8");
-        ll_ir_text(ir, "  call void @oo_str_" + op + "({ ptr, i64 } " + ll_ssa(s + 4) + ")");
-        ll_ir_text(ir, "  br label %arcn" + tag);
-        ll_ir_text(ir, "arcn" + tag + ":");
+        ll_ir_inst(ir, "getelementptr inbounds", ll_ir_alloc(kind), ll_ssa(s + 3), "ptr " + ptr + ", i32 0, i32 " + fi, 1, 1);
+        ll_ir_inst(ir, "load", "{ ptr, i64 }", ll_ssa(s + 4), "ptr " + ll_ssa(s + 3) + ", align 8", 1, 1);
+        ll_ir_inst(ir, "call", "void", "", "@oo_str_" + op + "({ ptr, i64 } " + ll_ssa(s + 4) + ")", 1, 1);
+        ll_ir_inst(ir, "br", "label", "", "%arcn" + tag, 1, 1);
+        ll_ir_label(ir, "arcn" + tag);
         return s + 4;
     }
-    ll_ir_text(ir, "  call void @oo_" + op + "_St_" + ll_arc_st_nm(kind) + "(ptr " + ptr + ")");
+    ll_ir_inst(ir, "call", "void", "", "@oo_" + op + "_St_" + ll_arc_st_nm(kind) + "(ptr " + ptr + ")", 1, 1);
     return ssa0;
 }
 
