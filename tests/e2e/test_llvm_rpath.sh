@@ -56,7 +56,11 @@ PY
   record "R3-noundef" "$?"
   grep -q 'nounwind' "$d/add.ll"
   record "R3-nounwind" "$?"
-  if grep -q 'ignoring invalid debug' "$d/add.ll"; then record "R4-no-invalid-dbg" 1; else record "R4-no-invalid-dbg" 0; fi
+  clang_err=$(clang --no-default-config --target=x86_64-unknown-linux-gnu -c "$d/add.ll" -o "$d/add.o" 2>&1 || true)
+  "$OODAC" check "$ROOT/bootstrap/corpus/emit-llvm/pass/struct_field.oo" >/dev/null
+  "$OODAC" emit-llvm "$ROOT/bootstrap/corpus/emit-llvm/pass/struct_field.oo" > "$d/struct.ll"
+  clang_st_err=$(clang --no-default-config --target=x86_64-unknown-linux-gnu -c "$d/struct.ll" -o "$d/struct.o" 2>&1 || true)
+  if echo "$clang_err$clang_st_err" | grep -qi 'invalid debug'; then record "R4-no-invalid-dbg" 1; else record "R4-no-invalid-dbg" 0; fi
   grep -q 'DISubprogram' "$d/add.ll"
   record "R4-disubprogram" "$?"
   # oodar ABI tagged: OoResS still 2-field in header types

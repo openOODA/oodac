@@ -24,13 +24,12 @@ fn ll_nl(s: String, i: Int) -> Int {
 }
 
 fn ll_dbg_loc(line: Int, col: Int, scope: Int) -> String {
+    if scope <= 0 || scope == 10 { return ""; }
     let mut ln: Int = line;
     let mut cn: Int = col;
-    let mut sc: Int = scope;
     if ln < 1 { ln = 1; }
     if cn < 1 { cn = 1; }
-    if sc < 1 { sc = 10; }
-    return ", !dbg !DILocation(line: " + ln.to_string() + ", column: " + cn.to_string() + ", scope: !" + sc.to_string() + ")";
+    return ", !dbg !DILocation(line: " + ln.to_string() + ", column: " + cn.to_string() + ", scope: !" + scope.to_string() + ")";
 }
 
 fn ll_t_is_label(s: String) -> Bool {
@@ -48,7 +47,7 @@ fn ll_t_is_call(s: String) -> Bool {
 
 fn ll_fn_scope(chunk: String) -> Int {
     let p: Int = str_index_of(chunk, "!dbg !");
-    if p < 0 { return 10; }
+    if p < 0 { return 0; }
     let n: Int = chars_len(chunk);
     let e: Int = ll_nl(chunk, p);
     let digits: String = str_slice(chunk, p + 6, e);
@@ -60,12 +59,12 @@ fn ll_fn_scope(chunk: String) -> Int {
         s = s + c;
         i = i + 1;
     }
-    if s == "" { return 10; }
+    if s == "" { return 0; }
     return parse_int(s);
 }
 
 fn ll_print_t(s: String, scope: Int) {
-    if ll_t_is_call(s) && str_index_of(s, "!dbg") < 0 {
+    if ll_t_is_call(s) && str_index_of(s, "!dbg") < 0 && scope > 0 && scope != 10 {
         println(s + ll_dbg_loc(1, 1, scope));
         return;
     }
