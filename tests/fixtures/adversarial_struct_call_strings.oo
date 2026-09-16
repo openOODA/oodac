@@ -1,0 +1,22 @@
+// # Adversarial Test: Struct with call string fields
+//
+// Logline: Combine structs and call strings to verify both paths simultaneously.
+//
+// Beats:
+//   1. Struct with string field.
+//   2. Call string assigned to field.
+//   3. Print field.
+
+type CallHolder = struct {
+    tag: String,
+    val: Int
+};
+
+pub fn main() {
+    let ch: CallHolder = CallHolder {
+        tag: " = call ",
+        val: 42
+    };
+    println(ch.tag);
+    println(ch.val);
+}

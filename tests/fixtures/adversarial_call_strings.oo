@@ -1,0 +1,30 @@
+// # Adversarial Test: Strings containing LLVM call patterns
+//
+// Logline: Verify LLVM emission does not misclassify strings as calls.
+//
+// Setup: Strings containing ' = call ' and '  call ' must not get !dbg attached.
+//
+// Beats:
+//   1. Define functions with adversarial string literals.
+//   2. Print and return strings.
+//   3. Validate output in main.
+
+pub fn test_call_strings() -> Int {
+    let s1: String = " = call ";
+    let s2: String = "  call ";
+    let s3: String = "foo = call bar(i64 123)";
+    let s4: String = "  call void @llvm.lifetime.start.p0()";
+    let s5: String = "nested \" = call \" and \"  call \" in text";
+    let s6: String = " = call \n  call \n = call ";
+    println(s1);
+    println(s2);
+    println(s3);
+    println(s4);
+    println(s5);
+    println(s6);
+    return 0;
+}
+
+pub fn main() {
+    test_call_strings();
+}

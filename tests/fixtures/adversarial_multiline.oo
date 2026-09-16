@@ -1,0 +1,56 @@
+// # Adversarial Test: Multi-Line Expressions
+//
+// Logline: Stress-test expressions, calls, and conditions broken across lines.
+//
+// Setup: Lexer and parser must assemble multi-line AST without syntax faults.
+//
+// Beats:
+//   1. Multi-line arithmetic and boolean expressions.
+//   2. Multi-line function calls.
+//   3. Multi-line string concatenation.
+//   4. Multi-line if-expression assignment.
+
+fn multiline_fn_call(
+    a: Int,
+    b: Int,
+    c: Int,
+    d: Int
+) -> Int {
+    return a + b + c + d;
+}
+
+fn test_multiline_exprs() -> Int {
+    let x: Int = 10 +
+        20 *
+        3 -
+        5;
+
+    let flag: Bool = (x > 50) &&
+        (x < 100) ||
+        (x == 65);
+
+    let s: String = "alpha" +
+        "beta" +
+        "gamma";
+
+    let call_res: Int = multiline_fn_call(
+        1,
+        2,
+        3,
+        4
+    );
+
+    let if_res: Int = if flag {
+        1000
+    } else {
+        2000
+    };
+
+    println(s);
+    return x + call_res + if_res;
+}
+
+pub fn main() {
+    let r: Int = test_multiline_exprs();
+    println(r);
+}

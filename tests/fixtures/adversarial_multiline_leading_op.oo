@@ -1,0 +1,23 @@
+// # Adversarial Test: Multi-line leading operators
+//
+// Logline: Test binary operations where operator is at start of continuation line.
+//
+// Beats:
+//   1. Leading plus, minus, mul.
+//   2. Leading logical and/or.
+
+pub fn main() {
+    let x: Int = 10
+        + 20
+        * 3
+        - 5;
+    let b: Bool = true
+        && false
+        || true;
+    println(x);
+    if b {
+        println(1);
+    } else {
+        println(0);
+    }
+}
