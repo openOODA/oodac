@@ -17,24 +17,7 @@ pub fn ll_expr(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String, ir:
 }
 fn ll_unary(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String, ir: &mut IrBuf) -> String {
     if pos < n && ll_k(toks, pos) == "AMP" {
-        let mut ap: Int = pos + 1;
-        if ap < n && ll_k(toks, ap) == "KW_MUT" { ap = ap + 1; }
-        if ap >= n || ll_k(toks, ap) != "IDENT" {
-            println("ERR\tllvm\taddress of non-ident");
-            process_exit(1);
-        }
-        let ad: String = ll_addr_ident(ll_t(toks, ap), env, ssa0, ir);
-        if ll_is_agg(ll_pk(ad)) {
-            return ll_pack(ap + 1, ll_pssa(ad), ll_pk(ad), ll_pptr(ad));
-        }
-        if ll_is_refk(ll_pk(ad)) {
-            return ll_pack(ap + 1, ll_pssa(ad), ll_pk(ad), ll_pptr(ad));
-        }
-        if ll_pk(ad) != "i64" && ll_pk(ad) != "u64" {
-            println("ERR\tllvm\tborrow of narrow/float/bool not lowered");
-            process_exit(1);
-        }
-        return ll_pack(ap + 1, ll_pssa(ad), "ri64", ll_pptr(ad));
+        return ll_borrow_addr(toks, pos, n, ssa0, env, ir);
     }
     if pos < n && ll_k(toks, pos) == "STAR" {
         let r: String = ll_unary(toks, pos + 1, n, ssa0, env, ir);
