@@ -25,11 +25,15 @@ SUITE_LIST=(
   "test_tier1_r2_migrate.sh"
   "test_tier1_r4_llvm.sh"
   "test_llvm_ir_props.sh"
+  "test_llvm_rpath.sh"
   "test_tier1_r3_qa.sh"
   "test_tier1_r5_boot.sh"
   "test_tier2_boundary.sh"
   "test_tier3_cross.sh"
   "test_tier4_realworld.sh"
+  "test_polyrepo_parity.sh"
+  "test_tui_harness.sh"
+  "test_installer_updater.sh"
 )
 
 # Governance: Verify Line Count Ceilings (wc -l <= 256)
