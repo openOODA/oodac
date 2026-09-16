@@ -45,6 +45,12 @@ fn ll_load_art(fs: &FsReadCap, dest: String) -> TypedArtifact {
     return artifact_decode(body);
 }
 
+fn ll_skip_anchor_tu(p: String) -> Bool {
+    let n: Int = chars_len(p);
+    if n < 9 { return false; }
+    return str_slice(p, n - 9, n) == "ANCHOR.oo";
+}
+
 fn ll_toks_file(fs: &FsReadCap, path: String, src: String) -> List[String] {
     let auto: String = artifact_cache_path(artifact_sha(path, src));
     if !path_exists(fs, auto) {
@@ -83,9 +89,8 @@ pub fn run_emit_llvm(fs: &FsReadCap, fs_w: &FsWriteCap, env: &EnvCap, path: Stri
             let mut i: Int = 0;
             while i < list_len(paths) {
                 let ip: String = list_get(paths, i);
-                let pn0: Int = chars_len(ip);
                 let mut skip: Bool = ip == path && root == path;
-                if pn0 >= 9 && (str_slice(ip, pn0 - 9, pn0) == "ANCHOR.oo" || str_slice(ip, pn0 - 9, pn0) == "anchor.oo") { skip = true; }
+                if ll_skip_anchor_tu(ip) { skip = true; }
                 if !skip {
                     let ir: Result[String, String] = read_file(fs, ip);
                     if ir.is_ok() {
@@ -117,8 +122,7 @@ pub fn run_emit_llvm(fs: &FsReadCap, fs_w: &FsWriteCap, env: &EnvCap, path: Stri
     let mut i: Int = 0;
     while i < nle {
         let p: String = list_get(paths, i);
-        let pn0: Int = chars_len(p);
-        if pn0 >= 9 && (str_slice(p, pn0 - 9, pn0) == "ANCHOR.oo" || str_slice(p, pn0 - 9, pn0) == "anchor.oo") {
+        if ll_skip_anchor_tu(p) {
             i = i + 1;
             continue;
         }
