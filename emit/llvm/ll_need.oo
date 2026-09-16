@@ -22,6 +22,7 @@ fn ll_need_call(need: String, nm: String) -> String {
     if nm == "println" || nm == "print" {
         n = ll_need_add(n, "oo_println");
         n = ll_need_add(n, "oo_print_int");
+        n = ll_need_add(n, "oo_print_str");
         return n;
     }
     if nm == "unwrap" || nm == "unwrap_or" {
