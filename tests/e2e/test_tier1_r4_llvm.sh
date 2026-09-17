@@ -148,8 +148,7 @@ EOF
 
   # Feature 10: 32-Ocap Symbol Linkage
   # T1-F10-01: All 26 active capabilities present in oodar.o
-  local nm_symbols
-  nm_symbols=$(nm -g "$OODAR_O" 2>/dev/null || true)
+  nm -g "$OODAR_O" > "$d/nm_symbols.txt" 2>/dev/null || true
   local active_caps=(
     "alloc" "arena" "audio" "bind" "camera" "compiler_read" "env" "ffi"
     "frame" "fs" "fsread" "fswrite" "gpu" "hid" "metrics" "net"
@@ -157,7 +156,7 @@ EOF
   )
   local missing_caps=0
   for cap in "${active_caps[@]}"; do
-    if ! echo "$nm_symbols" | grep -F -q "oo_cap_grant_$cap"; then
+    if ! grep -F -q "oo_cap_grant_$cap" "$d/nm_symbols.txt" 2>/dev/null; then
       missing_caps=$((missing_caps + 1))
     fi
   done

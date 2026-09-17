@@ -4,7 +4,7 @@
 set -euo pipefail
 
 OODAC="${OODAC_BIN:-$HOME/.openooda/bin/oodac}"
-ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd -P)"
 CORPUS="$ROOT/bootstrap/corpus/emit-llvm/pass"
 TMPDIR="$(mktemp -d /tmp/e2e_llvm_props_XXXXXX)"
 trap 'rm -rf "$TMPDIR"' EXIT INT TERM

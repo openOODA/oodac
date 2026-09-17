@@ -4,8 +4,8 @@
 set -euo pipefail
 
 OODAC="${OODAC_BIN:-$HOME/.openooda/bin/oodac}"
-PROJECT_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-POLYREPO_ROOT="$(cd "$PROJECT_ROOT/.." && pwd)"
+PROJECT_ROOT="$(cd "$(dirname "$0")/../.." && pwd -P)"
+POLYREPO_ROOT="$(cd "$PROJECT_ROOT/.." && pwd -P)"
 TMPDIR="$(mktemp -d /tmp/e2e_t1_r3_XXXXXX)"
 trap 'rm -rf "$TMPDIR"' EXIT INT TERM
 
@@ -84,7 +84,7 @@ run_suite() {
 
   # T1-F12-02: Polyrepo anchor collision prevented
   local f12_poly_avoid=1
-  if [[ -f "$POLYREPO_ROOT/anchor.oo" && "$f12_order" -eq 0 ]]; then
+  if [[ ( -f "$POLYREPO_ROOT/anchor.oo" || -f "$POLYREPO_ROOT/openOODA/anchor.oo" ) && "$f12_order" -eq 0 ]]; then
     f12_poly_avoid=0
   fi
   record_test "T1-F12-02" "Polyrepo root anchor collision avoided" "$f12_poly_avoid"

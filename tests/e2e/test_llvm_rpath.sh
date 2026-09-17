@@ -2,7 +2,7 @@
 # R-path IR checks on Unique-bar TU plus fn_ret_int. Double-run.
 set -euo pipefail
 OODAC="${OODAC_BIN:-$HOME/.openooda/bin/oodac}"
-ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd -P)"
 SRC="$ROOT/bootstrap/corpus/emit-llvm/pass/fn_ret_int.oo"
 TMPDIR="$(mktemp -d /tmp/e2e_llvm_rpath_XXXXXX)"
 trap 'rm -rf "$TMPDIR"' EXIT INT TERM

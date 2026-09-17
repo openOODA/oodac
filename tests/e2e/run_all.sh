@@ -3,8 +3,8 @@
 # Compliance: wc -l <= 256, Double-Run ($Run_1 == Run_2), Zero-Trust.
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd -P)"
 
 export OODAC_BIN="${OODAC_BIN:-$HOME/.openooda/bin/oodac}"
 
