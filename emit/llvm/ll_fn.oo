@@ -58,8 +58,6 @@ pub fn ll_parse_sig(toks: List[String], pos: Int, n: Int, stab: String) -> Strin
     if p < n && ll_k(toks, p) == "ARROW" {
         p = p + 1;
         rk = ll_ty_at(toks, p, n, stab);
-        let rh: Int = str_index_of(rk, "#");
-        if rh >= 0 { rk = str_slice(rk, 0, rh); }
     }
     if name == "main" { rk = "main_i32"; }
     return name + "=" + aks + ">" + rk;

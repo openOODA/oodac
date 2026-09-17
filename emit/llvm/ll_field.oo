@@ -19,8 +19,12 @@ import "ll_ir.oo";
 
 pub fn ll_store_field_stmt(toks: List[String], p0: Int, n: Int, ssa0: Int, env: String, stab: String, ir: &mut IrBuf) -> String {
     let p: Int = p0;
-    let bk: String = type_env_get(env, ll_t(toks, p));
-    let fi: String = ll_struct_field(bk, ll_t(toks, p + 2));
+    let mut bk: String = type_env_get(env, ll_t(toks, p));
+    let mut fi: String = ll_struct_field(bk, ll_t(toks, p + 2));
+    if fi == "" && ll_is_struct(bk) {
+        bk = ll_rich_of(env, str_slice(ll_st_basek(bk), 3, chars_len(ll_st_basek(bk))));
+        fi = ll_struct_field(bk, ll_t(toks, p + 2));
+    }
     if fi == "" || str_index_of(fi, ":") < 0 {
         println("ERR\tllvm\tunknown field " + ll_t(toks, p + 2));
         process_exit(1);

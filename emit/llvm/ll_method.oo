@@ -22,12 +22,17 @@ import "ll_call.oo";
 
 pub fn ll_method(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, env: String, arg: String, ir: &mut IrBuf) -> String {
     if ll_is_struct(kind) {
-        let fi: String = ll_struct_field(kind, m);
+        let mut skind: String = str_slice(kind, 0, chars_len(kind));
+        let mut fi: String = ll_struct_field(skind, m);
+        if fi == "" {
+            skind = ll_rich_of(env, str_slice(ll_st_basek(skind), 3, chars_len(ll_st_basek(skind))));
+            fi = ll_struct_field(skind, m);
+        }
         if fi == "" {
             println("ERR\tllvm\tunknown field " + m);
             process_exit(1);
         }
-        let fr: String = ll_struct_field_load(kind, ssa, ptr, m, ssa0, ir);
+        let fr: String = ll_struct_field_load(skind, ssa, ptr, m, ssa0, ir);
         if ll_pptr(fr) == "" && ll_is_struct(ll_pk(fr)) {
             let a: String = ll_tmpa(ll_pssa(fr) + 1);
             ll_slot_name(a, ir);
