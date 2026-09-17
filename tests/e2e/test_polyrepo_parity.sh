@@ -2,6 +2,8 @@
 # E2E Test Suite: Polyrepo Entrypoint LLVM Parity & C Deprecation
 # Compliance: wc -l <= 256, Double-Run (Run_1 == Run_2), Zero-Trust.
 set -euo pipefail
+export OO_LIST_AMBIENT_QUOTA="${OO_LIST_AMBIENT_QUOTA:-8589934592}"
+export OODA_NO_JAIL="${OODA_NO_JAIL:-1}"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 if [[ -n "${PROJECT_ROOT:-}" ]]; then
