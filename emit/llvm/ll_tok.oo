@@ -164,7 +164,7 @@ pub fn ll_stab_rich(stab: String, t: String) -> String {
             let val: String = str_slice(stab, k, m);
             let ci: Int = str_index_of(val, ":");
             if ci >= 0 {
-                if !first { rich = rich + ","; }
+                if !first { rich = rich + "|"; }
                 rich = rich + fld + ":" + ll_st_map(str_slice(val, ci + 1, chars_len(val)), ",", "|");
                 first = false;
             }

@@ -6,7 +6,7 @@
 //
 // Beats:
 //   1. Named Int slots are alloca i64.
-//   2. Other slots are alloca [256 x i8].
+//   2. Other slots are alloca [1024 x i8].
 
 import "ll_ir.oo";
 
@@ -38,7 +38,7 @@ pub fn ll_nhash(s: String) -> Int {
 
 pub fn ll_slot(dst: String, n: Int, ir: &mut IrBuf) {
     if n < 0 { ll_slot_ty(dst, "i64", ir); return; }
-    ll_slot_ty(dst, "[256 x i8]", ir);
+    ll_slot_ty(dst, "[1024 x i8]", ir);
 }
 
 pub fn ll_slot_tmp(n: Int, ir: &mut IrBuf) -> String {
@@ -48,7 +48,7 @@ pub fn ll_slot_tmp(n: Int, ir: &mut IrBuf) -> String {
 }
 
 pub fn ll_slot_name(dst: String, ir: &mut IrBuf) {
-    ll_slot_ty(dst, "[256 x i8]", ir);
+    ll_slot_ty(dst, "[1024 x i8]", ir);
 }
 
 pub fn ll_trap(ir: &mut IrBuf) {

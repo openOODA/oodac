@@ -108,7 +108,7 @@ fn ll_ty_struct_rich(toks: List[String], t: String, n: Int, stab: String) -> Str
                                 if q >= n || ll_k(toks, q) != "COLON" { println("ERR\tllvm\tstruct colon"); process_exit(1); }
                                 q = q + 1;
                                 let fk: String = ll_ty_at(toks, q, n, stab);
-                                if !first { rich = rich + ","; }
+                                if !first { rich = rich + "|"; }
                                 rich = rich + fld + ":" + ll_st_map(fk, ",", "|"); first = false;
                                 q = ll_skip_type(toks, q, n);
                             }
@@ -241,16 +241,14 @@ pub fn ll_pass(kind: String) -> String {
 
 pub fn ll_ensure_ptr(v: String, ssa0: Int, ir: &mut IrBuf) -> String {
     if ll_has_slot(v) { return ll_pack(ll_ppos(v), ssa0, ll_pk(v), ll_pptr(v)); }
-    let a: String = ll_tmpa(ssa0 + 1);
-    let s: Int = ssa0 + 1;
+    let a: String = ll_tmpa(ssa0 + 1); let s: Int = ssa0 + 1;
     ll_slot_ty(a, ll_ir_alloc(ll_pk(v)), ir);
     ll_ir_inst(ir, "store", ll_ir_val(ll_pk(v)), "", ll_opnd(v) + ", ptr " + a + ", align 8", 1, 1);
     return ll_pack(ll_ppos(v), s, ll_pk(v), a);
 }
 
 pub fn ll_as_val(v: String, ssa0: Int, ir: &mut IrBuf) -> String {
-    let p: String = ll_ensure_ptr(v, ssa0, ir);
-    let s: Int = ll_pssa(p) + 1;
+    let p: String = ll_ensure_ptr(v, ssa0, ir); let s: Int = ll_pssa(p) + 1;
     ll_ir_inst(ir, "load", ll_ir_val(ll_pk(v)), ll_ssa(s), "ptr " + ll_pptr(p) + ", align 8", 1, 1);
     return ll_pack(ll_ppos(v), s, ll_pk(v), "");
 }

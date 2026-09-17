@@ -22,14 +22,14 @@ pub fn ll_arc_push(env: String) -> String {
 
 pub fn ll_arc_frame_at(env: String) -> Int {
     let key: String = "__sc__=1;";
-    let kn: Int = chars_len(key);
-    let en: Int = chars_len(env);
+    let kn: Int = bytes_len(key);
+    let en: Int = bytes_len(env);
     let mut i: Int = en - kn;
     while i >= 0 {
         let mut ok: Bool = true;
         let mut j: Int = 0;
         while j < kn {
-            if char_at(env, i + j) != char_at(key, j) { ok = false; j = kn; }
+            if byte_at(env, i + j) != byte_at(key, j) { ok = false; j = kn; }
             j = j + 1;
         }
         if ok { return i; }
@@ -41,7 +41,7 @@ pub fn ll_arc_frame_at(env: String) -> Int {
 pub fn ll_arc_pop(env: String) -> String {
     let at: Int = ll_arc_frame_at(env);
     if at < 0 { return env; }
-    return str_slice(env, 0, at);
+    return byte_slice(env, 0, at);
 }
 
 pub fn ll_arc_owned(kind: String) -> Bool {
@@ -120,20 +120,21 @@ pub fn ll_arc_exit(env: String, ssa0: Int, ir: &mut IrBuf) -> Int {
     if type_env_get(env, "__no_arc__") == "1" { return ssa0; }
     let at: Int = ll_arc_frame_at(env);
     if at < 0 { return ssa0; }
-    let en: Int = chars_len(env);
+    let outer_env: String = byte_slice(env, 0, at);
+    let en: Int = bytes_len(env);
     let mut p: Int = at + 9;
     let mut names: List[String] = list_new();
     let mut kinds: List[String] = list_new();
     while p < en {
         let start: Int = p;
-        while p < en && char_at(env, p) != "=" && char_at(env, p) != ";" { p = p + 1; }
-        if p < en && char_at(env, p) == "=" {
-            let name: String = str_slice(env, start, p);
+        while p < en && byte_at(env, p) != 61 && byte_at(env, p) != 59 { p = p + 1; }
+        if p < en && byte_at(env, p) == 61 {
+            let name: String = byte_slice(env, start, p);
             p = p + 1;
             let ks: Int = p;
-            while p < en && char_at(env, p) != ";" { p = p + 1; }
+            while p < en && byte_at(env, p) != 59 { p = p + 1; }
             names = list_push(names, name);
-            kinds = list_push(kinds, str_slice(env, ks, p));
+            kinds = list_push(kinds, byte_slice(env, ks, p));
             if p < en { p = p + 1; }
         } else {
             p = p + 1;
@@ -146,8 +147,9 @@ pub fn ll_arc_exit(env: String, ssa0: Int, ir: &mut IrBuf) -> Int {
         let name: String = list_get(names, i);
         let kind: String = list_get(kinds, i);
         let mut skip: Bool = false;
-        if chars_len(name) >= 2 && char_at(name, 0) == "_" && char_at(name, 1) == "_" { skip = true; }
+        if bytes_len(name) >= 2 && byte_at(name, 0) == 95 && byte_at(name, 1) == 95 { skip = true; }
         if type_env_get(seen, name) != "" { skip = true; }
+        if type_env_get(outer_env, name) != "" { skip = true; }
         if !skip {
             seen = type_env_put(seen, name, "1");
             if ll_arc_owned(kind) { ssa = ll_arc_rel(name, kind, env, ssa, ir); }

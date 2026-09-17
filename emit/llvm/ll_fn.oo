@@ -42,7 +42,9 @@ pub fn ll_parse_sig(toks: List[String], pos: Int, n: Int, stab: String) -> Strin
             p = p + 1;
             if p < n && ll_k(toks, p) == "COLON" {
                 p = p + 1;
-                let k: String = ll_ty_at(toks, p, n, stab);
+                let mut k: String = ll_ty_at(toks, p, n, stab);
+                let h: Int = str_index_of(k, "#");
+                if h >= 0 { k = str_slice(k, 0, h); }
                 if aks != "" { aks = aks + ","; }
                 aks = aks + k;
                 p = ll_skip_type(toks, p, n);
@@ -56,6 +58,8 @@ pub fn ll_parse_sig(toks: List[String], pos: Int, n: Int, stab: String) -> Strin
     if p < n && ll_k(toks, p) == "ARROW" {
         p = p + 1;
         rk = ll_ty_at(toks, p, n, stab);
+        let rh: Int = str_index_of(rk, "#");
+        if rh >= 0 { rk = str_slice(rk, 0, rh); }
     }
     if name == "main" { rk = "main_i32"; }
     return name + "=" + aks + ">" + rk;

@@ -3,11 +3,15 @@
 # Compliance: wc -l <= 256, Double-Run (Run_1 == Run_2), Zero-Trust.
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-if [[ -f "$SCRIPT_DIR/../../oodac/main.oo" ]]; then
-  PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
+if [[ -f "$SCRIPT_DIR/../../install/install.sh" ]]; then
+  PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd -P)"
+elif [[ -f "$SCRIPT_DIR/../../../install/install.sh" ]]; then
+  PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd -P)"
+elif [[ -d "/home/jeryd/Projects/openOODA/install" ]]; then
+  PROJECT_ROOT="/home/jeryd/Projects/openOODA"
 else
-  PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+  PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd -P)"
 fi
 INSTALL_SH="$PROJECT_ROOT/install/install.sh"
 TEST_INSTALL_SH="$PROJECT_ROOT/install/tests/test_install.sh"

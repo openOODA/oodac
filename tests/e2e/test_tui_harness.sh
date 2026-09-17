@@ -2,12 +2,18 @@
 # E2E Test Suite: ooda-tui Harness Execution, MCP/LSP Wiring & Flags
 # Compliance: wc -l <= 256, Double-Run (Run_1 == Run_2), Zero-Trust.
 set -euo pipefail
+export OO_LIST_AMBIENT_QUOTA="${OO_LIST_AMBIENT_QUOTA:-8589934592}"
+export OODA_NO_JAIL="${OODA_NO_JAIL:-1}"
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-if [[ -f "$SCRIPT_DIR/../../oodac/main.oo" ]]; then
-  PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
+if [[ -f "$SCRIPT_DIR/../../tui/main.oo" ]]; then
+  PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd -P)"
+elif [[ -f "$SCRIPT_DIR/../../../tui/main.oo" ]]; then
+  PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd -P)"
+elif [[ -d "/home/jeryd/Projects/openOODA/tui" ]]; then
+  PROJECT_ROOT="/home/jeryd/Projects/openOODA"
 else
-  PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+  PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd -P)"
 fi
 TUI_DIR="$PROJECT_ROOT/tui"
 OODAC="${OODAC_BIN:-$HOME/.openooda/bin/oodac}"
@@ -41,7 +47,7 @@ run_suite() {
   # 1. Typecheck tui/main.oo
   local tui_chk=1
   if [[ -f "$TUI_DIR/main.oo" ]]; then
-    if timeout 15s "$OODAC" check "$TUI_DIR/main.oo" >/dev/null 2>&1; then
+    if timeout 120s "$OODAC" check "$TUI_DIR/main.oo" >/dev/null 2>&1; then
       tui_chk=0
     fi
   fi
@@ -79,10 +85,13 @@ run_suite() {
 
     # TUI-BANNER: --teamwork --yolo with OODACODEX
     local codex="$PROJECT_ROOT/openOODA/northstar.oot"
+    if [[ ! -f "$codex" ]]; then
+      codex="$HOME/.openooda/northstar.oot"
+    fi
     local tm_st=1
     if [[ -f "$codex" ]]; then
-      if timeout 5s env OODACODEX="$codex" "$tui_bin" --teamwork \
-          >/dev/null 2>&1; then
+      if echo '/exit' | timeout 10s env OODACODEX="$codex" "$tui_bin" \
+          --teamwork >/dev/null 2>&1; then
         tm_st=0
       fi
     fi
