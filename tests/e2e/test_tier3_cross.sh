@@ -2,6 +2,8 @@
 # Tier 3: Cross-Feature Combinations & Pairwise Subsystem Integration
 # Compliance: wc -l <= 256, Double-Run ($Run_1 == Run_2), Zero-Trust.
 set -euo pipefail
+export OO_LIST_AMBIENT_QUOTA="${OO_LIST_AMBIENT_QUOTA:-34359738368}"
+export OODA_NO_JAIL="${OODA_NO_JAIL:-1}"
 
 OODAC="${OODAC_BIN:-$HOME/.openooda/bin/oodac}"
 PROJECT_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"

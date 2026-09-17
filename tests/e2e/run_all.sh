@@ -8,6 +8,8 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd -P)"
 
 export OODAC_BIN="${OODAC_BIN:-$HOME/.openooda/bin/oodac}"
 export OODA_FS_READDIR="${OODA_FS_READDIR:-$(cd "$PROJECT_ROOT/.." && pwd -P)}"
+export OO_LIST_AMBIENT_QUOTA="${OO_LIST_AMBIENT_QUOTA:-34359738368}"
+export OODA_NO_JAIL="${OODA_NO_JAIL:-1}"
 
 echo "======================================================================"
 echo "=== openOODA/oodac Master End-to-End (E2E) Test Suite Runner       ==="

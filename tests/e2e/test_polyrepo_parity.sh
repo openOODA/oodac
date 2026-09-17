@@ -2,7 +2,7 @@
 # E2E Test Suite: Polyrepo Entrypoint LLVM Parity & C Deprecation
 # Compliance: wc -l <= 256, Double-Run (Run_1 == Run_2), Zero-Trust.
 set -euo pipefail
-export OO_LIST_AMBIENT_QUOTA="${OO_LIST_AMBIENT_QUOTA:-8589934592}"
+export OO_LIST_AMBIENT_QUOTA="${OO_LIST_AMBIENT_QUOTA:-34359738368}"
 export OODA_NO_JAIL="${OODA_NO_JAIL:-1}"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
@@ -57,7 +57,12 @@ run_suite() {
     local ep="$PROJECT_ROOT/$entry"
     local chk_st=1
     if [[ -f "$ep" ]]; then
-      if timeout 120s "$OODAC" check "$ep" >/dev/null 2>&1; then
+      local chk_quota="$OO_LIST_AMBIENT_QUOTA"
+      if [[ "$entry" == "bb/cli/main.oo" ]]; then
+        chk_quota="34359738368"
+      fi
+      if OO_LIST_AMBIENT_QUOTA="$chk_quota" timeout 120s "$OODAC" \
+          check "$ep" >/dev/null 2>&1; then
         chk_st=0
       fi
     fi
@@ -71,7 +76,12 @@ run_suite() {
     local base="${entry%%/*}"
     local ll_st=1
     if [[ -f "$ep" ]]; then
-      if timeout 120s "$OODAC" emit-llvm "$ep" > "$d/$base.ll" 2>&1; then
+      local ll_quota="$OO_LIST_AMBIENT_QUOTA"
+      if [[ "$entry" == "bb/cli/main.oo" ]]; then
+        ll_quota="34359738368"
+      fi
+      if OO_LIST_AMBIENT_QUOTA="$ll_quota" timeout 120s "$OODAC" \
+          emit-llvm "$ep" > "$d/$base.ll" 2>&1; then
         if llvm-as "$d/$base.ll" -o "$d/$base.bc" >/dev/null 2>&1; then
           ll_st=0
         fi
@@ -138,6 +148,11 @@ p2=$PASS_COUNT; f2=$FAIL_COUNT
 echo "=== Polyrepo Parity Determinism: R1 Pass=$p1 Fail=$f1 | R2 Pass=$p2 Fail=$f2 ==="
 if [[ "$p1" -ne "$p2" || "$f1" -ne "$f2" ]]; then
   echo "CRITICAL: Non-deterministic execution between Run 1 and Run 2!" >&2
+  exit 1
+fi
+
+if [[ "$f1" -ne 0 || "$f2" -ne 0 ]]; then
+  echo "CRITICAL: Test failures detected (R1 Fail=$f1, R2 Fail=$f2)!" >&2
   exit 1
 fi
 

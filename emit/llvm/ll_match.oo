@@ -34,9 +34,8 @@ pub fn ll_match_stmt(toks: List[String], p0: Int, n: Int, ssa0: Int, env: String
     }
     p = p + 1;
     let sp: String = ll_ensure_ptr(scr, ll_pssa(scr), ir);
-    let ptr: String = ll_pptr(sp);
     let id: Int = ll_pssa(sp) + 1;
-    let tag: Int = ll_match_tag(sk, ptr, ll_pssa(sp), ir);
+    let tag: Int = ll_match_tag(sk, ll_pptr(sp), ll_pssa(sp), ir);
     let a1: String = ll_match_arm_head(toks, p, n);
     let tag1: String = field_at(a1, 0);
     let bind1: String = field_at(a1, 1);
@@ -49,7 +48,7 @@ pub fn ll_match_stmt(toks: List[String], p0: Int, n: Int, ssa0: Int, env: String
     }
     ll_ir_inst(ir, "br", "i1", "", ll_ssa(cond) + ", label %marm1" + id.to_string() + ", label %marm2" + id.to_string(), 1, 1);
     ll_ir_label(ir, "marm1" + id.to_string());
-    let b1: String = ll_match_bind(sk, ptr, bind1, ok1, id, cond, ir);
+    let b1: String = ll_match_bind(sk, ll_pptr(sp), bind1, ok1, id, cond, ir);
     let e1: String = ll_match_arm_env(env, bind1, b1);
     let r1: String = ll_match_arm_body(toks, p, n, ll_pssa(b1) + 1, e1, ret_kind, stab, ir);
     p = ll_ppos(r1);
@@ -69,7 +68,7 @@ pub fn ll_match_stmt(toks: List[String], p0: Int, n: Int, ssa0: Int, env: String
         process_exit(1);
     }
     ll_ir_label(ir, "marm2" + id.to_string());
-    let b2: String = ll_match_bind(sk, ptr, bind2, ok2, id, ssa, ir);
+    let b2: String = ll_match_bind(sk, ll_pptr(sp), bind2, ok2, id, ssa, ir);
     let e2: String = ll_match_arm_env(env, bind2, b2);
     let r2: String = ll_match_arm_body(toks, p, n, ll_pssa(b2) + 1, e2, ret_kind, stab, ir);
     p = ll_ppos(r2);

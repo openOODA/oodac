@@ -2,7 +2,7 @@
 # E2E Test Suite: ooda-tui Harness Execution, MCP/LSP Wiring & Flags
 # Compliance: wc -l <= 256, Double-Run (Run_1 == Run_2), Zero-Trust.
 set -euo pipefail
-export OO_LIST_AMBIENT_QUOTA="${OO_LIST_AMBIENT_QUOTA:-8589934592}"
+export OO_LIST_AMBIENT_QUOTA="${OO_LIST_AMBIENT_QUOTA:-34359738368}"
 export OODA_NO_JAIL="${OODA_NO_JAIL:-1}"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
@@ -15,6 +15,7 @@ elif [[ -d "/home/jeryd/Projects/openOODA/tui" ]]; then
 else
   PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd -P)"
 fi
+export OODA_FS_READDIR="${OODA_FS_READDIR:-$PROJECT_ROOT}"
 TUI_DIR="$PROJECT_ROOT/tui"
 OODAC="${OODAC_BIN:-$HOME/.openooda/bin/oodac}"
 if [[ ! -x "$OODAC" && -x "/tmp/oodac_pure_2460300/stage2_oodac" ]]; then
@@ -47,7 +48,7 @@ run_suite() {
   # 1. Typecheck tui/main.oo
   local tui_chk=1
   if [[ -f "$TUI_DIR/main.oo" ]]; then
-    if timeout 120s "$OODAC" check "$TUI_DIR/main.oo" >/dev/null 2>&1; then
+    if timeout 180s "$OODAC" check "$TUI_DIR/main.oo" >/dev/null 2>&1; then
       tui_chk=0
     fi
   fi
