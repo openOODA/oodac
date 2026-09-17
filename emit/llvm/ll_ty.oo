@@ -19,7 +19,10 @@ pub fn ll_ty_at(toks: List[String], pos: Int, n: Int, stab: String) -> String {
         if isref { return "ri64"; }
         return "i64";
     }
-    if t == "Float" { return "f64"; }
+    if t == "Float" {
+        if isref { return "rf64"; }
+        return "f64";
+    }
     if t == "u64" {
         if isref { return "ru64"; }
         return "u64";
@@ -36,17 +39,15 @@ pub fn ll_ty_at(toks: List[String], pos: Int, n: Int, stab: String) -> String {
         println("ERR\tllvm\tnarrow int not lowered " + t);
         process_exit(1);
     }
-    if t == "Bool" { return "i1"; }
+    if t == "Bool" {
+        if isref { return "ri1"; }
+        return "i1";
+    }
     if t == "f32x8" { return "v8f32"; }
     if t == "f64x4" { return "v4f64"; }
     if t == "String" { return "str"; }
     if t == "Void" { return "void"; }
-    if t == "ProcessCap" || t == "EnvCap" || t == "FsReadCap" || t == "FsWriteCap" { return "i64"; }
-    if t == "SysCap" || t == "AllocCap" || t == "TimeCap" || t == "BindCap" { return "i64"; }
-    if t == "TcpCap" || t == "UdpCap" || t == "NetCap" || t == "FsCap" { return "i64"; }
-    if t == "RandCap" || t == "ArenaCap" || t == "FfiCap" || t == "ThreadCap" { return "i64"; }
-    if t == "GpuCap" || t == "CompilerReadCap" || t == "SignCap" || t == "AudioCap" { return "i64"; }
-    if t == "CameraCap" || t == "UsbCap" || t == "HidCap" || t == "WindowCap" || t == "FrameCap" || t == "MetricsCap" { return "i64"; }
+    if str_index_of(t, "Cap") >= 0 { return "i64"; }
     if t == "List" {
         if p + 2 < n && ll_k(toks, p + 1) == "LBRACKET" && ll_k(toks, p + 2) == "IDENT" {
             let e: String = ll_t(toks, p + 2);
@@ -63,7 +64,10 @@ pub fn ll_ty_at(toks: List[String], pos: Int, n: Int, stab: String) -> String {
             if e == "String" { return "ress"; }
             if e == "Int" { return "resi"; }
             if e == "Void" { return "ress"; }
-            if e == "List" { return "resl"; }
+            if e == "List" {
+                if p + 4 < n && ll_t(toks, p + 4) == "Int" { return "resil"; }
+                return "resl";
+            }
             return "resSt_" + e;
         }
         println("ERR\tllvm\tresult kind");
@@ -108,7 +112,7 @@ fn ll_ty_struct_rich(toks: List[String], t: String, n: Int, stab: String) -> Str
                                 if q >= n || ll_k(toks, q) != "COLON" { println("ERR\tllvm\tstruct colon"); process_exit(1); }
                                 q = q + 1;
                                 let fk: String = ll_ty_at(toks, q, n, stab);
-                                if !first { rich = rich + "|"; }
+                                if !first { rich = rich + ","; }
                                 rich = rich + fld + ":" + ll_st_map(fk, ",", "|"); first = false;
                                 q = ll_skip_type(toks, q, n);
                             }
@@ -160,7 +164,13 @@ pub fn ll_peek_cap_name(toks: List[String], pos: Int, n: Int) -> String {
     if p < n && ll_k(toks, p) == "IDENT" { return ll_t(toks, p); }
     return "";
 }
-
+fn ll_st_raw(s: String) -> String {
+    let c: Int = str_index_of(s, ",");
+    let mut r: String = if c >= 0 { str_slice(s, 0, c) } else { s };
+    let h: Int = str_index_of(r, "#");
+    if h >= 0 { r = str_slice(r, 0, h); }
+    return r;
+}
 pub fn ll_ir_alloc(kind: String) -> String {
     if ll_is_refk(kind) { return "ptr"; }
     if kind == "slist" { return "%OoSList"; }
@@ -171,25 +181,26 @@ pub fn ll_ir_alloc(kind: String) -> String {
     if kind == "ress" { return "%OoResS"; }
     if kind == "resi" { return "%OoResI"; }
     if kind == "resl" { return "%OoResL"; }
+    if kind == "resil" { return "%OoResLI"; }
     if kind == "i1" { return "i1"; }
+    if kind == "i8" || kind == "u8" { return "i8"; }
+    if kind == "i16" || kind == "u16" { return "i16"; }
     if kind == "i32" || kind == "u32" { return "i32"; }
     if kind == "i64" || kind == "u64" { return "i64"; }
     if kind == "f64" { return "double"; }
     if kind == "v8f32" { return "<8 x float>"; }
     if kind == "v4f64" { return "<4 x double>"; }
     if chars_len(kind) >= 3 && str_slice(kind, 0, 3) == "St_" {
-        let h: Int = str_index_of(kind, "#");
-        if h < 0 { return "%" + kind; }
-        return "%" + str_slice(kind, 0, h);
+        return "%" + ll_st_raw(kind);
     }
     if chars_len(kind) >= 6 && str_slice(kind, 0, 6) == "olist_" {
-        return "%OoL_" + str_slice(kind, 6, chars_len(kind));
+        return "%OoL_" + ll_st_raw(str_slice(kind, 6, chars_len(kind)));
     }
     if chars_len(kind) >= 6 && str_slice(kind, 0, 6) == "resSt_" {
-        return "%OoRes_St_" + str_slice(kind, 6, chars_len(kind));
+        return "%OoRes_St_" + ll_st_raw(str_slice(kind, 6, chars_len(kind)));
     }
     if chars_len(kind) >= 6 && str_slice(kind, 0, 6) == "optSt_" {
-        return "%OoOpt_St_" + str_slice(kind, 6, chars_len(kind));
+        return "%OoOpt_St_" + ll_st_raw(str_slice(kind, 6, chars_len(kind)));
     }
     return "i64";
 }
@@ -201,26 +212,15 @@ pub fn ll_ir_val(kind: String) -> String {
 }
 
 pub fn ll_is_agg(kind: String) -> Bool {
-    if kind == "slist" { return true; }
-    if kind == "ilist" { return true; }
-    if kind == "str" { return true; }
-    if kind == "opti" { return true; }
-    if kind == "opts" { return true; }
-    if kind == "ress" { return true; }
-    if kind == "resi" { return true; }
-    if kind == "resl" { return true; }
+    if kind == "slist" || kind == "ilist" || kind == "str" || kind == "opti" || kind == "opts" { return true; }
+    if kind == "ress" || kind == "resi" || kind == "resl" || kind == "resil" { return true; }
     if chars_len(kind) >= 3 && str_slice(kind, 0, 3) == "St_" { return true; }
     if chars_len(kind) >= 6 && (str_slice(kind, 0, 6) == "olist_" || str_slice(kind, 0, 6) == "resSt_" || str_slice(kind, 0, 6) == "optSt_") { return true; }
     return false;
 }
 pub fn ll_is_mem(kind: String) -> Bool {
-    if kind == "slist" { return true; }
-    if kind == "ilist" { return true; }
-    if kind == "ress" { return true; }
-    if kind == "resi" { return true; }
-    if kind == "resl" { return true; }
-    if kind == "opti" { return true; }
-    if kind == "opts" { return true; }
+    if kind == "slist" || kind == "ilist" || kind == "opti" || kind == "opts" { return true; }
+    if kind == "ress" || kind == "resi" || kind == "resl" || kind == "resil" { return true; }
     if chars_len(kind) >= 3 && str_slice(kind, 0, 3) == "St_" { return true; }
     if chars_len(kind) >= 6 && (str_slice(kind, 0, 6) == "olist_" || str_slice(kind, 0, 6) == "resSt_" || str_slice(kind, 0, 6) == "optSt_") { return true; }
     return false;

@@ -18,49 +18,6 @@ import "ll_slot.oo";
 import "types/types_core.oo";
 import "ll_ir.oo";
 
-fn ll_field_tab(kind: String, m: String) -> String {
-    if kind == "resi" && m == "val" { return "1:i64"; }
-    if kind == "resi" && m == "err" { return "2:str"; }
-    if kind == "ress" && (m == "val" || m == "err") { return "1:str"; }
-    if kind == "resl" && m == "val" { return "1:slist"; }
-    if kind == "resl" && m == "err" { return "2:str"; }
-    if kind == "opti" && m == "val" { return "1:i64"; }
-    if kind == "opts" && m == "val" { return "1:str"; }
-    if chars_len(kind) >= 6 && str_slice(kind, 0, 6) == "resSt_" && m == "val" {
-        return "1:St_" + str_slice(kind, 6, chars_len(kind));
-    }
-    if chars_len(kind) >= 6 && str_slice(kind, 0, 6) == "resSt_" && m == "err" { return "2:str"; }
-    if chars_len(kind) >= 6 && str_slice(kind, 0, 6) == "optSt_" && m == "val" {
-        return "1:St_" + str_slice(kind, 6, chars_len(kind));
-    }
-    return "";
-}
-
-pub fn ll_field_load(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, env: String, ir: &mut IrBuf) -> String {
-    let tab: String = ll_field_tab(kind, m);
-    if tab == "" {
-        println("ERR\tllvm\tmethod " + m + " kind " + kind);
-        process_exit(1);
-    }
-    let ci: Int = str_index_of(tab, ":");
-    let idx: String = str_slice(tab, 0, ci);
-    let mut fk: String = str_slice(tab, ci + 1, chars_len(tab));
-    if ll_is_struct(fk) && str_index_of(fk, "#") < 0 {
-        fk = ll_rich_of(env, str_slice(fk, 3, chars_len(fk)));
-    }
-    let base: String = ll_ensure_ptr(ll_pack(0, ssa, kind, ptr), ssa0, ir);
-    let s: Int = ll_pssa(base) + 1;
-    ll_ir_inst(ir, "getelementptr inbounds", ll_ir_alloc(kind), ll_ssa(s), "ptr " + ll_pptr(base) + ", i32 0, i32 " + idx, 1, 1);
-    let s2: Int = s + 1;
-    ll_ir_inst(ir, "load", ll_ir_val(fk), ll_ssa(s2), "ptr " + ll_ssa(s) + ", align 8", 1, 1);
-    if ll_is_struct(fk) {
-        let a: String = ll_tmpa(s2 + 1);
-        ll_slot_name(a, ir);
-        ll_ir_inst(ir, "store", ll_ir_val(fk), "", ll_ssa(s2) + ", ptr " + a + ", align 8", 1, 1);
-        return ll_pack(0, s2 + 1, fk, a);
-    }
-    return ll_pack(0, s2, fk, "");
-}
 
 pub fn ll_str_gep(toks: List[String], pos: Int, ssa0: Int, ir: &mut IrBuf) -> String {
     let tx: String = ll_t(toks, pos);
@@ -105,8 +62,9 @@ pub fn ll_load_ident(name: String, env: String, ssa0: Int, ir: &mut IrBuf) -> St
 }
 
 pub fn ll_match_tag(sk: String, ptr: String, ssa0: Int, ir: &mut IrBuf) -> Int {
+    let p: String = if ptr != "" { ptr } else { "%ret" };
     let s: Int = ssa0 + 1;
-    ll_ir_inst(ir, "getelementptr inbounds", ll_ir_alloc(sk), ll_ssa(s), "ptr " + ptr + ", i32 0, i32 0", 1, 1);
+    ll_ir_inst(ir, "getelementptr inbounds", ll_ir_alloc(sk), ll_ssa(s), "ptr " + p + ", i32 0, i32 0", 1, 1);
     let s2: Int = s + 1;
     ll_ir_inst(ir, "load", "i32", ll_ssa(s2), "ptr " + ll_ssa(s) + ", align 4", 1, 1);
     let s3: Int = s2 + 1;
@@ -223,6 +181,11 @@ pub fn ll_store(name: String, kind: String, v: String, ssa0: Int, env: String, i
             return s;
         }
         ll_ir_inst(ir, "store", ll_ir_val(kind), "", ll_opnd(v) + ", ptr " + dst + ", align 8", 1, 1);
+        return ssa0;
+    }
+    if ll_is_refk(kind) {
+        let pval: String = if ll_pptr(v) != "" { ll_pptr(v) } else { ll_opnd(v) };
+        ll_ir_inst(ir, "store", "ptr", "", pval + ", ptr " + dst + ", align 8", 1, 1);
         return ssa0;
     }
     if ll_is_int(kind) && ll_is_int(ll_pk(v)) && ll_pk(v) != kind {

@@ -21,6 +21,21 @@ pub fn ll_int_div(op: String, inst: String, t: String, le: String, re: String, s
     ll_ir_label(ir, "divok" + tag);
     ll_ir_inst(ir, "xor", "i1", ll_ssa(s + 1), ll_ssa(s) + ", true", 1, 1);
     ll_ir_inst(ir, "call", "void", "", "@llvm.assume(i1 " + ll_ssa(s + 1) + ")", 1, 1);
-    ll_ir_inst(ir, inst, t, ll_ssa(s + 2), ll_opnd(le) + ", " + ll_opnd(re), 1, 1);
-    return ll_pack(ll_ppos(re), s + 2, ck, "");
+    let mut rhs_val: String = ll_opnd(re);
+    let mut cur_s: Int = s + 1;
+    if inst == "sdiv" || inst == "srem" {
+        let min_val: String = if t == "i32" { "-2147483648" } else { "-9223372036854775808" };
+        cur_s = cur_s + 1;
+        ll_ir_inst(ir, "icmp eq", t, ll_ssa(cur_s), ll_opnd(le) + ", " + min_val, 1, 1);
+        cur_s = cur_s + 1;
+        ll_ir_inst(ir, "icmp eq", t, ll_ssa(cur_s), ll_opnd(re) + ", -1", 1, 1);
+        cur_s = cur_s + 1;
+        ll_ir_inst(ir, "and", "i1", ll_ssa(cur_s), ll_ssa(cur_s - 2) + ", " + ll_ssa(cur_s - 1), 1, 1);
+        cur_s = cur_s + 1;
+        ll_ir_inst(ir, "select", "i1 " + ll_ssa(cur_s - 1) + ", " + t + " 1, " + t, ll_ssa(cur_s), ll_opnd(re), 1, 1);
+        rhs_val = ll_ssa(cur_s);
+    }
+    cur_s = cur_s + 1;
+    ll_ir_inst(ir, inst, t, ll_ssa(cur_s), ll_opnd(le) + ", " + rhs_val, 1, 1);
+    return ll_pack(ll_ppos(re), cur_s, ck, "");
 }

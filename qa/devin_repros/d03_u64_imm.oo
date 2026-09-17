@@ -1,0 +1,14 @@
+// # Devin Repro 3: u64/u32 immediate constant conversion
+//
+// Logline: Same-width integer conversion must preserve #imm payload.
+//
+// Setup: Assign immediate constant 5 to u64 and print.
+//
+// Beats:
+//   1. let a: u64 = 5.
+//   2. println(a).
+
+pub fn main() {
+    let a: u64 = 5;
+    println(a);
+}

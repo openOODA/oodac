@@ -13,7 +13,7 @@ import "ll_struct.oo";
 import "ll_float.oo";
 import "ll_ir.oo";
 pub fn ll_expr(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String, ir: &mut IrBuf) -> String {
-    return ll_binop(toks, pos, n, ssa0, env, ir);
+    return ll_bin_climb(toks, pos, n, 2, ssa0, env, ir);
 }
 fn ll_unary(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String, ir: &mut IrBuf) -> String {
     if pos < n && ll_k(toks, pos) == "AMP" {
@@ -26,11 +26,24 @@ fn ll_unary(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String, ir: &m
             process_exit(1);
         }
         if ll_is_refk(ll_pk(r)) {
-            let s2: Int = ll_pssa(r) + 1;
             let mut lk: String = "i64";
-            if ll_pk(r) == "ri32" || ll_pk(r) == "ru32" { lk = "i32"; }
-            ll_ir_inst(ir, "load", lk, ll_ssa(s2), "ptr " + ll_pptr(r) + ", align 8", 1, 1);
-            return ll_pack(ll_ppos(r), s2, lk, "");
+            let mut ret_k: String = "i64";
+            if ll_pk(r) == "ri32" || ll_pk(r) == "ru32" { lk = "i32"; ret_k = "i32"; }
+            else if ll_pk(r) == "rf64" { lk = "double"; ret_k = "f64"; }
+            else if ll_pk(r) == "ri1" { lk = "i1"; ret_k = "i1"; }
+            let ptr_val: String = ll_pptr(r);
+            let mut cur_s: Int = ll_pssa(r);
+            let mut target_ptr: String = "";
+            if chars_len(ptr_val) < 3 || str_slice(ptr_val, 0, 3) != "%p_" {
+                cur_s = cur_s + 1;
+                ll_ir_inst(ir, "load", "ptr", ll_ssa(cur_s), "ptr " + ptr_val + ", align 8", 1, 1);
+                target_ptr = ll_ssa(cur_s);
+            } else {
+                target_ptr = ptr_val;
+            }
+            cur_s = cur_s + 1;
+            ll_ir_inst(ir, "load", lk, ll_ssa(cur_s), "ptr " + target_ptr + ", align 8", 1, 1);
+            return ll_pack(ll_ppos(r), cur_s, ret_k, "");
         }
         let s1: Int = ll_pssa(r) + 1;
         ll_ir_inst(ir, "inttoptr", ll_ir_val(ll_pk(r)), ll_ssa(s1), ll_opnd(r) + " to ptr", 1, 1);
@@ -87,70 +100,36 @@ fn ll_postfix(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String, ir: 
     return r;
 }
 
-fn ll_cmp(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String, ir: &mut IrBuf) -> String {
-    let mut r: String = ll_add(toks, pos, n, ssa0, env, ir);
-    let mut p: Int = ll_ppos(r);
-    while p < n {
-        let op: String = ll_k(toks, p);
-        if op != "EQEQ" && op != "NEQ" && op != "LT" && op != "GT" && op != "LTE" && op != "GTE" && op != "AMP" && op != "PIPE" && op != "CARET" {
-            return r;
-        }
-        p = p + 1;
-        let rhs: String = ll_add(toks, p, n, ll_pssa(r), env, ir);
-        r = ll_apply_binop(op, r, rhs, ir);
-        p = ll_ppos(rhs);
-        r = ll_pack(p, ll_pssa(r), ll_pk(r), ll_pptr(r));
-    }
-    return r;
+fn bin_bp(k: String) -> Int {
+    if k == "OROR" { return 2; }
+    if k == "ANDAND" { return 3; }
+    if k == "PIPE" { return 4; }
+    if k == "CARET" || k == "BXOR" { return 5; }
+    if k == "AMP" { return 6; }
+    if k == "EQEQ" || k == "NEQ" { return 7; }
+    if k == "LT" || k == "LTE" || k == "GT" || k == "GTE" { return 8; }
+    if k == "LSHIFT" || k == "RSHIFT" { return 9; }
+    if k == "PLUS" || k == "MINUS" { return 10; }
+    if k == "STAR" || k == "SLASH" || k == "PERCENT" { return 11; }
+    return 0;
 }
 
-fn ll_add(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String, ir: &mut IrBuf) -> String {
-    let mut r: String = ll_mul(toks, pos, n, ssa0, env, ir);
-    let mut p: Int = ll_ppos(r);
-    while p < n {
-        let op: String = ll_k(toks, p);
-        if op != "PLUS" && op != "MINUS" && op != "LSHIFT" && op != "RSHIFT" {
-            return r;
-        }
-        p = p + 1;
-        let rhs: String = ll_mul(toks, p, n, ll_pssa(r), env, ir);
-        r = ll_apply_binop(op, r, rhs, ir);
-        p = ll_ppos(rhs);
-        r = ll_pack(p, ll_pssa(r), ll_pk(r), ll_pptr(r));
-    }
-    return r;
-}
-
-fn ll_mul(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String, ir: &mut IrBuf) -> String {
+fn ll_bin_climb(toks: List[String], pos: Int, n: Int, min_bp: Int, ssa0: Int, env: String, ir: &mut IrBuf) -> String {
     let mut r: String = ll_unary(toks, pos, n, ssa0, env, ir);
     let mut p: Int = ll_ppos(r);
     while p < n {
         let op: String = ll_k(toks, p);
-        if op != "STAR" && op != "SLASH" && op != "PERCENT" {
+        let bp: Int = bin_bp(op);
+        if bp < min_bp || bp == 0 {
             return r;
         }
         p = p + 1;
-        let rhs: String = ll_unary(toks, p, n, ll_pssa(r), env, ir);
-        r = ll_apply_binop(op, r, rhs, ir);
-        p = ll_ppos(rhs);
-        r = ll_pack(p, ll_pssa(r), ll_pk(r), ll_pptr(r));
-    }
-    return r;
-}
-
-fn ll_binop(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String, ir: &mut IrBuf) -> String {
-    let mut r: String = ll_cmp(toks, pos, n, ssa0, env, ir);
-    let mut p: Int = ll_ppos(r);
-    while p < n {
-        let op: String = ll_k(toks, p);
-        if op != "ANDAND" && op != "OROR" { return r; }
-        p = p + 1;
         let ls: Int = ll_pssa(r);
-        let id: Int = ls;
         if op == "ANDAND" {
+            let id: Int = ls;
             ll_ir_inst(ir, "br", "i1", "", ll_opnd(r) + ", label %ar" + id.to_string() + ", label %af" + id.to_string(), 1, 1);
             ll_ir_label(ir, "ar" + id.to_string());
-            let rhs: String = ll_cmp(toks, p, n, ls, env, ir);
+            let rhs: String = ll_bin_climb(toks, p, n, bp + 1, ls, env, ir);
             p = ll_ppos(rhs);
             let rs: Int = ll_pssa(rhs);
             ll_ir_inst(ir, "br", "", "", "label %aj" + id.to_string(), 1, 1);
@@ -162,10 +141,11 @@ fn ll_binop(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String, ir: &m
             let ph: Int = rs + 1;
             ll_ir_inst(ir, "phi", "i1", ll_ssa(ph), "[ " + ll_opnd(rhs) + ", %aj" + id.to_string() + " ], [ false, %af" + id.to_string() + " ]", 1, 1);
             r = ll_pack(p, ph, "i1", "");
-        } else {
+        } else if op == "OROR" {
+            let id: Int = ls;
             ll_ir_inst(ir, "br", "i1", "", ll_opnd(r) + ", label %ot" + id.to_string() + ", label %or" + id.to_string(), 1, 1);
             ll_ir_label(ir, "or" + id.to_string());
-            let rhs: String = ll_cmp(toks, p, n, ls, env, ir);
+            let rhs: String = ll_bin_climb(toks, p, n, bp + 1, ls, env, ir);
             p = ll_ppos(rhs);
             let rs: Int = ll_pssa(rhs);
             ll_ir_inst(ir, "br", "", "", "label %oj" + id.to_string(), 1, 1);
@@ -177,10 +157,16 @@ fn ll_binop(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String, ir: &m
             let ph: Int = rs + 1;
             ll_ir_inst(ir, "phi", "i1", ll_ssa(ph), "[ true, %ot" + id.to_string() + " ], [ " + ll_opnd(rhs) + ", %oj" + id.to_string() + " ]", 1, 1);
             r = ll_pack(p, ph, "i1", "");
+        } else {
+            let rhs: String = ll_bin_climb(toks, p, n, bp + 1, ls, env, ir);
+            r = ll_apply_binop(op, r, rhs, ir);
+            p = ll_ppos(rhs);
+            r = ll_pack(p, ll_pssa(r), ll_pk(r), ll_pptr(r));
         }
     }
     return r;
 }
+
 fn ll_primary(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String, ir: &mut IrBuf) -> String {
     if pos >= n {
         println("ERR\tllvm\texpr eof");

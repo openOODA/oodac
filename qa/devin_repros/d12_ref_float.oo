@@ -1,0 +1,18 @@
+// # Devin Repro 12: &Float parameter and dereference
+//
+// Logline: &Float references must be lowered as rf64 and dereferenced cleanly.
+//
+// Setup: Function receiving &Float.
+//
+// Beats:
+//   1. Pass &x to fn rd(p: &Float).
+//   2. Dereference *p and print.
+
+fn rd(p: &Float) {
+    println(*p);
+}
+
+pub fn main() {
+    let x: Float = 1.5;
+    rd(&x);
+}

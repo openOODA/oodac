@@ -19,6 +19,9 @@ import "ll_struct.oo";
 import "ll_slot.oo";
 import "ll_ir.oo";
 import "ll_call.oo";
+import "ll_field.oo";
+import "ll_print.oo";
+import "ll_arc.oo";
 
 pub fn ll_method(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, env: String, arg: String, ir: &mut IrBuf) -> String {
     if ll_is_struct(kind) {
@@ -56,7 +59,9 @@ pub fn ll_method(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, env:
         return ll_pack(0, s, "str", "");
     }
     if m == "is_some" || m == "is_ok" || m == "is_none" || m == "is_err" {
-        let s3: Int = ll_match_tag(kind, ptr, ssa0, ir);
+        let base: String = ll_ensure_ptr(ll_pack(0, ssa, kind, str_slice(ptr, 0, chars_len(ptr))), ssa0, ir);
+        let bp: String = ll_pptr(base);
+        let s3: Int = ll_match_tag(kind, bp, ll_pssa(base), ir);
         if m == "is_some" || m == "is_ok" { return ll_pack(0, s3, "i1", ""); }
         let nz: Int = s3 + 1;
         ll_ir_inst(ir, "xor", "i1", ll_ssa(nz), ll_ssa(s3) + ", true", 1, 1);
@@ -194,7 +199,11 @@ pub fn ll_arm_val(arm: String, ssa0: Int, ir: &mut IrBuf) -> Int {
         return s2;
     }
     if !ll_has_slot(arm) { return ll_pssa(arm); }
-    let s: Int = ll_hw(ll_pssa(arm), ssa0) + 1;
+    let mut s: Int = ll_hw(ll_pssa(arm), ssa0);
+    if ll_arc_owned(ll_pk(arm)) {
+        s = ll_arc_keep_ptr(ll_pk(arm), ll_pptr(arm), s, ir);
+    }
+    s = s + 1;
     ll_ir_inst(ir, "load", ll_ir_val(ll_pk(arm)), ll_ssa(s), "ptr " + ll_pptr(arm) + ", align 8", 1, 1);
     return s;
 }
@@ -217,7 +226,22 @@ pub fn ll_borrow_addr(toks: List[String], pos: Int, n: Int, ssa0: Int, env: Stri
     if ll_is_agg(ll_pk(ad)) || ll_is_refk(ll_pk(ad)) {
         return ll_pack(ap, ll_pssa(ad), ll_pk(ad), ll_pptr(ad));
     }
-    if ll_pk(ad) != "i64" && ll_pk(ad) != "u64" {
+    if ll_pk(ad) == "f64" {
+        return ll_pack(ap, ll_pssa(ad), "rf64", ll_pptr(ad));
+    }
+    if ll_pk(ad) == "i1" || ll_pk(ad) == "bool" {
+        return ll_pack(ap, ll_pssa(ad), "ri1", ll_pptr(ad));
+    }
+    if ll_pk(ad) == "u64" {
+        return ll_pack(ap, ll_pssa(ad), "ru64", ll_pptr(ad));
+    }
+    if ll_pk(ad) == "i32" {
+        return ll_pack(ap, ll_pssa(ad), "ri32", ll_pptr(ad));
+    }
+    if ll_pk(ad) == "u32" {
+        return ll_pack(ap, ll_pssa(ad), "ru32", ll_pptr(ad));
+    }
+    if ll_pk(ad) != "i64" {
         println("ERR\tllvm\tborrow of narrow/float/bool not lowered");
         process_exit(1);
     }

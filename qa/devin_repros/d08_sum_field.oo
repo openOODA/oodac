@@ -1,0 +1,21 @@
+// # Devin Repro 8: Sum-type struct fields literal init & load
+//
+// Logline: Struct with Result field constructed with Ok literal and checked with is_ok.
+//
+// Setup: Struct T with Result[Int, String] field.
+//
+// Beats:
+//   1. Construct T { x: 1, r: Ok(2) }.
+//   2. If t.r.is_ok(), print t.x.
+
+type T = struct {
+    x: Int,
+    r: Result[Int, String]
+};
+
+pub fn main() {
+    let t = T { x: 1, r: Ok(2) };
+    if t.r.is_ok() {
+        println(t.x);
+    }
+}

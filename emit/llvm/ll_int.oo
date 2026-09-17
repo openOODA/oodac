@@ -54,6 +54,9 @@ pub fn ll_int_convert(v: String, ssa0: Int, target: String, ir: &mut IrBuf) -> S
         src = ll_ssa(s);
     }
     if ll_int_wide(fk) == ll_int_wide(target) {
+        if ll_is_imm(v) {
+            return ll_pack(ll_ppos(v), ll_pssa(v), target, ll_pptr(v));
+        }
         if src != ll_ssa(ll_pssa(v)) {
             return ll_pack(ll_ppos(v), s, target, "");
         }
@@ -82,11 +85,11 @@ pub fn ll_neg_int(r: String, ir: &mut IrBuf) -> String {
         return ll_pack(ll_ppos(r), ll_neg_float(r, ir), "f64", "");
     }
     if !ll_is_int(k) || k == "i64" {
-        ll_ir_inst(ir, "sub nsw", "i64", ll_ssa(ll_pssa(r) + 1), "0, " + ll_opnd(r), 1, 1);
+        ll_ir_inst(ir, "sub", "i64", ll_ssa(ll_pssa(r) + 1), "0, " + ll_opnd(r), 1, 1);
         return ll_pack(ll_ppos(r), ll_pssa(r) + 1, "i64", "");
     }
     let s: Int = ll_pssa(r) + 1;
-    ll_ir_inst(ir, "sub nsw", "i32", ll_ssa(s), "0, " + ll_opnd(r), 1, 1);
+    ll_ir_inst(ir, "sub", "i32", ll_ssa(s), "0, " + ll_opnd(r), 1, 1);
     return ll_pack(ll_ppos(r), s, k, "");
 }
 
@@ -106,9 +109,9 @@ pub fn ll_apply_intop(op: String, lhs: String, rhs: String, ir: &mut IrBuf) -> S
     if ll_int_wide(ck) == "i32" { t = "i32"; }
     let uns: Bool = ll_is_uint(ck);
     let mut inst: String = "";
-    if op == "PLUS" { if uns { inst = "add"; } else { inst = "add nsw"; } }
-    else if op == "MINUS" { if uns { inst = "sub"; } else { inst = "sub nsw"; } }
-    else if op == "STAR" { if uns { inst = "mul"; } else { inst = "mul nsw"; } }
+    if op == "PLUS" { inst = "add"; }
+    else if op == "MINUS" { inst = "sub"; }
+    else if op == "STAR" { inst = "mul"; }
     else if op == "SLASH" { if uns { inst = "udiv"; } else { inst = "sdiv"; } }
     else if op == "PERCENT" { if uns { inst = "urem"; } else { inst = "srem"; } }
     else if op == "EQEQ" { inst = "icmp eq"; }

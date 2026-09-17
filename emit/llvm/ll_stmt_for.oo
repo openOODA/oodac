@@ -1,0 +1,98 @@
+// # LLVM for-loop statement lowering
+//
+// Logline: Lowers range-based for loops to condition, body, step, and end.
+//
+// Setup: Called from ll_emit_stmts on KW_FOR. Emits fcond, fbody, fstep, fend.
+//
+// Beats:
+//   1. Parse loop identifier, in keyword, lo bound, and hi bound.
+//   2. Allocate loop index slot and branch into condition block.
+//   3. Emit dedicated fstep increment label target for continue statements.
+//   4. Close loop with conditional step and terminal fend block.
+
+import "ll_tok.oo";
+import "ll_ty.oo";
+import "ll_int.oo";
+import "ll_expr.oo";
+import "ll_slot.oo";
+import "ll_ir.oo";
+
+pub fn ll_for_init(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String, ir: &mut IrBuf) -> String {
+    let mut p: Int = pos;
+    let mut ssa: Int = ssa0;
+    if p >= n || ll_k(toks, p) != "IDENT" {
+        println("ERR\tllvm\tfor residual (expected loop IDENT)");
+        process_exit(1);
+    }
+    let fname: String = ll_t(toks, p);
+    p = p + 1;
+    if p >= n {
+        println("ERR\tllvm\tfor residual (need 'in')");
+        process_exit(1);
+    }
+    if ll_k(toks, p) == "KW_IN" || (ll_k(toks, p) == "IDENT" && ll_t(toks, p) == "in") {
+        p = p + 1;
+    } else {
+        println("ERR\tllvm\tfor residual (need 'in')");
+        process_exit(1);
+    }
+    let mut lo: String = ll_expr(toks, p, n, ssa, env, ir);
+    p = ll_ppos(lo);
+    ssa = ll_pssa(lo);
+    if p >= n || ll_k(toks, p) != "DOTDOT" {
+        println("ERR\tllvm\tfor residual (expected .. between bounds)");
+        process_exit(1);
+    }
+    p = p + 1;
+    let mut hi: String = ll_expr(toks, p, n, ssa, env, ir);
+    p = ll_ppos(hi);
+    ssa = ll_pssa(hi);
+    if ll_is_int(ll_pk(lo)) && ll_pk(lo) != "i64" {
+        lo = ll_int_convert(lo, ssa, "i64", ir);
+        ssa = ll_pssa(lo);
+    }
+    if ll_is_int(ll_pk(hi)) && ll_pk(hi) != "i64" {
+        hi = ll_int_convert(hi, ssa, "i64", ir);
+        ssa = ll_pssa(hi);
+    }
+    if ll_pk(lo) != "i64" || ll_pk(hi) != "i64" {
+        println("ERR\tllvm\tfor residual (i64 range bounds only)");
+        process_exit(1);
+    }
+    let mut lo_op: String = ll_opnd(lo);
+    if ll_pptr(lo) != "" && !ll_is_imm(lo) {
+        ssa = ssa + 1;
+        ll_ir_inst(ir, "load", "i64", ll_ssa(ssa), "ptr " + ll_pptr(lo) + ", align 8", 1, 1);
+        lo_op = ll_ssa(ssa);
+    }
+    let mut hi_op: String = ll_opnd(hi);
+    if ll_pptr(hi) != "" && !ll_is_imm(hi) {
+        ssa = ssa + 1;
+        ll_ir_inst(ir, "load", "i64", ll_ssa(ssa), "ptr " + ll_pptr(hi) + ", align 8", 1, 1);
+        hi_op = ll_ssa(ssa);
+    }
+    let fid: Int = ssa + 1;
+    let fvar: String = ll_var(fname) + "_" + fid.to_string();
+    ll_slot_name(fvar, ir);
+    ll_ir_inst(ir, "store", "i64", "", lo_op + ", ptr " + fvar + ", align 8", 1, 1);
+    ll_ir_inst(ir, "br", "", "", "label %fcond" + fid.to_string(), 1, 1);
+    ll_ir_label(ir, "fcond" + fid.to_string());
+    ssa = ssa + 1;
+    ll_ir_inst(ir, "load", "i64", ll_ssa(ssa), "ptr " + fvar + ", align 8", 1, 1);
+    ssa = ssa + 1;
+    ll_ir_inst(ir, "icmp slt", "i64", ll_ssa(ssa), ll_ssa(ssa - 1) + ", " + hi_op, 1, 1);
+    ll_ir_inst(ir, "br", "i1", "", ll_ssa(ssa) + ", label %fbody" + fid.to_string() + ", label %fend" + fid.to_string(), 1, 1);
+    return ll_pack(p, ssa, fid.to_string(), fvar);
+}
+
+pub fn ll_for_step(fid: String, fvar: String, ssa0: Int, ir: &mut IrBuf) -> Int {
+    ll_ir_label(ir, "fstep" + fid);
+    let mut s: Int = ssa0 + 1;
+    ll_ir_inst(ir, "load", "i64", ll_ssa(s), "ptr " + fvar + ", align 8", 1, 1);
+    s = s + 1;
+    ll_ir_inst(ir, "add", "i64", ll_ssa(s), ll_ssa(s - 1) + ", 1", 1, 1);
+    ll_ir_inst(ir, "store", "i64", "", ll_ssa(s) + ", ptr " + fvar + ", align 8", 1, 1);
+    ll_ir_inst(ir, "br", "", "", "label %fcond" + fid, 1, 1);
+    ll_ir_label(ir, "fend" + fid);
+    return s;
+}

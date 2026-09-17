@@ -1,0 +1,17 @@
+// # Devin Repro 13: INT_MIN / -1 and INT_MIN % -1 safe evaluation
+//
+// Logline: Signed integer division of INT_MIN by -1 must not cause SIGFPE.
+//
+// Setup: Evaluate INT_MIN / -1 and INT_MIN % -1.
+//
+// Beats:
+//   1. a = 0 - 9223372036854775807 - 1.
+//   2. b = a / -1, c = a % -1.
+
+pub fn main() {
+    let a: Int = 0 - 9223372036854775807 - 1;
+    let b: Int = a / -1;
+    let c: Int = a % -1;
+    println(b);
+    println(c);
+}

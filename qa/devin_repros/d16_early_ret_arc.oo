@@ -1,0 +1,22 @@
+// # Devin Repro 16: ARC release on early return
+//
+// Logline: Returning early from inner scope releases outer scope variables.
+//
+// Setup: Function with string in outer scope and early return in if block.
+//
+// Beats:
+//   1. Allocate string t in outer scope.
+//   2. Return 1 from if b block.
+
+fn f(b: Bool) -> Int {
+    let t: String = "kept";
+    if b {
+        return 1;
+    }
+    println(t);
+    return 0;
+}
+
+pub fn main() {
+    println(f(true));
+}

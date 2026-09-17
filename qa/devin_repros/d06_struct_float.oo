@@ -1,0 +1,19 @@
+// # Devin Repro 6: Struct with Float field retain/release
+//
+// Logline: Retain/release on structs with Float fields must not emit GEP into scalar.
+//
+// Setup: Struct with Float and Int fields.
+//
+// Beats:
+//   1. Instantiate struct P { x: 1.5, y: 2 }.
+//   2. Print field y.
+
+type P = struct {
+    x: Float,
+    y: Int
+};
+
+pub fn main() {
+    let q = P { x: 1.5, y: 2 };
+    println(q.y);
+}

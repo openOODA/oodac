@@ -21,7 +21,8 @@
 Primary self-hosting compiler. Root `anchor.oo` re-exports six
 surfaces: `lex`, `ast`, `check`, `types`, `emit/llvm`, and `cli`.
 Product `oodac build` is LLVM IR + clang. `--backend c` / `emit-c`
-/ `--gcc` are residual (exit 2).
+/ `--gcc` are residual (exit 2). Experimental/auxiliary backends include
+`emit/elf` (direct ELF code emission) and `emit/wasm` (WebAssembly emission).
 
 ## Install
 

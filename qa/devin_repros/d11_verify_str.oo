@@ -1,0 +1,17 @@
+// # Devin Repro 11: verify block string literals
+//
+// Logline: String literals inside verify blocks must emit string constant globals.
+//
+// Setup: Program with verify block containing string literal.
+//
+// Beats:
+//   1. Define main.
+//   2. Define verify block printing string literal.
+
+pub fn main() {
+    println(1);
+}
+
+verify T1 {
+    println("verify ran");
+}

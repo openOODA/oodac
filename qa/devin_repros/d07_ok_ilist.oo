@@ -1,0 +1,19 @@
+// # Devin Repro 7: Ok(intList) %OoIList into %OoResLI
+//
+// Logline: Ok wrapping a List[Int] must emit %OoResLI, not %OoSList.
+//
+// Setup: Return Result[List[Int], String] from function.
+//
+// Beats:
+//   1. Construct List[Int] and return Ok(l).
+//   2. Verify r.is_ok().
+
+fn mk() -> Result[List[Int], String] {
+    let l: List[Int] = list_new();
+    return Ok(l);
+}
+
+pub fn main() {
+    let r = mk();
+    println(r.is_ok());
+}

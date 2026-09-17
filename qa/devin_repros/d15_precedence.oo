@@ -1,0 +1,16 @@
+// # Devin Repro 15: Operator precedence
+//
+// Logline: Evaluates mixed bitwise, shift, additive, and logical operators.
+//
+// Setup: Test 1 << 1 + 1, true || false && false, 3 | 4 ^ 5.
+//
+// Beats:
+//   1. 1 << 1 + 1 == 4.
+//   2. true || false && false == true.
+//   3. 3 | 4 ^ 5 == 3.
+
+pub fn main() {
+    println(1 << 1 + 1);
+    println(true || false && false);
+    println(3 | 4 ^ 5);
+}

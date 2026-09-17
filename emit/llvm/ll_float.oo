@@ -60,25 +60,28 @@ pub fn ll_apply_floatop(op: String, lhs: String, rhs: String, ir: &mut IrBuf) ->
 
 pub fn ll_neg_float(r: String, ir: &mut IrBuf) -> Int {
     let s: Int = ll_pssa(r) + 1;
-    ll_ir_inst(ir, "fneg", "double", ll_ssa(s), ll_ssa(ll_pssa(r)), 1, 1);
+    ll_ir_inst(ir, "fneg", "double", ll_ssa(s), ll_opnd(r), 1, 1);
     return s;
 }
 
 pub fn ll_float_cond(v: String, ssa0: Int, ir: &mut IrBuf) -> Int {
     let s: Int = ssa0 + 1;
-    ll_ir_inst(ir, "fcmp une", "double", ll_ssa(s), ll_ssa(ll_pssa(v)) + ", 0.0", 1, 1);
+    ll_ir_inst(ir, "fcmp une", "double", ll_ssa(s), ll_opnd(v) + ", 0.0", 1, 1);
     return s;
 }
 
 pub fn ll_print_float(ssa: Int, ptr: String, ssa0: Int, ir: &mut IrBuf) -> Int {
-    let mut ds: Int = ssa;
+    let mut opnd: String = ll_ssa(ssa);
     let mut ns: Int = ssa0;
-    if ptr != "" {
-        ds = ssa0 + 1;
+    if chars_len(ptr) >= 2 && char_at(ptr, 0) == "#" {
+        opnd = str_slice(ptr, 1, chars_len(ptr));
+    } else if ptr != "" {
+        let ds: Int = ssa0 + 1;
         ns = ds;
         ll_ir_inst(ir, "load", "double", ll_ssa(ds), "ptr " + ptr + ", align 8", 1, 1);
+        opnd = ll_ssa(ds);
     }
-    ll_ir_inst(ir, "call", "void", "", "@oo_print_double(double " + ll_ssa(ds) + ")", 1, 1);
+    ll_ir_inst(ir, "call", "void", "", "@oo_print_double(double " + opnd + ")", 1, 1);
     ll_ir_inst(ir, "call", "void", "", "@oo_println()", 1, 1);
     return ns;
 }

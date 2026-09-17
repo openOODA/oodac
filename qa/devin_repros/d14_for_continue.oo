@@ -1,0 +1,20 @@
+// # Devin Repro 14: for + continue jump target
+//
+// Logline: continue statement in for loop must branch to fstep increment label.
+//
+// Setup: for loop with continue statement.
+//
+// Beats:
+//   1. Loop from 0 to 5.
+//   2. Continue on each iteration.
+
+pub fn main() {
+    let mut c: Int = 0;
+    for i in 0..5 {
+        if i < 10 {
+            continue;
+        }
+        c = c + 1;
+    }
+    println(c);
+}

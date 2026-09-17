@@ -1,0 +1,19 @@
+// # Devin Repro 1: Store through reference *p = v
+//
+// Logline: Mutating an integer through &mut reference must not emit invalid inttoptr.
+//
+// Setup: fn setit takes &mut Int and writes *p = 7.
+//
+// Beats:
+//   1. Call setit with &mut x.
+//   2. x is updated to 7.
+
+fn setit(p: &mut Int) {
+    *p = 7;
+}
+
+pub fn main() {
+    let mut x: Int = 1;
+    setit(&mut x);
+    println(x);
+}

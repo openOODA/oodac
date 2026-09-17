@@ -23,7 +23,7 @@ import "ll_ir.oo";
 pub fn ll_return_stmt(toks: List[String], p: Int, n: Int, ssa: Int, env: String, ret_kind: String, stab: String, ir: &mut IrBuf) -> String {
     if p + 1 < n && ll_k(toks, p + 1) == "SEMI" {
         if ret_kind == "main_i32" || ret_kind == "optim" || ret_kind == "optsm" {
-            let ns: Int = ll_arc_exit(env, ssa, ir);
+            let ns: Int = ll_arc_exit_all(env, ssa, ir);
             ll_heap_end(ir);
             ll_ir_inst(ir, "ret", "i32", "", "0", 1, 1);
             let q: Int = ll_skip_to_rbrace(toks, p + 1, n);
@@ -55,7 +55,7 @@ pub fn ll_return_stmt(toks: List[String], p: Int, n: Int, ssa: Int, env: String,
         ns = ll_contract_return(toks, v, env, ns, exp_kind, p, ir);
     }
     if ll_arc_owned(ll_pk(v)) && ll_pptr(v) != "" { ns = ll_arc_keep_ptr(ll_pk(v), ll_pptr(v), ns, ir); }
-    ns = ll_arc_exit(env, ns, ir);
+    ns = ll_arc_exit_all(env, ns, ir);
     ll_heap_end(ir);
     if ret_kind == "resim" {
         ns = ll_ret_resim(v, ns, ir);
@@ -63,6 +63,8 @@ pub fn ll_return_stmt(toks: List[String], p: Int, n: Int, ssa: Int, env: String,
         ll_ir_inst(ir, "ret", "i32", "", "0", 1, 1);
     } else if ret_kind == "resi" {
         ns = ll_ret_resi(v, ns, ir);
+    } else if ret_kind == "resl" || ret_kind == "resil" || ret_kind == "ress" {
+        ns = ll_ret_res(v, ret_kind, ns, ir);
     } else if ret_kind == "void" {
         ll_ir_inst(ir, "ret", "void", "", "", 1, 1);
     } else if ret_kind == "opti" || ret_kind == "opts" {
@@ -96,11 +98,12 @@ pub fn ll_break_stmt(toks: List[String], p: Int, n: Int, ssa: Int, env: String, 
         println("ERR\tllvm\tbreak outside loop");
         process_exit(1);
     }
+    let ssa2: Int = ll_arc_exit(env, ssa, ir);
     ll_ir_inst(ir, "br", "label", "", "%" + dst, 1, 1);
     let mut np: Int = p + 1;
     if np < n && ll_k(toks, np) == "SEMI" { np = np + 1; }
     let rp: Int = ll_skip_to_rbrace(toks, np, n);
-    return ll_pack(rp, ssa, ret_kind, env) + "\t1";
+    return ll_pack(rp, ssa2, ret_kind, env) + "\t1";
 }
 
 pub fn ll_store_deref_stmt(toks: List[String], p0: Int, n: Int, ssa0: Int, env: String, ir: &mut IrBuf) -> String {
@@ -110,15 +113,69 @@ pub fn ll_store_deref_stmt(toks: List[String], p0: Int, n: Int, ssa0: Int, env: 
         println("ERR\tllvm\tstore through bad ref, align 8");
         process_exit(1);
     }
-    let mut vv: String = ll_expr(toks, p0 + 3, n, ssa0, type_env_put(env, "__e__", ty), ir);
-    if ll_is_int(ty) && ll_is_int(ll_pk(vv)) && ll_pk(vv) != ty {
-        vv = ll_int_convert(vv, ll_hw(ssa0, ll_pssa(vv)), ty, ir);
+    let mut val_ty: String = "i64";
+    if ty == "ri32" || ty == "ru32" { val_ty = "i32"; }
+    if ty == "rf64" { val_ty = "f64"; }
+    if ty == "ri1" { val_ty = "i1"; }
+    let mut vv: String = ll_expr(toks, p0 + 3, n, ssa0, type_env_put(env, "__e__", val_ty), ir);
+    if ll_is_int(val_ty) && ll_is_int(ll_pk(vv)) && ll_pk(vv) != val_ty {
+        vv = ll_int_convert(vv, ll_hw(ssa0, ll_pssa(vv)), val_ty, ir);
     }
     let la: String = ll_load_ident(name, env, ll_pssa(vv), ir);
-    let pa: Int = ll_pssa(la) + 1;
-    ll_ir_inst(ir, "inttoptr", ll_ir_val(ty), ll_ssa(pa), ll_ssa(ll_pssa(la)) + " to ptr", 1, 1);
-    ll_ir_inst(ir, "store", ll_ir_val(ty), "", ll_opnd(vv) + ", ptr " + ll_ssa(pa) + ", align 8", 1, 1);
+    let ptr_target: String = ll_pptr(la);
+    let mut cur_s: Int = ll_pssa(la);
+    let mut target_ptr: String = "";
+    if chars_len(ptr_target) < 3 || str_slice(ptr_target, 0, 3) != "%p_" {
+        cur_s = cur_s + 1;
+        ll_ir_inst(ir, "load", "ptr", ll_ssa(cur_s), "ptr " + ptr_target + ", align 8", 1, 1);
+        target_ptr = ll_ssa(cur_s);
+    } else {
+        target_ptr = ptr_target;
+    }
+    ll_ir_inst(ir, "store", ll_ir_val(val_ty), "", ll_opnd(vv) + ", ptr " + target_ptr + ", align 8", 1, 1);
     let mut p: Int = ll_ppos(vv);
     if p < n && ll_k(toks, p) == "SEMI" { p = p + 1; }
-    return ll_pack(p, pa, ty, "");
+    return ll_pack(p, cur_s, val_ty, "");
 }
+
+pub fn ll_ret_resi(v: String, ssa0: Int, ir: &mut IrBuf) -> Int {
+    let p: String = ll_ensure_ptr(v, ssa0, ir);
+    let s: Int = ll_pssa(p) + 1;
+    ll_ir_inst(ir, "load", "%OoResI", ll_ssa(s), "ptr " + ll_pptr(p) + ", align 8", 1, 1);
+    ll_ir_inst(ir, "store", "%OoResI", "", ll_ssa(s) + ", ptr %ret, align 8", 1, 1);
+    ll_ir_inst(ir, "ret", "void", "", "", 1, 1);
+    return s;
+}
+
+pub fn ll_ret_opt(v: String, kind: String, ssa0: Int, ir: &mut IrBuf) -> Int {
+    let p: String = ll_ensure_ptr(v, ssa0, ir);
+    let s: Int = ll_pssa(p) + 1;
+    ll_ir_inst(ir, "load", ll_ir_alloc(kind), ll_ssa(s), "ptr " + ll_pptr(p) + ", align 8", 1, 1);
+    ll_ir_inst(ir, "store", ll_ir_alloc(kind), "", ll_ssa(s) + ", ptr %ret, align 8", 1, 1);
+    ll_ir_inst(ir, "ret", "void", "", "", 1, 1);
+    return s;
+}
+
+pub fn ll_ret_resim(v: String, ssa0: Int, ir: &mut IrBuf) -> Int {
+    let p: String = ll_ensure_ptr(v, ssa0, ir);
+    let s: Int = ll_pssa(p) + 1;
+    ll_ir_inst(ir, "getelementptr inbounds", "%OoResI", ll_ssa(s), "ptr " + ll_pptr(p) + ", i32 0, i32 0", 1, 1);
+    let s2: Int = s + 1;
+    ll_ir_inst(ir, "load", "i32", ll_ssa(s2), "ptr " + ll_ssa(s) + ", align 4", 1, 1);
+    let s3: Int = s2 + 1;
+    ll_ir_inst(ir, "icmp eq", "i32", ll_ssa(s3), ll_ssa(s2) + ", 0", 1, 1);
+    let s4: Int = s3 + 1;
+    ll_ir_inst(ir, "zext", "i1", ll_ssa(s4), ll_ssa(s3) + " to i32", 1, 1);
+    ll_ir_inst(ir, "ret", "i32", "", ll_ssa(s4), 1, 1);
+    return s4;
+}
+
+pub fn ll_ret_res(v: String, kind: String, ssa0: Int, ir: &mut IrBuf) -> Int {
+    let p: String = ll_ensure_ptr(v, ssa0, ir);
+    let s: Int = ll_pssa(p) + 1;
+    ll_ir_inst(ir, "load", ll_ir_alloc(kind), ll_ssa(s), "ptr " + ll_pptr(p) + ", align 8", 1, 1);
+    ll_ir_inst(ir, "store", ll_ir_alloc(kind), "", ll_ssa(s) + ", ptr %ret, align 8", 1, 1);
+    ll_ir_inst(ir, "ret", "void", "", "", 1, 1);
+    return s;
+}
+

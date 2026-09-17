@@ -25,7 +25,7 @@ pub fn ll_st_rr(fl: String, nm: String, is_ret: Int, ir: &mut IrBuf) {
         if e {
             if cur != "" {
                 let fk: String = ll_st_map(cur, "|", ",");
-                if fk != "i64" && fk != "i1" && fk != "opti" && !ll_is_int(fk) {
+                if fk != "i64" && fk != "i1" && fk != "opti" && fk != "f64" && fk != "v8f32" && fk != "v4f64" && !ll_is_int(fk) {
                     ll_ir_inst(ir, "getelementptr inbounds", "%St_" + nm, ll_ssa(s), "ptr %p, i32 0, i32 " + idx.to_string(), 1, 1);
                     if fk == "str" {
                         ll_ir_inst(ir, "load", "{ ptr, i64 }", ll_ssa(s + 1), "ptr " + ll_ssa(s) + ", align 8", 1, 1);
@@ -92,9 +92,9 @@ pub fn ll_st_rr(fl: String, nm: String, is_ret: Int, ir: &mut IrBuf) {
                         ll_ir_inst(ir, "br", "label", "", "%" + rtag + "_end", 1, 1);
                         ll_ir_label(ir, rtag + "_end");
                         s = s + 7;
-                    } else {
+                    } else if fk == "resi" || fk == "resl" || fk == "resil" || fk == "ress" {
                         let mut inner: Int = 1;
-                        if fk == "resi" { inner = 2; }
+                        if fk == "resi" || fk == "resl" || fk == "resil" { inner = 2; }
                         ll_ir_inst(ir, "getelementptr inbounds", ll_ir_alloc(fk), ll_ssa(s + 1), "ptr " + ll_ssa(s) + ", i32 0, i32 " + inner.to_string(), 1, 1);
                         ll_ir_inst(ir, "load", "{ ptr, i64 }", ll_ssa(s + 2), "ptr " + ll_ssa(s + 1) + ", align 8", 1, 1);
                         ll_ir_inst(ir, "call", "void", "", "@oo_str_" + op + "({ ptr, i64 } " + ll_ssa(s + 2) + ")", 1, 1);
@@ -102,7 +102,7 @@ pub fn ll_st_rr(fl: String, nm: String, is_ret: Int, ir: &mut IrBuf) {
                 }
                 if fk == "slist" || fk == "ilist" || (chars_len(fk) >= 3 && str_slice(fk, 0, 3) == "St_") {
                     s = s + 1;
-                } else if fk == "i64" || fk == "i1" || fk == "opti" || ll_is_int(fk) {
+                } else if fk == "i64" || fk == "i1" || fk == "opti" || fk == "f64" || fk == "v8f32" || fk == "v4f64" || ll_is_int(fk) {
                     s = s;
                 } else if ll_is_olist(fk) || ll_is_optst(fk) || ll_is_resst(fk) {
                     s = s;

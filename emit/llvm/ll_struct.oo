@@ -94,7 +94,7 @@ pub fn ll_struct_field_load(kind: String, ssa: Int, ptr: String, field: String, 
     let fk: String = ll_pk(fp);
     let t: Int = ll_pssa(fp) + 1;
     ll_ir_inst(ir, "load", ll_ir_val(fk), ll_ssa(t), "ptr " + ll_pptr(fp) + ", align 8", 1, 1);
-    return ll_pack(0, t, fk, "");
+    return ll_pack(0, t, fk, ll_pptr(fp));
 }
 pub fn ll_struct_declare(toks: List[String], base: String) -> String {
     let n: Int = list_len(toks); let mut env: String = base; let mut i: Int = 0;
@@ -223,8 +223,7 @@ pub fn ll_struct_lit_at(toks: List[String], pos: Int, n: Int, ssa0: Int, env: St
         let cj2: Int = str_index_of(fe2, ":");
         let fk: String = ll_st_map(str_slice(fe2, cj2 + 1, chars_len(fe2)), ",", "|"); p = p + 1;
         if p >= n || ll_k(toks, p) != "COLON" { println("ERR\tllvm\tstruct lit colon"); process_exit(1); }
-        p = p + 1;
-        let v0: String = ll_expr(toks, p, n, s, env, ir); p = ll_ppos(v0); s = ll_pssa(v0);
+        p = p + 1; let v0: String = ll_expr(toks, p, n, s, type_env_put(env, "__e__", fk), ir); p = ll_ppos(v0); s = ll_pssa(v0);
         let mut v: String = ll_int_convert(v0, s, fk, ir);
         s = ll_pssa(v);
         let mut pk: String = ll_pk(v);

@@ -1,0 +1,23 @@
+// # Devin Repro 9: Match expression phi arm type unification
+//
+// Logline: Match arms unify correctly without invalid phi types.
+//
+// Setup: Match expression over Result returning consistent types.
+//
+// Beats:
+//   1. Match Ok(x) => x, Err(_) => 0.
+//   2. Print result.
+
+fn f(b: Bool) -> Result[Int, String] {
+    if b { return Ok(42); }
+    return Err("fail");
+}
+
+pub fn main() {
+    let r = f(true);
+    let v: Int = match r {
+        Ok(x) => x,
+        Err(e) => 0
+    };
+    println(v);
+}

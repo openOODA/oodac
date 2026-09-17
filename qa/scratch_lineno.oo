@@ -1,3 +1,13 @@
+// # Scratch Lineno Test Probe
+//
+// Logline: Probes line number reporting on Result match evaluation.
+//
+// Setup: Construct Ok(1) Result and match unwrapping.
+//
+// Beats:
+//   1. Assert Result is ok.
+//   2. Unwrap value and print OK.
+
 pub fn main() {
     let r: Result[Int, String] = Ok(1);
     if r.is_err() {

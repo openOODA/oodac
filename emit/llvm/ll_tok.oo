@@ -103,6 +103,7 @@ pub fn ll_opnd(v: String) -> String {
 pub fn ll_is_refk(kind: String) -> Bool {
     if kind == "ri64" || kind == "ru64" { return true; }
     if kind == "ri32" || kind == "ru32" { return true; }
+    if kind == "rf64" || kind == "ri1" { return true; }
     return false;
 }
 
@@ -164,7 +165,7 @@ pub fn ll_stab_rich(stab: String, t: String) -> String {
             let val: String = str_slice(stab, k, m);
             let ci: Int = str_index_of(val, ":");
             if ci >= 0 {
-                if !first { rich = rich + "|"; }
+                if !first { rich = rich + ","; }
                 rich = rich + fld + ":" + ll_st_map(str_slice(val, ci + 1, chars_len(val)), ",", "|");
                 first = false;
             }

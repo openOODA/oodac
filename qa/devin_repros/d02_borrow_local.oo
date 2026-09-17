@@ -1,0 +1,15 @@
+// # Devin Repro 2: let p = &x binding reference to local
+//
+// Logline: Binding &x to local let p must preserve address and load value.
+//
+// Setup: let p = &x, load through *p.
+//
+// Beats:
+//   1. Borrow local variable x.
+//   2. Dereference *p and print.
+
+pub fn main() {
+    let x: Int = 3;
+    let p = &x;
+    println(*p);
+}

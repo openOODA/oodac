@@ -25,13 +25,9 @@ pub fn parse_expr_dump(toks: List[String], pos0: Int, depth: Int) -> Int {
 }
 
 pub fn parse_expr_bp(toks: List[String], pos0: Int, depth: Int, min_bp: Int) -> Int {
-    let n = list_len(toks);
-let mut pos = pos0;
-let pad: String = indent(depth);
-let left_start = pos;
-pos = skip_expr_bp(toks, pos, min_bp);
-pos = print_expr_bp(toks, left_start, depth, min_bp);
-return pos;
+    let left_start = pos0;
+    let pos = skip_expr_bp(toks, pos0, min_bp);
+    return print_expr_bp(toks, left_start, depth, min_bp);
 }
 
 // Advance past an expression at given min binding power (no print).
@@ -74,23 +70,9 @@ pos = print_expr_bp(toks, pos, depth + 1, 100);
                 let op: String = bin_op_name(k);
                 let bl: String = field_at(list_get(toks, pos), 1);
                 let bc: String = field_at(list_get(toks, pos), 2);
-                // We already printed left at `depth`. For parent-first we should have
-                // printed BIN first. Compensate by only supporting single BIN level
-                // restructure: mark that left was printed; for parity normalizer,
-                // we instead re-print: go back is hard.
-                // Approach: for each BIN, we print BIN, then the left was already
-                // printed above us — WRONG.
-                // Correct approach for left-assoc parent-first without AST:
-                // use recursion that returns without printing left, then:
-                //   right_end = skip after op
-                //   print BIN; print_expr left; print_expr right
-                let after_left = pos;
                 pos = pos + 1;
-                // Fall back: print BIN then right only (left already out) — normalize in script.
                 println(pad + "EXPR BIN op=" + op + " @" + bl + ":" + bc);
                 pos = print_expr_bp(toks, pos, depth + 1, bp + 1);
-                // continue chain at same depth for left-assoc? stage-0 nests.
-                // For a+b only one BIN — ok for corpus ok_main.
             }
         }
     }

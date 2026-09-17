@@ -1,0 +1,23 @@
+// # Devin Repro 10: Match expression arm with internal control flow
+//
+// Logline: Match arms with internal branching branch to mend via trampolines.
+//
+// Setup: Match arm containing boolean conjunction.
+//
+// Beats:
+//   1. Evaluate match with x + 1 > 0 && x > 0.
+//   2. Print result.
+
+fn f(b: Bool) -> Result[Int, String] {
+    if b { return Ok(1); }
+    return Err("no");
+}
+
+pub fn main() {
+    let r = f(true);
+    let v = match r {
+        Ok(x) => x + 1 > 0 && x > 0,
+        Err(e) => false
+    };
+    println(v);
+}

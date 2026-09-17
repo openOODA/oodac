@@ -44,9 +44,11 @@ pub fn ll_match_expr(toks: List[String], pos: Int, n: Int, ssa0: Int, env: Strin
     }
     let okarm: String = ll_expr(toks, p, n, ll_pssa(b) + 1, env2, ir);
     p = ll_ppos(okarm);
-    let oks: Int = ll_arm_val(okarm, ll_pssa(okarm), ir);
+    let mut oks: Int = ll_arm_val(okarm, ll_pssa(okarm), ir);
     if p < n && ll_k(toks, p) == "COMMA" { p = p + 1; }
-    ll_ir_inst(ir, "br", "label", "", "%mend" + id.to_string(), 1, 1);
+    ll_ir_inst(ir, "br", "", "", "label %tj" + id.to_string(), 1, 1);
+    ll_ir_label(ir, "tj" + id.to_string());
+    ll_ir_inst(ir, "br", "", "", "label %mend" + id.to_string(), 1, 1);
     if p < n && ll_k(toks, p) == "IDENT" { p = p + 1; }
     if p < n && ll_k(toks, p) == "LPAREN" { p = p + 1; }
     let mut ebn: String = "_";
@@ -97,27 +99,35 @@ pub fn ll_match_expr(toks: List[String], pos: Int, n: Int, ssa0: Int, env: Strin
         return ll_pack(p, s3, pk0, a0);
     }
     let ers0: Int = ll_arm_val(erarm, ll_pssa(erarm), ir);
-    let pk: String = ll_pk(okarm);
+    let mut pk: String = ll_pk(okarm);
     let ek: String = ll_pk(erarm);
     let mut ers2: Int = ers0;
-    if ll_is_int(pk) && ll_is_int(ek) && pk != ek {
-        let pkw: String = ll_int_wide(pk);
-        let ekw: String = ll_int_wide(ek);
-        if pkw == "i64" {
-            if ekw == "i32" {
-                let ec: String = ll_int_convert(ll_pack(ll_ppos(erarm), ers0, ek, ""), ers0, pk, ir);
-                ers2 = ll_pssa(ec);
+    if pk != ek {
+        if ll_is_int(pk) && ll_is_int(ek) {
+            let pkw: String = ll_int_wide(pk);
+            let ekw: String = ll_int_wide(ek);
+            if pkw == "i64" {
+                if ekw == "i32" {
+                    let ec: String = ll_int_convert(ll_pack(ll_ppos(erarm), ers0, ek, ""), ers0, pk, ir);
+                    ers2 = ll_pssa(ec);
+                }
+            } else if ekw == "i64" {
+                let oc: String = ll_int_convert(ll_pack(ll_ppos(okarm), oks, pk, ""), oks, ek, ir);
+                oks = ll_pssa(oc);
+                pk = ek;
             }
-        } else if ekw == "i64" {
-            println("ERR\tllvm\tmixed-width match arms need same kind");
+        } else {
+            println("ERR\tllvm\tmatch arm type mismatch");
             process_exit(1);
         }
     }
     if p < n && ll_k(toks, p) == "COMMA" { p = p + 1; }
     if p < n && ll_k(toks, p) == "RBRACE" { p = p + 1; }
-    ll_ir_inst(ir, "br", "label", "", "%mend" + id.to_string(), 1, 1);
+    ll_ir_inst(ir, "br", "", "", "label %ej" + id.to_string(), 1, 1);
+    ll_ir_label(ir, "ej" + id.to_string());
+    ll_ir_inst(ir, "br", "", "", "label %mend" + id.to_string(), 1, 1);
     ll_ir_label(ir, "mend" + id.to_string());
     let ph: Int = ll_hw(oks, ers2) + 1;
-    ll_ir_inst(ir, "phi", ll_ir_val(pk), ll_ssa(ph), "[ " + ll_ssa(oks) + ", %mok" + id.to_string() + " ], [ " + ll_ssa(ers2) + ", %merr" + id.to_string() + " ]", 1, 1);
+    ll_ir_inst(ir, "phi", ll_ir_val(pk), ll_ssa(ph), "[ " + ll_ssa(oks) + ", %tj" + id.to_string() + " ], [ " + ll_ssa(ers2) + ", %ej" + id.to_string() + " ]", 1, 1);
     return ll_pack(p, ph, pk, "");
 }

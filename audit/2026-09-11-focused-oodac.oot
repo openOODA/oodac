@@ -1,5 +1,6 @@
 // # 2026-09-11 Focused Audit — oodac/
 //
+// Status:  [SUPERSEDED by 2026-09-17 SWE-2/mcode unified resolution audit]
 // Logline: Focused audit of the compiler repo on 2026-09-11.
 //          10 dirty files — an in-flight LLVM-emit repair touching
 //          emit/llvm/ll_*.oo (9 files), types/types_core.oo,

@@ -1,5 +1,5 @@
 # CAP — Granular Capability Migration Rules
-File: openOODA/oodac/docs/CAP_LEGACY_SUPERSEDE_REMOVAL_TODO.oot
+File: openOODA/oodac/docs/cap_legacy_supersede_removal_todo.oot
 
 Product check no longer accepts a broad `NetCap` / `FsCap` / `SysCap` /
 `AllocCap` token as a supersede for the granular kind a sealed op needs.

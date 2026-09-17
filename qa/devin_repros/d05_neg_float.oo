@@ -1,0 +1,14 @@
+// # Devin Repro 5: Unary minus on float literal
+//
+// Logline: Unary negation on float literal must not reference phantom SSA.
+//
+// Setup: Evaluate -2.0 and assign to x.
+//
+// Beats:
+//   1. let x = -2.0.
+//   2. println(x).
+
+pub fn main() {
+    let x = -2.0;
+    println(x);
+}

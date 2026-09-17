@@ -1,0 +1,15 @@
+// # Devin Repro 17: Integer overflow wrapping without nsw poison
+//
+// Logline: Signed addition wraps without undefined behavior / nsw poison.
+//
+// Setup: Add 1 to INT_MAX.
+//
+// Beats:
+//   1. x = 9223372036854775807.
+//   2. y = x + 1.
+
+pub fn main() {
+    let x: Int = 9223372036854775807;
+    let y: Int = x + 1;
+    println(y);
+}

@@ -107,19 +107,20 @@ fn check_modules(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, paths: L
     let mut arity_all: String = "\t";
     let mut raws: List[String] = list_new();
     let mut i = 0;
-    while i < np { let pth: String = list_get(paths, i);
-    let rr = read_file(fs_r, pth);
-    let mut raw: String = "";
-    if !rr.is_err() { raw = match rr { Ok(s)    => s, Err(msg) => msg };
-            if count_lines(raw) > 256 { println("ERR\tcheck\toversized " + pth + " " + count_lines(raw).to_string() + " > 256");
-            process_exit(1);
-            }
-            names = names + scan_fn_names(raw);
-            arity_all = arity_all + scan_import_arity(raw);
-        } else {
+    while i < np {
+        let pth: String = list_get(paths, i);
+        let rr = read_file(fs_r, pth);
+        if rr.is_err() {
             println("ERR\timport\tmissing " + pth);
             process_exit(1);
         }
+        let raw: String = match rr { Ok(s) => s, Err(_) => "" };
+        if count_lines(raw) > 256 {
+            println("ERR\tcheck\toversized " + pth + " " + count_lines(raw).to_string() + " > 256");
+            process_exit(1);
+        }
+        names = names + scan_fn_names(raw);
+        arity_all = arity_all + scan_import_arity(raw);
         raws = list_push(raws, raw);
         i = i + 1;
     }

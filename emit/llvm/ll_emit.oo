@@ -22,106 +22,18 @@ import "ll_ty.oo";
 import "ll_verify.oo";
 import "ll_decl.oo";
 import "ll_struct_imp.oo";
+import "ll_reach.oo";
 import "types/token_search.oo";
 import "types/types_core.oo";
 
-pub fn ll_collect_sigs(toks: List[String], stab: String) -> String {
-    return ll_collect_sigs_sel(toks, stab, false);
-}
-
-pub fn ll_collect_pub_sigs(toks: List[String], stab: String) -> String {
-    return ll_collect_sigs_sel(toks, stab, true);
-}
-
-fn ll_collect_sigs_sel(toks: List[String], stab: String, pub_only: Bool) -> String {
-    let n: Int = list_len(toks);
-    let mut pos: Int = 0;
-    let mut env: String = "";
-    while pos < n {
-        let k: String = ll_k(toks, pos);
-        if k == "EOF" { return env; }
-        if k == "KW_PUB" || k == "KW_EXPORT" || k == "KW_FN" {
-            let mut pubp: Bool = k == "KW_PUB" || k == "KW_EXPORT";
-            if pub_only && !pubp {
-                pos = ll_skip_fn(toks, pos, n);
-                continue;
-            }
-            let sig: String = ll_parse_sig(toks, pos, n, stab);
-            if sig != "" {
-                let eq: Int = str_index_of(sig, "=");
-                let nm: String = str_slice(sig, 0, eq);
-                let rest: String = str_slice(sig, eq + 1, chars_len(sig));
-                if type_env_get(env, "__fn__" + nm) == "" {
-                    env = type_env_put(env, "__fn__" + nm, rest);
-                    env = type_env_put(env, "__sym__" + nm, ll_sym_of(toks, nm, pubp, false));
-                }
-            }
-            pos = ll_skip_fn(toks, pos, n);
-        } else {
-            pos = pos + 1;
-        }
-    }
-    return env;
-}
-
-fn ll_in_set(set: String, name: String) -> Bool {
-    return str_index_of(set, "\t" + name + "\t") >= 0;
-}
-
-fn ll_known_fns(sigs: String) -> String {    let n: Int = chars_len(sigs); let mut o: String = "\t"; let mut i: Int = 0;
-    while i < n {
-        let at: Bool = i == 0 || char_at(sigs, i - 1) == ";";
-        if at && i + 6 <= n && str_slice(sigs, i, i + 6) == "__fn__" {
-            let mut k: Int = i + 6;
-            while k < n && char_at(sigs, k) != "=" { k = k + 1; }
-            o = o + str_slice(sigs, i + 6, k) + "\t";
-            i = k;
-        }
-        i = i + 1;
-    }
-    return o;
-}
-
-fn ll_reachable(toks: List[String], known: String) -> String {    let n: Int = list_len(toks);
-    let mut set: String = "\tmain\t";
-    let mut added: Bool = true;
-    while added {
-        added = false;
-        let mut pos: Int = 0;
-        while pos < n {
-            if ll_k(toks, pos) == "KW_PUB" || ll_k(toks, pos) == "KW_EXPORT" || ll_k(toks, pos) == "KW_FN" {
-                let nm: String = ll_fn_name_at(toks, pos, n);
-                let end: Int = ll_skip_fn(toks, pos, n);
-                if ll_in_set(set, nm) {
-                    let mut i: Int = pos;
-                    while i < end {
-                        if ll_k(toks, i) == "IDENT" && i + 1 < end && ll_k(toks, i + 1) == "LPAREN" {
-                            let cal: String = ll_t(toks, i);
-                            if i > 0 && ll_k(toks, i - 1) == "DOT" {
-                                i = i + 1;
-                                continue;
-                            }
-                            if ll_in_set(known, cal) {
-                                if !ll_in_set(set, cal) {
-                                    set = set + cal + "\t";
-                                    added = true;
-                                }
-                            }
-                        }
-                        i = i + 1;
-                    }
-                }
-                pos = end;
-            } else {
-                pos = pos + 1;
-            }
-        }
-    }
-    return set;
-}
 
 fn ll_emit_fn_strings(toks: List[String], pos: Int, n: Int, ir: &mut IrBuf) {
-    let end: Int = ll_skip_fn(toks, pos, n);
+    let mut end: Int = ll_skip_fn(toks, pos, n);
+    if ll_k(toks, pos) == "KW_VERIFY" {
+        let mut p: Int = pos + 1;
+        if p < n && ll_k(toks, p) == "IDENT" { p = p + 1; }
+        if p < n && ll_k(toks, p) == "LBRACE" { end = skip_balanced(toks, p); }
+    }
     let mut i: Int = pos;
     while i < end {
         if ll_k(toks, i) == "STRING" {
@@ -133,42 +45,6 @@ fn ll_emit_fn_strings(toks: List[String], pos: Int, n: Int, ir: &mut IrBuf) {
     }
 }
 
-fn ll_callee_set(toks: List[String], pos: Int, n: Int) -> String {
-    let end: Int = ll_skip_fn(toks, pos, n);
-    let mut o: String = "\t"; let mut i: Int = pos;
-    while i < end {
-        if ll_k(toks, i) == "IDENT" && i + 1 < end && ll_k(toks, i + 1) == "LPAREN" {
-            if !(i > pos && ll_k(toks, i - 1) == "DOT") {
-                o = o + ll_t(toks, i) + "\t";
-            }
-        }
-        i = i + 1;
-    }
-    return o;
-}
-
-fn ll_prune_sigs(sigs: String, stenv: String, want: String) -> String {
-    let n: Int = bytes_len(sigs);
-    let mut o: String = "";
-    let mut i: Int = 0;
-    while i < n {
-        let mut m: Int = i;
-        while m < n && byte_at(sigs, m) != 59 { m = m + 1; }
-        if m > i {
-            if i + 7 <= m && byte_slice(sigs, i, i + 7) == "__sym__" {
-                o = o + byte_slice(sigs, i, m) + ";";
-            } else if i + 6 <= m && byte_slice(sigs, i, i + 6) == "__fn__" {
-                let mut k: Int = i + 6;
-                while k < m && byte_at(sigs, k) != 61 { k = k + 1; }
-                if ll_in_set(want, byte_slice(sigs, i + 6, k)) {
-                    o = o + byte_slice(sigs, i, m) + ";";
-                }
-            }
-        }
-        i = m + 1;
-    }
-    return o + stenv;
-}
 
 pub fn ll_emit_stream_toks(toks: List[String]) {
     ll_emit_stream_plus(toks, "");
@@ -238,6 +114,7 @@ pub fn ll_emit_stream_plus_t(toks: List[String], extra: String, triple: String) 
             while pos < n && ll_k(toks, pos) != "LBRACE" && ll_k(toks, pos) != "EOF" { pos = pos + 1; }
             if pos < n && ll_k(toks, pos) == "LBRACE" { pos = skip_balanced(toks, pos); }
         } else if k == "KW_VERIFY" {
+            ll_emit_fn_strings(toks, pos, n, ir);
             let vr: String = ll_emit_verify(toks, pos, n, stab, ir);
             pos = ll_ppos(vr);
             if ll_pk(vr) != "" { ctors = ctors + ll_pk(vr) + "\t"; }
