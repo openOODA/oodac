@@ -14,24 +14,26 @@ import "ll_ir.oo";
 pub fn ll_struct_kind(name: String) -> String {
     return "St_" + name;
 }
+pub fn ll_st_unp(kind: String) -> String {
+    let kl: Int = chars_len(kind);
+    if kl > 0 && char_at(kind, 0) == "%" { return str_slice(kind, 1, kl); }
+    return kind;
+}
 pub fn ll_is_struct(kind: String) -> Bool {
-    if chars_len(kind) < 3 { return false; }
-    if str_slice(kind, 0, 3) != "St_" { return false; }
-    return true;
+    let k: String = ll_st_unp(kind);
+    return chars_len(k) >= 3 && str_slice(k, 0, 3) == "St_";
 }
 pub fn ll_st_basek(kind: String) -> String {
-    if !ll_is_struct(kind) { println("ERR\tllvm\tstruct kind " + kind); process_exit(1); }
-    let h: Int = str_index_of(kind, "#");
-    if h < 0 { return kind; }
-    return str_slice(kind, 0, h);
+    let k: String = ll_st_unp(kind);
+    if !ll_is_struct(k) { println("ERR\tllvm\tstruct kind " + k); process_exit(1); }
+    let h: Int = str_index_of(k, "#");
+    if h < 0 { return k; }
+    return str_slice(k, 0, h);
 }
 pub fn ll_rich_of(env: String, e: String) -> String {
     let pre: String = "__stf__" + e + ".";
-    let pl: Int = chars_len(pre);
-    let en: Int = chars_len(env);
-    let mut o: String = "St_" + e + "#";
-    let mut first: Bool = true;
-    let mut j: Int = 0;
+    let pl: Int = chars_len(pre); let en: Int = chars_len(env); let mut o: String = "St_" + e + "#";
+    let mut first: Bool = true; let mut j: Int = 0;
     while j < en {
         if j + pl <= en && str_slice(env, j, j + pl) == pre {
             let mut k: Int = j + pl;
@@ -44,9 +46,7 @@ pub fn ll_rich_of(env: String, e: String) -> String {
             let c: Int = str_index_of(val, ":");
             let fk: String = str_slice(val, c + 1, chars_len(val));
             if !first { o = o + ","; }
-            o = o + fld + ":" + ll_st_map(fk, ",", "|");
-            first = false;
-            j = k + 1;
+            o = o + fld + ":" + ll_st_map(fk, ",", "|"); first = false; j = k + 1;
         } else {
             while j < en && char_at(env, j) != ";" { j = j + 1; }
             j = j + 1;
@@ -91,7 +91,8 @@ pub fn ll_struct_field_ptr(kind: String, ptr: String, field: String, ssa0: Int, 
 pub fn ll_struct_field_load(kind: String, ssa: Int, ptr: String, field: String, ssa0: Int, ir: &mut IrBuf) -> String {
     if ptr == "" { println("ERR\tllvm\tstruct load no ptr"); process_exit(1); }
     let fp: String = ll_struct_field_ptr(kind, ptr, field, ssa0, ir);
-    let fk: String = ll_pk(fp);
+    let mut fk: String = ll_pk(fp);
+    if chars_len(fk) > 0 && str_slice(fk, 0, 1) == "%" { fk = str_slice(fk, 1, chars_len(fk)); }
     let t: Int = ll_pssa(fp) + 1;
     ll_ir_inst(ir, "load", ll_ir_val(fk), ll_ssa(t), "ptr " + ll_pptr(fp) + ", align 8", 1, 1);
     return ll_pack(0, t, fk, ll_pptr(fp));

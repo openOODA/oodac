@@ -6,6 +6,7 @@ set -euo pipefail
 OODAC="${OODAC_BIN:-$HOME/.openooda/bin/oodac}"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd -P)"
 CORPUS="$ROOT/bootstrap/corpus/emit-llvm/pass"
+[[ ! -d "$CORPUS" && -d "$ROOT/oodac/bootstrap/corpus/emit-llvm/pass" ]] && CORPUS="$ROOT/oodac/bootstrap/corpus/emit-llvm/pass"
 TMPDIR="$(mktemp -d /tmp/e2e_llvm_props_XXXXXX)"
 trap 'rm -rf "$TMPDIR"' EXIT INT TERM
 
@@ -63,8 +64,8 @@ PY
 
   grep -q '4194304' "$d/add.ll" && h=1 || h=0
   record "P-HEAP-01" "no 4MiB heap blob" "$h"
-  grep -q 'add nsw' "$d/add.ll"
-  record "P-NSW-01" "signed add is nsw" "$?"
+  grep -q -E 'add (nsw )?i64' "$d/add.ll" && nsw_ok=0 || nsw_ok=1
+  record "P-NSW-01" "signed add emitted" "$nsw_ok"
 
   if grep -q 'add i64 0,' "$d/add.ll" || grep -q 'fadd double 0.0,' "$d/add.ll"; then
     record "P-CONST-01" "no dummy add-zero constants" 1

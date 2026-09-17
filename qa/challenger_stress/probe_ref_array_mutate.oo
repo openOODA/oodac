@@ -1,0 +1,109 @@
+// # Challenger Stress Probe 4: Reference and Array/List Mutation
+//
+// Logline: Adversarially validates mutating struct scalar fields via direct references, whole structs via struct references, and list/array fields inside structs via list_push.
+//
+// Setup: Struct with Int, Float, Bool fields mutated via &mut Int/Float/Bool and &mut Struct. Struct with List[Int] and List[String] mutated via list_push.
+//
+// Beats:
+//   1. Mutate struct scalar fields through &mut Int, &mut Float, &mut Bool.
+//   2. Mutate whole struct fields through &mut Point.
+//   3. Mutate List[Int] and List[String] inside struct through &mut DataBag with list_push.
+//   4. Validate all mutated values against expected state.
+
+type Point = struct {
+    x: Int,
+    y: Int,
+    scale: Float,
+    active: Bool
+};
+
+type DataBag = struct {
+    values: List[Int],
+    names: List[String],
+    version: Int
+};
+
+fn set_int(p: &mut Int, v: Int) {
+    *p = v;
+}
+
+fn set_bool(p: &mut Bool, v: Bool) {
+    *p = v;
+}
+
+fn set_float(p: &mut Float, v: Float) {
+    *p = v;
+}
+
+fn update_point(pt: &mut Point, nx: Int, ny: Int, ns: Float, na: Bool) {
+    pt.x = nx;
+    pt.y = ny;
+    pt.scale = ns;
+    pt.active = na;
+}
+
+fn bag_add(b: &mut DataBag, v: Int, name: String) {
+    b.values = list_push(b.values, v);
+    b.names = list_push(b.names, name);
+    b.version = b.version + 1;
+}
+
+pub fn main() {
+    let mut errs: Int = 0;
+
+    let mut pt = Point {
+        x: 10,
+        y: 20,
+        scale: 1.5,
+        active: false
+    };
+
+    set_int(&mut pt.x, 100);
+    set_int(&mut pt.y, 200);
+    set_float(&mut pt.scale, 3.5);
+    set_bool(&mut pt.active, true);
+
+    if pt.x != 100 || pt.y != 200 || pt.scale != 3.5 || !pt.active {
+        println("FAIL: direct field ref mutation");
+        errs = errs + 1;
+    }
+
+    update_point(&mut pt, 500, 600, 7.25, false);
+    if pt.x != 500 || pt.y != 600 || pt.scale != 7.25 || pt.active {
+        println("FAIL: struct ref mutation");
+        errs = errs + 1;
+    }
+
+    let mut bag = DataBag {
+        values: list_new(),
+        names: list_new(),
+        version: 0
+    };
+    bag_add(&mut bag, 101, "alpha");
+    bag_add(&mut bag, 202, "beta");
+    bag_add(&mut bag, 303, "gamma");
+
+    if bag.version != 3 {
+        println("FAIL: bag version");
+        errs = errs + 1;
+    }
+    if list_len(bag.values) != 3 || list_len(bag.names) != 3 {
+        println("FAIL: list lengths");
+        errs = errs + 1;
+    }
+    if list_get(bag.values, 0) != 101 || list_get(bag.values, 1) != 202 || list_get(bag.values, 2) != 303 {
+        println("FAIL: list_get values");
+        errs = errs + 1;
+    }
+    if list_get(bag.names, 0) != "alpha" || list_get(bag.names, 1) != "beta" || list_get(bag.names, 2) != "gamma" {
+        println("FAIL: list_get names");
+        errs = errs + 1;
+    }
+
+    if errs == 0 {
+        println("PROBE_REF_ARRAY_MUTATE: PASS");
+    } else {
+        println("PROBE_REF_ARRAY_MUTATE: FAIL");
+        process_exit(1);
+    }
+}

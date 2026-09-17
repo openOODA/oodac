@@ -7,6 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd -P)"
 
 export OODAC_BIN="${OODAC_BIN:-$HOME/.openooda/bin/oodac}"
+export OODA_FS_READDIR="${OODA_FS_READDIR:-$(cd "$PROJECT_ROOT/.." && pwd -P)}"
 
 echo "======================================================================"
 echo "=== openOODA/oodac Master End-to-End (E2E) Test Suite Runner       ==="

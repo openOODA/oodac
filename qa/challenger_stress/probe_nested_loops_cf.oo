@@ -1,0 +1,113 @@
+// # Challenger Stress Probe 3: Nested For-Loops Control Flow
+//
+// Logline: Adversarially validates early break and continue across multi-level nested for-loops.
+//
+// Setup: 3-level nested for-loops with interleaving continue, break, and early returns.
+//
+// Beats:
+//   1. Test inner loop continue (branches to innermost fstep without loop hang).
+//   2. Test inner loop break (exits to enclosing middle loop).
+//   3. Test middle loop continue and break across iterations.
+//   4. Test outer loop continue and break terminating the nest.
+//   5. Test early return from deeply nested loops unwinding all loop scopes.
+
+fn search_cube(target: Int) -> Int {
+    for x in 0..10 {
+        for y in 0..10 {
+            for z in 0..10 {
+                let current: Int = x * 100 + y * 10 + z;
+                if current == target {
+                    return current;
+                }
+            }
+        }
+    }
+    return 0 - 1;
+}
+
+pub fn main() {
+    let mut errs: Int = 0;
+
+    let mut inner_count: Int = 0;
+    let mut acc: Int = 0;
+    let mut outer_steps: Int = 0;
+    let mut mid_steps: Int = 0;
+
+    for i in 0..6 {
+        outer_steps = outer_steps + 1;
+        if i == 1 {
+            continue;
+        }
+        if i == 5 {
+            break;
+        }
+
+        for j in 0..6 {
+            mid_steps = mid_steps + 1;
+            if j == 2 {
+                continue;
+            }
+            if j == 4 {
+                break;
+            }
+
+            for k in 0..6 {
+                if k == 1 {
+                    continue;
+                }
+                if k == 3 {
+                    break;
+                }
+
+                inner_count = inner_count + 1;
+                acc = acc + (i * 100 + j * 10 + k);
+            }
+        }
+    }
+
+    // Expected verification:
+    // outer_steps: i=0 (1), i=1 (2), i=2 (3), i=3 (4), i=4 (5), i=5 (6, then breaks) -> 6
+    if outer_steps != 6 {
+        println("FAIL: outer_steps mismatch");
+        errs = errs + 1;
+    }
+
+    // mid_steps: for i in [0, 2, 3, 4] (4 iterations):
+    // j runs for j=0, 1, 2, 3, 4 (breaks at 4) -> 5 steps per outer iter -> 4 * 5 = 20
+    if mid_steps != 20 {
+        println("FAIL: mid_steps mismatch");
+        errs = errs + 1;
+    }
+
+    // inner_count: 24 total executions
+    if inner_count != 24 {
+        println("FAIL: inner_count mismatch");
+        errs = errs + 1;
+    }
+
+    // acc: sum of (i*100 + j*10 + k) for all executed points = 5744
+    if acc != 5744 {
+        println("FAIL: acc mismatch");
+        errs = errs + 1;
+    }
+
+    // Test early return unwinding across 3 nested loops
+    let found1: Int = search_cube(345);
+    if found1 != 345 {
+        println("FAIL: search_cube found");
+        errs = errs + 1;
+    }
+
+    let found_none: Int = search_cube(9999);
+    if found_none != -1 {
+        println("FAIL: search_cube none");
+        errs = errs + 1;
+    }
+
+    if errs == 0 {
+        println("PROBE_NESTED_LOOPS_CF: PASS");
+    } else {
+        println("PROBE_NESTED_LOOPS_CF: FAIL");
+        process_exit(1);
+    }
+}

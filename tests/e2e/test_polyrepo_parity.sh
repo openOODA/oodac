@@ -13,6 +13,7 @@ elif [[ -f "$SCRIPT_DIR/../../oodac/main.oo" ]]; then
 else
   PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd -P)"
 fi
+export OODA_FS_READDIR="${OODA_FS_READDIR:-$PROJECT_ROOT}"
 OODAC_DIR="$PROJECT_ROOT/oodac"
 OODAC="${OODAC_BIN:-$HOME/.openooda/bin/oodac}"
 if [[ ! -x "$OODAC" && -x "/tmp/oodac_pure_2460300/stage2_oodac" ]]; then

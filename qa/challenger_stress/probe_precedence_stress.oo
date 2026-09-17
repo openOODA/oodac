@@ -1,0 +1,171 @@
+// # Challenger Stress Probe 1: Precedence & Multi-Operator Evaluation
+//
+// Logline: Adversarially validates operator precedence climbing across all 10 precedence levels.
+//
+// Setup: Mixed operators: <<, >>, +, -, *, /, %, &, |, ^, ==, !=, <, <=, &&, ||.
+//
+// Beats:
+//   1. Test arithmetic, shift, and bitwise precedence interactions.
+//   2. Test relational, equality, and logical short-circuit precedence.
+//   3. Test left-associativity of division, subtraction, and shifts.
+//   4. Validate variable-based evaluations match literal evaluations.
+
+fn eval_shifts(a: Int, b: Int, c: Int, d: Int) -> Int {
+    return a << b + c * d;
+}
+
+fn eval_rshifts(a: Int, b: Int, c: Int, d: Int) -> Int {
+    return a >> b + c * d;
+}
+
+fn eval_arith(a: Int, b: Int, c: Int, d: Int, e: Int, f: Int) -> Int {
+    return a - b / c + d % e * f;
+}
+
+fn eval_bitwise(a: Int, b: Int, c: Int, d: Int) -> Int {
+    return a | b ^ c & d;
+}
+
+fn eval_relational(a: Int, b: Int, c: Int, d: Int, e: Int) -> Bool {
+    return a + b == c && d * 2 <= e;
+}
+
+pub fn main() {
+    let mut errs: Int = 0;
+
+    // 1. Shift vs Add vs Mul: 1 << (2 + (3 * 4)) = 1 << 14 = 16384
+    let r1: Int = 1 << 2 + 3 * 4;
+    let r1_var: Int = eval_shifts(1, 2, 3, 4);
+    if r1 != 16384 || r1_var != 16384 {
+        println("FAIL: Case 1 Shift-Add-Mul");
+        errs = errs + 1;
+    }
+
+    // 2. Right shift vs Add vs Mul: 2048 >> (1 + (1 * 2)) = 2048 >> 3 = 256
+    let r2: Int = 2048 >> 1 + 1 * 2;
+    let r2_var: Int = eval_rshifts(2048, 1, 1, 2);
+    if r2 != 256 || r2_var != 256 {
+        println("FAIL: Case 2 RShift-Add-Mul");
+        errs = errs + 1;
+    }
+
+    // 3. Arith precedence: 100 - (20 / 4) + ((3 % 2) * 5) = 100 - 5 + 5 = 100
+    let r3: Int = 100 - 20 / 4 + 3 % 2 * 5;
+    let r3_var: Int = eval_arith(100, 20, 4, 3, 2, 5);
+    if r3 != 100 || r3_var != 100 {
+        println("FAIL: Case 3 Arith Div Mod");
+        errs = errs + 1;
+    }
+
+    // 4. Bitwise precedence: 1 | (2 ^ (3 & 4)) = 1 | (2 ^ 0) = 3
+    let r4: Int = 1 | 2 ^ 3 & 4;
+    let r4_var: Int = eval_bitwise(1, 2, 3, 4);
+    if r4 != 3 || r4_var != 3 {
+        println("FAIL: Case 4 Bitwise Pipe-Caret-Amp");
+        errs = errs + 1;
+    }
+
+    // 5. Inverted bitwise: ((15 & 7) ^ 3) | 8 = (7 ^ 3) | 8 = 4 | 8 = 12
+    let r5: Int = 15 & 7 ^ 3 | 8;
+    if r5 != 12 {
+        println("FAIL: Case 5 Amp-Caret-Pipe");
+        errs = errs + 1;
+    }
+
+    // 6. Shift and Bitwise: (1 << 3) & 15 = 8 & 15 = 8
+    let r6: Int = 1 << 3 & 15;
+    if r6 != 8 {
+        println("FAIL: Case 6 Shift-Amp");
+        errs = errs + 1;
+    }
+
+    // 7. Add and Shift: (1 + 2) << 2 = 3 << 2 = 12
+    let r7: Int = 1 + 2 << 2;
+    if r7 != 12 {
+        println("FAIL: Case 7 Add-Shift");
+        errs = errs + 1;
+    }
+
+    // 8. Relational and Logical: (1 + 2 == 3) && ((4 * 2) <= 8) = true && true = true
+    let r8: Bool = 1 + 2 == 3 && 4 * 2 <= 8;
+    let r8_var: Bool = eval_relational(1, 2, 3, 4, 8);
+    if !r8 || !r8_var {
+        println("FAIL: Case 8 Relational Logical");
+        errs = errs + 1;
+    }
+
+    // 9. Mixed Comparison & Logical: (1 + 2 < 3 * 2) && (4 << 1 == 8) = true && true = true
+    let r9: Bool = (1 + 2 < 3 * 2) && (4 << 1 == 8);
+    if !r9 {
+        println("FAIL: Case 9 Comp Logical");
+        errs = errs + 1;
+    }
+
+    // 10. Short-circuit Precedence: false || (true && false) || true = true
+    let r10: Bool = false || true && false || true;
+    if !r10 {
+        println("FAIL: Case 10 Logical Precedence");
+        errs = errs + 1;
+    }
+
+    // 11. Relational on Bool: (1 < 2) == (3 < 4) = true == true = true
+    let r11: Bool = (1 < 2) == (3 < 4);
+    if !r11 {
+        println("FAIL: Case 11 Bool Equality");
+        errs = errs + 1;
+    }
+
+    // 12. Left-associative Division: (100 / 5) / 2 = 20 / 2 = 10
+    let r12: Int = 100 / 5 / 2;
+    if r12 != 10 {
+        println("FAIL: Case 12 Div Left-Assoc");
+        errs = errs + 1;
+    }
+
+    // 13. Left-associative Subtraction: (10 - 5) - 2 = 5 - 2 = 3
+    let r13: Int = 10 - 5 - 2;
+    if r13 != 3 {
+        println("FAIL: Case 13 Sub Left-Assoc");
+        errs = errs + 1;
+    }
+
+    // 14. Left-associative Right Shift: (64 >> 2) >> 1 = 16 >> 1 = 8
+    let r14: Int = 64 >> 2 >> 1;
+    if r14 != 8 {
+        println("FAIL: Case 14 RShift Left-Assoc");
+        errs = errs + 1;
+    }
+
+    // 15. Shift and Inequality: (1 << (2 + 3)) != 32 = (1 << 5) != 32 = 32 != 32 = false
+    let r15: Bool = 1 << 2 + 3 != 32;
+    if r15 {
+        println("FAIL: Case 15 Shift Neq");
+        errs = errs + 1;
+    }
+
+    // 16. Ultra Complex Precedence Chain:
+    // ((((1 + (2 * 3)) << 1) == 14) && ((10 - (4 / 2)) >= 8)) || false
+    // Left: (7 << 1 == 14) -> (14 == 14) -> true
+    // Mid: (10 - 2 >= 8) -> (8 >= 8) -> true
+    // Logical: (true && true) || false -> true
+    let r16: Bool = (1 + 2 * 3 << 1 == 14) && (10 - 4 / 2 >= 8) || false;
+    if !r16 {
+        println("FAIL: Case 16 Complex Chain");
+        errs = errs + 1;
+    }
+
+    // 17. Bitwise and Shift Cascade:
+    // 1 | (2 ^ ((4 << (1 + 1)) & 12)) = 1 | (2 ^ ((4 << 2) & 12)) = 1 | (2 ^ (16 & 12)) = 1 | (2 ^ 0) = 3
+    let r17: Int = 1 | 2 ^ 4 << 1 + 1 & 12;
+    if r17 != 3 {
+        println("FAIL: Case 17 Cascade");
+        errs = errs + 1;
+    }
+
+    if errs == 0 {
+        println("PROBE_PRECEDENCE_STRESS: PASS");
+    } else {
+        println("PROBE_PRECEDENCE_STRESS: FAIL");
+        process_exit(1);
+    }
+}

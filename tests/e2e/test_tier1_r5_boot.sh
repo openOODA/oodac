@@ -6,6 +6,7 @@ set -euo pipefail
 OODAC="${OODAC_BIN:-$HOME/.openooda/bin/oodac}"
 PROJECT_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 POLYREPO_ROOT="$(cd "$PROJECT_ROOT/.." && pwd)"
+export OODA_FS_READDIR="${OODA_FS_READDIR:-$POLYREPO_ROOT}"
 PB_SCRIPT="$PROJECT_ROOT/bootstrap/oodac_pure_build"
 TMPDIR="$(mktemp -d /tmp/e2e_t1_r5_XXXXXX)"
 trap 'rm -rf "$TMPDIR"' EXIT INT TERM

@@ -97,6 +97,10 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String, stab: Stri
                 if pn == "args" { use_args = true; }
                 if isref { refs = refs + pn + ";"; }
                 if g != "" { caps = caps + pn + "=" + g + ";"; }
+                if name == "main" && str_index_of(cn, "Cap") >= 0 && g == "" {
+                    println("ERR\tllvm\tunknown capability " + cn);
+                    process_exit(1);
+                }
                 if form != "" { form = form + "\t"; }
                 form = form + pn + ":" + k;
                 if name != "main" {

@@ -2,7 +2,7 @@
 //
 // Logline: Re-exports the LLVM-backend compiler surface for toolchain consumers.
 //
-// Setup: Compiles the canonical surface from the flat layout. Subsystem boundaries: lex → parse → check → tc → emit/llvm. This ANCHOR.oo is the oodac/ parent directory entry.
+// Setup: Compiles the canonical surface from the flat layout. Subsystem boundaries: lex → parse → check → tc → emit/llvm. This anchor.oo is the oodac/ parent directory entry.
 //
 // Beats:
 //   1. Re-export the lexical scanner surface (lex_all).

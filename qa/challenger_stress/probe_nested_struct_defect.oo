@@ -1,0 +1,33 @@
+// # Challenger Stress Defect Repro: Nested Struct Lowering Type Mismatch
+//
+// Logline: Demonstrates backend compiler defect where nested struct fields trigger invalid LLVM store i64 type mismatch.
+//
+// Setup: Inner struct SubCoord embedded as a field inside outer struct GeoPoint. Instantiating outer struct emits store i64 instead of store %St_SubCoord.
+//
+// Beats:
+//   1. Declare inner struct SubCoord.
+//   2. Declare outer struct GeoPoint with field of type SubCoord.
+//   3. Instantiate GeoPoint with SubCoord instance.
+//   4. Compiler emits `store i64 %t, ptr %field`, causing clang/llvm-as rejection.
+
+type SubCoord = struct {
+    x: Int,
+    y: Int,
+    active: Bool
+};
+
+type GeoPoint = struct {
+    coord: SubCoord,
+    elevation: Float,
+    id: Int
+};
+
+pub fn main() {
+    let c = SubCoord { x: 10, y: 20, active: false };
+    let mut pt = GeoPoint {
+        coord: c,
+        elevation: 100.5,
+        id: 1
+    };
+    println(pt.coord.x);
+}

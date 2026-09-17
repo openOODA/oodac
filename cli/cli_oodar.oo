@@ -31,6 +31,7 @@ pub fn oodar_root(fs_r: &FsReadCap, host: String) -> String {
     let c: String = path_parent_oodar(b);
     if path_exists(fs_r, c + "/oodar/oodar.c") { return c + "/oodar"; }
     if path_exists(fs_r, b + "/oodar/oodar.c") { return b + "/oodar"; }
+    if path_exists(fs_r, "/home/jeryd/Projects/openOODA/oodar/oodar.c") { return "/home/jeryd/Projects/openOODA/oodar"; }
     println("ERR\tbuild\toodar.c missing");
     process_exit(1);
     return "";
