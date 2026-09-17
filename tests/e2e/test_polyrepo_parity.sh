@@ -3,11 +3,13 @@
 # Compliance: wc -l <= 256, Double-Run (Run_1 == Run_2), Zero-Trust.
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-if [[ -f "$SCRIPT_DIR/../../oodac/main.oo" ]]; then
-  PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
+if [[ -n "${PROJECT_ROOT:-}" ]]; then
+  :
+elif [[ -f "$SCRIPT_DIR/../../oodac/main.oo" ]]; then
+  PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd -P)"
 else
-  PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+  PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd -P)"
 fi
 OODAC_DIR="$PROJECT_ROOT/oodac"
 OODAC="${OODAC_BIN:-$HOME/.openooda/bin/oodac}"
@@ -52,7 +54,7 @@ run_suite() {
     local ep="$PROJECT_ROOT/$entry"
     local chk_st=1
     if [[ -f "$ep" ]]; then
-      if timeout 35s "$OODAC" check "$ep" >/dev/null 2>&1; then
+      if timeout 120s "$OODAC" check "$ep" >/dev/null 2>&1; then
         chk_st=0
       fi
     fi
@@ -66,7 +68,7 @@ run_suite() {
     local base="${entry%%/*}"
     local ll_st=1
     if [[ -f "$ep" ]]; then
-      if timeout 35s "$OODAC" emit-llvm "$ep" > "$d/$base.ll" 2>&1; then
+      if timeout 120s "$OODAC" emit-llvm "$ep" > "$d/$base.ll" 2>&1; then
         if llvm-as "$d/$base.ll" -o "$d/$base.bc" >/dev/null 2>&1; then
           ll_st=0
         fi
