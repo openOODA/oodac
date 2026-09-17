@@ -91,8 +91,7 @@ pub fn ll_struct_field_ptr(kind: String, ptr: String, field: String, ssa0: Int, 
 pub fn ll_struct_field_load(kind: String, ssa: Int, ptr: String, field: String, ssa0: Int, ir: &mut IrBuf) -> String {
     if ptr == "" { println("ERR\tllvm\tstruct load no ptr"); process_exit(1); }
     let fp: String = ll_struct_field_ptr(kind, ptr, field, ssa0, ir);
-    let mut fk: String = ll_pk(fp);
-    if chars_len(fk) > 0 && str_slice(fk, 0, 1) == "%" { fk = str_slice(fk, 1, chars_len(fk)); }
+    let fk: String = ll_st_unp(ll_pk(fp));
     let t: Int = ll_pssa(fp) + 1;
     ll_ir_inst(ir, "load", ll_ir_val(fk), ll_ssa(t), "ptr " + ll_pptr(fp) + ", align 8", 1, 1);
     return ll_pack(0, t, fk, ll_pptr(fp));
@@ -100,10 +99,7 @@ pub fn ll_struct_field_load(kind: String, ssa: Int, ptr: String, field: String, 
 pub fn ll_struct_declare(toks: List[String], base: String) -> String {
     let n: Int = list_len(toks); let mut env: String = base; let mut i: Int = 0;
     while i < n {
-        if ll_k(toks, i) == "KW_PUB" && i + 1 < n && ll_k(toks, i + 1) == "KW_TYPE" {
-            i = i + 1;
-            continue;
-        }
+        if ll_k(toks, i) == "KW_PUB" && i + 1 < n && ll_k(toks, i + 1) == "KW_TYPE" { i = i + 1; continue; }
         if ll_k(toks, i) == "KW_TYPE" {
             let mut q: Int = i + 1;
             if q < n && ll_k(toks, q) == "IDENT" {
@@ -243,12 +239,13 @@ pub fn ll_struct_lit_at(toks: List[String], pos: Int, n: Int, ssa0: Int, env: St
         let fi: String = ll_struct_field(rich, fld2); let idx: String = str_slice(fi, 0, str_index_of(fi, ":"));
         s = s + 1;
         ll_ir_inst(ir, "getelementptr inbounds", "%St_" + nm, ll_ssa(s), "ptr " + a + ", i32 0, i32 " + idx, 1, 1);
+        let fk_ty: String = ll_ir_val(fk);
         if ll_has_slot(v) {
             s = s + 1;
-            ll_ir_inst(ir, "load", ll_ir_val(fk), ll_ssa(s), "ptr " + ll_pptr(v) + ", align 8", 1, 1);
-            ll_ir_inst(ir, "store", ll_ir_val(fk), "", ll_ssa(s) + ", ptr " + ll_ssa(s - 1) + ", align 8", 1, 1);
+            ll_ir_inst(ir, "load", fk_ty, ll_ssa(s), "ptr " + ll_pptr(v) + ", align 8", 1, 1);
+            ll_ir_inst(ir, "store", fk_ty, "", ll_ssa(s) + ", ptr " + ll_ssa(s - 1) + ", align 8", 1, 1);
         } else {
-            ll_ir_inst(ir, "store", ll_ir_val(fk), "", ll_opnd(v) + ", ptr " + ll_ssa(s) + ", align 8", 1, 1);
+            ll_ir_inst(ir, "store", fk_ty, "", ll_opnd(v) + ", ptr " + ll_ssa(s) + ", align 8", 1, 1);
         }
     }
     if p >= n || ll_k(toks, p) != "RBRACE" { println("ERR\tllvm\tstruct lit rbrace"); process_exit(1); }

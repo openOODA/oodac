@@ -129,32 +129,19 @@ fn ll_ty_struct_rich(toks: List[String], t: String, n: Int, stab: String) -> Str
 }
 
 pub fn ll_cap_grant(ty: String) -> String {
-    if ty == "ProcessCap" { return "process"; }
-    if ty == "EnvCap" { return "env"; }
-    if ty == "FsReadCap" { return "fsread"; }
-    if ty == "FsWriteCap" { return "fswrite"; }
-    if ty == "BindCap" { return "bind"; }
-    if ty == "SysCap" { return "sys"; }
-    if ty == "TimeCap" { return "time"; }
-    if ty == "AllocCap" { return "alloc"; }
-    if ty == "TcpCap" { return "tcp"; }
-    if ty == "UdpCap" { return "udp"; }
-    if ty == "NetCap" { return "net"; }
-    if ty == "FsCap" { return "fs"; }
-    if ty == "RandCap" { return "rand"; }
-    if ty == "ArenaCap" { return "arena"; }
-    if ty == "FfiCap" { return "ffi"; }
-    if ty == "ThreadCap" { return "thread"; }
-    if ty == "GpuCap" { return "gpu"; }
-    if ty == "CompilerReadCap" { return "compiler_read"; }
-    if ty == "SignCap" { return "sign"; }
-    if ty == "AudioCap" { return "audio"; }
-    if ty == "CameraCap" { return "camera"; }
-    if ty == "UsbCap" { return "usb"; }
-    if ty == "HidCap" { return "hid"; }
-    if ty == "WindowCap" { return "window"; }
-    if ty == "FrameCap" { return "frame"; }
-    if ty == "MetricsCap" { return "metrics"; }
+    if ty == "ProcessCap" { return "process"; } if ty == "EnvCap" { return "env"; }
+    if ty == "FsReadCap" { return "fsread"; } if ty == "FsWriteCap" { return "fswrite"; }
+    if ty == "BindCap" { return "bind"; } if ty == "SysCap" { return "sys"; }
+    if ty == "TimeCap" { return "time"; } if ty == "AllocCap" { return "alloc"; }
+    if ty == "TcpCap" { return "tcp"; } if ty == "UdpCap" { return "udp"; }
+    if ty == "NetCap" { return "net"; } if ty == "FsCap" { return "fs"; }
+    if ty == "RandCap" { return "rand"; } if ty == "ArenaCap" { return "arena"; }
+    if ty == "FfiCap" { return "ffi"; } if ty == "ThreadCap" { return "thread"; }
+    if ty == "GpuCap" { return "gpu"; } if ty == "CompilerReadCap" { return "compiler_read"; }
+    if ty == "SignCap" { return "sign"; } if ty == "AudioCap" { return "audio"; }
+    if ty == "CameraCap" { return "camera"; } if ty == "UsbCap" { return "usb"; }
+    if ty == "HidCap" { return "hid"; } if ty == "WindowCap" { return "window"; }
+    if ty == "FrameCap" { return "frame"; } if ty == "MetricsCap" { return "metrics"; }
     return "";
 }
 
@@ -164,43 +151,51 @@ pub fn ll_peek_cap_name(toks: List[String], pos: Int, n: Int) -> String {
     if p < n && ll_k(toks, p) == "IDENT" { return ll_t(toks, p); }
     return "";
 }
+fn ll_unp(s: String) -> String {
+    let n: Int = chars_len(s);
+    if n > 0 && char_at(s, 0) == "%" { return str_slice(s, 1, n); }
+    return s;
+}
 fn ll_st_raw(s: String) -> String {
+    let n: Int = chars_len(s);
+    let mut end: Int = n;
     let c: Int = str_index_of(s, ",");
-    let mut r: String = if c >= 0 { str_slice(s, 0, c) } else { s };
-    let h: Int = str_index_of(r, "#");
-    if h >= 0 { r = str_slice(r, 0, h); }
-    return r;
+    if c >= 0 && c < end { end = c; }
+    let h: Int = str_index_of(s, "#");
+    if h >= 0 && h < end { end = h; }
+    return str_slice(s, 0, end);
 }
 pub fn ll_ir_alloc(kind: String) -> String {
-    if ll_is_refk(kind) { return "ptr"; }
-    if kind == "slist" { return "%OoSList"; }
-    if kind == "ilist" { return "%OoIList"; }
-    if kind == "str" { return "%OoStr"; }
-    if kind == "opti" { return "%OoOptI"; }
-    if kind == "opts" { return "%OoOptS"; }
-    if kind == "ress" { return "%OoResS"; }
-    if kind == "resi" { return "%OoResI"; }
-    if kind == "resl" { return "%OoResL"; }
-    if kind == "resil" { return "%OoResLI"; }
-    if kind == "i1" { return "i1"; }
-    if kind == "i8" || kind == "u8" { return "i8"; }
-    if kind == "i16" || kind == "u16" { return "i16"; }
-    if kind == "i32" || kind == "u32" { return "i32"; }
-    if kind == "i64" || kind == "u64" { return "i64"; }
-    if kind == "f64" { return "double"; }
-    if kind == "v8f32" { return "<8 x float>"; }
-    if kind == "v4f64" { return "<4 x double>"; }
-    if chars_len(kind) >= 3 && str_slice(kind, 0, 3) == "St_" {
-        return "%" + ll_st_raw(kind);
+    let k: String = ll_unp(kind);
+    if ll_is_refk(k) { return "ptr"; }
+    if k == "slist" { return "%OoSList"; }
+    if k == "ilist" { return "%OoIList"; }
+    if k == "str" { return "%OoStr"; }
+    if k == "opti" { return "%OoOptI"; }
+    if k == "opts" { return "%OoOptS"; }
+    if k == "ress" { return "%OoResS"; }
+    if k == "resi" { return "%OoResI"; }
+    if k == "resl" { return "%OoResL"; }
+    if k == "resil" { return "%OoResLI"; }
+    if k == "i1" { return "i1"; }
+    if k == "i8" || k == "u8" { return "i8"; }
+    if k == "i16" || k == "u16" { return "i16"; }
+    if k == "i32" || k == "u32" { return "i32"; }
+    if k == "i64" || k == "u64" { return "i64"; }
+    if k == "f64" { return "double"; }
+    if k == "v8f32" { return "<8 x float>"; }
+    if k == "v4f64" { return "<4 x double>"; }
+    if chars_len(k) >= 3 && str_slice(k, 0, 3) == "St_" {
+        return "%" + ll_st_raw(k);
     }
-    if chars_len(kind) >= 6 && str_slice(kind, 0, 6) == "olist_" {
-        return "%OoL_" + ll_st_raw(str_slice(kind, 6, chars_len(kind)));
+    if chars_len(k) >= 6 && str_slice(k, 0, 6) == "olist_" {
+        return "%OoL_" + ll_st_raw(str_slice(k, 6, chars_len(k)));
     }
-    if chars_len(kind) >= 6 && str_slice(kind, 0, 6) == "resSt_" {
-        return "%OoRes_St_" + ll_st_raw(str_slice(kind, 6, chars_len(kind)));
+    if chars_len(k) >= 6 && str_slice(k, 0, 6) == "resSt_" {
+        return "%OoRes_St_" + ll_st_raw(str_slice(k, 6, chars_len(k)));
     }
-    if chars_len(kind) >= 6 && str_slice(kind, 0, 6) == "optSt_" {
-        return "%OoOpt_St_" + ll_st_raw(str_slice(kind, 6, chars_len(kind)));
+    if chars_len(k) >= 6 && str_slice(k, 0, 6) == "optSt_" {
+        return "%OoOpt_St_" + ll_st_raw(str_slice(k, 6, chars_len(k)));
     }
     return "i64";
 }
@@ -212,31 +207,34 @@ pub fn ll_ir_val(kind: String) -> String {
 }
 
 pub fn ll_is_agg(kind: String) -> Bool {
-    if kind == "slist" || kind == "ilist" || kind == "str" || kind == "opti" || kind == "opts" { return true; }
-    if kind == "ress" || kind == "resi" || kind == "resl" || kind == "resil" { return true; }
-    if chars_len(kind) >= 3 && str_slice(kind, 0, 3) == "St_" { return true; }
-    if chars_len(kind) >= 6 && (str_slice(kind, 0, 6) == "olist_" || str_slice(kind, 0, 6) == "resSt_" || str_slice(kind, 0, 6) == "optSt_") { return true; }
+    let k: String = ll_unp(kind);
+    if k == "slist" || k == "ilist" || k == "str" || k == "opti" || k == "opts" { return true; }
+    if k == "ress" || k == "resi" || k == "resl" || k == "resil" { return true; }
+    if chars_len(k) >= 3 && str_slice(k, 0, 3) == "St_" { return true; }
+    if chars_len(k) >= 6 && (str_slice(k, 0, 6) == "olist_" || str_slice(k, 0, 6) == "resSt_" || str_slice(k, 0, 6) == "optSt_") { return true; }
     return false;
 }
 pub fn ll_is_mem(kind: String) -> Bool {
-    if kind == "slist" || kind == "ilist" || kind == "opti" || kind == "opts" { return true; }
-    if kind == "ress" || kind == "resi" || kind == "resl" || kind == "resil" { return true; }
-    if chars_len(kind) >= 3 && str_slice(kind, 0, 3) == "St_" { return true; }
-    if chars_len(kind) >= 6 && (str_slice(kind, 0, 6) == "olist_" || str_slice(kind, 0, 6) == "resSt_" || str_slice(kind, 0, 6) == "optSt_") { return true; }
+    let k: String = ll_unp(kind);
+    if k == "slist" || k == "ilist" || k == "opti" || k == "opts" { return true; }
+    if k == "ress" || k == "resi" || k == "resl" || k == "resil" { return true; }
+    if chars_len(k) >= 3 && str_slice(k, 0, 3) == "St_" { return true; }
+    if chars_len(k) >= 6 && (str_slice(k, 0, 6) == "olist_" || str_slice(k, 0, 6) == "resSt_" || str_slice(k, 0, 6) == "optSt_") { return true; }
     return false;
 }
 
 pub fn ll_pass(kind: String) -> String {
-    if chars_len(kind) >= 3 && str_slice(kind, 0, 3) == "St_" { return "ptr noalias nocapture noundef"; }
-    if chars_len(kind) >= 6 && (str_slice(kind, 0, 6) == "olist_" || str_slice(kind, 0, 6) == "resSt_" || str_slice(kind, 0, 6) == "optSt_") { return "ptr noalias nocapture noundef"; }
-    if ll_is_mem(kind) {
-        return "ptr noalias nocapture byval(" + ll_ir_alloc(kind) + ") align 8";
+    let k: String = ll_unp(kind);
+    if chars_len(k) >= 3 && str_slice(k, 0, 3) == "St_" { return "ptr noalias nocapture noundef"; }
+    if chars_len(k) >= 6 && (str_slice(k, 0, 6) == "olist_" || str_slice(k, 0, 6) == "resSt_" || str_slice(k, 0, 6) == "optSt_") { return "ptr noalias nocapture noundef"; }
+    if ll_is_mem(k) {
+        return "ptr noalias nocapture byval(" + ll_ir_alloc(k) + ") align 8";
     }
-    if ll_is_refk(kind) { return "ptr noalias nocapture noundef"; }
-    if kind == "i64" || kind == "u64" || kind == "i32" || kind == "u32" || kind == "i1" {
-        return ll_ir_val(kind) + " noundef";
+    if ll_is_refk(k) { return "ptr noalias nocapture noundef"; }
+    if k == "i64" || k == "u64" || k == "i32" || k == "u32" || k == "i1" {
+        return ll_ir_val(k) + " noundef";
     }
-    return ll_ir_val(kind);
+    return ll_ir_val(k);
 }
 
 pub fn ll_ensure_ptr(v: String, ssa0: Int, ir: &mut IrBuf) -> String {

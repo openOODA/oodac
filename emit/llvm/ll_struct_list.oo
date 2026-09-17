@@ -33,12 +33,14 @@ pub fn ll_is_optst(kind: String) -> Bool {
 }
 
 fn ll_olist_nm(kind: String) -> String {
-    let mut s: String = str_slice(kind, 6, chars_len(kind));
-    let c: Int = str_index_of(s, ",");
-    if c >= 0 { s = str_slice(s, 0, c); }
-    let h: Int = str_index_of(s, "#");
-    if h >= 0 { s = str_slice(s, 0, h); }
-    return s;
+    let n: Int = chars_len(kind);
+    if n <= 6 { return ""; }
+    let mut end: Int = n;
+    let c: Int = str_index_of(kind, ",");
+    if c >= 6 && c < end { end = c; }
+    let h: Int = str_index_of(kind, "#");
+    if h >= 6 && h < end { end = h; }
+    return str_slice(kind, 6, end);
 }
 
 pub fn ll_olist_wanted(toks: List[String], nm: String) -> Bool {

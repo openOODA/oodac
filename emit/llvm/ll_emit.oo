@@ -25,6 +25,7 @@ import "ll_struct_imp.oo";
 import "ll_reach.oo";
 import "types/token_search.oo";
 import "types/types_core.oo";
+import "ast/parse_drive.oo";
 
 
 fn ll_emit_fn_strings(toks: List[String], pos: Int, n: Int, ir: &mut IrBuf) {
@@ -106,7 +107,7 @@ pub fn ll_emit_stream_plus_t(toks: List[String], extra: String, triple: String) 
                 let penv: String = ll_prune_sigs(sigs, stenv, ll_callee_set(toks, pos, n));
                 pos = ll_emit_fn(toks, pos, n, penv, stab, ir);
                 ll_ir_flush(ir);
-                ir.recs = "";
+                ir = ll_ir_new();
             } else {
                 pos = ll_skip_fn(toks, pos, n);
             }

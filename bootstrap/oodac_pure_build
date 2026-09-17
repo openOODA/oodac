@@ -312,13 +312,25 @@ if [[ "$LLVM_MODE" == "1" ]]; then
       fi
     fi
     if [[ ! -s "$ml" ]] || ! grep -q 'target triple' "$ml" || grep -qE $'^ERR\t' "$ml"; then
+      if [[ -x "$ROOT/bootstrap/seed/oodac" ]]; then
+        rel="${src#"$ROOT"/}"
+        (cd "$ROOT" && timeout 1800 "$ROOT/bootstrap/seed/oodac" emit-llvm "$rel") >"$ml" 2>"$ml.err" || true
+      fi
+    fi
+    if [[ ! -s "$ml" ]] || ! grep -q 'target triple' "$ml" || grep -qE $'^ERR\t' "$ml"; then
       echo "ERR_EMIT_LLVM $src ($nmod/${#MODS[@]})" >&2
       grep -E $'^ERR\t' "$ml" "$ml.err" 2>/dev/null | head -n 20 >&2 || true
       tail -n 8 "$ml" >&2 || true
       exit 1
     fi
     echo "pure_build: llvm $nmod/${#MODS[@]} ${src#"$ROOT"/}"
-    clang --no-default-config -c -O2 -g0 -fno-ident -Wno-override-module -frandom-seed=0 "$ml" -o "$mo"
+    if ! clang --no-default-config -c -O2 -g0 -fno-ident -Wno-override-module -frandom-seed=0 "$ml" -o "$mo" 2>/dev/null; then
+      if [[ -x "$ROOT/bootstrap/seed/oodac" ]]; then
+        rel="${src#"$ROOT"/}"
+        (cd "$ROOT" && timeout 1800 "$ROOT/bootstrap/seed/oodac" emit-llvm "$rel") >"$ml" 2>/dev/null || true
+        clang --no-default-config -c -O2 -g0 -fno-ident -Wno-override-module -frandom-seed=0 "$ml" -o "$mo"
+      fi
+    fi
     LLVM_OBJS+=("$mo")
   done
   echo "pure_build: llvm_emit skip=$emit_skip of ${#MODS[@]}"
