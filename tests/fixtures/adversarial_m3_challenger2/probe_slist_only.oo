@@ -1,0 +1,26 @@
+// # Pure String List Symbol Pruning Probe
+//
+// Logline: Verify string-only list operations omit all integer list symbols.
+//
+// Setup: Compile with oodac emit-llvm and verify presence of slist and absence of ilist.
+//
+// Beats:
+//   1. Allocate and push into List[String].
+//   2. Retrieve and count elements.
+//   3. Validate emitted LLVM IR.
+
+pub fn count_slist() -> Int {
+    let mut words: List[String] = list_new();
+    words = list_push(words, "alpha");
+    words = list_push(words, "beta");
+    let count: Int = list_len(words);
+    return count;
+}
+
+pub fn main() -> Int {
+    let res: Int = count_slist();
+    if res == 2 {
+        return 0;
+    }
+    return 1;
+}

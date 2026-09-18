@@ -11,6 +11,7 @@
 import "ll_tok.oo";
 import "ll_slot.oo";
 import "ll_ir.oo";
+import "ll_range.oo";
 
 pub fn ll_ty_at(toks: List[String], pos: Int, n: Int, stab: String) -> String {
     let mut p: Int = pos;
@@ -22,7 +23,12 @@ pub fn ll_ty_at(toks: List[String], pos: Int, n: Int, stab: String) -> String {
         process_exit(1);
     }
     let t: String = ll_t(toks, p);
-    if t == "Int" || t == "i64" { if isref { return "ri64"; } return "i64"; }
+    if t == "Int" || t == "i64" {
+        if isref { return "ri64"; }
+        let br: String = ll_range_parse(toks, p, n);
+        if br != "" { return br; }
+        return "i64";
+    }
     if t == "Float" { if isref { return "rf64"; } return "f64"; }
     if t == "u64" { if isref { return "ru64"; } return "u64"; }
     if t == "i32" { if isref { return "ri32"; } return "i32"; }
@@ -171,6 +177,7 @@ pub fn ll_ir_alloc(kind: String) -> String {
     if k == "i16" || k == "u16" { return "i16"; }
     if k == "i32" || k == "u32" { return "i32"; }
     if k == "i64" || k == "u64" { return "i64"; }
+    if ll_range_is_bint(k) { return "i64"; }
     if k == "f64" { return "double"; }
     if k == "v8f32" { return "<8 x float>"; }
     if k == "v4f64" { return "<4 x double>"; }
@@ -220,6 +227,7 @@ pub fn ll_pass(kind: String) -> String {
         return "ptr noalias nocapture byval(" + ll_ir_alloc(k) + ") align 8";
     }
     if ll_is_refk(k) { return "ptr noalias nocapture noundef"; }
+    if ll_range_is_bint(k) { return ll_range_param_pass(k); }
     if k == "i64" || k == "u64" || k == "i32" || k == "u32" || k == "i1" {
         return ll_ir_val(k) + " noundef";
     }

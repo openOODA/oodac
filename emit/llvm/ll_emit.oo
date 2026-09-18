@@ -25,6 +25,7 @@ import "ll_struct_imp.oo";
 import "ll_reach.oo";
 import "types/token_search.oo";
 import "types/types_core.oo";
+import "ll_range.oo";
 
 fn skip_balanced(toks: List[String], pos0: Int) -> Int {
     let n: Int = list_len(toks);
@@ -127,7 +128,8 @@ pub fn ll_emit_stream_plus_t(toks: List[String], extra: String, triple: String) 
                 seen_fn = seen_fn + nm + "\t";
                 ll_ir_text(ir, "; FN " + nm);
                 ll_emit_fn_strings(toks, pos, n, ir);
-                let penv: String = ll_prune_sigs(sigs, stenv, ll_callee_set(toks, pos, n));
+                let mut penv: String = ll_prune_sigs(sigs, stenv, ll_callee_set(toks, pos, n));
+                penv = type_env_put(penv, "__rng_tab__", ll_range_scan_all(toks));
                 pos = ll_emit_fn(toks, pos, n, penv, stab, ir);
                 ll_ir_flush(ir);
                 ir = ll_ir_new();

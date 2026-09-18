@@ -12,6 +12,7 @@
 import "ll_need.oo";
 import "ll_rt_decl.oo";
 import "ll_ir.oo";
+import "ll_range.oo";
 
 pub fn ll_c_esc(s: String) -> String {
     let n: Int = chars_len(s);
@@ -70,6 +71,7 @@ pub fn ll_rt_header_triple(toks: List[String], triple: String) {
     println("declare void @llvm.assume(i1) nounwind willreturn memory(inaccessiblemem: readwrite)");
     ll_ir_begin(toks);
     ll_ir_subty();
+    ll_range_emit_all(toks);
     println("%OoStr = type { ptr, i64 }");
     println("%OoSList = type { ptr, i64, i64 }");
     println("%OoIList = type { ptr, i64, i64 }");

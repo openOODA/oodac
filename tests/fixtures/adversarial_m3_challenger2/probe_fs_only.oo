@@ -1,0 +1,21 @@
+// # Filesystem Calls Symbol Pruning Probe
+//
+// Logline: Verify filesystem operations declare oo_fs and omit oo_tui.
+//
+// Setup: Compile with oodac emit-llvm and verify fs declarations and absence of tui.
+//
+// Beats:
+//   1. Call path_exists and file_size with FsReadCap.
+//   2. Validate emitted declarations with llvm-as.
+
+pub fn check_fs(fs: &FsReadCap, path: String) -> Int {
+    if path_exists(fs, path) != 0 {
+        return file_size(fs, path);
+    }
+    return 0;
+}
+
+pub fn main(fs: &FsReadCap) -> Int {
+    let sz: Int = check_fs(fs, "test.txt");
+    return sz;
+}

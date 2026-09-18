@@ -1,0 +1,63 @@
+// # Parameter and Function Attributes Verification Probe
+//
+// Logline: Probes pure vs mutating, &mut T, and capability functions for readonly.
+//
+// Setup: Compile with oodac emit-llvm and inspect function definition attributes.
+//
+// Beats:
+//   1. Pure function receives readonly nounwind.
+//   2. &mut Int function does NOT receive readonly.
+//   3. &mut Struct function does NOT receive readonly.
+//   4. Capability function does NOT receive readonly.
+//   5. Memory return function does NOT receive readonly.
+//   6. Void function does NOT receive readonly.
+
+pub type Counter = struct {
+    value: Int
+};
+
+// 1. Pure function with scalar return: CAN receive readonly
+pub fn pure_calc(a: Int, b: Int) -> Int {
+    return a * 2 + b;
+}
+
+// 2. Mutating function with &mut Int: MUST NOT receive readonly
+pub fn mut_scalar(val: &mut Int, delta: Int) -> Int {
+    *val = *val + delta;
+    return *val;
+}
+
+// 3. Mutating function with &mut Struct: MUST NOT receive readonly
+pub fn mut_struct(c: &mut Counter, step: Int) -> Int {
+    c.value = c.value + step;
+    return c.value;
+}
+
+// 4. Function with Capability parameter: MUST NOT receive readonly
+pub fn cap_read(fs: &FsReadCap, factor: Int) -> Int {
+    return factor * 10;
+}
+
+// 5. Memory return function: MUST NOT receive readonly
+pub fn mem_return(val: Int) -> Counter {
+    return Counter { value: val };
+}
+
+// 6. Void function: MUST NOT receive readonly
+pub fn void_worker(x: Int) {
+    if x > 0 {
+        return;
+    }
+}
+
+pub fn main(fs: &FsReadCap) -> Int {
+    let mut num: Int = 10;
+    let r1: Int = pure_calc(num, 5);
+    let r2: Int = mut_scalar(&mut num, 3);
+    let mut c: Counter = Counter { value: 20 };
+    let r3: Int = mut_struct(&mut c, 4);
+    let r4: Int = cap_read(fs, 2);
+    let c2: Counter = mem_return(r1 + r2 + r3 + r4);
+    void_worker(c2.value);
+    return 0;
+}

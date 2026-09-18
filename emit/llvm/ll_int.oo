@@ -14,9 +14,11 @@ import "ll_float.oo";
 import "ll_int_div.oo";
 import "ll_slot.oo";
 import "ll_ir.oo";
+import "ll_range.oo";
 
 pub fn ll_is_int(kind: String) -> Bool {
     if kind == "i32" || kind == "u32" || kind == "i64" || kind == "u64" || kind == "i1" { return true; }
+    if ll_range_is_bint(kind) { return true; }
     return false;
 }
 
@@ -26,7 +28,7 @@ pub fn ll_is_uint(kind: String) -> Bool {
 }
 
 pub fn ll_int_wide(kind: String) -> String {
-    if kind == "i64" || kind == "u64" { return "i64"; }
+    if kind == "i64" || kind == "u64" || ll_range_is_bint(kind) { return "i64"; }
     return "i32";
 }
 

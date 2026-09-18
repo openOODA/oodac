@@ -19,6 +19,7 @@ import "ll_fn_main.oo";
 import "ll_ir.oo";
 import "ll_int.oo";
 import "types/types_core.oo";
+import "ll_range.oo";
 
 pub fn ll_fn_name_at(toks: List[String], pos: Int, n: Int) -> String {
     let mut p: Int = pos;
@@ -62,6 +63,27 @@ pub fn ll_parse_sig(toks: List[String], pos: Int, n: Int, stab: String) -> Strin
     }
     if name == "main" { rk = "main_i32"; }
     return name + "=" + aks + ">" + rk;
+}
+
+pub fn ll_is_side_effect_call(name: String) -> Bool {
+    if name == "println" || name == "print" || name == "eprintln" { return true; }
+    if name == "oo_println" || name == "oo_print_str" || name == "oo_print_int" { return true; }
+    if name == "oo_print_bool" || name == "oo_print_double" { return true; }
+    if name == "panic" || name == "process_exit" || name == "oo_process_exit" { return true; }
+    if name == "write_file" || name == "sys_exec" { return true; }
+    return false;
+}
+
+pub fn ll_has_side_effects(toks: List[String], p0: Int, pend: Int) -> Bool {
+    let mut i: Int = p0;
+    while i < pend {
+        if ll_k(toks, i) == "IDENT" {
+            let nm: String = ll_t(toks, i);
+            if ll_is_side_effect_call(nm) { return true; }
+        }
+        i = i + 1;
+    }
+    return false;
 }
 
 pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String, stab: String, ir: &mut IrBuf) -> Int {
@@ -141,7 +163,10 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String, stab: Stri
     let db: Int = pos + 20;
     ll_ir_sub(name, pos, db);
     let ds: String = " !dbg !" + db.to_string();
-    let is_pure: Bool = name != "main" && caps == "" && !has_mut_ref && !ll_is_mem(rk) && rk != "void";
+    let is_scalar_ret: Bool = (ll_is_int(rk) || rk == "bool" || rk == "f64") && rk != "void";
+    let fn_end: Int = ll_skip_fn(toks, pos, n);
+    let has_side_effects: Bool = ll_has_side_effects(toks, p, fn_end);
+    let is_pure: Bool = name != "main" && caps == "" && !has_mut_ref && is_scalar_ret && !has_side_effects;
     let fn_attrs: String = if is_pure { "readonly nounwind" } else { "nounwind" };
     if ll_is_mem(rk) {
         if plist != "" {
@@ -152,7 +177,7 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String, stab: Stri
     } else if rk == "void" {
         ll_ir_fn_open(ir, "define " + vis + "void @" + gnm + "(" + plist + ") nounwind" + ds + " {");
     } else {
-        let rk_val: String = if ll_is_int(rk) { "noundef " + ll_ir_val(rk) } else { ll_ir_val(rk) };
+        let rk_val: String = if ll_range_is_bint(rk) { ll_range_ret_val(rk) } else if ll_is_int(rk) { "noundef " + ll_ir_val(rk) } else { ll_ir_val(rk) };
         ll_ir_fn_open(ir, "define " + vis + rk_val + " @" + gnm + "(" + plist + ") " + fn_attrs + ds + " {");
     }
     ll_heap(ir);
@@ -197,5 +222,5 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String, stab: Stri
         else { ll_ir_inst(ir, "unreachable", "", "", "", 1, 1); }
     }
     ll_ir_fn_close(ir);
-    return ll_skip_fn(toks, pos, n);
+    return fn_end;
 }

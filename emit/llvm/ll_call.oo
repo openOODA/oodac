@@ -17,6 +17,7 @@ import "ll_float.oo";
 import "ll_slot.oo";
 import "types/types_core.oo";
 import "ll_ir.oo";
+import "ll_range.oo";
 
 
 pub fn ll_str_gep(toks: List[String], pos: Int, ssa0: Int, ir: &mut IrBuf) -> String {
@@ -57,7 +58,8 @@ pub fn ll_load_ident(name: String, env: String, ssa0: Int, ir: &mut IrBuf) -> St
         return ll_pack(0, ssa0, k, ptr);
     }
     let n: Int = ssa0 + 1;
-    ll_ir_inst(ir, "load", ll_ir_val(k), ll_ssa(n), "ptr " + ptr + ", align 8", 1, 1);
+    let meta: String = if ll_range_is_bint(k) { ll_range_meta_load(k, env) } else { "" };
+    ll_ir_inst(ir, "load", ll_ir_val(k), ll_ssa(n), "ptr " + ptr + ", align 8" + meta, 1, 1);
     return ll_pack(0, n, k, "");
 }
 

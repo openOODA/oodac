@@ -1,0 +1,30 @@
+// # Division and Remainder Signed vs Unsigned Probe
+//
+// Logline: Probe signed vs unsigned division and remainder lowerings.
+//
+// Setup: Verify sdiv/srem for signed Int/i32 and udiv/urem for unsigned u64/u32.
+//
+// Beats:
+//   1. Signed division and remainder.
+//   2. Unsigned division and remainder.
+//   3. Validate with llvm-as.
+
+pub fn signed_div_rem(a: Int, b: Int) -> Int {
+    let q: Int = a / b;
+    let r: Int = a % b;
+    return q + r;
+}
+
+pub fn unsigned_div_rem(a: u64, b: u64) -> u64 {
+    let q: u64 = a / b;
+    let r: u64 = a % b;
+    return q + r;
+}
+
+pub fn main() -> Int {
+    let s: Int = signed_div_rem(20, 3);
+    let u: u64 = unsigned_div_rem(20, 3);
+    println(s);
+    println(u);
+    return 0;
+}

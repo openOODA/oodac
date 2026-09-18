@@ -1,0 +1,53 @@
+// # Signed vs Unsigned Arithmetic NSW Probe
+//
+// Logline: Probe signed vs unsigned operations ensuring nsw is attached only to signed arithmetic.
+//
+// Setup: Compile with oodac emit-llvm and verify LLVM IR instructions.
+//
+// Beats:
+//   1. Signed i64 operations: add nsw, sub nsw, mul nsw.
+//   2. Unsigned u64 operations: add, sub, mul (NO nsw).
+//   3. Signed i32 operations: add nsw, sub nsw, mul nsw.
+//   4. Unsigned u32 operations: add, sub, mul (NO nsw).
+
+pub fn signed_i64_ops(a: Int, b: Int) -> Int {
+    let s: Int = a + b;
+    let d: Int = a - b;
+    let p: Int = a * b;
+    let neg: Int = -a;
+    return s + d + p + neg;
+}
+
+pub fn unsigned_u64_ops(a: u64, b: u64) -> u64 {
+    let s: u64 = a + b;
+    let d: u64 = a - b;
+    let p: u64 = a * b;
+    return s + d + p;
+}
+
+pub fn signed_i32_ops(a: i32, b: i32) -> i32 {
+    let s: i32 = a + b;
+    let d: i32 = a - b;
+    let p: i32 = a * b;
+    let neg: i32 = 0 - a;
+    return s + d + p + neg;
+}
+
+pub fn unsigned_u32_ops(a: u32, b: u32) -> u32 {
+    let s: u32 = a + b;
+    let d: u32 = a - b;
+    let p: u32 = a * b;
+    return s + d + p;
+}
+
+pub fn main() -> Int {
+    let r1: Int = signed_i64_ops(10, 20);
+    let r2: u64 = unsigned_u64_ops(10, 20);
+    let r3: i32 = signed_i32_ops(10, 20);
+    let r4: u32 = unsigned_u32_ops(10, 20);
+    println(r1);
+    println(r2);
+    println(r3);
+    println(r4);
+    return 0;
+}

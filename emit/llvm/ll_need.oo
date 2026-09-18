@@ -35,11 +35,9 @@ pub fn ll_need_emit_referenced(need: String) {
             if i > start {
                 let sym: String = str_slice(need, start, i);
                 let proto: String = ll_need_proto(sym);
-                if proto != "" {
-                    println(proto);
-                    let ext: String = ll_need_extra(sym);
-                    if ext != "" { println(ext); }
-                }
+                if proto != "" { println(proto); }
+                let ext: String = ll_need_extra(sym);
+                if ext != "" { println(ext); }
             }
             start = i + 1;
         }
@@ -49,8 +47,13 @@ pub fn ll_need_emit_referenced(need: String) {
 
 fn ll_need_call(need: String, nm: String) -> String {
     let mut n: String = need;
-    if nm == "println" || nm == "print" {
+    if nm == "println" {
         n = ll_need_add(n, "oo_println");
+        n = ll_need_add(n, "oo_print_int");
+        return n;
+    }
+    if nm == "print" {
+        n = ll_need_add(n, "oo_print_str");
         return n;
     }
     if nm == "unwrap" || nm == "unwrap_or" {
@@ -186,7 +189,7 @@ pub fn ll_need_scan(toks: List[String]) -> String {
         }
         if k == "IDENT" {
             let nm: String = ll_t(toks, i);
-            if nm == "String" || nm == "to_string" { has_str = true; }
+            if nm == "String" || nm == "to_string" || nm == "char_at" || nm == "str_slice" { has_str = true; }
             if nm == "Float" { has_float = true; }
             if nm == "List" { has_list = true; }
             if nm == "List" && i + 2 < n && ll_k(toks, i + 1) == "LBRACKET" && ll_k(toks, i + 2) == "IDENT" {
@@ -196,13 +199,6 @@ pub fn ll_need_scan(toks: List[String]) -> String {
             if nm == "args" { has_args = true; }
             if i + 1 < n && ll_k(toks, i + 1) == "LPAREN" {
                 need = ll_need_call(need, nm);
-                if nm == "println" || nm == "print" {
-                    if i + 2 < n && ll_k(toks, i + 2) == "STRING" {
-                        need = ll_need_add(need, "oo_print_str");
-                    } else {
-                        need = ll_need_add(need, "oo_print_int");
-                    }
-                }
                 if nm == "list_new" || nm == "list_len" || nm == "list_get" || nm == "list_push" || nm == "list_slice" { has_list = true; }
             }
             if i > 0 && ll_k(toks, i - 1) == "DOT" && i + 1 < n && ll_k(toks, i + 1) == "LPAREN" {
@@ -215,6 +211,9 @@ pub fn ll_need_scan(toks: List[String]) -> String {
         need = ll_need_add(need, "oo_str_lit");
         need = ll_need_add(need, "oo_str_retain");
         need = ll_need_add(need, "oo_str_release");
+        need = ll_need_add(need, "oo_str_concat");
+        need = ll_need_add(need, "oo_str_eq");
+        if ll_need_has(need, "oo_println") { need = ll_need_add(need, "oo_print_str"); }
     }
     if has_list {
         need = ll_need_add(need, "oo_slist_retain");

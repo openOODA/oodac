@@ -1,0 +1,37 @@
+// # Signed NSW Loop Optimization Probe
+//
+// Logline: Verifies signed NSW arithmetic enables clean SSA loop optimization.
+//
+// Setup: Compiled to LLVM IR, passed to opt, and executed.
+//
+// Beats:
+//   1. Signed loop accumulator with add, sub, and mul operations.
+//   2. Verifies NSW flag allows instcombine to optimize expressions.
+//   3. Assert exact mathematical output.
+
+pub fn nsw_accumulator(n: Int, step: Int) -> Int {
+    let mut acc: Int = 0;
+    let mut i: Int = 0;
+    while i < n {
+        let term: Int = (i * step) + 5;
+        let diff: Int = term - 2;
+        acc = acc + diff;
+        i = i + 1;
+    }
+    return acc;
+}
+
+pub fn nsw_algebraic_ident(x: Int) -> Int {
+    let a: Int = x + 10;
+    let b: Int = a - x;
+    return b;
+}
+
+pub fn main() -> Int {
+    let res1: Int = nsw_accumulator(10, 3);
+    let res2: Int = nsw_algebraic_ident(42);
+    if res1 == 165 && res2 == 10 {
+        return 0;
+    }
+    return 1;
+}

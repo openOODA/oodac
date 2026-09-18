@@ -1,0 +1,27 @@
+// # Proven Contract SMT Assume Branch Folding Probe
+//
+// Logline: Verifies proven contracts emit @llvm.assume enabling optimizer branch folding.
+//
+// Setup: Compiled to LLVM IR, passed to opt, and verified branch folding.
+//
+// Beats:
+//   1. Function with bounded Int[10..50] and proven requires x >= 10.
+//   2. Function body with redundant branch if x < 5.
+//   3. Optimizer folds redundant branch to pure straight-line SSA.
+
+pub fn branch_fold_test(x: Int[10..50]) -> Int
+    requires x >= 10
+{
+    if x < 5 {
+        return 999;
+    }
+    return x * 2;
+}
+
+pub fn main() -> Int {
+    let res: Int = branch_fold_test(15);
+    if res == 30 {
+        return 0;
+    }
+    return 1;
+}

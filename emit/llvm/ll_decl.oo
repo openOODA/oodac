@@ -12,6 +12,7 @@
 import "ll_tok.oo";
 import "ll_ty.oo";
 import "ll_int.oo";
+import "ll_range.oo";
 
 fn ll_decl_params(aks: String) -> String {
     let n: Int = chars_len(aks); let mut o: String = ""; let mut start: Int = 0; let mut p: Int = 0;
@@ -42,7 +43,7 @@ fn ll_emit_one_decl(name: String, sig: String) {
     } else if rk == "void" || rk == "" {
         println("declare void @" + name + "(" + ps + ")");
     } else {
-        let rk_val: String = if ll_is_int(rk) { "noundef " + ll_ir_val(rk) } else { ll_ir_val(rk) };
+        let rk_val: String = if ll_range_is_bint(rk) { ll_range_ret_val(rk) } else if ll_is_int(rk) { "noundef " + ll_ir_val(rk) } else { ll_ir_val(rk) };
         println("declare " + rk_val + " @" + name + "(" + ps + ")");
     }
 }

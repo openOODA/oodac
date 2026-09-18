@@ -1,0 +1,46 @@
+// # Complex Catalog Symbol Table Probe
+//
+// Logline: Probes complex types including Option, Result, and custom struct lists.
+//
+// Setup: Compile with oodac emit-llvm and verify exact symbol table mapping.
+//
+// Beats:
+//   1. Option[Int] construction and pattern matching.
+//   2. Result[String, String] pattern matching.
+//   3. Struct and list allocation and retrieval.
+//   4. Validate with llvm-as.
+
+pub type Item = struct {
+    id: Int,
+    name: String
+};
+
+pub fn check_opt(opt: Option[Int]) -> Int {
+    match opt {
+        Some(v) => { return v; }
+        None => { return 0; }
+    }
+}
+
+pub fn check_res(res: Result[String, String]) -> String {
+    match res {
+        Ok(msg) => { return msg; }
+        Err(err) => { return err; }
+    }
+}
+
+pub fn make_item(id: Int, name: String) -> Item {
+    return Item { id: id, name: name };
+}
+
+pub fn main() -> Int {
+    let o: Option[Int] = Some(42);
+    let v: Int = check_opt(o);
+    let r: Result[String, String] = Ok("success");
+    let msg: String = check_res(r);
+    let it: Item = make_item(1, msg);
+    if v == 42 && it.id == 1 {
+        return 0;
+    }
+    return 1;
+}

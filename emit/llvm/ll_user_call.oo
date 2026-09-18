@@ -16,6 +16,7 @@ import "ll_builtin.oo";
 import "ll_expr.oo";
 import "types/types_core.oo";
 import "ll_ir.oo";
+import "ll_range.oo";
 
 pub fn ll_user_call(name: String, sig: String, args: List[String], ssa0: Int, ir: &mut IrBuf) -> String {
     let gt: Int = str_index_of(sig, ">");
@@ -76,7 +77,8 @@ pub fn ll_user_call(name: String, sig: String, args: List[String], ssa0: Int, ir
         return ll_pack(0, s, ret, a);
     }
     let s2: Int = s + 1;
-    ll_ir_inst(ir, "call", ll_ir_val(ret), ll_ssa(s2), "@" + name + "(" + call + ")", 1, 1);
+    let meta: String = if ll_range_is_bint(ret) { ll_range_meta_load(ret, "") } else { "" };
+    ll_ir_inst(ir, "call", ll_ir_val(ret), ll_ssa(s2), "@" + name + "(" + call + ")" + meta, 1, 1);
     return ll_pack(0, s2, ret, "");
 }
 

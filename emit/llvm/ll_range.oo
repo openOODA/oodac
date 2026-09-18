@@ -5,9 +5,13 @@
 // Setup: Maps inclusive Int[lo..hi] to LLVM range attributes and metadata nodes.
 //
 // Beats:
-//   1. Half-open interval string calculation.
-//   2. Metadata node formatting and registration.
-//   3. Bounded range attribute generation.
+//   1. Parses bounded integer types Int[lo..hi] and parses signed bounds.
+//   2. Half-open interval string calculation and range(...) attribute formatting.
+//   3. Metadata node formatting, table lookup, and module header emission.
+
+import "lex/token_parse_int.oo";
+import "ll_tok.oo";
+import "types/types_core.oo";
 
 pub fn ll_range_upper(hi: Int) -> Int {
     if hi >= 9223372036854775806 { return hi; }
@@ -19,29 +23,129 @@ pub fn ll_range_attr(lo: Int, hi: Int) -> String {
     return "range(i64 " + lo.to_string() + ", " + hi1.to_string() + ")";
 }
 
-pub fn ll_range_meta_id(lo: Int, hi: Int) -> String {
-    let mut sid: String = "!rng_";
-    if lo < 0 {
-        let nlo: Int = 0 - lo;
-        sid = sid + "m" + nlo.to_string();
-    } else {
-        sid = sid + lo.to_string();
-    }
-    sid = sid + "_";
-    if hi < 0 {
-        let nhi: Int = 0 - hi;
-        sid = sid + "m" + nhi.to_string();
-    } else {
-        sid = sid + hi.to_string();
-    }
-    return sid;
-}
-
 pub fn ll_range_node(lo: Int, hi: Int) -> String {
     let hi1: Int = ll_range_upper(hi);
     return "!{i64 " + lo.to_string() + ", i64 " + hi1.to_string() + "}";
 }
 
-pub fn ll_range_emit_node(lo: Int, hi: Int) {
-    println(ll_range_meta_id(lo, hi) + " = " + ll_range_node(lo, hi));
+pub fn ll_range_parse(toks: List[String], pos: Int, n: Int) -> String {
+    if pos + 1 >= n || ll_k(toks, pos + 1) != "LBRACKET" { return ""; }
+    let mut p: Int = pos + 2;
+    let mut lo_neg: Bool = false;
+    if p < n && ll_k(toks, p) == "MINUS" { lo_neg = true; p = p + 1; }
+    if p >= n || ll_k(toks, p) != "INT" { return ""; }
+    let mut lo: Int = parse_int(ll_t(toks, p));
+    if lo_neg { lo = 0 - lo; }
+    p = p + 1;
+    if p >= n || ll_k(toks, p) != "DOTDOT" { return ""; }
+    p = p + 1;
+    let mut hi_neg: Bool = false;
+    if p < n && ll_k(toks, p) == "MINUS" { hi_neg = true; p = p + 1; }
+    if p >= n || ll_k(toks, p) != "INT" { return ""; }
+    let mut hi: Int = parse_int(ll_t(toks, p));
+    if hi_neg { hi = 0 - hi; }
+    p = p + 1;
+    if p >= n || ll_k(toks, p) != "RBRACKET" { return ""; }
+    return "bint:" + lo.to_string() + ":" + hi.to_string();
+}
+
+pub fn ll_range_is_bint(k: String) -> Bool {
+    return chars_len(k) >= 5 && str_slice(k, 0, 5) == "bint:";
+}
+
+pub fn ll_range_lo(k: String) -> Int {
+    if !ll_range_is_bint(k) { return 0; }
+    let n: Int = chars_len(k);
+    let mut p: Int = 5;
+    while p < n && char_at(k, p) != ":" { p = p + 1; }
+    return parse_int(str_slice(k, 5, p));
+}
+
+pub fn ll_range_hi(k: String) -> Int {
+    if !ll_range_is_bint(k) { return 0; }
+    let n: Int = chars_len(k);
+    let mut p: Int = 5;
+    while p < n && char_at(k, p) != ":" { p = p + 1; }
+    if p + 1 >= n { return 0; }
+    return parse_int(str_slice(k, p + 1, n));
+}
+
+pub fn ll_range_param_pass(k: String) -> String {
+    let lo: Int = ll_range_lo(k);
+    let hi: Int = ll_range_hi(k);
+    return "i64 " + ll_range_attr(lo, hi) + " noundef";
+}
+
+pub fn ll_range_ret_val(k: String) -> String {
+    let lo: Int = ll_range_lo(k);
+    let hi: Int = ll_range_hi(k);
+    return "noundef " + ll_range_attr(lo, hi) + " i64";
+}
+
+pub fn ll_range_scan_all(toks: List[String]) -> String {
+    let n: Int = list_len(toks);
+    let mut tab: String = ";";
+    let mut i: Int = 0;
+    let mut id: Int = 100000;
+    while i < n {
+        if ll_k(toks, i) == "IDENT" && ll_t(toks, i) == "Int" {
+            let br: String = ll_range_parse(toks, i, n);
+            if br != "" {
+                let lo: Int = ll_range_lo(br);
+                let hi: Int = ll_range_hi(br);
+                let key: String = ";" + lo.to_string() + ":" + hi.to_string() + "=";
+                if str_index_of(tab, key) < 0 {
+                    tab = tab + lo.to_string() + ":" + hi.to_string() + "=" + id.to_string() + ";";
+                    id = id + 1;
+                }
+            }
+        }
+        i = i + 1;
+    }
+    return tab;
+}
+
+pub fn ll_range_lookup_id(tab: String, lo: Int, hi: Int) -> Int {
+    let key: String = ";" + lo.to_string() + ":" + hi.to_string() + "=";
+    let p: Int = str_index_of(tab, key);
+    if p < 0 { return 0; }
+    let s: Int = p + chars_len(key);
+    let n: Int = chars_len(tab);
+    let mut e: Int = s;
+    while e < n && char_at(tab, e) != ";" { e = e + 1; }
+    return parse_int(str_slice(tab, s, e));
+}
+
+pub fn ll_range_meta_load(k: String, env: String) -> String {
+    if !ll_range_is_bint(k) { return ""; }
+    let lo: Int = ll_range_lo(k);
+    let hi: Int = ll_range_hi(k);
+    if env != "" {
+        let tab: String = type_env_get(env, "__rng_tab__");
+        if tab != "" {
+            let id: Int = ll_range_lookup_id(tab, lo, hi);
+            if id > 0 { return ", !range !" + id.to_string(); }
+        }
+    }
+    return ", !range " + ll_range_node(lo, hi);
+}
+
+pub fn ll_range_emit_all(toks: List[String]) {
+    let tab: String = ll_range_scan_all(toks);
+    let n: Int = chars_len(tab);
+    let mut i: Int = 1;
+    while i < n {
+        let mut eq: Int = i;
+        while eq < n && char_at(tab, eq) != "=" { eq = eq + 1; }
+        if eq >= n { break; }
+        let pair: String = str_slice(tab, i, eq);
+        let colon: Int = str_index_of(pair, ":");
+        let lo: Int = parse_int(str_slice(pair, 0, colon));
+        let hi: Int = parse_int(str_slice(pair, colon + 1, chars_len(pair)));
+        let mut semi: Int = eq + 1;
+        while semi < n && char_at(tab, semi) != ";" { semi = semi + 1; }
+        let id_str: String = str_slice(tab, eq + 1, semi);
+        println("!" + id_str + " = " + ll_range_node(lo, hi));
+        i = semi + 1;
+    }
 }

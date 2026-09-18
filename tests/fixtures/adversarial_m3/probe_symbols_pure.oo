@@ -1,0 +1,42 @@
+// # Pure Math Symbol Pruning Probe
+//
+// Logline: Verifies complete absence of unneeded runtime declarations in pure math.
+//
+// Setup: Compiled to LLVM IR via emit-llvm to inspect symbol table.
+//
+// Beats:
+//   1. Define pure arithmetic operations across multiple helper functions.
+//   2. Use structs and conditionals without I/O or system interaction.
+//   3. Compute deterministic integer result.
+
+pub type MathState = struct {
+    acc: Int,
+    scale: Int
+};
+
+pub fn transform_val(st: MathState, delta: Int) -> Int {
+    let shifted: Int = st.acc * st.scale;
+    if delta > 0 {
+        return shifted + delta;
+    }
+    return shifted - delta;
+}
+
+pub fn run_math_loop(limit: Int) -> Int {
+    let mut total: Int = 0;
+    let mut i: Int = 0;
+    while i < limit {
+        let st: MathState = MathState { acc: i, scale: 3 };
+        total = total + transform_val(st, i % 5);
+        i = i + 1;
+    }
+    return total;
+}
+
+pub fn main() -> Int {
+    let res: Int = run_math_loop(20);
+    if res == 590 {
+        return 0;
+    }
+    return 1;
+}
