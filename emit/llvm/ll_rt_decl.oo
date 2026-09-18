@@ -25,9 +25,9 @@ pub fn ll_rt_decl_emit(need: String) {
     ll_d(need, "oo_print_bool", "declare void @oo_print_bool(i32)");
     ll_d(need, "oo_closure_retain", "declare void @oo_closure_retain(ptr byval(%OoClosure) align 8)");
     ll_d(need, "oo_closure_release", "declare void @oo_closure_release(ptr byval(%OoClosure) align 8)");
-    ll_d(need, "oo_slist_new", "declare void @oo_slist_new(ptr sret(%OoSList) align 8)");
+    ll_d(need, "oo_slist_new", "declare void @oo_slist_new(ptr noalias sret(%OoSList) align 8)");
     ll_d(need, "oo_slist_len", "declare i64 @oo_slist_len(ptr byval(%OoSList) align 8)");
-    ll_d(need, "oo_ilist_new", "declare void @oo_ilist_new(ptr sret(%OoIList) align 8)");
+    ll_d(need, "oo_ilist_new", "declare void @oo_ilist_new(ptr noalias sret(%OoIList) align 8)");
     ll_d(need, "oo_ilist_len", "declare i64 @oo_ilist_len(ptr byval(%OoIList) align 8)");
     ll_d(need, "oo_int_to_str", "declare { ptr, i64 } @oo_int_to_str(i64)");
     ll_d(need, "oo_str_repeat", "declare { ptr, i64 } @oo_str_repeat({ ptr, i64 }, i64)");

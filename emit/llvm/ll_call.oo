@@ -121,17 +121,17 @@ pub fn ll_apply_binop(op: String, lhs: String, rhs: String, ir: &mut IrBuf) -> S
     }
     if op == "PLUS" {
         let s: Int = s0 + 1;
-        ll_ir_inst(ir, "add", "i64", ll_ssa(s), ll_ssa(ll_pssa(lhs)) + ", " + ll_ssa(ll_pssa(rhs)), 1, 1);
+        ll_ir_inst(ir, "add nsw", "i64", ll_ssa(s), ll_ssa(ll_pssa(lhs)) + ", " + ll_ssa(ll_pssa(rhs)), 1, 1);
         return ll_pack(ll_ppos(rhs), s, "i64", "");
     }
     if op == "MINUS" {
         let s: Int = s0 + 1;
-        ll_ir_inst(ir, "sub", "i64", ll_ssa(s), ll_ssa(ll_pssa(lhs)) + ", " + ll_ssa(ll_pssa(rhs)), 1, 1);
+        ll_ir_inst(ir, "sub nsw", "i64", ll_ssa(s), ll_ssa(ll_pssa(lhs)) + ", " + ll_ssa(ll_pssa(rhs)), 1, 1);
         return ll_pack(ll_ppos(rhs), s, "i64", "");
     }
     if op == "STAR" {
         let s: Int = s0 + 1;
-        ll_ir_inst(ir, "mul", "i64", ll_ssa(s), ll_ssa(ll_pssa(lhs)) + ", " + ll_ssa(ll_pssa(rhs)), 1, 1);
+        ll_ir_inst(ir, "mul nsw", "i64", ll_ssa(s), ll_ssa(ll_pssa(lhs)) + ", " + ll_ssa(ll_pssa(rhs)), 1, 1);
         return ll_pack(ll_ppos(rhs), s, "i64", "");
     }
     if op == "SLASH" {
@@ -144,7 +144,7 @@ pub fn ll_apply_binop(op: String, lhs: String, rhs: String, ir: &mut IrBuf) -> S
         ll_ir_inst(ir, "srem", "i64", ll_ssa(s), ll_ssa(ll_pssa(lhs)) + ", " + ll_ssa(ll_pssa(rhs)), 1, 1);
         return ll_pack(ll_ppos(rhs), s, "i64", "");
     }
-    if (op == "EQEQ" || op == "NEQ") && lk == "str" {
+    if lk == "str" && (op == "EQEQ" || op == "NEQ") {
         let la: String = ll_as_val(lhs, s0, ir);
         let ra: String = ll_as_val(rhs, ll_pssa(la), ir);
         let s2: Int = ll_pssa(ra) + 1;

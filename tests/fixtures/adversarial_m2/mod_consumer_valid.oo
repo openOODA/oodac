@@ -1,0 +1,27 @@
+// # Consumer Module Valid Probe
+//
+// Logline: Imports provider module and calls valid cross-module functions.
+//
+// Setup: oodac check should exit 0.
+//
+// Beats:
+//   1. Import mod_provider.
+//   2. Call provider_service_call with ServiceConfig.
+//
+import "mod_provider.oo";
+
+pub fn run_valid_client() -> Int {
+  let cfg = ServiceConfig {
+    port: 8080,
+    timeout_ms: 500
+  };
+  let res: Int = provider_service_call(cfg);
+  if res != 8580 {
+    return 1;
+  }
+  return 0;
+}
+
+pub fn main() -> Int {
+  return run_valid_client();
+}

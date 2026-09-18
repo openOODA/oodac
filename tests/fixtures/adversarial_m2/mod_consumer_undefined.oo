@@ -1,0 +1,26 @@
+// # Consumer Module Undefined Variable Negative Probe
+//
+// Logline: Imports provider module but references a truly undefined variable.
+//
+// Setup: oodac check must fail with undefined variable error.
+//
+// Beats:
+//   1. Import mod_provider.
+//   2. Call provider_service_call.
+//   3. Reference undefined variable unexported_missing_var.
+//
+import "mod_provider.oo";
+
+pub fn run_bad_client() -> Int {
+  let cfg = ServiceConfig {
+    port: 8080,
+    timeout_ms: 500
+  };
+  let res: Int = provider_service_call(cfg);
+  let bad: Int = unexported_missing_var;
+  return res + bad;
+}
+
+pub fn main() -> Int {
+  return run_bad_client();
+}

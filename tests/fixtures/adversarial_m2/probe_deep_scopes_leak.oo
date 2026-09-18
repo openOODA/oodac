@@ -1,0 +1,28 @@
+// # Deep Nested Scopes Leakage Negative Probe
+//
+// Logline: Assert that variables dropped via drop_depth cannot be accessed in outer scopes.
+//
+// Setup: oodac check must fail with undefined variable error.
+//
+// Beats:
+//   1. Declare leaf in depth 4.
+//   2. Exit depth 4.
+//   3. Attempt to access leaf in depth 1 (must fail).
+//
+pub fn test_leak() -> Int {
+  let x: Int = 1;
+  if true {
+    if true {
+      if true {
+        let leaf: Int = 42;
+        let dummy: Int = leaf;
+      }
+    }
+  }
+  let leak_val: Int = leaf;
+  return leak_val;
+}
+
+pub fn main() -> Int {
+  return test_leak();
+}

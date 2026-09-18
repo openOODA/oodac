@@ -1,27 +1,56 @@
-// # LLVM runtime-symbol need scan
+// # LLVM exact runtime symbol tracker
 //
-// Logline: Collect @oo_* names that this TU will call from tokens.
+// Logline: Tracks genuinely referenced @oo_* runtime symbols and emits declarations.
 //
-// Setup: Call-shaped IDENT(, STRING/VERIFY/ARC/cap grants, and / % traps.
+// Setup: Refined scan and registration ensure declarations match exact TU needs.
 //
 // Beats:
-//   1. Tab-separated set of symbols this TU actually calls.
-//   2. Call names and methods map to runtime symbols.
-//   3. String/list/cap/verify add retain and grant helpers.
+//   1. Tab-delimited symbol set accumulation and queries.
+//   2. Exact call, type, and capability scanner.
+//   3. Deterministic referenced-only LLVM declaration emission.
 
 import "ll_tok.oo";
 import "ll_need_list.oo";
+import "ll_need_tab.oo";
 
-fn ll_need_add(need: String, name: String) -> String {
-    if str_index_of(need, "\t" + name + "\t") >= 0 { return need; }
+pub fn ll_need_add(need: String, name: String) -> String {
+    if name == "" || str_index_of(need, "\t" + name + "\t") >= 0 { return need; }
     return need + name + "\t";
+}
+
+pub fn ll_need_has(need: String, name: String) -> Bool {
+    return str_index_of(need, "\t" + name + "\t") >= 0;
+}
+
+pub fn ll_need_register(sym: String) -> String {
+    return ll_need_add("\t", sym);
+}
+
+pub fn ll_need_emit_referenced(need: String) {
+    let n: Int = chars_len(need);
+    let mut i: Int = 0;
+    let mut start: Int = 0;
+    while i <= n {
+        if i == n || char_at(need, i) == "\t" {
+            if i > start {
+                let sym: String = str_slice(need, start, i);
+                let proto: String = ll_need_proto(sym);
+                if proto != "" {
+                    println(proto);
+                    let ext: String = ll_need_extra(sym);
+                    if ext != "" { println(ext); }
+                }
+            }
+            start = i + 1;
+        }
+        i = i + 1;
+    }
 }
 
 fn ll_need_call(need: String, nm: String) -> String {
     let mut n: String = need;
     if nm == "println" || nm == "print" {
         n = ll_need_add(n, "oo_println");
-        n = ll_need_add(n, "oo_print_int");
         return n;
     }
     if nm == "unwrap" || nm == "unwrap_or" {
@@ -57,15 +86,16 @@ fn ll_need_call(need: String, nm: String) -> String {
         n = ll_need_add(n, "oo_ilist_slice");
         return n;
     }
-    if nm == "len" || nm == "chars_len" { return ll_need_add(ll_need_add(ll_need_add(n, "oo_chars_len"), "oo_slist_len"), "oo_ilist_len"); }
-    if nm == "contains" { return ll_need_add(n, "oo_str_contains"); }
+    if nm == "len" || nm == "chars_len" {
+        return ll_need_add(ll_need_add(ll_need_add(n, "oo_chars_len"), "oo_slist_len"), "oo_ilist_len");
+    }
+    if nm == "contains" || nm == "str_contains" { return ll_need_add(n, "oo_str_contains"); }
     if nm == "bytes_len" { return ll_need_add(n, "oo_bytes_len"); }
     if nm == "char_at" { return ll_need_add(n, "oo_char_at"); }
     if nm == "str_slice" { return ll_need_add(n, "oo_str_slice"); }
     if nm == "str_eq" { return ll_need_add(n, "oo_str_eq"); }
     if nm == "str_ends_with" { return ll_need_add(n, "oo_str_ends_with"); }
     if nm == "str_starts_with" { return ll_need_add(n, "oo_str_starts_with"); }
-    if nm == "str_contains" { return ll_need_add(n, "oo_str_contains"); }
     if nm == "str_index_of" { return ll_need_add(n, "oo_str_index_of"); }
     if nm == "byte_at" { return ll_need_add(n, "oo_byte_at"); }
     if nm == "byte_slice" { return ll_need_add(n, "oo_byte_slice"); }
@@ -76,70 +106,65 @@ fn ll_need_call(need: String, nm: String) -> String {
     if nm == "str_trim" { return ll_need_add(n, "oo_str_trim"); }
     if nm == "str_concat" { return ll_need_add(n, "oo_str_concat"); }
     if nm == "str_repeat" { return ll_need_add(n, "oo_str_repeat"); }
-    if nm == "to_string" { return ll_need_add(n, "oo_int_to_str"); }
+    if nm == "to_string" || nm == "int_to_str" { return ll_need_add(n, "oo_int_to_str"); }
     if nm == "to_uppercase" { return ll_need_add(n, "oo_str_to_uppercase"); }
     if nm == "to_lowercase" { return ll_need_add(n, "oo_str_to_lowercase"); }
-    if nm == "path_exists" || nm == "oo_path_exists" { return ll_need_add(n, "oo_path_exists"); }
-    if nm == "file_size" || nm == "oo_file_size" { return ll_need_add(n, "oo_file_size"); }
-    if nm == "env_get" || nm == "oo_env_get" { return ll_need_add(n, "oo_env_get"); }
-    if nm == "sys_exec" { return ll_need_add(n, "oo_sys_exec"); }
-    if nm == "process_exit" { return ll_need_add(n, "oo_process_exit"); }
-    if nm == "sleep_ms" { return ll_need_add(n, "oo_sleep_ms"); }
-    if nm == "now_ms" { return ll_need_add(n, "oo_now_ms"); }
-    if nm == "monotonic_us" { return ll_need_add(n, "oo_monotonic_us"); }
-    if nm == "read_file" { return ll_need_add(n, "oo_read_file"); }
-    if nm == "write_file" { return ll_need_add(n, "oo_write_file"); }
-    if nm == "file_stamp" || nm == "oo_file_stamp" { return ll_need_add(n, "oo_file_stamp"); }
-    if nm == "fs_is_dir" || nm == "oo_fs_is_dir" { return ll_need_add(n, "oo_fs_is_dir"); }
-    if nm == "fs_read_dir" { return ll_need_add(n, "oo_fs_read_dir"); }
-    if nm == "fs_mkdir" { return ll_need_add(n, "oo_fs_mkdir"); }
-    if nm == "fs_rmdir" { return ll_need_add(n, "oo_fs_rmdir"); }
-    if nm == "fs_remove_file" { return ll_need_add(n, "oo_fs_remove_file"); }
-    if nm == "fs_hardlink" { return ll_need_add(n, "oo_fs_hardlink"); }
-    if nm == "fs_symlink" { return ll_need_add(n, "oo_fs_symlink"); }
-    if nm == "sys_args" { return ll_need_add(n, "oo_sys_args"); }
-    if nm == "sys_exec_wait" { return ll_need_add(n, "oo_sys_exec_wait"); }
-    if nm == "sys_spawn" { return ll_need_add(n, "oo_sys_spawn"); }
-    if nm == "sys_wait" { return ll_need_add(n, "oo_sys_wait"); }
-    if nm == "sys_kill" { return ll_need_add(n, "oo_sys_kill"); }
-    if nm == "sys_epoll_create" { return ll_need_add(n, "oo_sys_epoll_create"); }
-    if nm == "sys_inotify_init" { return ll_need_add(n, "oo_sys_inotify_init"); }
-    if nm == "sys_prctl" { return ll_need_add(n, "oo_sys_prctl"); }
-    if nm == "landlock_is_available" { return ll_need_add(n, "oo_landlock_is_available"); }
-    if nm == "read_stdin" { return ll_need_add(n, "oo_read_stdin"); }
-    if nm == "read_stdin_chunk" { return ll_need_add(n, "oo_read_stdin_chunk"); }
-    if nm == "bytes_new" { return ll_need_add(n, "oo_bytes_new"); }
-    if nm == "bytes_push" { return ll_need_add(n, "oo_bytes_push"); }
-    if nm == "bytes_to_str" { return ll_need_add(n, "oo_bytes_to_str"); }
-    if nm == "crypto_sha256_internal" { return ll_need_add(n, "crypto_sha256_internal"); }
-    if nm == "crypto_sha512_internal" { return ll_need_add(n, "crypto_sha512_internal"); }
-    if nm == "crypto_hmac_sha256_internal" { return ll_need_add(n, "crypto_hmac_sha256_internal"); }
-    if nm == "hot_reload" { return ll_need_add(n, "oo_hot_reload"); }
-    if nm == "alloc_bytes" { return ll_need_add(n, "oo_alloc_bytes"); }
-    if nm == "int_to_str" { return ll_need_add(n, "oo_int_to_str"); }
+    if nm == "path_exists" || nm == "file_size" || nm == "file_stamp" { return ll_need_add(n, "oo_" + nm); }
+    if nm == "read_file" || nm == "write_file" { return ll_need_add(n, "oo_" + nm); }
+    if nm == "env_get" || nm == "sys_exec" || nm == "process_exit" { return ll_need_add(n, "oo_" + nm); }
+    if nm == "sleep_ms" || nm == "now_ms" || nm == "monotonic_us" { return ll_need_add(n, "oo_" + nm); }
+    if nm == "hot_reload" || nm == "alloc_bytes" { return ll_need_add(n, "oo_" + nm); }
     if chars_len(nm) >= 3 && str_slice(nm, 0, 3) == "oo_" { return ll_need_add(n, nm); }
-    n = ll_need_tui(n, nm);
+    if chars_len(nm) >= 4 && str_slice(nm, 0, 4) == "sys_" { return ll_need_add(n, "oo_" + nm); }
+    if chars_len(nm) >= 3 && str_slice(nm, 0, 3) == "fs_" { return ll_need_add(n, "oo_" + nm); }
+    if chars_len(nm) >= 4 && str_slice(nm, 0, 4) == "tui_" { return ll_need_add(n, "oo_" + nm); }
+    if chars_len(nm) >= 6 && str_slice(nm, 0, 6) == "bytes_" { return ll_need_add(n, "oo_" + nm); }
+    if chars_len(nm) >= 7 && str_slice(nm, 0, 7) == "crypto_" { return ll_need_add(n, nm); }
     return n;
 }
 
-fn ll_need_tui(need: String, nm: String) -> String {
-    if nm == "tui_enable_raw" { return ll_need_add(need, "oo_tui_enable_raw"); }
-    if nm == "tui_disable_raw" { return ll_need_add(need, "oo_tui_disable_raw"); }
-    if nm == "tui_get_size" { return ll_need_add(need, "oo_tui_get_size"); }
-    if nm == "tui_alt_screen_enter" { return ll_need_add(need, "oo_tui_alt_screen_enter"); }
-    if nm == "tui_alt_screen_leave" { return ll_need_add(need, "oo_tui_alt_screen_leave"); }
-    if nm == "tui_show_cursor" { return ll_need_add(need, "oo_tui_show_cursor"); }
-    if nm == "tui_clear" { return ll_need_add(need, "oo_tui_clear"); }
-    if nm == "tui_write" { return ll_need_add(need, "oo_tui_write"); }
-    if nm == "tui_read_byte" { return ll_need_add(need, "oo_tui_read_byte"); }
-    if nm == "tui_read_byte_timeout" { return ll_need_add(need, "oo_tui_read_byte_timeout"); }
-    if nm == "tui_signal_winch_install" { return ll_need_add(need, "oo_tui_signal_winch_install"); }
-    if nm == "tui_signal_winch_poll" { return ll_need_add(need, "oo_tui_signal_winch_poll"); }
-    return need;
+fn ll_need_cap_sym(t: String) -> String {
+    if t == "ProcessCap" { return "oo_cap_grant_process"; }
+    if t == "EnvCap" { return "oo_cap_grant_env"; }
+    if t == "FsReadCap" { return "oo_cap_grant_fsread"; }
+    if t == "FsWriteCap" { return "oo_cap_grant_fswrite"; }
+    if t == "BindCap" { return "oo_cap_grant_bind"; }
+    if t == "SysCap" { return "oo_cap_grant_sys"; }
+    if t == "TimeCap" { return "oo_cap_grant_time"; }
+    if t == "AllocCap" { return "oo_cap_grant_alloc"; }
+    if t == "TcpCap" { return "oo_cap_grant_tcp"; }
+    if t == "UdpCap" { return "oo_cap_grant_udp"; }
+    if t == "NetCap" { return "oo_cap_grant_net"; }
+    if t == "FsCap" { return "oo_cap_grant_fs"; }
+    if t == "RandCap" { return "oo_cap_grant_rand"; }
+    if t == "ArenaCap" { return "oo_cap_grant_arena"; }
+    if t == "FfiCap" { return "oo_cap_grant_ffi"; }
+    if t == "ThreadCap" { return "oo_cap_grant_thread"; }
+    if t == "GpuCap" { return "oo_cap_grant_gpu"; }
+    if t == "CompilerReadCap" { return "oo_cap_grant_compiler_read"; }
+    if t == "SignCap" { return "oo_cap_grant_sign"; }
+    if t == "AudioCap" { return "oo_cap_grant_audio"; }
+    if t == "CameraCap" { return "oo_cap_grant_camera"; }
+    if t == "UsbCap" { return "oo_cap_grant_usb"; }
+    if t == "HidCap" { return "oo_cap_grant_hid"; }
+    if t == "WindowCap" { return "oo_cap_grant_window"; }
+    if t == "FrameCap" { return "oo_cap_grant_frame"; }
+    if t == "MetricsCap" { return "oo_cap_grant_metrics"; }
+    return "";
 }
 
-pub fn ll_need_has(need: String, name: String) -> Bool {
-    return str_index_of(need, "\t" + name + "\t") >= 0;
+fn ll_need_caps(toks: List[String], need0: String) -> String {
+    let n: Int = list_len(toks);
+    let mut need: String = need0;
+    let mut i: Int = 0;
+    while i < n {
+        if ll_k(toks, i) == "IDENT" {
+            let s: String = ll_need_cap_sym(ll_t(toks, i));
+            if s != "" { need = ll_need_add(need, s); }
+        }
+        i = i + 1;
+    }
+    return need;
 }
 
 pub fn ll_need_scan(toks: List[String]) -> String {
@@ -171,6 +196,13 @@ pub fn ll_need_scan(toks: List[String]) -> String {
             if nm == "args" { has_args = true; }
             if i + 1 < n && ll_k(toks, i + 1) == "LPAREN" {
                 need = ll_need_call(need, nm);
+                if nm == "println" || nm == "print" {
+                    if i + 2 < n && ll_k(toks, i + 2) == "STRING" {
+                        need = ll_need_add(need, "oo_print_str");
+                    } else {
+                        need = ll_need_add(need, "oo_print_int");
+                    }
+                }
                 if nm == "list_new" || nm == "list_len" || nm == "list_get" || nm == "list_push" || nm == "list_slice" { has_list = true; }
             }
             if i > 0 && ll_k(toks, i - 1) == "DOT" && i + 1 < n && ll_k(toks, i + 1) == "LPAREN" {
@@ -183,10 +215,6 @@ pub fn ll_need_scan(toks: List[String]) -> String {
         need = ll_need_add(need, "oo_str_lit");
         need = ll_need_add(need, "oo_str_retain");
         need = ll_need_add(need, "oo_str_release");
-        need = ll_need_add(need, "oo_str_concat");
-        need = ll_need_add(need, "oo_str_eq");
-        need = ll_need_add(need, "oo_print_str");
-        need = ll_need_add(need, "oo_println");
     }
     if has_list {
         need = ll_need_add(need, "oo_slist_retain");
@@ -213,43 +241,4 @@ pub fn ll_need_scan(toks: List[String]) -> String {
     }
     need = ll_need_caps(toks, need);
     return ll_need_refine_list(toks, need);
-}
-
-fn ll_need_caps(toks: List[String], need0: String) -> String {
-    let n: Int = list_len(toks);
-    let mut need: String = need0;
-    let mut i: Int = 0;
-    while i < n {
-        if ll_k(toks, i) == "IDENT" {
-            let t: String = ll_t(toks, i);
-            if t == "ProcessCap" { need = ll_need_add(need, "oo_cap_grant_process"); }
-            if t == "EnvCap" { need = ll_need_add(need, "oo_cap_grant_env"); }
-            if t == "FsReadCap" { need = ll_need_add(need, "oo_cap_grant_fsread"); }
-            if t == "FsWriteCap" { need = ll_need_add(need, "oo_cap_grant_fswrite"); }
-            if t == "BindCap" { need = ll_need_add(need, "oo_cap_grant_bind"); }
-            if t == "SysCap" { need = ll_need_add(need, "oo_cap_grant_sys"); }
-            if t == "TimeCap" { need = ll_need_add(need, "oo_cap_grant_time"); }
-            if t == "AllocCap" { need = ll_need_add(need, "oo_cap_grant_alloc"); }
-            if t == "TcpCap" { need = ll_need_add(need, "oo_cap_grant_tcp"); }
-            if t == "UdpCap" { need = ll_need_add(need, "oo_cap_grant_udp"); }
-            if t == "NetCap" { need = ll_need_add(need, "oo_cap_grant_net"); }
-            if t == "FsCap" { need = ll_need_add(need, "oo_cap_grant_fs"); }
-            if t == "RandCap" { need = ll_need_add(need, "oo_cap_grant_rand"); }
-            if t == "ArenaCap" { need = ll_need_add(need, "oo_cap_grant_arena"); }
-            if t == "FfiCap" { need = ll_need_add(need, "oo_cap_grant_ffi"); }
-            if t == "ThreadCap" { need = ll_need_add(need, "oo_cap_grant_thread"); }
-            if t == "GpuCap" { need = ll_need_add(need, "oo_cap_grant_gpu"); }
-            if t == "CompilerReadCap" { need = ll_need_add(need, "oo_cap_grant_compiler_read"); }
-            if t == "SignCap" { need = ll_need_add(need, "oo_cap_grant_sign"); }
-            if t == "AudioCap" { need = ll_need_add(need, "oo_cap_grant_audio"); }
-            if t == "CameraCap" { need = ll_need_add(need, "oo_cap_grant_camera"); }
-            if t == "UsbCap" { need = ll_need_add(need, "oo_cap_grant_usb"); }
-            if t == "HidCap" { need = ll_need_add(need, "oo_cap_grant_hid"); }
-            if t == "WindowCap" { need = ll_need_add(need, "oo_cap_grant_window"); }
-            if t == "FrameCap" { need = ll_need_add(need, "oo_cap_grant_frame"); }
-            if t == "MetricsCap" { need = ll_need_add(need, "oo_cap_grant_metrics"); }
-        }
-        i = i + 1;
-    }
-    return need;
 }

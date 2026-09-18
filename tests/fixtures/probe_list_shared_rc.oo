@@ -1,0 +1,33 @@
+// # Test Shared Refcount List Mutation
+// Logline: Test copy-on-write and refcount behavior
+// Setup: check, emit-llvm, build, run
+// Beats: list, mutation, main
+pub type Node = struct { id: Int, val: Int };
+
+pub fn main() -> Int {
+  let empty: List[Node] = list_new();
+  let n1 = Node { id: 1, val: 100 };
+  let n2 = Node { id: 2, val: 200 };
+  let n3 = Node { id: 3, val: 300 };
+
+  let l1: List[Node] = list_push(empty, n1);
+  let l2: List[Node] = list_push(l1, n2);
+  let l3: List[Node] = list_push(l2, n3);
+  let n4 = Node { id: 4, val: 400 };
+  let l4: List[Node] = list_push(l2, n4);
+
+  if list_len(l2) != 2 { return 1; }
+  if list_len(l3) != 3 { return 2; }
+  let item3: Node = list_get(l3, 2);
+  if item3.val != 300 { return 3; }
+  if list_len(l4) != 3 { return 4; }
+  let item4: Node = list_get(l4, 2);
+  if item4.val != 400 { return 5; }
+
+  let it0: Node = list_get(l2, 0);
+  let it1: Node = list_get(l2, 1);
+  if it0.val != 100 { return 6; }
+  if it1.val != 200 { return 7; }
+
+  return 0;
+}

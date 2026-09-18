@@ -1,0 +1,48 @@
+// # Deep Nested Scopes and Shadowing Probe
+//
+// Logline: Stress-test drop_depth and binds_has with 5-deep nested scopes and variable shadowing.
+//
+// Setup: oodac check and emit-llvm on multi-level scoped blocks.
+//
+// Beats:
+//   1. Declare x at depth 1.
+//   2. Shadow x across depths 2, 3, 4, and 5 with empty intermediate blocks.
+//   3. Assert value resolution matches lexical scope at each level.
+//
+pub fn test_deep_shadow() -> Int {
+  let x: Int = 1;
+  let mut acc: Int = 0;
+  if true {
+    // Depth 2
+    let x: Int = 10;
+    if true {
+      // Depth 3: empty block to test drop_depth fast path
+      if true {
+        // Depth 4
+        let x: Int = 100;
+        if true {
+          // Depth 5
+          let x: Int = 1000;
+          let leaf: Int = 5000;
+          acc = acc + x + leaf;
+        }
+        // Exited depth 5: leaf dropped, x@4 visible
+        acc = acc + x;
+      }
+      // Exited depth 4: x@4 dropped
+    }
+    // Exited depth 3: x@2 visible
+    acc = acc + x;
+  }
+  // Exited depth 2: x@1 visible
+  acc = acc + x;
+  // Expected: 1000 + 5000 + 100 + 10 + 1 = 6111
+  if acc != 6111 {
+    return 1;
+  }
+  return 0;
+}
+
+pub fn main() -> Int {
+  return test_deep_shadow();
+}

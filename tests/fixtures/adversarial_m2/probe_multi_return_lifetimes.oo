@@ -1,0 +1,88 @@
+// # Multi-Return and Lifetime End Emission Probe
+//
+// Logline: Verify LLVM lowering emits symmetric lifetime.end on all return paths.
+//
+// Setup: oodac emit-llvm and execution verification.
+//
+// Beats:
+//   1. Function branch_eval with 4 distinct return paths.
+//   2. Function loop_search with loop-break early return and terminal return.
+//   3. Main orchestrator validating all return branches.
+//
+pub type Point = struct {
+  x: Int,
+  y: Int
+};
+
+pub fn branch_eval(mode: Int, base: Int) -> Int {
+  let a: Int = base * 2;
+  let b: Int = base + 10;
+  let pt = Point {
+    x: a,
+    y: b
+  };
+
+  if mode < 0 {
+    return pt.x - pt.y;
+  }
+
+  if mode == 0 {
+    return 0;
+  }
+
+  if mode == 1 {
+    let bonus: Int = 100;
+    return pt.x + pt.y + bonus;
+  }
+
+  return pt.x * pt.y;
+}
+
+pub fn loop_search(limit: Int, target: Int) -> Int {
+  let mut i: Int = 0;
+  let factor: Int = 3;
+
+  while i < limit {
+    let cand: Int = i * factor;
+    if cand == target {
+      return i;
+    }
+    i = i + 1;
+  }
+
+  return -1;
+}
+
+pub fn main() -> Int {
+  // Test mode < 0: base=5 -> a=10, b=15 -> 10 - 15 = -5
+  if branch_eval(-1, 5) != -5 {
+    return 1;
+  }
+
+  // Test mode == 0 -> 0
+  if branch_eval(0, 5) != 0 {
+    return 2;
+  }
+
+  // Test mode == 1: base=5 -> 10 + 15 + 100 = 125
+  if branch_eval(1, 5) != 125 {
+    return 3;
+  }
+
+  // Test mode == 2: base=5 -> 10 * 15 = 150
+  if branch_eval(2, 5) != 150 {
+    return 4;
+  }
+
+  // Test loop_search hit: target=12 -> 4 * 3 = 12 -> returns 4
+  if loop_search(10, 12) != 4 {
+    return 5;
+  }
+
+  // Test loop_search miss: target=13 -> returns -1
+  if loop_search(10, 13) != -1 {
+    return 6;
+  }
+
+  return 0;
+}

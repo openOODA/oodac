@@ -39,6 +39,8 @@ pub fn ll_contract_collect(toks: List[String], p0: Int, n: Int, env0: String, na
     let mut env: String = env0;
     let mut reqs: String = "";
     let mut enss: String = "";
+    let mut preqs: String = "";
+    let mut penss: String = "";
     let mut ri: Int = 0;
     let mut ei: Int = 0;
     let mut done: Bool = false;
@@ -54,7 +56,9 @@ pub fn ll_contract_collect(toks: List[String], p0: Int, n: Int, env0: String, na
             let cs: Int = p + 1;
             let ce: Int = ll_con_end(toks, cs, n);
             if smt_clause_is_unsat(toks, cs, ce, "spec") { smt_clause_unsat_exit(toks, cs, "spec"); }
-            if !smt_clause_is_proven(toks, cs, ce, "spec") {
+            if smt_clause_is_proven(toks, cs, ce, "spec") {
+                preqs = preqs + cs.to_string() + ":" + ce.to_string() + ":spec;";
+            } else {
                 reqs = reqs + cs.to_string() + ":" + ce.to_string() + ":spec;";
                 ll_con_global(name, ri, "spec");
                 ri = ri + 1;
@@ -64,7 +68,9 @@ pub fn ll_contract_collect(toks: List[String], p0: Int, n: Int, env0: String, na
             let cs: Int = p + 1;
             let ce: Int = ll_con_end(toks, cs, n);
             if smt_clause_is_unsat(toks, cs, ce, "requires") { smt_clause_unsat_exit(toks, cs, "requires"); }
-            if !smt_clause_is_proven(toks, cs, ce, "requires") {
+            if smt_clause_is_proven(toks, cs, ce, "requires") {
+                preqs = preqs + cs.to_string() + ":" + ce.to_string() + ":requires;";
+            } else {
                 reqs = reqs + cs.to_string() + ":" + ce.to_string() + ":requires;";
                 ll_con_global(name, ri, "requires");
                 ri = ri + 1;
@@ -74,7 +80,9 @@ pub fn ll_contract_collect(toks: List[String], p0: Int, n: Int, env0: String, na
             let cs: Int = p + 1;
             let ce: Int = ll_con_end(toks, cs, n);
             if smt_clause_is_unsat(toks, cs, ce, "ensures") { smt_clause_unsat_exit(toks, cs, "ensures"); }
-            if !smt_clause_is_proven(toks, cs, ce, "ensures") {
+            if smt_clause_is_proven(toks, cs, ce, "ensures") {
+                penss = penss + cs.to_string() + ":" + ce.to_string() + ":ensures;";
+            } else {
                 enss = enss + cs.to_string() + ":" + ce.to_string() + ":ensures;";
                 ll_con_global(name, 1000 + ei, "ensures");
                 ei = ei + 1;
@@ -88,6 +96,8 @@ pub fn ll_contract_collect(toks: List[String], p0: Int, n: Int, env0: String, na
     }
     if reqs != "" { env = type_env_put(env, "__creq__", reqs); }
     if enss != "" { env = type_env_put(env, "__cens__", enss); }
+    if preqs != "" { env = type_env_put(env, "__preq__", preqs); }
+    if penss != "" { env = type_env_put(env, "__pens__", penss); }
     return ll_pack(p, 0, "", env);
 }
 
@@ -162,18 +172,44 @@ fn ll_con_colon(s: String, from: Int) -> Int {
     return q;
 }
 
+fn ll_con_assume_walk(toks: List[String], spec: String, env: String, ssa0: Int, ir: &mut IrBuf) -> Int {
+    let mut ssa: Int = ssa0;
+    let n: Int = chars_len(spec);
+    let mut p: Int = 0;
+    while p < n {
+        let mut q: Int = p;
+        while q < n && char_at(spec, q) != ";" { q = q + 1; }
+        if q > p {
+            let cl: String = str_slice(spec, p, q);
+            let c1: Int = ll_con_colon(cl, 0);
+            let c2: Int = ll_con_colon(cl, c1 + 1);
+            let cs: Int = parse_int(str_slice(cl, 0, c1));
+            let ce: Int = parse_int(str_slice(cl, c1 + 1, c2));
+            let v: String = ll_expr(toks, cs, ce, ssa, env, ir);
+            let c: Int = ll_cond_i1(v, ll_pssa(v), ir);
+            ll_ir_inst(ir, "call", "void", "", "@llvm.assume(i1 " + ll_ssa(c) + ") nounwind", 1, 1);
+            ssa = c;
+        }
+        p = q + 1;
+    }
+    return ssa;
+}
+
 pub fn ll_contract_entry(toks: List[String], env0: String, ssa0: Int, name: String, ir: &mut IrBuf) -> String {
     let mut env: String = env0;
     let mut ssa: Int = ssa0;
     let reqs: String = type_env_get(env, "__creq__");
     if reqs != "" { ssa = ll_con_walk(toks, reqs, env, ssa, name, 0, ir); }
-    if type_env_get(env, "__cens__") != "" { env = type_env_put(env, "__ens__", "1"); }
+    let preqs: String = type_env_get(env, "__preq__");
+    if preqs != "" { ssa = ll_con_assume_walk(toks, preqs, env, ssa, ir); }
+    if type_env_get(env, "__cens__") != "" || type_env_get(env, "__pens__") != "" { env = type_env_put(env, "__ens__", "1"); }
     return ll_pack(0, ssa, "", env);
 }
 
 pub fn ll_contract_return(toks: List[String], v: String, env0: String, ssa0: Int, ret_kind: String, site: Int, ir: &mut IrBuf) -> Int {
     let enss: String = type_env_get(env0, "__cens__");
-    if enss == "" { return ssa0; }
+    let penss: String = type_env_get(env0, "__pens__");
+    if enss == "" && penss == "" { return ssa0; }
     let mut env: String = env0;
     let mut ssa: Int = ssa0;
     let slot: String = "%cres" + site.to_string();
@@ -199,7 +235,9 @@ pub fn ll_contract_return(toks: List[String], v: String, env0: String, ssa0: Int
         println("ERR\tllvm\tensures on kind " + ret_kind);
         process_exit(1);
     }
-    return ll_con_walk(toks, enss, env, ssa, name_of(env), 1000, ir);
+    if penss != "" { ssa = ll_con_assume_walk(toks, penss, env, ssa, ir); }
+    if enss != "" { ssa = ll_con_walk(toks, enss, env, ssa, name_of(env), 1000, ir); }
+    return ssa;
 }
 
 fn name_of(env: String) -> String {

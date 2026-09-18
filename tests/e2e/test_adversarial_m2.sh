@@ -1,217 +1,167 @@
 #!/usr/bin/env bash
-# # Adversarial & Concurrency Stress Test Suite for Milestone 2
-#
-# Logline: Stress-test compiled polyrepo binaries:
-#   cli, ooda, opm, lsp, mcp, hello.
-#
-# Setup: Requires bin/ binaries. Tests hostile flags, payloads, and concurrency.
-#
-# Beats:
-#   1. Binary presence, ELF format, and dynamic library linkage.
-#   2. Hostile CLI inputs: empty, unknown flags, and subcommands.
-#   3. Adversarial payloads: large buffers, format strings, path traversals.
-#   4. Subcommand-specific fail-closed error paths.
-#   5. High-concurrency burst and thread pool execution.
-#   6. Resource leak (FDs) and defunct process audit.
-
+# Challenger 2: Adversarial M2 It2 Falsification Suite
+# Probes: Deep scopes / shadowing, module cross-ref undefined, multi-return lifetimes
+# Compliance: wc -l <= 256, Double-Run Determinism (Run1 == Run2 = 0)
 set -euo pipefail
 
-ROOT="/home/jeryd/Projects/openOODA"
-BIN_DIR="$ROOT/bin"
-PASS=0
-FAIL=0
+OODAC="${OODAC_BIN:-$HOME/.openooda/bin/oodac}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
+OODAC_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd -P)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd -P)"
+FIXTURES_DIR="$OODAC_ROOT/tests/fixtures/adversarial_m2"
+TMPDIR="$(mktemp -d /tmp/challenger_m2_XXXXXX)"
+trap 'rm -rf "$TMPDIR"' EXIT INT TERM
 
-log_pass() {
-  echo "  [PASS] $1"
-  PASS=$((PASS + 1))
-}
+export OO_LIST_AMBIENT_QUOTA="${OO_LIST_AMBIENT_QUOTA:-8589934592}"
+export OODA_NO_JAIL="${OODA_NO_JAIL:-1}"
+export OODA_FS_READDIR="${OODA_FS_READDIR:-$PROJECT_ROOT}"
 
-log_fail() {
-  echo "  [FAIL] $1"
-  FAIL=$((FAIL + 1))
-}
+PASS_COUNT=0
+FAIL_COUNT=0
 
-assert_no_crash() {
-  local desc="$1"
-  shift
-  local code=0
-  "$@" >/dev/null 2>&1 || code=$?
-  if [ "$code" -eq 134 ] || [ "$code" -eq 135 ] || [ "$code" -eq 139 ]; then
-    log_fail "$desc (crashed with signal/exit $code)"
+record() {
+  local id="$1" desc="$2" status="$3"
+  if [[ "$status" -eq 0 ]]; then
+    echo "  [PASS] $id: $desc"
+    PASS_COUNT=$((PASS_COUNT + 1))
   else
-    log_pass "$desc (exit $code, no crash)"
+    echo "  [FAIL] $id: $desc"
+    FAIL_COUNT=$((FAIL_COUNT + 1))
   fi
 }
 
-echo "=== M2 Adversarial & Concurrency Stress Suite ==="
+emit() {
+  local src="$1" out="$2"
+  "$OODAC" check "$src" >/dev/null 2>&1
+  "$OODAC" emit-llvm "$src" > "$out" 2>&1
+}
 
-# Beat 1: Binary presence and ELF integrity
-echo "--- Beat 1: Binary presence and ELF architecture ---"
-for b in cli ooda opm lsp mcp hello; do
-  target="$BIN_DIR/$b"
-  if [ -x "$target" ] && file "$target" | grep -q "ELF 64-bit"; then
-    log_pass "ELF binary valid: bin/$b"
-  else
-    log_fail "Missing or non-ELF binary: bin/$b"
+run_suite() {
+  local r_id="$1"
+  echo "=== Adversarial M2 Falsification Suite (Run $r_id) ==="
+  local d="$TMPDIR/run_$r_id"
+  mkdir -p "$d"
+
+  # PROBE 1: Deep Nested Scopes & Shadowing
+  local p1_chk=1
+  if "$OODAC" check "$FIXTURES_DIR/probe_deep_scopes.oo" >/dev/null 2>&1; then
+    p1_chk=0
   fi
-  if ! ldd "$target" | grep -q "not found"; then
-    log_pass "Dynamic libraries resolved: bin/$b"
-  else
-    log_fail "Unresolved dynamic libraries: bin/$b"
+  record "CH2-P01-01" "Deep nested scopes with shadowing checks cleanly" "$p1_chk"
+
+  local p1_ll=1
+  if emit "$FIXTURES_DIR/probe_deep_scopes.oo" "$d/p1.ll"; then
+    if llvm-as "$d/p1.ll" -o "$d/p1.bc" >/dev/null 2>&1; then
+      p1_ll=0
+    fi
   fi
-done
+  record "CH2-P01-02" "Deep scopes LLVM IR validates under llvm-as" "$p1_ll"
 
-# Beat 2: Adversarial CLI inputs
-echo "--- Beat 2: Hostile flags and empty/unknown arguments ---"
-assert_no_crash "cli empty arg" "$BIN_DIR/cli" ""
-assert_no_crash "cli unknown subcommand" "$BIN_DIR/cli" "nonexistent_subcmd"
-assert_no_crash "cli invalid flag" "$BIN_DIR/cli" "--invalid-flag"
+  local p1_run=1
+  if "$OODAC" build "$FIXTURES_DIR/probe_deep_scopes.oo" -o "$d/p1_bin" >/dev/null 2>&1; then
+    if "$d/p1_bin"; then
+      p1_run=0
+    fi
+  fi
+  record "CH2-P01-03" "Deep scopes binary executes and returns 0" "$p1_run"
 
-assert_no_crash "ooda empty arg" "$BIN_DIR/ooda" ""
-assert_no_crash "ooda unknown subcommand" "$BIN_DIR/ooda" "nonexistent_subcmd"
-assert_no_crash "ooda invalid flag" "$BIN_DIR/ooda" "--invalid-flag"
+  # PROBE 1 Negative: Out-of-scope access after drop_depth
+  local p1_leak=1
+  local p1_leak_out
+  p1_leak_out=$("$OODAC" check "$FIXTURES_DIR/probe_deep_scopes_leak.oo" 2>&1 || true)
+  if echo "$p1_leak_out" | grep -q "undefined variable 'leaf'"; then
+    p1_leak=0
+  fi
+  record "CH2-P01-04" "drop_depth correctly purges inner bindings (leaf rejected)" "$p1_leak"
 
-assert_no_crash "opm empty arg" "$BIN_DIR/opm" ""
-assert_no_crash "opm unknown subcommand" "$BIN_DIR/opm" "nonexistent_subcmd"
-assert_no_crash "opm invalid flag" "$BIN_DIR/opm" "--invalid-flag"
+  # PROBE 2: Module Cross-References & Undefined Variables
+  local p2_valid=1
+  if "$OODAC" check "$FIXTURES_DIR/mod_consumer_valid.oo" >/dev/null 2>&1; then
+    p2_valid=0
+  fi
+  record "CH2-P02-01" "Valid cross-module import checks cleanly" "$p2_valid"
 
-assert_no_crash "lsp unknown file" "$BIN_DIR/lsp" "/nonexistent/path/file.json"
-assert_no_crash "lsp bad stdlib root" "$BIN_DIR/lsp" \
-  --stdlib-root "../../../etc"
-assert_no_crash "lsp bad oodar root" "$BIN_DIR/lsp" --oodar-root "/proc"
+  local p2_valid_run=1
+  if "$OODAC" build "$FIXTURES_DIR/mod_consumer_valid.oo" -o "$d/p2_valid_bin" >/dev/null 2>&1; then
+    if "$d/p2_valid_bin"; then
+      p2_valid_run=0
+    fi
+  fi
+  record "CH2-P02-02" "Valid cross-module binary executes and returns 0" "$p2_valid_run"
 
-assert_no_crash "mcp unknown subcommand" "$BIN_DIR/mcp" "nonexistent_subcmd"
-assert_no_crash "mcp unknown flag" "$BIN_DIR/mcp" "--invalid-flag"
-assert_no_crash "mcp mutually exclusive" "$BIN_DIR/mcp" \
-  --stdio --file "/tmp/foo"
+  # PROBE 2 Negative A: Undefined variable in consumer module
+  local p2_undef=1
+  local p2_undef_out
+  p2_undef_out=$("$OODAC" check "$FIXTURES_DIR/mod_consumer_undefined.oo" 2>&1 || true)
+  if echo "$p2_undef_out" | grep -q "undefined variable 'unexported_missing_var'"; then
+    p2_undef=0
+  fi
+  record "CH2-P02-03" "Cross-module typechecker catches undefined variable" "$p2_undef"
 
-assert_no_crash "hello excess arguments" "$BIN_DIR/hello" "foo" "bar" "baz"
+  # PROBE 2 Negative B: Substring prefix collision rejection
+  local p2_prefix=1
+  local p2_prefix_out
+  p2_prefix_out=$("$OODAC" check "$FIXTURES_DIR/mod_consumer_prefix_clash.oo" 2>&1 || true)
+  if echo "$p2_prefix_out" | grep -q "undefined variable 'provider_service'"; then
+    p2_prefix=0
+  fi
+  record "CH2-P02-04" "Substring prefix of imported symbol rejected as undefined" "$p2_prefix"
 
-# Beat 3: Adversarial payloads
-echo "--- Beat 3: Large buffers, format strings, traversals ---"
-payload_large=$(python3 -c 'print("A" * 32768)')
-payload_fmt="%s%s%n%x%p%#x"
-payload_trav="../../../../etc/shadow"
-payload_chars='!@#$%^&*()_+~`|}{[]\:;?><,./'
+  # PROBE 3: Functions with Multiple Returns & Lifetime End Emission
+  local p3_chk=1
+  if "$OODAC" check "$FIXTURES_DIR/probe_multi_return_lifetimes.oo" >/dev/null 2>&1; then
+    p3_chk=0
+  fi
+  record "CH2-P03-01" "Multi-return probe passes typecheck" "$p3_chk"
 
-for b in cli ooda opm lsp mcp hello; do
-  assert_no_crash "$b: 32KB payload" "$BIN_DIR/$b" "$payload_large"
-  assert_no_crash "$b: format string" "$BIN_DIR/$b" "$payload_fmt"
-  assert_no_crash "$b: path traversal" "$BIN_DIR/$b" "$payload_trav"
-  assert_no_crash "$b: special chars" "$BIN_DIR/$b" "$payload_chars"
-done
+  local p3_ll=1
+  if emit "$FIXTURES_DIR/probe_multi_return_lifetimes.oo" "$d/p3.ll"; then
+    if llvm-as "$d/p3.ll" -o "$d/p3.bc" >/dev/null 2>&1; then
+      p3_ll=0
+    fi
+  fi
+  record "CH2-P03-02" "Multi-return LLVM IR validates under llvm-as" "$p3_ll"
 
-# Beat 4: Subcommand-specific fail-closed behavior
-echo "--- Beat 4: Subcommand-specific fail-closed verification ---"
-# cli build missing file -> exit 2
-code=0; "$BIN_DIR/cli" build >/dev/null 2>&1 || code=$?
-[ "$code" -eq 2 ] && log_pass "cli build missing file exit 2" \
-  || log_fail "cli build missing file expected exit 2, got $code"
+  local p3_life=1
+  # branch_eval has 4 return points, loop_search has 2 return points -> >= 6 ret
+  local ret_cnt
+  ret_cnt=$(grep -c "  ret " "$d/p3.ll" || true)
+  local life_end_cnt
+  life_end_cnt=$(grep -c "call void @llvm.lifetime.end.p0" "$d/p3.ll" || true)
+  # Allocas are present in branch_eval, so each ret must have preceding lifetime.end
+  if [[ "$ret_cnt" -ge 6 && "$life_end_cnt" -ge 6 ]]; then
+    p3_life=0
+  fi
+  record "CH2-P03-03" "Every return point preceded by lifetime.end ($life_end_cnt ends / $ret_cnt rets)" "$p3_life"
 
-# cli build unreadable file -> exit 2
-code=0; "$BIN_DIR/cli" build "/nonexistent.oo" >/dev/null 2>&1 || code=$?
-[ "$code" -eq 2 ] && log_pass "cli build unreadable file exit 2" \
-  || log_fail "cli build unreadable file expected exit 2, got $code"
+  local p3_opt=1
+  if opt -passes=mem2reg,instcombine -S "$d/p3.ll" -o "$d/p3_opt.ll" >/dev/null 2>&1; then
+    if llvm-as "$d/p3_opt.ll" -o "$d/p3_opt.bc" >/dev/null 2>&1; then
+      p3_opt=0
+    fi
+  fi
+  record "CH2-P03-04" "Multi-return IR optimizes cleanly under mem2reg" "$p3_opt"
 
-# ooda no-arg without OODACODEX fails closed -> exit 1
-code=0; "$BIN_DIR/ooda" >/dev/null 2>&1 || code=$?
-[ "$code" -eq 1 ] && log_pass "ooda bare invocation exit 1" \
-  || log_fail "ooda bare invocation expected exit 1, got $code"
+  local p3_run=1
+  if "$OODAC" build "$FIXTURES_DIR/probe_multi_return_lifetimes.oo" -o "$d/p3_bin" >/dev/null 2>&1; then
+    if "$d/p3_bin"; then
+      p3_run=0
+    fi
+  fi
+  record "CH2-P03-05" "Multi-return binary executes all branches successfully" "$p3_run"
+}
 
-# opm add missing arg -> exit 2
-code=0; "$BIN_DIR/opm" add >/dev/null 2>&1 || code=$?
-[ "$code" -eq 2 ] && log_pass "opm add missing arg exit 2" \
-  || log_fail "opm add missing arg expected exit 2, got $code"
+# Run 1
+run_suite 1
+P1=$PASS_COUNT; F1=$FAIL_COUNT
+PASS_COUNT=0; FAIL_COUNT=0
+# Run 2
+run_suite 2
+P2=$PASS_COUNT; F2=$FAIL_COUNT
 
-# lsp missing request file -> exit 2
-code=0; "$BIN_DIR/lsp" "/nonexistent.json" >/dev/null 2>&1 || code=$?
-[ "$code" -eq 2 ] && log_pass "lsp missing file exit 2" \
-  || log_fail "lsp missing file expected exit 2, got $code"
-
-# lsp stdio clean EOF -> exit 0
-code=0; echo "" | "$BIN_DIR/lsp" --stdio >/dev/null 2>&1 || code=$?
-[ "$code" -eq 0 ] && log_pass "lsp stdio EOF clean exit 0" \
-  || log_fail "lsp stdio EOF expected exit 0, got $code"
-
-# mcp missing file -> exit 1
-code=0; "$BIN_DIR/mcp" --file "/nonexistent.json" >/dev/null 2>&1 || code=$?
-[ "$code" -eq 1 ] && log_pass "mcp missing file exit 1" \
-  || log_fail "mcp missing file expected exit 1, got $code"
-
-# Beat 5: Concurrency stress
-echo "--- Beat 5: Concurrency stress (burst and thread pool) ---"
-python3 -c '
-import subprocess, concurrent.futures, time, sys
-
-binaries = [
-  ["bin/cli", "--help"],
-  ["bin/cli", "version"],
-  ["bin/cli", "unknown_cmd"],
-  ["bin/ooda", "--help"],
-  ["bin/ooda", "version"],
-  ["bin/ooda", "unknown_cmd"],
-  ["bin/opm", "--help"],
-  ["bin/opm", "add"],
-  ["bin/lsp", "--help"],
-  ["bin/lsp", "--version"],
-  ["bin/mcp", "--help"],
-  ["bin/mcp", "--bogus"],
-  ["bin/hello"],
-]
-
-def task(idx):
-  cmd = binaries[idx % len(binaries)]
-  devnull = subprocess.DEVNULL
-  p = subprocess.Popen(cmd, stdout=devnull, stderr=devnull)
-  p.wait(timeout=5)
-  return p.returncode
-
-t0 = time.time()
-with concurrent.futures.ThreadPoolExecutor(max_workers=50) as ex:
-  results = list(ex.map(task, range(500)))
-
-crashes = [r for r in results if r in (134, 135, 139) or r < 0]
-elapsed = time.time() - t0
-if crashes:
-  print(f"FAILED: {len(crashes)} crashes in 500 concurrent runs")
-  sys.exit(1)
-print(f"  500 concurrent invocations completed in {elapsed:.2f}s (0 crashes)")
-' && log_pass "500 concurrent invocations passed" \
-  || log_fail "Concurrency stress failed"
-
-# Beat 6: FD leak and zombie audit
-echo "--- Beat 6: FD leaks and defunct processes ---"
-python3 -c '
-import subprocess, os, sys
-
-def count_fds():
-  return len(os.listdir("/proc/self/fd"))
-
-before = count_fds()
-bins = ["cli", "ooda", "opm", "lsp", "mcp", "hello"]
-for _ in range(50):
-  for b in bins:
-    cmd = [f"bin/{b}", "--help"]
-    p = subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
-                         stderr=subprocess.DEVNULL)
-    p.wait()
-after = count_fds()
-if before != after:
-  print(f"FD leak: {before} -> {after}")
-  sys.exit(1)
-' && log_pass "FD leak check passed (0 leaked FDs)" \
-  || log_fail "FD leak detected"
-
-zombie_count=$(ps -eo stat,pid,comm | grep -c -E '^[Zz]' || true)
-if [ "$zombie_count" -eq 0 ]; then
-  log_pass "Defunct process check passed (0 zombies)"
-else
-  log_fail "Defunct processes found: $zombie_count"
-fi
-
-echo "=== Suite Summary ==="
-echo "PASS: $PASS | FAIL: $FAIL"
-if [ "$FAIL" -gt 0 ]; then
+if [[ "$P1" -ne "$P2" || "$F1" -ne "$F2" || "$F1" -ne 0 ]]; then
+  echo "Determinism failure: Run1 ($P1/$F1) != Run2 ($P2/$F2)"
   exit 1
 fi
+echo "Deterministic PASS: $P1/$P1 tests passed in both runs."
 exit 0

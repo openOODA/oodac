@@ -1,0 +1,18 @@
+// # Provider Module for Cross-Reference Testing
+//
+// Logline: Exports valid symbols for module cross-reference checks.
+//
+// Setup: Imported by consumer modules.
+//
+// Beats:
+//   1. Export provider_service_call.
+//   2. Export ServiceConfig struct.
+//
+pub type ServiceConfig = struct {
+  port: Int,
+  timeout_ms: Int
+};
+
+pub fn provider_service_call(cfg: ServiceConfig) -> Int {
+  return cfg.port + cfg.timeout_ms;
+}

@@ -1,0 +1,12 @@
+// # Test Zero Field Struct
+// Logline: Zero-field struct probe
+// Setup: check and emit-llvm
+// Beats: struct, main
+pub type Empty = struct {};
+fn use_empty(e: Empty) -> Int {
+  return 42;
+}
+pub fn main() -> Int {
+  let e = Empty {};
+  return use_empty(e);
+}

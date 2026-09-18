@@ -1,0 +1,15 @@
+// # Test Single Field Struct
+// Logline: Single-field struct probe
+// Setup: check, emit-llvm, build
+// Beats: struct, main
+pub type Single = struct { x: Int };
+fn get_single(s: Single) -> Int {
+  return s.x;
+}
+pub fn main() -> Int {
+  let s = Single { x: 42 };
+  if get_single(s) != 42 {
+    return 1;
+  }
+  return 0;
+}

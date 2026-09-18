@@ -67,7 +67,7 @@ pub fn ll_rt_header_triple(toks: List[String], triple: String) {
     println("!1 = !{i32 8, !\"PIC Level\", i32 2}");
     println("declare void @llvm.lifetime.start.p0(i64 immarg, ptr nocapture) nounwind");
     println("declare void @llvm.lifetime.end.p0(i64 immarg, ptr nocapture) nounwind");
-    println("declare void @llvm.assume(i1) nounwind");
+    println("declare void @llvm.assume(i1) nounwind willreturn memory(inaccessiblemem: readwrite)");
     ll_ir_begin(toks);
     ll_ir_subty();
     println("%OoStr = type { ptr, i64 }");
@@ -81,5 +81,5 @@ pub fn ll_rt_header_triple(toks: List[String], triple: String) {
     println("%OoOptS = type { i32, %OoStr }");
     println("%OoResV = type { i32, %OoStr }");
     println("%OoClosure = type { ptr, ptr, ptr }");
-    ll_rt_decl_emit(ll_need_scan(toks));
+    ll_need_emit_referenced(ll_need_scan(toks));
 }

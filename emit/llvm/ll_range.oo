@@ -1,0 +1,47 @@
+// # LLVM range metadata and attribute engine
+//
+// Logline: Formats and registers half-open interval metadata for bounded integers.
+//
+// Setup: Maps inclusive Int[lo..hi] to LLVM range attributes and metadata nodes.
+//
+// Beats:
+//   1. Half-open interval string calculation.
+//   2. Metadata node formatting and registration.
+//   3. Bounded range attribute generation.
+
+pub fn ll_range_upper(hi: Int) -> Int {
+    if hi >= 9223372036854775806 { return hi; }
+    return hi + 1;
+}
+
+pub fn ll_range_attr(lo: Int, hi: Int) -> String {
+    let hi1: Int = ll_range_upper(hi);
+    return "range(i64 " + lo.to_string() + ", " + hi1.to_string() + ")";
+}
+
+pub fn ll_range_meta_id(lo: Int, hi: Int) -> String {
+    let mut sid: String = "!rng_";
+    if lo < 0 {
+        let nlo: Int = 0 - lo;
+        sid = sid + "m" + nlo.to_string();
+    } else {
+        sid = sid + lo.to_string();
+    }
+    sid = sid + "_";
+    if hi < 0 {
+        let nhi: Int = 0 - hi;
+        sid = sid + "m" + nhi.to_string();
+    } else {
+        sid = sid + hi.to_string();
+    }
+    return sid;
+}
+
+pub fn ll_range_node(lo: Int, hi: Int) -> String {
+    let hi1: Int = ll_range_upper(hi);
+    return "!{i64 " + lo.to_string() + ", i64 " + hi1.to_string() + "}";
+}
+
+pub fn ll_range_emit_node(lo: Int, hi: Int) {
+    println(ll_range_meta_id(lo, hi) + " = " + ll_range_node(lo, hi));
+}

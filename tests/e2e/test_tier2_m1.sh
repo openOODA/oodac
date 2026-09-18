@@ -176,7 +176,7 @@ pub fn main() -> Int { return get_neg(); }
 EOF
   local b3_neg=1
   if emit "$d/neg_ret.oo" "$d/neg_ret.ll"; then
-    if grep -q "sub i64 0, 42" "$d/neg_ret.ll" 2>/dev/null; then b3_neg=0; fi
+    if grep -q -E 'sub (nsw )?i64 0, 42' "$d/neg_ret.ll" 2>/dev/null; then b3_neg=0; fi
   fi
   record_test "T2-F03-01" "Negative integer return lowering" "$b3_neg"
 
@@ -191,8 +191,8 @@ pub fn main() -> Int { return f1() + f2(); }
 EOF
   local b3_multi=1
   if emit "$d/multi_fn.oo" "$d/multi_fn.ll"; then
-    if grep -q "define hidden i64 @f1" "$d/multi_fn.ll" && \
-       grep -q "define hidden i64 @f2" "$d/multi_fn.ll"; then
+    if grep -q -E 'define hidden (noundef )?i64 @f1' "$d/multi_fn.ll" && \
+       grep -q -E 'define hidden (noundef )?i64 @f2' "$d/multi_fn.ll"; then
       b3_multi=0
     fi
   fi

@@ -84,12 +84,13 @@ pub fn ll_neg_int(r: String, ir: &mut IrBuf) -> String {
     if k == "f64" {
         return ll_pack(ll_ppos(r), ll_neg_float(r, ir), "f64", "");
     }
+    let sub_op: String = if ll_is_uint(k) { "sub" } else { "sub nsw" };
     if !ll_is_int(k) || k == "i64" {
-        ll_ir_inst(ir, "sub", "i64", ll_ssa(ll_pssa(r) + 1), "0, " + ll_opnd(r), 1, 1);
+        ll_ir_inst(ir, sub_op, "i64", ll_ssa(ll_pssa(r) + 1), "0, " + ll_opnd(r), 1, 1);
         return ll_pack(ll_ppos(r), ll_pssa(r) + 1, "i64", "");
     }
     let s: Int = ll_pssa(r) + 1;
-    ll_ir_inst(ir, "sub", "i32", ll_ssa(s), "0, " + ll_opnd(r), 1, 1);
+    ll_ir_inst(ir, sub_op, "i32", ll_ssa(s), "0, " + ll_opnd(r), 1, 1);
     return ll_pack(ll_ppos(r), s, k, "");
 }
 
@@ -109,9 +110,9 @@ pub fn ll_apply_intop(op: String, lhs: String, rhs: String, ir: &mut IrBuf) -> S
     if ll_int_wide(ck) == "i32" { t = "i32"; }
     let uns: Bool = ll_is_uint(ck);
     let mut inst: String = "";
-    if op == "PLUS" { inst = "add"; }
-    else if op == "MINUS" { inst = "sub"; }
-    else if op == "STAR" { inst = "mul"; }
+    if op == "PLUS" { if uns { inst = "add"; } else { inst = "add nsw"; } }
+    else if op == "MINUS" { if uns { inst = "sub"; } else { inst = "sub nsw"; } }
+    else if op == "STAR" { if uns { inst = "mul"; } else { inst = "mul nsw"; } }
     else if op == "SLASH" { if uns { inst = "udiv"; } else { inst = "sdiv"; } }
     else if op == "PERCENT" { if uns { inst = "urem"; } else { inst = "srem"; } }
     else if op == "EQEQ" { inst = "icmp eq"; }

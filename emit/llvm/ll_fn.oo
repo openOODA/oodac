@@ -17,6 +17,7 @@ import "ll_contract.oo";
 import "ll_slot.oo";
 import "ll_fn_main.oo";
 import "ll_ir.oo";
+import "ll_int.oo";
 import "types/types_core.oo";
 
 pub fn ll_fn_name_at(toks: List[String], pos: Int, n: Int) -> String {
@@ -82,6 +83,7 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String, stab: Stri
     let mut plist: String = "";
     let mut refs: String = ";";
     let mut use_args: Bool = false;
+    let mut has_mut_ref: Bool = false;
     while p < n && ll_k(toks, p) != "RPAREN" {
         if ll_k(toks, p) == "COMMA" { p = p + 1; continue; }
         if ll_k(toks, p) == "IDENT" {
@@ -92,6 +94,8 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String, stab: Stri
                 let cn: String = ll_peek_cap_name(toks, p, n);
                 let g: String = ll_cap_grant(cn);
                 let isref: Bool = p < n && ll_k(toks, p) == "AMP";
+                let ismut: Bool = isref && p + 1 < n && ll_k(toks, p + 1) == "KW_MUT";
+                if ismut { has_mut_ref = true; }
                 let k: String = ll_ty_at(toks, p, n, stab);
                 env = type_env_put(env, pn, k);
                 if pn == "args" { use_args = true; }
@@ -137,6 +141,8 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String, stab: Stri
     let db: Int = pos + 20;
     ll_ir_sub(name, pos, db);
     let ds: String = " !dbg !" + db.to_string();
+    let is_pure: Bool = name != "main" && caps == "" && !has_mut_ref && !ll_is_mem(rk) && rk != "void";
+    let fn_attrs: String = if is_pure { "readonly nounwind" } else { "nounwind" };
     if ll_is_mem(rk) {
         if plist != "" {
             ll_ir_fn_open(ir, "define " + vis + "void @" + gnm + "(ptr noalias sret(" + ll_ir_alloc(rk) + ") align 8 %ret, " + plist + ") nounwind" + ds + " {");
@@ -146,7 +152,8 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String, stab: Stri
     } else if rk == "void" {
         ll_ir_fn_open(ir, "define " + vis + "void @" + gnm + "(" + plist + ") nounwind" + ds + " {");
     } else {
-        ll_ir_fn_open(ir, "define " + vis + ll_ir_val(rk) + " @" + gnm + "(" + plist + ") nounwind" + ds + " {");
+        let rk_val: String = if ll_is_int(rk) { "noundef " + ll_ir_val(rk) } else { ll_ir_val(rk) };
+        ll_ir_fn_open(ir, "define " + vis + rk_val + " @" + gnm + "(" + plist + ") " + fn_attrs + ds + " {");
     }
     ll_heap(ir);
     let mut fi: Int = 0;

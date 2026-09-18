@@ -1,0 +1,20 @@
+// # Substring Prefix Clash Negative Probe
+//
+// Logline: Assert that substring prefix of imported function is rejected as undefined.
+//
+// Setup: oodac check must fail with undefined variable error.
+//
+// Beats:
+//   1. Import mod_provider.
+//   2. Reference provider_service (prefix of provider_service_call).
+//
+import "mod_provider.oo";
+
+pub fn run_prefix_clash() -> Int {
+  let bad_sub: Int = provider_service;
+  return bad_sub;
+}
+
+pub fn main() -> Int {
+  return run_prefix_clash();
+}

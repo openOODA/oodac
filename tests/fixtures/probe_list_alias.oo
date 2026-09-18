@@ -1,0 +1,27 @@
+// # Test Aliased List Mutation
+// Logline: Test aliased list variables
+// Setup: check, build, run
+// Beats: alias, mutate, main
+pub type Node = struct { id: Int, val: Int };
+
+pub fn main() -> Int {
+  let empty: List[Node] = list_new();
+  let n1 = Node { id: 1, val: 10 };
+  let l1: List[Node] = list_push(empty, n1);
+  let l_alias: List[Node] = l1;
+
+  let n2 = Node { id: 2, val: 20 };
+  let l2: List[Node] = list_push(l1, n2);
+
+  let n3 = Node { id: 3, val: 30 };
+  let l3: List[Node] = list_push(l_alias, n3);
+
+  if list_len(l_alias) != 1 { return 1; }
+  if list_len(l1) != 1 { return 2; }
+  if list_len(l2) != 2 { return 3; }
+  if list_get(l2, 1).val != 20 { return 4; }
+  if list_len(l3) != 2 { return 5; }
+  if list_get(l3, 1).val != 30 { return 6; }
+
+  return 0;
+}
