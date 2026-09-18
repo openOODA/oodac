@@ -12,17 +12,30 @@
 //   3. ll_ir_flush is the only function-body LLVM printer.
 
 import "ll_tok.oo";
+import "ll_di.oo";
 
 pub type IrBuf = struct {
-    recs: String
+    recs: String,
+    cur_line: Int,
+    cur_col: Int,
+    scope_id: Int
 };
 
 pub fn ll_ir_new() -> IrBuf {
-    return IrBuf { recs: "" };
+    return IrBuf { recs: "", cur_line: 1, cur_col: 1, scope_id: 0 };
 }
 
 pub fn ll_ir_push(b: &mut IrBuf, rec: String) {
     b.recs = b.recs + rec + "\n";
+}
+
+pub fn ll_ir_set_loc(b: &mut IrBuf, line: Int, col: Int) {
+    if line > 0 { b.cur_line = line; }
+    if col > 0 { b.cur_col = col; }
+}
+
+pub fn ll_ir_set_scope(b: &mut IrBuf, sc: Int) {
+    b.scope_id = sc;
 }
 
 pub fn ll_ir_val_rec(ssa: Int, kind: String, line: Int, col: Int) -> String {
@@ -30,8 +43,15 @@ pub fn ll_ir_val_rec(ssa: Int, kind: String, line: Int, col: Int) -> String {
 }
 
 pub fn ll_ir_inst(b: &mut IrBuf, op: String, ty: String, dst: String, args: String, line: Int, col: Int) {
-    let vr: String = ll_ir_val_rec(0, ty, line, col);
-    ll_ir_push(b, "I\t" + op + "\t" + ty + "\t" + dst + "\t" + args + "\t" + vr);
+    let mut ln: Int = line;
+    let mut cn: Int = col;
+    if ln <= 1 && cn <= 1 && b.cur_line > 1 {
+        ln = b.cur_line;
+        cn = b.cur_col;
+    }
+    let sc: Int = b.scope_id;
+    let vr: String = ll_ir_val_rec(0, ty, ln, cn);
+    ll_ir_push(b, "I\t" + op + "\t" + ty + "\t" + dst + "\t" + args + "\t" + vr + "\t" + sc.to_string());
 }
 
 pub fn ll_ir_label(b: &mut IrBuf, name: String) {
@@ -91,17 +111,14 @@ pub fn ll_sym_of(toks: List[String], name: String, is_pub: Bool, is_export: Bool
 
 pub fn ll_ir_begin(toks: List[String]) {
     let path: String = ll_src_path(toks);
-    println("!llvm.dbg.cu = !{!10}");
-    println("!10 = distinct !DICompileUnit(language: DW_LANG_C99, file: !11, producer: \"oodac\", isOptimized: false, runtimeVersion: 0, emissionKind: LineTablesOnly, splitDebugInlining: false)");
-    println("!11 = !DIFile(filename: \"" + path + "\", directory: \".\")");
-    println("!12 = !{i32 2, !\"Debug Info Version\", i32 3}");
+    ll_di_compile_unit(path);
+    ll_di_basic_types();
 }
 
 pub fn ll_ir_sub(name: String, line: Int, id: Int) {
-    println("!" + id.to_string() + " = distinct !DISubprogram(name: \"" + name + "\", scope: !11, file: !11, line: " + line.to_string() + ", type: !13, spFlags: DISPFlagDefinition, unit: !10)");
+    ll_di_sub(name, line, id);
 }
 
 pub fn ll_ir_subty() {
-    println("!13 = !DISubroutineType(types: !14)");
-    println("!14 = !{null}");
+    ll_di_subty();
 }

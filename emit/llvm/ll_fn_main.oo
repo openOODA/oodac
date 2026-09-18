@@ -12,13 +12,17 @@ import "ll_tok.oo";
 import "ll_ty.oo";
 import "ll_stmt.oo";
 import "ll_slot.oo";
+import "ll_tok.oo";
 import "ll_ir.oo";
 import "types/types_core.oo";
 
 pub fn ll_emit_main(toks: List[String], pos: Int, n: Int, p: Int, env0: String, caps: String, rk: String, stab: String, use_args: Bool, ir: &mut IrBuf) -> Int {
     let mut env: String = env0;
     let db: Int = pos + 20;
-    ll_ir_sub("main", pos, db);
+    let fn_line: Int = ll_line(toks, pos);
+    ll_ir_sub("main", fn_line, db);
+    ll_ir_set_loc(ir, fn_line, 1);
+    ll_ir_set_scope(ir, db);
     ll_ir_fn_open(ir, "define hidden i32 @main(i32 noundef %argc, ptr nocapture noundef %argv) nounwind !dbg !" + db.to_string() + " {");
     ll_ir_label(ir, "entry");
     ll_heap(ir);

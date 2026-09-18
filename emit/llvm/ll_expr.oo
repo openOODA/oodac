@@ -21,6 +21,7 @@ import "ll_struct.oo";
 import "ll_float.oo";
 import "ll_ir.oo";
 pub fn ll_expr(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String, ir: &mut IrBuf) -> String {
+    if pos < n { ll_ir_set_loc(ir, ll_line(toks, pos), ll_col(toks, pos)); }
     return ll_bin_climb(toks, pos, n, 2, ssa0, env, ir);
 }
 fn ll_unary(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String, ir: &mut IrBuf) -> String {

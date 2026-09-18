@@ -20,6 +20,8 @@ import "ll_ir.oo";
 import "ll_int.oo";
 import "types/types_core.oo";
 import "ll_range.oo";
+import "lex/token_parse_int.oo";
+import "ll_di.oo";
 
 pub fn ll_fn_name_at(toks: List[String], pos: Int, n: Int) -> String {
     let mut p: Int = pos;
@@ -110,6 +112,7 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String, stab: Stri
         if ll_k(toks, p) == "COMMA" { p = p + 1; continue; }
         if ll_k(toks, p) == "IDENT" {
             let pn: String = ll_t(toks, p);
+            let ptok: Int = p;
             p = p + 1;
             if p < n && ll_k(toks, p) == "COLON" {
                 p = p + 1;
@@ -128,7 +131,7 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String, stab: Stri
                     process_exit(1);
                 }
                 if form != "" { form = form + "\t"; }
-                form = form + pn + ":" + k;
+                form = form + pn + ":" + ptok.to_string() + ":" + k;
                 if name != "main" {
                     if plist != "" { plist = plist + ", "; }
                     plist = plist + ll_pass(k) + " %p_" + pn;
@@ -161,8 +164,11 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String, stab: Stri
     let mut gnm: String = type_env_get(fenv, "__sym__" + name);
     if gnm == "" { gnm = name; }
     let db: Int = pos + 20;
-    ll_ir_sub(name, pos, db);
+    let fn_line: Int = ll_line(toks, pos);
+    ll_ir_sub(name, fn_line, db);
     let ds: String = " !dbg !" + db.to_string();
+    ll_ir_set_loc(ir, fn_line, 1);
+    ll_ir_set_scope(ir, db);
     let is_scalar_ret: Bool = (ll_is_int(rk) || rk == "bool" || rk == "f64") && rk != "void";
     let fn_end: Int = ll_skip_fn(toks, pos, n);
     let has_side_effects: Bool = ll_has_side_effects(toks, p, fn_end);
@@ -185,25 +191,34 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String, stab: Stri
     let fnn: Int = chars_len(form);
     let mut start: Int = 0;
     let mut ssa: Int = 1;
+    let mut arg_idx: Int = 1;
     while fi <= fnn {
         if fi == fnn || char_at(form, fi) == "\t" {
             if fi > start {
                 let pair: String = str_slice(form, start, fi);
-                let col: Int = str_index_of(pair, ":");
-                let pn: String = str_slice(pair, 0, col);
-                let k: String = str_slice(pair, col + 1, chars_len(pair));
+                let c1: Int = str_index_of(pair, ":");
+                let pn: String = str_slice(pair, 0, c1);
+                let rest: String = str_slice(pair, c1 + 1, chars_len(pair));
+                let c2: Int = str_index_of(rest, ":");
+                let ptok: Int = parse_int(str_slice(rest, 0, c2));
+                let k: String = str_slice(rest, c2 + 1, chars_len(rest));
+                let pln: Int = ll_line(toks, ptok);
+                let vid: Int = ll_di_param_var(pn, arg_idx, db, pln, ll_di_type_id(k), ptok);
+                arg_idx = arg_idx + 1;
                 if str_index_of(refs, ";" + pn + ";") >= 0 && (ll_is_mem(k) || ll_is_refk(k)) {
                     env = type_env_put(env, "__l__" + pn, "%p_" + pn);
+                    ll_ir_inst(ir, "call", "void", "", "@llvm.dbg.declare(metadata ptr %p_" + pn + ", metadata !" + vid.to_string() + ", metadata !DIExpression())", pln, 1);
                 } else {
                     ll_slot_ty(ll_var(pn), ll_ir_alloc(k), ir);
+                    ll_ir_inst(ir, "call", "void", "", "@llvm.dbg.declare(metadata ptr " + ll_var(pn) + ", metadata !" + vid.to_string() + ", metadata !DIExpression())", pln, 1);
                     if ll_is_mem(k) {
                         ssa = ssa + 1;
-                        ll_ir_inst(ir, "load", ll_ir_val(k), ll_ssa(ssa), "ptr %p_" + pn + ", align 8", 1, 1);
-                        ll_ir_inst(ir, "store", ll_ir_val(k), "", ll_ssa(ssa) + ", ptr " + ll_var(pn) + ", align 8", 1, 1);
+                        ll_ir_inst(ir, "load", ll_ir_val(k), ll_ssa(ssa), "ptr %p_" + pn + ", align 8", pln, 1);
+                        ll_ir_inst(ir, "store", ll_ir_val(k), "", ll_ssa(ssa) + ", ptr " + ll_var(pn) + ", align 8", pln, 1);
                     } else if ll_is_refk(k) {
-                        ll_ir_inst(ir, "store", "ptr", "", "%p_" + pn + ", ptr " + ll_var(pn) + ", align 8", 1, 1);
+                        ll_ir_inst(ir, "store", "ptr", "", "%p_" + pn + ", ptr " + ll_var(pn) + ", align 8", pln, 1);
                     } else {
-                        ll_ir_inst(ir, "store", ll_ir_val(k), "", "%p_" + pn + ", ptr " + ll_var(pn) + ", align 8", 1, 1);
+                        ll_ir_inst(ir, "store", ll_ir_val(k), "", "%p_" + pn + ", ptr " + ll_var(pn) + ", align 8", pln, 1);
                     }
                 }
             }

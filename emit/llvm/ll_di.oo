@@ -1,0 +1,81 @@
+// # LLVM DWARF debug metadata generation
+//
+// Logline: Emit FullDebug compile units, subprograms, lexical blocks, and variable descriptors.
+//
+// Setup: Builds DWARF metadata nodes for LLVM IR with genuine source coordinates.
+// Scoped lexical blocks track control structure nesting for debugger inspection.
+//
+// Beats:
+//   1. ll_di_compile_unit emits distinct !DICompileUnit with FullDebug emissionKind.
+//   2. ll_di_basic_types emits DIBasicType definitions for scalar and pointer types.
+//   3. ll_di_sub emits !DISubprogram descriptors with exact line coordinates.
+//   4. ll_di_lex_block and variable emitters manage lexical scopes and DIEs.
+
+import "ll_tok.oo";
+
+pub fn ll_di_compile_unit(path: String) {
+    println("!llvm.dbg.cu = !{!10}");
+    println("!10 = distinct !DICompileUnit(language: DW_LANG_C99, file: !11, producer: \"oodac\", isOptimized: false, runtimeVersion: 0, emissionKind: FullDebug, splitDebugInlining: false)");
+    println("!11 = !DIFile(filename: \"" + path + "\", directory: \".\")");
+    println("!12 = !{i32 2, !\"Debug Info Version\", i32 3}");
+}
+
+pub fn ll_di_subty() {
+    println("!13 = !DISubroutineType(types: !14)");
+    println("!14 = !{null}");
+}
+
+pub fn ll_di_basic_types() {
+    println("!15 = !DIBasicType(name: \"Int\", size: 64, encoding: DW_ATE_signed)");
+    println("!16 = !DIBasicType(name: \"i32\", size: 32, encoding: DW_ATE_signed)");
+    println("!17 = !DIBasicType(name: \"Bool\", size: 8, encoding: DW_ATE_boolean)");
+    println("!18 = !DIBasicType(name: \"ptr\", size: 64, encoding: DW_ATE_address)");
+    println("!19 = !DIBasicType(name: \"Float\", size: 64, encoding: DW_ATE_float)");
+}
+
+pub fn ll_di_type_id(k: String) -> Int {
+    if k == "Int" || k == "i64" || k == "int" { return 15; }
+    if k == "i32" || k == "u32" || k == "main_i32" { return 16; }
+    if k == "Bool" || k == "bool" || k == "i1" { return 17; }
+    if k == "Float" || k == "f64" || k == "float" || k == "double" { return 19; }
+    return 18;
+}
+
+pub fn ll_di_sub(name: String, line: Int, id: Int) {
+    println("!" + id.to_string() + " = distinct !DISubprogram(name: \"" + name + "\", scope: !11, file: !11, line: " + line.to_string() + ", type: !13, spFlags: DISPFlagDefinition, unit: !10)");
+}
+
+pub fn ll_di_block_id(pos: Int) -> Int {
+    return 200000 + pos;
+}
+
+pub fn ll_di_lex_block(parent_scope: Int, line: Int, col: Int, pos: Int) -> Int {
+    let id: Int = ll_di_block_id(pos);
+    println("!" + id.to_string() + " = distinct !DILexicalBlock(scope: !" + parent_scope.to_string() + ", file: !11, line: " + line.to_string() + ", column: " + col.to_string() + ")");
+    return id;
+}
+
+pub fn ll_di_var_id(pos: Int) -> Int {
+    return 300000 + pos;
+}
+
+pub fn ll_di_param_var(name: String, arg_idx: Int, scope: Int, line: Int, ty_id: Int, pos: Int) -> Int {
+    let vid: Int = ll_di_var_id(pos);
+    println("!" + vid.to_string() + " = !DILocalVariable(name: \"" + name + "\", arg: " + arg_idx.to_string() + ", scope: !" + scope.to_string() + ", file: !11, line: " + line.to_string() + ", type: !" + ty_id.to_string() + ")");
+    return vid;
+}
+
+pub fn ll_di_local_var(name: String, scope: Int, line: Int, ty_id: Int, pos: Int) -> Int {
+    let vid: Int = ll_di_var_id(pos);
+    println("!" + vid.to_string() + " = !DILocalVariable(name: \"" + name + "\", scope: !" + scope.to_string() + ", file: !11, line: " + line.to_string() + ", type: !" + ty_id.to_string() + ")");
+    return vid;
+}
+
+pub fn ll_di_loc(line: Int, col: Int, scope: Int) -> String {
+    if scope <= 0 || scope == 10 { return ""; }
+    let mut ln: Int = line;
+    let mut cn: Int = col;
+    if ln < 1 { ln = 1; }
+    if cn < 1 { cn = 1; }
+    return ", !dbg !DILocation(line: " + ln.to_string() + ", column: " + cn.to_string() + ", scope: !" + scope.to_string() + ")";
+}

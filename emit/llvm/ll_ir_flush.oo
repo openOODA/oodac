@@ -222,8 +222,9 @@ pub fn ll_ir_flush(b: &IrBuf) {
                 let args: String = if nparts > 4 { list_get(parts, 4) } else { "" };
                 let ln: Int = if nparts > 7 { mir_parse_int(list_get(parts, 7)) } else { 1 };
                 let col: Int = if nparts > 8 { mir_parse_int(list_get(parts, 8)) } else { 1 };
+                let sc: Int = if nparts > 9 { mir_parse_int(list_get(parts, 9)) } else { mfn.scope_id };
                 let empty_args2: List[MirOpnd] = list_new();
-                let inst: MirInst = MirInst { op: op, dst: dst, ty: ty, args: empty_args2, raw_args: args, line: ln, col: col, scope_id: mfn.scope_id };
+                let inst: MirInst = MirInst { op: op, dst: dst, ty: ty, args: empty_args2, raw_args: args, line: ln, col: col, scope_id: if sc > 0 { sc } else { mfn.scope_id } };
                 mir_block_add_inst(&mut cur_block, inst);
             } else if tag == "E" {
                 if cur_block.label != "" || mir_block_inst_count(&cur_block) > 0 {

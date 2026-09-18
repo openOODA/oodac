@@ -23,6 +23,18 @@ pub fn ll_t(toks: List[String], i: Int) -> String {
     return field_at(list_get(toks, i), 3);
 }
 
+pub fn ll_line(toks: List[String], i: Int) -> Int {
+    if i < 0 || i >= list_len(toks) { return 1; }
+    let v: Int = parse_int(field_at(list_get(toks, i), 1));
+    return if v < 1 { 1 } else { v };
+}
+
+pub fn ll_col(toks: List[String], i: Int) -> Int {
+    if i < 0 || i >= list_len(toks) { return 1; }
+    let v: Int = parse_int(field_at(list_get(toks, i), 2));
+    return if v < 1 { 1 } else { v };
+}
+
 pub fn ll_skip_type(toks: List[String], pos: Int, n: Int) -> Int {
     let mut p: Int = pos;
     if p < n && ll_k(toks, p) == "AMP" { p = p + 1; }

@@ -69,6 +69,8 @@ pub fn ll_rt_header_triple(toks: List[String], triple: String) {
     println("declare void @llvm.lifetime.start.p0(i64 immarg, ptr nocapture) nounwind");
     println("declare void @llvm.lifetime.end.p0(i64 immarg, ptr nocapture) nounwind");
     println("declare void @llvm.assume(i1) nounwind willreturn memory(inaccessiblemem: readwrite)");
+    println("declare void @llvm.dbg.declare(metadata, metadata, metadata) nounwind readnone speculatable");
+    println("declare void @llvm.dbg.value(metadata, metadata, metadata) nounwind readnone speculatable");
     ll_ir_begin(toks);
     ll_ir_subty();
     ll_range_emit_all(toks);

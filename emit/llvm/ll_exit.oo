@@ -21,6 +21,9 @@ import "types/types_core.oo";
 import "ll_ir.oo";
 
 pub fn ll_return_stmt(toks: List[String], p: Int, n: Int, ssa: Int, env: String, ret_kind: String, stab: String, ir: &mut IrBuf) -> String {
+    let rl: Int = ll_line(toks, p);
+    let rc: Int = ll_col(toks, p);
+    ll_ir_set_loc(ir, rl, rc);
     if p + 1 < n && ll_k(toks, p + 1) == "SEMI" {
         if ret_kind == "main_i32" || ret_kind == "optim" || ret_kind == "optsm" {
             let ns: Int = ll_arc_exit_all(env, ssa, ir);
@@ -93,6 +96,9 @@ pub fn ll_return_stmt(toks: List[String], p: Int, n: Int, ssa: Int, env: String,
 }
 
 pub fn ll_break_stmt(toks: List[String], p: Int, n: Int, ssa: Int, env: String, ret_kind: String, ir: &mut IrBuf) -> String {
+    let bl: Int = ll_line(toks, p);
+    let bc: Int = ll_col(toks, p);
+    ll_ir_set_loc(ir, bl, bc);
     let is_brk: Bool = ll_t(toks, p) == "break";
     let mut dst: String = type_env_get(env, "__brk__");
     if !is_brk { dst = type_env_get(env, "__cont__"); }
@@ -109,6 +115,7 @@ pub fn ll_break_stmt(toks: List[String], p: Int, n: Int, ssa: Int, env: String, 
 }
 
 pub fn ll_store_deref_stmt(toks: List[String], p0: Int, n: Int, ssa0: Int, env: String, ir: &mut IrBuf) -> String {
+    ll_ir_set_loc(ir, ll_line(toks, p0), ll_col(toks, p0));
     let name: String = ll_t(toks, p0 + 1);
     let ty: String = type_env_get(env, name);
     if ty == "" || ll_is_agg(ty) {
