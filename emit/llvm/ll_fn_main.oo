@@ -50,7 +50,7 @@ pub fn ll_emit_main(toks: List[String], pos: Int, n: Int, p: Int, env0: String, 
         ll_ir_inst(ir, "getelementptr inbounds", "ptr", "%ap", "ptr %argv, i32 %ai", 1, 1);
         ll_ir_inst(ir, "load", "ptr", "%astr", "ptr %ap, align 8", 1, 1);
         ll_ir_inst(ir, "call", "{ ptr, i64 }", "%alit", "@oo_str_lit(ptr %astr)", 1, 1);
-        ll_slot_name("%anew", ir);
+        ll_slot_ty("%anew", "%OoSList", ir);
         ll_ir_inst(ir, "call", "void", "", "@oo_slist_push(ptr sret(%OoSList) align 8 %anew, ptr byval(%OoSList) align 8 %v_args, { ptr, i64 } %alit)", 1, 1);
         ll_ir_inst(ir, "load", "%OoSList", "%acpy", "ptr %anew, align 8", 1, 1);
         ll_ir_inst(ir, "store", "%OoSList", "", "%acpy, ptr %v_args, align 8", 1, 1);

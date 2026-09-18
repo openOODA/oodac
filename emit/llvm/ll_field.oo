@@ -57,7 +57,7 @@ pub fn ll_field_load(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, 
     ll_ir_inst(ir, "load", ll_ir_val(fk), ll_ssa(s2), "ptr " + ll_ssa(s) + ", align 8", 1, 1);
     if ll_is_agg(fk) {
         let a: String = ll_tmpa(s2 + 1);
-        ll_slot_name(a, ir);
+        ll_slot_ty(a, ll_ir_alloc(fk), ir);
         ll_ir_inst(ir, "store", ll_ir_val(fk), "", ll_ssa(s2) + ", ptr " + a + ", align 8", 1, 1);
         return ll_pack(0, s2 + 1, fk, a);
     }

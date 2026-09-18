@@ -5,13 +5,13 @@
 // Setup: is_known_name, scope_has, drop_depth, and tc_err_at exist. Binds are "name@depth" List entries. extra_binds is a tab-separated string at the API.
 //
 // Beats:
-//   1. Split extra_binds on tabs into the binds List and pre-bind every fn name at depth 0.
+//   1. Check extra_binds string directly and pre-bind every local fn name at depth 0.
 //   2. On LBRACE raise depth; on RBRACE drop that depth and step down; on KW_LET and bind-site IDENTs push name@depth.
 //   3. On a use IDENT, fail if the name is not known and not in scope. get_builtin_ret_type and get_builtin_arg_types return the small builtin type tables.
 
 import "tc_names_known.oo";
-
 import "tc_names_sum.oo";
+import "tc_scope.oo";
 
 
 // Bound names are "name@depth" entries in a List (was one big String: the
@@ -23,21 +23,11 @@ pub fn typecheck_undefined_vars(toks: List[String]) {
 
 pub fn typecheck_undefined_vars_ext(toks: List[String], extra_binds: String) {
     let n = list_len(toks);
-    // depth 0: fn names + params always visible in file scope for simplicity
-    // extra_binds stays a String at the API boundary (check_drive.oo caller);
-    // split it on tabs once into the List form used below. Inline scan (not
-    // str_split) so this stays buildable with the current stage host.
     let mut binds: List[String] = list_new();
-    let en = chars_len(extra_binds);
-    let mut si = 0;
-    let mut start = 0;
-    while si < en { if char_at(extra_binds, si) == "\t" { if si > start { binds = list_push(binds, str_slice(extra_binds, start, si));
-    }
-            start = si + 1;
-        }
-        si = si + 1;
-    }
-    if si > start { binds = list_push(binds, str_slice(extra_binds, start, si));
+    let mut extra: String = extra_binds;
+    if extra != "" {
+        if char_at(extra, 0) != "\t" { extra = "\t" + extra; }
+        if char_at(extra, chars_len(extra) - 1) != "\t" { extra = extra + "\t"; }
     }
     let mut depth = 0;
     let mut i = 0;
@@ -130,8 +120,11 @@ pub fn typecheck_undefined_vars_ext(toks: List[String], extra_binds: String) {
                     }
                 }
             }
-            if !is_bind { if !is_known_name(name) { if !scope_has(binds, name, depth) { tc_err_at( toks, i, "undefined variable '" + name + "'" );
-            }
+            if !is_bind {
+                if !is_known_name(name) {
+                    if !scope_has(binds, name, depth) && !binds_has(extra, name + "@0") {
+                        tc_err_at( toks, i, "undefined variable '" + name + "'" );
+                    }
                 }
             }
             i = i + 1;

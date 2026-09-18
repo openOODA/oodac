@@ -1,12 +1,13 @@
-// # LLVM entry-block heap slots
+// # LLVM entry-block typed allocas and lifetime bounds
 //
-// Logline: Per-local entry allocas; A records flushed before other insts.
+// Logline: Canonical typed stack allocas and symmetric lifetime bounds.
 //
-// Setup: ll_slot_ty emits A records. ll_heap is a no-op.
+// Setup: Replaces untyped buffers with exact LLVM types.
 //
 // Beats:
-//   1. Named Int slots are alloca i64.
-//   2. Other slots are alloca [1024 x i8].
+//   1. ll_slot_ty emits typed A records hoisted to function entry.
+//   2. ll_lifetime_start and ll_lifetime_end emit symmetric scope intrinsics.
+//   3. Zero untyped stack memory buffer allocations.
 
 import "ll_ir.oo";
 
@@ -24,6 +25,33 @@ pub fn ll_slot_ty(dst: String, ty: String, ir: &mut IrBuf) {
     ll_ir_push(ir, "A\t" + t + "\t" + dst);
 }
 
+pub fn ll_slot_size(ty: String) -> Int {
+    if ty == "i1" || ty == "i8" || ty == "u8" { return 1; }
+    if ty == "i16" || ty == "u16" { return 2; }
+    if ty == "i32" || ty == "u32" { return 4; }
+    if ty == "i64" || ty == "u64" || ty == "double" || ty == "ptr" { return 8; }
+    if ty == "%OoStr" || ty == "{ ptr, i64 }" { return 16; }
+    if ty == "%OoSList" || ty == "%OoIList" { return 24; }
+    if chars_len(ty) >= 5 && str_slice(ty, 0, 5) == "%OoL_" { return 24; }
+    if ty == "%OoOptI" { return 16; }
+    if ty == "%OoOptS" || ty == "%OoResS" || ty == "%OoResV" { return 24; }
+    if ty == "%OoResI" { return 32; }
+    if ty == "%OoResL" || ty == "%OoResLI" { return 48; }
+    if chars_len(ty) >= 10 && str_slice(ty, 0, 10) == "%OoOpt_St_" { return -1; }
+    if chars_len(ty) >= 10 && str_slice(ty, 0, 10) == "%OoRes_St_" { return -1; }
+    if chars_len(ty) >= 4 && str_slice(ty, 0, 4) == "%St_" { return -1; }
+    if chars_len(ty) >= 3 && str_slice(ty, 0, 1) == "[" { return -1; }
+    return 8;
+}
+
+pub fn ll_lifetime_start(dst: String, size_bytes: Int, ir: &mut IrBuf) {
+    ll_ir_inst(ir, "call", "void", "", "@llvm.lifetime.start.p0(i64 " + size_bytes.to_string() + ", ptr " + dst + ")", 1, 1);
+}
+
+pub fn ll_lifetime_end(dst: String, size_bytes: Int, ir: &mut IrBuf) {
+    ll_ir_inst(ir, "call", "void", "", "@llvm.lifetime.end.p0(i64 " + size_bytes.to_string() + ", ptr " + dst + ")", 1, 1);
+}
+
 pub fn ll_nhash(s: String) -> Int {
     let n: Int = chars_len(s);
     let mut h: Int = 0;
@@ -37,19 +65,15 @@ pub fn ll_nhash(s: String) -> Int {
 }
 
 pub fn ll_slot(dst: String, n: Int, ir: &mut IrBuf) {
-    if n < 0 { ll_slot_ty(dst, "i64", ir); return; }
-    ll_slot_ty(dst, "[1024 x i8]", ir);
+    ll_slot_ty(dst, "i64", ir);
 }
 
 pub fn ll_slot_tmp(n: Int, ir: &mut IrBuf) -> String {
     let a: String = "%a" + n.to_string();
-    ll_slot(a, n, ir);
+    ll_slot_ty(a, "i64", ir);
     return a;
 }
 
-pub fn ll_slot_name(dst: String, ir: &mut IrBuf) {
-    ll_slot_ty(dst, "[1024 x i8]", ir);
-}
 
 pub fn ll_trap(ir: &mut IrBuf) {
     ll_heap_end(ir);

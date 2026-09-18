@@ -198,3 +198,7 @@ pub fn mir_inst_format_args(inst: MirInst) -> String {
     }
     return out;
 }
+
+pub fn mir_inst_list_stub(xs: List[MirInst]) -> Int {
+    return list_len(xs);
+}

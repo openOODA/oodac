@@ -186,12 +186,12 @@ pub fn ll_contract_return(toks: List[String], v: String, env0: String, ssa0: Int
         }
         ssa = ssa + 1;
         ll_ir_inst(ir, "call", "i64", ll_ssa(ssa), "@oo_chars_len({ ptr, i64 } " + ll_ssa(rv) + ")", 1, 1);
-        ll_slot_name(slot, ir);
+        ll_slot_ty(slot, "i64", ir);
         ll_ir_inst(ir, "store", "i64", "", ll_ssa(ssa) + ", ptr " + slot + ", align 8", 1, 1);
         env = type_env_put(env, "result", "i64");
         env = type_env_put(env, "__l__result", slot);
     } else if ll_is_int(ret_kind) || ret_kind == "f64" || ret_kind == "i1" {
-        ll_slot_name(slot, ir);
+        ll_slot_ty(slot, ll_ir_alloc(ret_kind), ir);
         ll_ir_inst(ir, "store", ll_ir_val(ret_kind), "", ll_opnd(v) + ", ptr " + slot + ", align 8", 1, 1);
         env = type_env_put(env, "result", ret_kind);
         env = type_env_put(env, "__l__result", slot);

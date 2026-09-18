@@ -105,9 +105,9 @@ pub fn ll_struct_emit_imports(stenv: String, local_st: String, toks: List[String
             e = e + 1;
             let mut c: Int = e;
             while c < n && char_at(stenv, c) != ";" { c = c + 1; }
+            ll_ir_text(ir, "%OoL_" + nm + " = type { ptr, i64, i64 }");
             if type_env_get(local_st, "__st__" + nm) == "" {
                 ll_ir_text(ir, "%St_" + nm + " = type { " + ll_st_fields(stenv, nm) + " }");
-                ll_ir_text(ir, "%OoL_" + nm + " = type { ptr, i64, i64 }");
                 ll_ir_text(ir, "%OoRes_St_" + nm + " = type { i32, %St_" + nm + ", %OoStr }");
                 ll_ir_text(ir, "%OoOpt_St_" + nm + " = type { i32, %St_" + nm + " }");
                 ll_ir_text(ir, "declare void @oo_retain_St_" + nm + "(ptr)");
@@ -117,6 +117,8 @@ pub fn ll_struct_emit_imports(stenv: String, local_st: String, toks: List[String
                     ll_ir_text(ir, "declare i64 @oo_l_" + nm + "_len(ptr)");
                     ll_ir_text(ir, "declare %St_" + nm + " @oo_l_" + nm + "_get(ptr, i64)");
                     ll_ir_text(ir, "declare void @oo_l_" + nm + "_push(ptr sret(%OoL_" + nm + ") align 8, ptr, ptr)");
+                    ll_ir_text(ir, "declare void @oo_l_" + nm + "_retain(ptr)");
+                    ll_ir_text(ir, "declare void @oo_l_" + nm + "_release(ptr)");
                 }
             }
             i = c;

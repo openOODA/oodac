@@ -10,6 +10,7 @@
 //   3. sealed_kind_of picks the first matching kind; c_arg_cap_type_resolved follows __alias__ up to depth 32.
 
 import "check_cap_grant.oo";
+import "types/types_core.oo";
 
 
 

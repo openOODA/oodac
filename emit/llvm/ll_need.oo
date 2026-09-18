@@ -193,7 +193,8 @@ pub fn ll_need_scan(toks: List[String]) -> String {
         need = ll_need_add(need, "oo_slist_release");
         need = ll_need_add(need, "oo_ilist_retain");
         need = ll_need_add(need, "oo_ilist_release");
-        need = ll_need_add(need, "oo_list_alloc_payload");
+        need = ll_need_add(ll_need_add(need, "oo_list_alloc_payload"), "oo_list_quota_release_bytes");
+        need = ll_need_add(need, "oo_payload_free");
     }
     if has_args {
         need = ll_need_add(need, "oo_slist_new");

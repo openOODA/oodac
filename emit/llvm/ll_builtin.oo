@@ -114,13 +114,13 @@ pub fn ll_builtin(name: String, args: List[String], ssa0: Int, expect: String, i
         if as_i {
             let pv: String = ll_i64arg(args, 1, s, ir);
             s = ll_hw(s, ll_pssa(pv)) + 1;
-            ll_slot_name(out, ir);
+            ll_slot_ty(out, "%OoIList", ir);
             ll_ir_inst(ir, "call", "void", "", "@oo_ilist_push(ptr sret(%OoIList) align 8 " + out + ", ptr byval(%OoIList) align 8 " + ll_pptr(a0) + ", i64 " + ll_opnd(pv) + ")", 1, 1);
             return ll_pack(0, s, "ilist", out);
         }
         let a1: String = ll_as_val(a1r, s, ir);
         s = ll_pssa(a1);
-        ll_slot_name(out, ir);
+        ll_slot_ty(out, "%OoSList", ir);
         ll_ir_inst(ir, "call", "void", "", "@oo_slist_push(ptr sret(%OoSList) align 8 " + out + ", ptr byval(%OoSList) align 8 " + ll_pptr(a0) + ", { ptr, i64 } " + ll_ssa(s) + ")", 1, 1);
         return ll_pack(0, s, "slist", out);
     }
@@ -130,7 +130,7 @@ pub fn ll_builtin(name: String, args: List[String], ssa0: Int, expect: String, i
         let c2: String = ll_i64arg(args, 2, ll_pssa(c1), ir);
         let s: Int = ll_hw(ll_hw(ll_pssa(a0), ll_pssa(c1)), ll_pssa(c2)) + 1;
         let out: String = ll_tmpa(s);
-        ll_slot_name(out, ir);
+        ll_slot_ty(out, if ll_pk(a0) == "ilist" { "%OoIList" } else { "%OoSList" }, ir);
         let a: String = ll_opnd(c1);
         let b: String = ll_opnd(c2);
         if ll_pk(a0) == "ilist" {
@@ -205,7 +205,7 @@ pub fn ll_builtin(name: String, args: List[String], ssa0: Int, expect: String, i
         let a1: String = ll_as_val(ll_arg(args, 1), ssa0, ir);
         let a: String = ll_tmpa(ll_pssa(a1) + 1);
         let s: Int = ll_pssa(a1) + 1;
-        ll_slot_name(a, ir);
+        ll_slot_ty(a, "%OoResS", ir);
         ll_ir_inst(ir, "call", "void", "", "@oo_env_get(ptr sret(%OoResS) align 8 " + a + ", i64 " + ll_ssa(ll_pssa(ll_arg(args, 0))) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ")", 1, 1);
         return ll_pack(0, s, "ress", a);
     }
@@ -228,7 +228,7 @@ fn ll_sys_exec(args: List[String], ssa0: Int, ir: &mut IrBuf) -> String {
     let mut s: Int = ssa0;
     let av: String = ll_tmpa(s + 1);
     s = s + 1;
-    ll_slot_name(av, ir);
+    ll_slot_ty(av, "[" + argc.to_string() + " x %OoStr]", ir);
     let mut i: Int = 1;
     while i < na {
         let a: String = ll_ensure_ptr(ll_arg(args, i), s, ir);
@@ -243,13 +243,9 @@ fn ll_sys_exec(args: List[String], ssa0: Int, ir: &mut IrBuf) -> String {
     }
     let res: String = ll_tmpa(s + 1);
     s = s + 1;
-    ll_slot_name(res, ir);
+    ll_slot_ty(res, "%OoResS", ir);
     let base: Int = s + 1;
     ll_ir_inst(ir, "getelementptr inbounds", "[" + argc.to_string() + " x %OoStr]", ll_ssa(base), "ptr " + av + ", i64 0, i64 0", 1, 1);
     ll_ir_inst(ir, "call", "void", "", "@oo_sys_exec(ptr sret(%OoResS) align 8 " + res + ", i64 " + ll_ssa(ll_pssa(ll_arg(args, 0))) + ", i32 " + argc.to_string() + ", ptr " + ll_ssa(base) + ")", 1, 1);
     return ll_pack(0, base, "ress", res);
 }
-
-
-
-

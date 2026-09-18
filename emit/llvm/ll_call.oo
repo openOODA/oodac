@@ -88,7 +88,7 @@ pub fn ll_match_bind(sk: String, ptr: String, bn: String, ok: Int, id: Int, ssa0
         return ll_pack(0, ssa0, bk, "");
     }
     let locn: String = "%v_" + bn + "_" + id.to_string();
-    ll_slot_name(locn, ir);
+    ll_slot_ty(locn, ll_ir_alloc(bk), ir);
     let s: Int = ssa0 + 1;
     ll_ir_inst(ir, "getelementptr inbounds", ll_ir_alloc(sk), ll_ssa(s), "ptr " + ptr + ", i32 0, i32 " + fi, 1, 1);
     let s2: Int = s + 1;

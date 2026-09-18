@@ -6,7 +6,7 @@
 //
 // Beats:
 //   1. olist kinds plus OoL type and new/len/get/push defines.
-//   2. Retain cascade on get and push copy.
+//   2. In-place append check, retain, and release with quota refund.
 //   3. Builtin dispatch helpers for list ops.
 //   4. resSt types for struct payload results.
 import "ll_tok.oo";
@@ -14,23 +14,10 @@ import "ll_ty.oo";
 import "ll_slot.oo";
 import "ll_ir.oo";
 
-pub fn ll_is_olist(kind: String) -> Bool {
-    if chars_len(kind) < 6 { return false; }
-    if str_slice(kind, 0, 6) != "olist_" { return false; }
-    return true;
-}
-
-pub fn ll_is_resst(kind: String) -> Bool {
-    if chars_len(kind) < 6 { return false; }
-    if str_slice(kind, 0, 6) != "resSt_" { return false; }
-    return true;
-}
-
-pub fn ll_is_optst(kind: String) -> Bool {
-    if chars_len(kind) < 6 { return false; }
-    if str_slice(kind, 0, 6) != "optSt_" { return false; }
-    return true;
-}
+pub fn ll_is_olist(kind: String) -> Bool { return chars_len(kind) >= 6 && str_slice(kind, 0, 6) == "olist_"; }
+pub fn ll_is_resst(kind: String) -> Bool { return chars_len(kind) >= 6 && str_slice(kind, 0, 6) == "resSt_"; }
+pub fn ll_is_optst(kind: String) -> Bool { return chars_len(kind) >= 6 && str_slice(kind, 0, 6) == "optSt_"; }
+fn ll_is_st(k: String) -> Bool { let kl: Int = chars_len(k); let u: String = if kl > 0 && char_at(k, 0) == "%" { str_slice(k, 1, kl) } else { k }; return chars_len(u) >= 3 && str_slice(u, 0, 3) == "St_"; }
 
 fn ll_olist_nm(kind: String) -> String {
     let n: Int = chars_len(kind);
@@ -64,20 +51,16 @@ pub fn ll_st_wrap_emit(nm: String, toks: List[String], ir: &mut IrBuf) {
 }
 
 pub fn ll_olist_emit_one(nm: String, ir: &mut IrBuf) {
-    ll_ir_text(ir, "%OoL_" + nm + " = type { ptr, i64, i64 }");
     ll_ir_fn_open(ir, "define hidden void @oo_l_" + nm + "_new(ptr sret(%OoL_" + nm + ") align 8 %out) {");
-    ll_heap(ir);
     ll_ir_inst(ir, "store", "%OoL_" + nm, "", "{ ptr null, i64 0, i64 0 }, ptr %out, align 8", 1, 1);
     ll_ir_inst(ir, "ret", "void", "", "", 1, 1);
     ll_ir_fn_close(ir);
     ll_ir_fn_open(ir, "define hidden i64 @oo_l_" + nm + "_len(ptr %l) {");
-    ll_heap(ir);
     ll_ir_inst(ir, "getelementptr inbounds", "%OoL_" + nm, "%lp", "ptr %l, i32 0, i32 1", 1, 1);
     ll_ir_inst(ir, "load", "i64", "%lv", "ptr %lp, align 8", 1, 1);
     ll_ir_inst(ir, "ret", "i64", "", "%lv", 1, 1);
     ll_ir_fn_close(ir);
     ll_ir_fn_open(ir, "define hidden %St_" + nm + " @oo_l_" + nm + "_get(ptr %l, i64 %i) {");
-    ll_heap(ir);
     ll_ir_inst(ir, "getelementptr inbounds", "%OoL_" + nm, "%lp", "ptr %l, i32 0, i32 1", 1, 1);
     ll_ir_inst(ir, "load", "i64", "%len", "ptr %lp, align 8", 1, 1);
     ll_ir_inst(ir, "icmp ult", "i64", "%ok", "%i, %len", 1, 1);
@@ -94,16 +77,35 @@ pub fn ll_olist_emit_one(nm: String, ir: &mut IrBuf) {
     ll_ir_inst(ir, "ret", "%St_" + nm, "", "%v", 1, 1);
     ll_ir_fn_close(ir);
     ll_ir_fn_open(ir, "define hidden void @oo_l_" + nm + "_push(ptr sret(%OoL_" + nm + ") align 8 %out, ptr %l, ptr %vp) {");
-    ll_heap(ir);
     ll_ir_inst(ir, "getelementptr inbounds", "%OoL_" + nm, "%lenp", "ptr %l, i32 0, i32 1", 1, 1);
     ll_ir_inst(ir, "load", "i64", "%len", "ptr %lenp, align 8", 1, 1);
     ll_ir_inst(ir, "getelementptr inbounds", "%OoL_" + nm, "%capp", "ptr %l, i32 0, i32 2", 1, 1);
     ll_ir_inst(ir, "load", "i64", "%cap", "ptr %capp, align 8", 1, 1);
     ll_ir_inst(ir, "getelementptr inbounds", "%OoL_" + nm, "%dp0", "ptr %l, i32 0, i32 0", 1, 1);
     ll_ir_inst(ir, "load", "ptr", "%data0", "ptr %dp0, align 8", 1, 1);
-    ll_ir_inst(ir, "icmp ne", "i64", "%hascap", "%cap, 0", 1, 1);
-    ll_ir_inst(ir, "select", "i1", "%ncap0", "%hascap, i64 %cap, i64 8", 1, 1);
-    ll_slot_name("%ncap", ir);
+    ll_ir_inst(ir, "icmp ult", "i64", "%hascap", "%len, %cap", 1, 1);
+    ll_ir_inst(ir, "br", "i1", "", "%hascap, label %pchkrc_" + nm + ", label %pgrow0_" + nm, 1, 1);
+    ll_ir_label(ir, "pchkrc_" + nm);
+    ll_ir_inst(ir, "getelementptr inbounds", "i8", "%h0", "ptr %data0, i64 -8", 1, 1);
+    ll_ir_inst(ir, "load atomic", "i32", "%rc0", ", ptr %h0 acquire, align 4", 1, 1);
+    ll_ir_inst(ir, "icmp eq", "i32", "%isown", "%rc0, 1", 1, 1);
+    ll_ir_inst(ir, "br", "i1", "", "%isown, label %pinplace_" + nm + ", label %pgrow0_" + nm, 1, 1);
+    ll_ir_label(ir, "pinplace_" + nm);
+    ll_ir_inst(ir, "call", "void", "", "@oo_l_" + nm + "_retain(ptr %l)", 1, 1);
+    ll_ir_inst(ir, "load", "%St_" + nm, "%vin", "ptr %vp, align 8", 1, 1);
+    ll_ir_inst(ir, "call", "void", "", "@oo_retain_St_" + nm + "(ptr %vp)", 1, 1);
+    ll_ir_inst(ir, "getelementptr inbounds", "%St_" + nm, "%apin", "ptr %data0, i64 %len", 1, 1);
+    ll_ir_inst(ir, "store", "%St_" + nm, "", "%vin, ptr %apin, align 8", 1, 1);
+    ll_ir_inst(ir, "add", "i64", "%nlin", "%len, 1", 1, 1);
+    ll_ir_inst(ir, "insertvalue", "%OoL_" + nm, "%ri0", "{ ptr null, i64 0, i64 0 }, ptr %data0, 0", 1, 1);
+    ll_ir_inst(ir, "insertvalue", "%OoL_" + nm, "%ri1", "%ri0, i64 %nlin, 1", 1, 1);
+    ll_ir_inst(ir, "insertvalue", "%OoL_" + nm, "%ri2", "%ri1, i64 %cap, 2", 1, 1);
+    ll_ir_inst(ir, "store", "%OoL_" + nm, "", "%ri2, ptr %out, align 8", 1, 1);
+    ll_ir_inst(ir, "ret", "void", "", "", 1, 1);
+    ll_ir_label(ir, "pgrow0_" + nm);
+    ll_ir_inst(ir, "icmp ne", "i64", "%hascap0", "%cap, 0", 1, 1);
+    ll_ir_inst(ir, "select", "i1", "%ncap0", "%hascap0, i64 %cap, i64 8", 1, 1);
+    ll_slot_ty("%ncap", "i64", ir);
     ll_ir_inst(ir, "store", "i64", "", "%ncap0, ptr %ncap, align 8", 1, 1);
     ll_ir_inst(ir, "br", "label", "", "%pgrow_" + nm, 1, 1);
     ll_ir_label(ir, "pgrow_" + nm);
@@ -120,7 +122,9 @@ pub fn ll_olist_emit_one(nm: String, ir: &mut IrBuf) {
     ll_ir_inst(ir, "getelementptr inbounds", "%St_" + nm, "%szp", "ptr null, i32 1", 1, 1);
     ll_ir_inst(ir, "ptrtoint", "ptr", "%esz", "%szp to i64", 1, 1);
     ll_ir_inst(ir, "call", "ptr", "%ndata", "@oo_list_alloc_payload(i64 %esz, i64 %ncapf)", 1, 1);
-    ll_slot_name("%ci", ir);
+    ll_ir_inst(ir, "getelementptr inbounds", "i8", "%nhp", "ptr %ndata, i64 -8", 1, 1);
+    ll_ir_inst(ir, "store atomic", "i32", "", "1, ptr %nhp release, align 4", 1, 1);
+    ll_slot_ty("%ci", "i64", ir);
     ll_ir_inst(ir, "store", "i64", "", "0, ptr %ci, align 8", 1, 1);
     ll_ir_inst(ir, "br", "label", "", "%pcopy_" + nm, 1, 1);
     ll_ir_label(ir, "pcopy_" + nm);
@@ -148,12 +152,61 @@ pub fn ll_olist_emit_one(nm: String, ir: &mut IrBuf) {
     ll_ir_inst(ir, "store", "%OoL_" + nm, "", "%r2, ptr %out, align 8", 1, 1);
     ll_ir_inst(ir, "ret", "void", "", "", 1, 1);
     ll_ir_fn_close(ir);
+    ll_ir_fn_open(ir, "define hidden void @oo_l_" + nm + "_retain(ptr %l) {");
+    ll_ir_inst(ir, "getelementptr inbounds", "%OoL_" + nm, "%dp", "ptr %l, i32 0, i32 0", 1, 1);
+    ll_ir_inst(ir, "load", "ptr", "%d", "ptr %dp, align 8", 1, 1);
+    ll_ir_inst(ir, "icmp ne", "ptr", "%hasd", "%d, null", 1, 1);
+    ll_ir_inst(ir, "br", "i1", "", "%hasd, label %rok_" + nm + ", label %rend_" + nm, 1, 1);
+    ll_ir_label(ir, "rok_" + nm);
+    ll_ir_inst(ir, "getelementptr inbounds", "i8", "%hp", "ptr %d, i64 -8", 1, 1);
+    ll_ir_inst(ir, "atomicrmw add", "", "%prc", "ptr %hp, i32 1 acq_rel, align 4", 1, 1);
+    ll_ir_inst(ir, "br", "label", "", "%rend_" + nm, 1, 1);
+    ll_ir_label(ir, "rend_" + nm);
+    ll_ir_inst(ir, "ret", "void", "", "", 1, 1);
+    ll_ir_fn_close(ir);
+    ll_ir_fn_open(ir, "define hidden void @oo_l_" + nm + "_release(ptr %l) {");
+    ll_ir_inst(ir, "getelementptr inbounds", "%OoL_" + nm, "%dp", "ptr %l, i32 0, i32 0", 1, 1);
+    ll_ir_inst(ir, "load", "ptr", "%d", "ptr %dp, align 8", 1, 1);
+    ll_ir_inst(ir, "icmp ne", "ptr", "%hasd", "%d, null", 1, 1);
+    ll_ir_inst(ir, "br", "i1", "", "%hasd, label %relsub_" + nm + ", label %relend_" + nm, 1, 1);
+    ll_ir_label(ir, "relsub_" + nm);
+    ll_ir_inst(ir, "getelementptr inbounds", "i8", "%hp", "ptr %d, i64 -8", 1, 1);
+    ll_ir_inst(ir, "atomicrmw sub", "", "%prc", "ptr %hp, i32 1 acq_rel, align 4", 1, 1);
+    ll_ir_inst(ir, "icmp eq", "i32", "%iszero", "%prc, 1", 1, 1);
+    ll_ir_inst(ir, "br", "i1", "", "%iszero, label %relfree_" + nm + ", label %relend_" + nm, 1, 1);
+    ll_ir_label(ir, "relfree_" + nm);
+    ll_ir_inst(ir, "getelementptr inbounds", "%OoL_" + nm, "%lp", "ptr %l, i32 0, i32 1", 1, 1);
+    ll_ir_inst(ir, "load", "i64", "%len", "ptr %lp, align 8", 1, 1);
+    ll_ir_inst(ir, "getelementptr inbounds", "%OoL_" + nm, "%cp", "ptr %l, i32 0, i32 2", 1, 1);
+    ll_ir_inst(ir, "load", "i64", "%cap", "ptr %cp, align 8", 1, 1);
+    ll_slot_ty("%ri", "i64", ir);
+    ll_ir_inst(ir, "store", "i64", "", "0, ptr %ri, align 8", 1, 1);
+    ll_ir_inst(ir, "br", "label", "", "%relloop_" + nm, 1, 1);
+    ll_ir_label(ir, "relloop_" + nm);
+    ll_ir_inst(ir, "load", "i64", "%i", "ptr %ri, align 8", 1, 1);
+    ll_ir_inst(ir, "icmp ult", "i64", "%more", "%i, %len", 1, 1);
+    ll_ir_inst(ir, "br", "i1", "", "%more, label %relstep_" + nm + ", label %reldone_" + nm, 1, 1);
+    ll_ir_label(ir, "relstep_" + nm);
+    ll_ir_inst(ir, "getelementptr inbounds", "%St_" + nm, "%ep", "ptr %d, i64 %i", 1, 1);
+    ll_ir_inst(ir, "call", "void", "", "@oo_release_St_" + nm + "(ptr %ep)", 1, 1);
+    ll_ir_inst(ir, "add", "i64", "%i2", "%i, 1", 1, 1);
+    ll_ir_inst(ir, "store", "i64", "", "%i2, ptr %ri, align 8", 1, 1);
+    ll_ir_inst(ir, "br", "label", "", "%relloop_" + nm, 1, 1);
+    ll_ir_label(ir, "reldone_" + nm);
+    ll_ir_inst(ir, "getelementptr inbounds", "%St_" + nm, "%szp", "ptr null, i32 1", 1, 1);
+    ll_ir_inst(ir, "ptrtoint", "ptr", "%esz", "%szp to i64", 1, 1);
+    ll_ir_inst(ir, "call", "void", "", "@oo_list_quota_release_bytes(i64 %cap, i64 %esz)", 1, 1);
+    ll_ir_inst(ir, "call", "void", "", "@oo_payload_free(ptr %d)", 1, 1);
+    ll_ir_inst(ir, "br", "label", "", "%relend_" + nm, 1, 1);
+    ll_ir_label(ir, "relend_" + nm);
+    ll_ir_inst(ir, "ret", "void", "", "", 1, 1);
+    ll_ir_fn_close(ir);
 }
 
 pub fn ll_olist_new(expect: String, ssa0: Int, ir: &mut IrBuf) -> String {
     let nm: String = ll_olist_nm(expect);
     let a: String = ll_tmpa(ssa0 + 1);
-    ll_slot_name(a, ir);
+    ll_slot_ty(a, "%OoL_" + nm, ir);
     ll_ir_inst(ir, "call", "void", "", "@oo_l_" + nm + "_new(ptr sret(%OoL_" + nm + ") align 8 " + a + ")", 1, 1);
     return ll_pack(0, ssa0 + 1, expect, a);
 }
@@ -182,26 +235,17 @@ pub fn ll_olist_push(arg: String, val: String, ssa0: Int, ir: &mut IrBuf) -> Str
     let vp: String = ll_ensure_ptr(val, ll_pssa(a0), ir);
     let s: Int = ll_pssa(vp) + 1;
     let out: String = ll_tmpa(s);
-    ll_slot_name(out, ir);
+    ll_slot_ty(out, "%OoL_" + nm, ir);
     ll_ir_inst(ir, "call", "void", "", "@oo_l_" + nm + "_push(ptr sret(%OoL_" + nm + ") align 8 " + out + ", ptr " + ll_pptr(a0) + ", ptr " + ll_pptr(vp) + ")", 1, 1);
     return ll_pack(0, s, ll_pk(arg), out);
 }
 
 pub fn ll_olist_builtin(name: String, args: List[String], ssa0: Int, expect: String, ir: &mut IrBuf) -> String {
-    if name == "list_new" && ll_is_olist(expect) {
-        return ll_olist_new(expect, ssa0, ir);
-    }
+    if name == "list_new" && ll_is_olist(expect) { return ll_olist_new(expect, ssa0, ir); }
     let na: Int = list_len(args);
-    if na < 1 { return ""; }
-    if !ll_is_olist(ll_pk(list_get(args, 0))) { return ""; }
-    if name == "list_len" && na >= 1 {
-        return ll_olist_len(list_get(args, 0), ssa0, ir);
-    }
-    if name == "list_get" && na >= 2 {
-        return ll_olist_get(list_get(args, 0), list_get(args, 1), ssa0, expect, ir);
-    }
-    if name == "list_push" && na >= 2 {
-        return ll_olist_push(list_get(args, 0), list_get(args, 1), ssa0, ir);
-    }
+    if na < 1 || !ll_is_olist(ll_pk(list_get(args, 0))) { return ""; }
+    if name == "list_len" && na >= 1 { return ll_olist_len(list_get(args, 0), ssa0, ir); }
+    if name == "list_get" && na >= 2 { return ll_olist_get(list_get(args, 0), list_get(args, 1), ssa0, expect, ir); }
+    if name == "list_push" && na >= 2 { return ll_olist_push(list_get(args, 0), list_get(args, 1), ssa0, ir); }
     return "";
 }

@@ -87,7 +87,7 @@ fn ll_if_dead_merge(fp: Int, ssa0: Int, tk: String, ek: String, env: String, cid
     if kk == "" || kk == "void" { kk = "i64"; }
     let a: String = ll_tmpa(ssa0 + 1);
     let s: Int = ssa0 + 1;
-    ll_slot_name(a, ir);
+    ll_slot_ty(a, ll_ir_alloc(kk), ir);
     let s2: Int = s + 1;
     ll_ir_inst(ir, "load", ll_ir_val(kk), ll_ssa(s2), "ptr " + a + ", align 8", 1, 1);
     return ll_pack(fp, s2, kk, "");
@@ -158,7 +158,7 @@ fn ll_if_zero(ssa0: Int, kk: String, ir: &mut IrBuf) -> Int {
     if k == "" || k == "void" { k = "i64"; }
     let a: String = ll_tmpa(ssa0 + 1);
     let s: Int = ssa0 + 1;
-    ll_slot_name(a, ir);
+    ll_slot_ty(a, ll_ir_alloc(k), ir);
     let mut z: String = "zeroinitializer";
     if k == "f64" { z = "0.0"; }
     if k == "i1" { z = "false"; }

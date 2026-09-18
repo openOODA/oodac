@@ -67,7 +67,7 @@ pub fn ll_user_call(name: String, sig: String, args: List[String], ssa0: Int, ir
     if ll_is_mem(ret) {
         let a: String = ll_tmpa(s + 1);
         s = s + 1;
-        ll_slot_name(a, ir);
+        ll_slot_ty(a, ll_ir_alloc(ret), ir);
         if call != "" {
             ll_ir_inst(ir, "call", "void", "", "@" + name + "(ptr sret(" + ll_ir_alloc(ret) + ") align 8 " + a + ", " + call + ")", 1, 1);
         } else {

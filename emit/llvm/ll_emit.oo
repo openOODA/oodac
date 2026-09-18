@@ -25,7 +25,30 @@ import "ll_struct_imp.oo";
 import "ll_reach.oo";
 import "types/token_search.oo";
 import "types/types_core.oo";
-import "ast/parse_drive.oo";
+
+fn skip_balanced(toks: List[String], pos0: Int) -> Int {
+    let n: Int = list_len(toks);
+    let mut pos: Int = pos0 + 1;
+    let mut depth: Int = 1;
+    while pos < n {
+        if depth == 0 { return pos; }
+        let k: String = ll_k(toks, pos);
+        if k == "LBRACE" { depth = depth + 1; }
+        if k == "RBRACE" { depth = depth - 1; }
+        pos = pos + 1;
+    }
+    return pos;
+}
+
+fn skip_until_semi(toks: List[String], pos0: Int) -> Int {
+    let n: Int = list_len(toks);
+    let mut pos: Int = pos0;
+    while pos < n {
+        if ll_k(toks, pos) == "SEMI" { return pos + 1; }
+        pos = pos + 1;
+    }
+    return pos;
+}
 
 
 fn ll_emit_fn_strings(toks: List[String], pos: Int, n: Int, ir: &mut IrBuf) {

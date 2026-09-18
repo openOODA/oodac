@@ -115,6 +115,13 @@ pub fn ll_tmpa(n: Int) -> String {
     return "%a" + n.to_string();
 }
 
+pub fn ll_is_var(p: String) -> Bool {
+    let n: Int = chars_len(p);
+    if n < 3 { return false; }
+    let pre: String = str_slice(p, 0, 3);
+    return pre == "%v_" || pre == "%p_";
+}
+
 pub fn ll_hw(a: Int, b: Int) -> Int {
     if a > b { return a; }
     return b;

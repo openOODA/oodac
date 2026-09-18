@@ -76,7 +76,7 @@ pub fn ll_match_expr(toks: List[String], pos: Int, n: Int, ssa0: Int, env: Strin
         let pk: String = ll_pk(okarm);
         let hw: Int = ll_hw(oks, ll_pssa(bd)) + 1;
         let a: String = ll_tmpa(hw);
-        ll_slot_name(a, ir);
+        ll_slot_ty(a, ll_ir_alloc(pk), ir);
         ll_ir_inst(ir, "store", ll_ir_val(pk), "", ll_ssa(oks) + ", ptr " + a + ", align 8", 1, 1);
         let s2: Int = hw + 1;
         ll_ir_inst(ir, "load", ll_ir_val(pk), ll_ssa(s2), "ptr " + a + ", align 8", 1, 1);
@@ -92,7 +92,7 @@ pub fn ll_match_expr(toks: List[String], pos: Int, n: Int, ssa0: Int, env: Strin
         let pk0: String = ll_pk(okarm);
         let hw0: Int = ll_hw(oks, ll_pssa(erarm)) + 1;
         let a0: String = ll_tmpa(hw0);
-        ll_slot_name(a0, ir);
+        ll_slot_ty(a0, ll_ir_alloc(pk0), ir);
         ll_ir_inst(ir, "store", ll_ir_val(pk0), "", ll_ssa(oks) + ", ptr " + a0 + ", align 8", 1, 1);
         let s3: Int = hw0 + 1;
         ll_ir_inst(ir, "load", ll_ir_val(pk0), ll_ssa(s3), "ptr " + a0 + ", align 8", 1, 1);

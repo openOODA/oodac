@@ -73,7 +73,7 @@ pub fn ll_for_init(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String,
     }
     let fid: Int = ssa + 1;
     let fvar: String = ll_var(fname) + "_" + fid.to_string();
-    ll_slot_name(fvar, ir);
+    ll_slot_ty(fvar, "i64", ir);
     ll_ir_inst(ir, "store", "i64", "", lo_op + ", ptr " + fvar + ", align 8", 1, 1);
     ll_ir_inst(ir, "br", "", "", "label %fcond" + fid.to_string(), 1, 1);
     ll_ir_label(ir, "fcond" + fid.to_string());

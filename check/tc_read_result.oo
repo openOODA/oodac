@@ -9,6 +9,9 @@
 //   2. tc_bracket_type_text packs IDENT, COMMA, and nested bracket text.
 //   3. tc_read_result_ann appends that text only when the base is Result or Option.
 
+import "lex/token_fmt.oo";
+import "tc_types_core.oo";
+
 pub fn tc_skip_brackets(toks: List[String], pos0: Int) -> Int {
     let n = list_len(toks);
 let mut p = pos0;

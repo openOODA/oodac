@@ -10,10 +10,9 @@
 //   3. tc_check_fn / stmt / expr and tc_report.
 
 import "types/ty.oo";
+import "ast/ast.oo";
 
-fn i2s(x: Int) -> String {
-    return x.to_string();
-}
+fn i2s(x: Int) -> String { return x.to_string(); }
 
 fn ast_tag(node: String) -> String {
     let n: Int = chars_len(node); let mut i: Int = 0; while i < n { if char_at(node, i) == "(" { return str_slice(node, 0, i); } i = i + 1; } return node;

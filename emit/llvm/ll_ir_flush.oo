@@ -12,6 +12,7 @@
 import "mir_types.oo";
 import "mir_block.oo";
 import "ll_ir.oo";
+import "ll_slot.oo";
 
 fn ll_dbg_loc(line: Int, col: Int, scope: Int) -> String {
     if scope <= 0 || scope == 10 { return ""; }
@@ -23,17 +24,19 @@ fn ll_dbg_loc(line: Int, col: Int, scope: Int) -> String {
 }
 
 fn ll_print_life(ty: String, dst: String, scope: Int) {
-    let mut sz: String = "8";
-    if ty == "i32" { sz = "4"; }
-    if ty == "i1" { sz = "1"; }
-    if chars_len(ty) >= 3 && str_slice(ty, 0, 1) == "[" { sz = "256"; }
-    println("  call void @llvm.lifetime.start.p0(i64 " + sz + ", ptr " + dst + ")" + ll_dbg_loc(1, 1, scope));
+    let sz: Int = ll_slot_size(ty);
+    println("  call void @llvm.lifetime.start.p0(i64 " + sz.to_string() + ", ptr " + dst + ")" + ll_dbg_loc(1, 1, scope));
+}
+
+fn ll_print_life_end(ty: String, dst: String, scope: Int) {
+    let sz: Int = ll_slot_size(ty);
+    println("  call void @llvm.lifetime.end.p0(i64 " + sz.to_string() + ", ptr " + dst + ")" + ll_dbg_loc(1, 1, scope));
 }
 
 fn ll_print_mir_inst(inst: MirInst, scope: Int) {
-    let comma: Bool = inst.op == "load" || inst.op == "alloca" || inst.op == "getelementptr" ||
-        inst.op == "getelementptr inbounds" || inst.op == "extractvalue" ||
-        inst.op == "insertelement" || inst.op == "shufflevector";
+    let comma: Bool = inst.op == "load" || inst.op == "alloca" ||
+        inst.op == "getelementptr" || inst.op == "getelementptr inbounds" ||
+        inst.op == "extractvalue" || inst.op == "insertelement" || inst.op == "shufflevector";
     let mut body: String = inst.op;
     if inst.ty != "" { body = body + " " + inst.ty; }
     let args: String = mir_inst_format_args(inst);
@@ -53,12 +56,18 @@ fn ll_print_mir_inst(inst: MirInst, scope: Int) {
     }
 }
 
-pub fn mir_flush_fn(f: MirFn) {
-    if f.header != "" {
-        println(f.header);
+pub fn mir_flush_fn(f: &MirFn, fn_hdr: String) {
+    if fn_hdr != "" {
+        println(fn_hdr);
     } else {
         let ds: String = if f.scope_id > 0 { " !dbg !" + f.scope_id.to_string() } else { "" };
         println("define " + f.vis + f.ret_ty + " @" + f.name + "(" + f.params + ") nounwind" + ds + " {");
+    }
+
+    let nb: Int = mir_fn_block_count(f);
+    if nb > 0 {
+        let b0: MirBlock = mir_fn_get_block(f, 0);
+        if b0.label != "" { println(b0.label + ":"); }
     }
 
     let na: Int = list_len(f.allocas);
@@ -75,17 +84,24 @@ pub fn mir_flush_fn(f: MirFn) {
         ai = ai + 1;
     }
 
-    let nb: Int = mir_fn_block_count(f);
     let mut bi: Int = 0;
     while bi < nb {
         let b: MirBlock = mir_fn_get_block(f, bi);
-        if b.label != "" {
+        if bi > 0 && b.label != "" {
             println(b.label + ":");
         }
-        let ni: Int = mir_block_inst_count(b);
+        let ni: Int = mir_block_inst_count(&b);
         let mut ii: Int = 0;
         while ii < ni {
-            let inst: MirInst = mir_block_get_inst(b, ii);
+            let inst: MirInst = mir_block_get_inst(&b, ii);
+            if inst.op == "ret" {
+                let mut ai_end: Int = 0;
+                while ai_end < na {
+                    let ainst: MirInst = list_get(f.allocas, ai_end);
+                    ll_print_life_end(ainst.ty, ainst.dst, f.scope_id);
+                    ai_end = ai_end + 1;
+                }
+            }
             ll_print_mir_inst(inst, f.scope_id);
             ii = ii + 1;
         }
@@ -161,6 +177,7 @@ pub fn ll_ir_flush(b: &IrBuf) {
     let total: Int = list_len(lines);
     let mut li: Int = 0;
     let mut in_fn: Bool = false;
+    let mut fn_hdr: String = "";
     let mut mfn: MirFn = mir_fn_new("", "", "void", "", "", 0);
     let mut cur_block: MirBlock = mir_block_new("");
 
@@ -179,19 +196,19 @@ pub fn ll_ir_flush(b: &IrBuf) {
                 println(text);
             } else if tag == "F" {
                 in_fn = true;
-                let header: String = if chars_len(line) >= 2 { str_slice(line, 2, chars_len(line)) } else { "" };
-                let scope: Int = mir_parse_scope_id(header);
+                fn_hdr = if chars_len(line) >= 2 { str_slice(line, 2, chars_len(line)) } else { "" };
+                let scope: Int = mir_parse_scope_id(fn_hdr);
                 mfn = mir_fn_new("", "", "void", "", "", scope);
-                mir_fn_set_header(&mut mfn, header);
                 cur_block = mir_block_new("");
             } else if tag == "A" {
                 let ty: String = if nparts > 1 { list_get(parts, 1) } else { "i64" };
                 let dst: String = if nparts > 2 { list_get(parts, 2) } else { "" };
-                let inst: MirInst = mir_inst_raw("alloca", ty, dst, "", 1, 1, mfn.scope_id);
+                let empty_args: List[MirOpnd] = list_new();
+                let inst: MirInst = MirInst { op: "alloca", dst: dst, ty: ty, args: empty_args, raw_args: "", line: 1, col: 1, scope_id: mfn.scope_id };
                 mir_fn_add_alloca(&mut mfn, inst);
             } else if tag == "L" {
                 let lbl: String = if nparts > 1 { list_get(parts, 1) } else { "" };
-                if cur_block.label != "" || mir_block_inst_count(cur_block) > 0 {
+                if cur_block.label != "" || mir_block_inst_count(&cur_block) > 0 {
                     mir_fn_add_block(&mut mfn, cur_block);
                     cur_block = mir_block_new(lbl);
                 } else {
@@ -205,16 +222,21 @@ pub fn ll_ir_flush(b: &IrBuf) {
                 let args: String = if nparts > 4 { list_get(parts, 4) } else { "" };
                 let ln: Int = if nparts > 7 { mir_parse_int(list_get(parts, 7)) } else { 1 };
                 let col: Int = if nparts > 8 { mir_parse_int(list_get(parts, 8)) } else { 1 };
-                let inst: MirInst = mir_inst_raw(op, ty, dst, args, ln, col, mfn.scope_id);
+                let empty_args2: List[MirOpnd] = list_new();
+                let inst: MirInst = MirInst { op: op, dst: dst, ty: ty, args: empty_args2, raw_args: args, line: ln, col: col, scope_id: mfn.scope_id };
                 mir_block_add_inst(&mut cur_block, inst);
             } else if tag == "E" {
-                if cur_block.label != "" || mir_block_inst_count(cur_block) > 0 {
+                if cur_block.label != "" || mir_block_inst_count(&cur_block) > 0 {
                     mir_fn_add_block(&mut mfn, cur_block);
                 }
-                mir_flush_fn(mfn);
+                mir_flush_fn(&mfn, fn_hdr);
                 in_fn = false;
             }
         }
         li = li + 1;
     }
+}
+
+pub fn mir_flush_types_stub(xs: List[MirInst], bs: List[MirBlock]) -> Int {
+    return list_len(xs) + list_len(bs);
 }

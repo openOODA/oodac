@@ -190,7 +190,7 @@ pub fn ll_struct_lit_at(toks: List[String], pos: Int, n: Int, ssa0: Int, env: St
     if type_env_get(env, "__st__" + nm) == "" { println("ERR\tllvm\tunknown struct " + nm); process_exit(1); }
     if pos + 1 >= n || ll_k(toks, pos + 1) != "LBRACE" { println("ERR\tllvm\tstruct lit"); process_exit(1); }
     let a: String = ll_tmpa(ssa0 + 1); let mut s: Int = ssa0 + 1;
-    ll_slot_name(a, ir);
+    ll_slot_ty(a, "%St_" + nm, ir);
     let mut rich: String = "St_" + nm + "#"; let mut first: Bool = true;
     let en: Int = chars_len(env); let pre: String = "__stf__" + nm + "."; let pl: Int = chars_len(pre); let mut j: Int = 0;
     while j < en {

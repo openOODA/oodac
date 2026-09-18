@@ -31,15 +31,28 @@ while i < n { if list_get(binds, i) == needle { return true;
 }
 
 pub fn drop_depth(binds: List[String], depth: Int) -> List[String] {
-    // Rebuild binds without entries for this depth (after RBRACE).
-    // Entries are "name@d" — drop those whose suffix is exactly "@depth".
     let marker = "@" + depth.to_string();
     let n = list_len(binds);
-    let mut out: List[String] = list_new();
+    let mut has_depth = false;
     let mut i = 0;
-    while i < n { let e: String = list_get(binds, i);
-    if !str_ends_with(e, marker) { out = list_push(out, e);
+    while i < n {
+        let e: String = list_get(binds, i);
+        if str_ends_with(e, marker) {
+            has_depth = true;
+            break;
+        }
+        i = i + 1;
     }
+    if !has_depth {
+        return binds;
+    }
+    let mut out: List[String] = list_new();
+    i = 0;
+    while i < n {
+        let e: String = list_get(binds, i);
+        if !str_ends_with(e, marker) {
+            out = list_push(out, e);
+        }
         i = i + 1;
     }
     return out;

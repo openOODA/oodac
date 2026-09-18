@@ -124,6 +124,8 @@ fn ll_rt_emit_rest(need: String) {
     ll_d(need, "oo_bytes_push", "declare void @oo_bytes_push(ptr sret(%OoIList) align 8, ptr byval(%OoIList) align 8, i64)");
     ll_d(need, "oo_bytes_to_str", "declare { ptr, i64 } @oo_bytes_to_str(ptr byval(%OoIList) align 8)");
     ll_d(need, "oo_list_alloc_payload", "declare ptr @oo_list_alloc_payload(i64, i64)");
+    ll_d(need, "oo_list_quota_release_bytes", "declare void @oo_list_quota_release_bytes(i64, i64)");
+    ll_d(need, "oo_payload_free", "declare void @oo_payload_free(ptr)");
     ll_rt_emit_fs(need);
 }
 

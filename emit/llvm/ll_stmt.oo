@@ -62,7 +62,7 @@ pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String, env
             ssa = ll_store(name, ty, v, ssa, env, ir);
             env = type_env_put(env, name, ty);
             if ll_pk(v) == "ilist" || ll_pk(v) == "slist" { env = type_env_put(env, name, ll_pk(v)); }
-            if ll_arc_owned(ty) && ll_pptr(v) != "" { ssa = ll_arc_keep(name, ty, env, ssa, ir); }
+            if ll_arc_owned(ty) && ll_is_var(ll_pptr(v)) { ssa = ll_arc_keep(name, ty, env, ssa, ir); }
             if p < n && ll_k(toks, p) == "SEMI" { p = p + 1; }
         } else if k == "KW_IF" {
             let c: String = ll_expr(toks, p + 1, n, ssa, env, ir);
@@ -167,7 +167,7 @@ pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String, env
             p = ll_ppos(v);
             ssa = ll_pssa(v);
             if ll_arc_owned(ty) {
-                if ll_pptr(v) != "" { ssa = ll_arc_keep_ptr(ty, ll_pptr(v), ssa, ir); }
+                if ll_is_var(ll_pptr(v)) { ssa = ll_arc_keep_ptr(ty, ll_pptr(v), ssa, ir); }
                 ssa = ll_arc_rel(name, ty, env, ssa, ir);
             }
             ssa = ll_store(name, ty, v, ssa, env, ir);

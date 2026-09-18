@@ -75,31 +75,32 @@ pub fn mir_block_add_pred(b: &mut MirBlock, source: String) {
     b.preds = list_push(b.preds, source);
 }
 
-pub fn mir_block_is_terminated(b: MirBlock) -> Bool {
+pub fn mir_block_is_terminated(b: &MirBlock) -> Bool {
     return b.terminated;
 }
 
-pub fn mir_block_inst_count(b: MirBlock) -> Int {
+pub fn mir_block_inst_count(b: &MirBlock) -> Int {
     return list_len(b.insts);
 }
 
-pub fn mir_block_get_inst(b: MirBlock, idx: Int) -> MirInst {
-    return list_get(b.insts, idx);
+pub fn mir_block_get_inst(b: &MirBlock, idx: Int) -> MirInst {
+    let inst: MirInst = list_get(b.insts, idx);
+    return inst;
 }
 
-pub fn mir_block_succ_count(b: MirBlock) -> Int {
+pub fn mir_block_succ_count(b: &MirBlock) -> Int {
     return list_len(b.succs);
 }
 
-pub fn mir_block_get_succ(b: MirBlock, idx: Int) -> String {
+pub fn mir_block_get_succ(b: &MirBlock, idx: Int) -> String {
     return list_get(b.succs, idx);
 }
 
-pub fn mir_block_pred_count(b: MirBlock) -> Int {
+pub fn mir_block_pred_count(b: &MirBlock) -> Int {
     return list_len(b.preds);
 }
 
-pub fn mir_block_get_pred(b: MirBlock, idx: Int) -> String {
+pub fn mir_block_get_pred(b: &MirBlock, idx: Int) -> String {
     return list_get(b.preds, idx);
 }
 
@@ -135,7 +136,7 @@ pub fn mir_fn_add_block(f: &mut MirFn, b: MirBlock) {
     f.blocks = list_push(f.blocks, b);
 }
 
-pub fn mir_fn_find_block(f: MirFn, label: String) -> Int {
+pub fn mir_fn_find_block(f: &MirFn, label: String) -> Int {
     let n: Int = list_len(f.blocks);
     let mut i: Int = 0;
     while i < n {
@@ -146,12 +147,13 @@ pub fn mir_fn_find_block(f: MirFn, label: String) -> Int {
     return 0 - 1;
 }
 
-pub fn mir_fn_block_count(f: MirFn) -> Int {
+pub fn mir_fn_block_count(f: &MirFn) -> Int {
     return list_len(f.blocks);
 }
 
-pub fn mir_fn_get_block(f: MirFn, idx: Int) -> MirBlock {
-    return list_get(f.blocks, idx);
+pub fn mir_fn_get_block(f: &MirFn, idx: Int) -> MirBlock {
+    let b: MirBlock = list_get(f.blocks, idx);
+    return b;
 }
 
 pub fn mir_fn_connect_edge(f: &mut MirFn, from_label: String, to_label: String) {
@@ -173,7 +175,8 @@ pub fn mir_fn_connect_edge(f: &mut MirFn, from_label: String, to_label: String) 
 }
 
 pub fn mir_fn_branch(f: &mut MirFn, from_label: String, to_label: String, line: Int, col: Int, scope_id: Int) {
-    let inst: MirInst = mir_inst_raw("br", "", "", "label %" + to_label, line, col, scope_id);
+    let empty_args: List[MirOpnd] = list_new();
+    let inst: MirInst = MirInst { op: "br", dst: "", ty: "", args: empty_args, raw_args: "label %" + to_label, line: line, col: col, scope_id: scope_id };
     let n: Int = list_len(f.blocks);
     let mut new_blocks: List[MirBlock] = list_new();
     let mut i: Int = 0;
@@ -191,7 +194,8 @@ pub fn mir_fn_branch(f: &mut MirFn, from_label: String, to_label: String, line: 
 
 pub fn mir_fn_cond_branch(f: &mut MirFn, from_label: String, cond_var: String, then_label: String, else_label: String, line: Int, col: Int, scope_id: Int) {
     let raw: String = "i1 " + cond_var + ", label %" + then_label + ", label %" + else_label;
-    let inst: MirInst = mir_inst_raw("br", "", "", raw, line, col, scope_id);
+    let empty_args: List[MirOpnd] = list_new();
+    let inst: MirInst = MirInst { op: "br", dst: "", ty: "", args: empty_args, raw_args: raw, line: line, col: col, scope_id: scope_id };
     let n: Int = list_len(f.blocks);
     let mut new_blocks: List[MirBlock] = list_new();
     let mut i: Int = 0;

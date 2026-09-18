@@ -49,22 +49,24 @@ if pk == "SEMI" { break;
     return out_tab;
 }
 
-pub fn bind_sum_ctors(toks: List[String], binds: List[String]) -> List[String] {
+pub fn bind_sum_ctors(toks: List[String], mut binds: List[String]) -> List[String] {
     let tab: String = sum_ctor_tab(toks);
-    let mut out_binds: List[String] = binds;
     let n: Int = chars_len(tab);
     let mut i: Int = 1;
     let mut cur: String = "";
-    while i < n { let ch: String = char_at(tab, i);
-    if ch == "\t" { if cur != "" { out_binds = list_push(out_binds, cur + "@0");
-    }
+    while i < n {
+        let ch: String = char_at(tab, i);
+        if ch == "\t" {
+            if cur != "" {
+                binds = list_push(binds, cur + "@0");
+            }
             cur = "";
         } else {
             cur = cur + ch;
         }
         i = i + 1;
     }
-    return out_binds;
+    return binds;
 }
 
 pub fn is_user_sum_ctor(tab: String, name: String) -> Bool {

@@ -54,7 +54,9 @@ pub fn ll_return_stmt(toks: List[String], p: Int, n: Int, ssa: Int, env: String,
     if type_env_get(env, "__ens__") == "1" && ret_kind != "main_i32" && ret_kind != "void" && ret_kind != "optim" && ret_kind != "optsm" {
         ns = ll_contract_return(toks, v, env, ns, exp_kind, p, ir);
     }
-    if ll_arc_owned(ll_pk(v)) && ll_pptr(v) != "" { ns = ll_arc_keep_ptr(ll_pk(v), ll_pptr(v), ns, ir); }
+    if ll_arc_owned(ll_pk(v)) && ll_pptr(v) != "" {
+        ns = ll_arc_keep_ptr(ll_pk(v), ll_pptr(v), ns, ir);
+    }
     ns = ll_arc_exit_all(env, ns, ir);
     ll_heap_end(ir);
     if ret_kind == "resim" {

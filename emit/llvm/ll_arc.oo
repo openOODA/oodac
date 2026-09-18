@@ -48,7 +48,15 @@ pub fn ll_arc_owned(kind: String) -> Bool {
     if kind == "str" || kind == "slist" || kind == "ilist" { return true; }
     if kind == "ress" || kind == "resi" || kind == "opts" { return true; }
     if chars_len(kind) >= 3 && str_slice(kind, 0, 3) == "St_" { return true; }
+    if chars_len(kind) >= 6 && str_slice(kind, 0, 6) == "olist_" { return true; }
     return false;
+}
+
+fn ll_arc_olist_nm(kind: String) -> String {
+    let rest: String = str_slice(kind, 6, chars_len(kind));
+    let h: Int = str_index_of(rest, "#");
+    if h < 0 { return rest; }
+    return str_slice(rest, 0, h);
 }
 
 fn ll_arc_st_nm(kind: String) -> String {
@@ -99,6 +107,11 @@ fn ll_arc_rr(kind: String, ptr: String, ssa0: Int, is_ret: Int, ir: &mut IrBuf) 
         ll_ir_inst(ir, "br", "label", "", "%arcn" + tag, 1, 1);
         ll_ir_label(ir, "arcn" + tag);
         return s + 4;
+    }
+    if chars_len(kind) >= 6 && str_slice(kind, 0, 6) == "olist_" {
+        let nm: String = ll_arc_olist_nm(kind);
+        ll_ir_inst(ir, "call", "void", "", "@oo_l_" + nm + "_" + op + "(ptr " + ptr + ")", 1, 1);
+        return ssa0;
     }
     ll_ir_inst(ir, "call", "void", "", "@oo_" + op + "_St_" + ll_arc_st_nm(kind) + "(ptr " + ptr + ")", 1, 1);
     return ssa0;

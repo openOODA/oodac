@@ -38,7 +38,7 @@ pub fn ll_method(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, env:
         let fr: String = ll_struct_field_load(skind, ssa, ptr, m, ssa0, ir);
         if ll_pptr(fr) == "" && ll_is_struct(ll_pk(fr)) {
             let a: String = ll_tmpa(ll_pssa(fr) + 1);
-            ll_slot_name(a, ir);
+            ll_slot_ty(a, ll_ir_alloc(ll_pk(fr)), ir);
             ll_ir_inst(ir, "store", ll_ir_val(ll_pk(fr)), "", ll_opnd(fr) + ", ptr " + a + ", align 8", 1, 1);
             return ll_pack(0, ll_pssa(fr) + 1, ll_pk(fr), a);
         }
@@ -177,7 +177,7 @@ pub fn ll_method(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, env:
         ll_ir_inst(ir, "phi", ll_ir_val(ll_pk(lv)), ll_ssa(ph), "[ " + ll_ssa(vs) + ", %wok" + id.to_string() + " ], [ " + ll_ssa(dv) + ", %werr" + id.to_string() + " ]", 1, 1);
         if ll_is_struct(ll_pk(lv)) {
             let wa: String = ll_tmpa(ph + 1);
-            ll_slot_name(wa, ir);
+            ll_slot_ty(wa, ll_ir_alloc(ll_pk(lv)), ir);
             ll_ir_inst(ir, "store", ll_ir_val(ll_pk(lv)), "", ll_ssa(ph) + ", ptr " + wa + ", align 8", 1, 1);
             return ll_pack(0, ph + 1, ll_pk(lv), wa);
         }
@@ -192,7 +192,7 @@ pub fn ll_arm_val(arm: String, ssa0: Int, ir: &mut IrBuf) -> Int {
     if ll_is_imm(arm) {
         let s: Int = ll_hw(ll_pssa(arm), ssa0) + 1;
         let a: String = ll_tmpa(s);
-        ll_slot_name(a, ir);
+        ll_slot_ty(a, ll_ir_alloc(ll_pk(arm)), ir);
         ll_ir_inst(ir, "store", ll_ir_val(ll_pk(arm)), "", ll_opnd(arm) + ", ptr " + a + ", align 8", 1, 1);
         let s2: Int = s + 1;
         ll_ir_inst(ir, "load", ll_ir_val(ll_pk(arm)), ll_ssa(s2), "ptr " + a + ", align 8", 1, 1);
@@ -200,7 +200,7 @@ pub fn ll_arm_val(arm: String, ssa0: Int, ir: &mut IrBuf) -> Int {
     }
     if !ll_has_slot(arm) { return ll_pssa(arm); }
     let mut s: Int = ll_hw(ll_pssa(arm), ssa0);
-    if ll_arc_owned(ll_pk(arm)) {
+    if ll_arc_owned(ll_pk(arm)) && ll_is_var(ll_pptr(arm)) {
         s = ll_arc_keep_ptr(ll_pk(arm), ll_pptr(arm), s, ir);
     }
     s = s + 1;
