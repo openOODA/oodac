@@ -1,0 +1,209 @@
+// # LLVM MIR Basic Blocks and Control Flow Graph
+//
+// Logline: MIR basic block representation, edge maintenance, and CFG graph traversal.
+//
+// Setup: Blocks hold sequences of MirInst with explicit predecessor and successor edges.
+//
+// Beats:
+//   1. MirBlock encapsulates label, instruction queue, and bidirectional CFG edges.
+//   2. MirFn holds entry allocas, block list, visibility, and DWARF scope.
+//   3. CFG edge wiring ensures bidirectional consistency between branch source and target.
+
+import "mir_types.oo";
+
+pub type MirBlock = struct {
+    id: String,
+    label: String,
+    insts: List[MirInst],
+    preds: List[String],
+    succs: List[String],
+    terminated: Bool
+};
+
+pub type MirFn = struct {
+    name: String,
+    entry: String,
+    ret_ty: String,
+    vis: String,
+    params: String,
+    scope_id: Int,
+    allocas: List[MirInst],
+    blocks: List[MirBlock],
+    header: String
+};
+
+pub fn mir_block_new(label: String) -> MirBlock {
+    let empty_insts: List[MirInst] = list_new();
+    let empty_preds: List[String] = list_new();
+    let empty_succs: List[String] = list_new();
+    return MirBlock {
+        id: label,
+        label: label,
+        insts: empty_insts,
+        preds: empty_preds,
+        succs: empty_succs,
+        terminated: false
+    };
+}
+
+pub fn mir_block_add_inst(b: &mut MirBlock, inst: MirInst) {
+    if !b.terminated {
+        b.insts = list_push(b.insts, inst);
+        if mir_is_terminator(inst.op) {
+            b.terminated = true;
+        }
+    }
+}
+
+pub fn mir_block_add_succ(b: &mut MirBlock, target: String) {
+    let n: Int = list_len(b.succs);
+    let mut i: Int = 0;
+    while i < n {
+        if list_get(b.succs, i) == target { return; }
+        i = i + 1;
+    }
+    b.succs = list_push(b.succs, target);
+}
+
+pub fn mir_block_add_pred(b: &mut MirBlock, source: String) {
+    let n: Int = list_len(b.preds);
+    let mut i: Int = 0;
+    while i < n {
+        if list_get(b.preds, i) == source { return; }
+        i = i + 1;
+    }
+    b.preds = list_push(b.preds, source);
+}
+
+pub fn mir_block_is_terminated(b: MirBlock) -> Bool {
+    return b.terminated;
+}
+
+pub fn mir_block_inst_count(b: MirBlock) -> Int {
+    return list_len(b.insts);
+}
+
+pub fn mir_block_get_inst(b: MirBlock, idx: Int) -> MirInst {
+    return list_get(b.insts, idx);
+}
+
+pub fn mir_block_succ_count(b: MirBlock) -> Int {
+    return list_len(b.succs);
+}
+
+pub fn mir_block_get_succ(b: MirBlock, idx: Int) -> String {
+    return list_get(b.succs, idx);
+}
+
+pub fn mir_block_pred_count(b: MirBlock) -> Int {
+    return list_len(b.preds);
+}
+
+pub fn mir_block_get_pred(b: MirBlock, idx: Int) -> String {
+    return list_get(b.preds, idx);
+}
+
+pub fn mir_fn_new(name: String, entry: String, ret_ty: String, vis: String, params: String, scope_id: Int) -> MirFn {
+    let empty_allocas: List[MirInst] = list_new();
+    let mut blocks: List[MirBlock] = list_new();
+    if entry != "" {
+        let entry_b: MirBlock = mir_block_new(entry);
+        blocks = list_push(blocks, entry_b);
+    }
+    return MirFn {
+        name: name,
+        entry: entry,
+        ret_ty: ret_ty,
+        vis: vis,
+        params: params,
+        scope_id: scope_id,
+        allocas: empty_allocas,
+        blocks: blocks,
+        header: ""
+    };
+}
+
+pub fn mir_fn_set_header(f: &mut MirFn, h: String) {
+    f.header = h;
+}
+
+pub fn mir_fn_add_alloca(f: &mut MirFn, inst: MirInst) {
+    f.allocas = list_push(f.allocas, inst);
+}
+
+pub fn mir_fn_add_block(f: &mut MirFn, b: MirBlock) {
+    f.blocks = list_push(f.blocks, b);
+}
+
+pub fn mir_fn_find_block(f: MirFn, label: String) -> Int {
+    let n: Int = list_len(f.blocks);
+    let mut i: Int = 0;
+    while i < n {
+        let b: MirBlock = list_get(f.blocks, i);
+        if b.label == label { return i; }
+        i = i + 1;
+    }
+    return 0 - 1;
+}
+
+pub fn mir_fn_block_count(f: MirFn) -> Int {
+    return list_len(f.blocks);
+}
+
+pub fn mir_fn_get_block(f: MirFn, idx: Int) -> MirBlock {
+    return list_get(f.blocks, idx);
+}
+
+pub fn mir_fn_connect_edge(f: &mut MirFn, from_label: String, to_label: String) {
+    let n: Int = list_len(f.blocks);
+    let mut new_blocks: List[MirBlock] = list_new();
+    let mut i: Int = 0;
+    while i < n {
+        let mut b: MirBlock = list_get(f.blocks, i);
+        if b.label == from_label {
+            mir_block_add_succ(&mut b, to_label);
+        }
+        if b.label == to_label {
+            mir_block_add_pred(&mut b, from_label);
+        }
+        new_blocks = list_push(new_blocks, b);
+        i = i + 1;
+    }
+    f.blocks = new_blocks;
+}
+
+pub fn mir_fn_branch(f: &mut MirFn, from_label: String, to_label: String, line: Int, col: Int, scope_id: Int) {
+    let inst: MirInst = mir_inst_raw("br", "", "", "label %" + to_label, line, col, scope_id);
+    let n: Int = list_len(f.blocks);
+    let mut new_blocks: List[MirBlock] = list_new();
+    let mut i: Int = 0;
+    while i < n {
+        let mut b: MirBlock = list_get(f.blocks, i);
+        if b.label == from_label {
+            mir_block_add_inst(&mut b, inst);
+        }
+        new_blocks = list_push(new_blocks, b);
+        i = i + 1;
+    }
+    f.blocks = new_blocks;
+    mir_fn_connect_edge(f, from_label, to_label);
+}
+
+pub fn mir_fn_cond_branch(f: &mut MirFn, from_label: String, cond_var: String, then_label: String, else_label: String, line: Int, col: Int, scope_id: Int) {
+    let raw: String = "i1 " + cond_var + ", label %" + then_label + ", label %" + else_label;
+    let inst: MirInst = mir_inst_raw("br", "", "", raw, line, col, scope_id);
+    let n: Int = list_len(f.blocks);
+    let mut new_blocks: List[MirBlock] = list_new();
+    let mut i: Int = 0;
+    while i < n {
+        let mut b: MirBlock = list_get(f.blocks, i);
+        if b.label == from_label {
+            mir_block_add_inst(&mut b, inst);
+        }
+        new_blocks = list_push(new_blocks, b);
+        i = i + 1;
+    }
+    f.blocks = new_blocks;
+    mir_fn_connect_edge(f, from_label, then_label);
+    mir_fn_connect_edge(f, from_label, else_label);
+}

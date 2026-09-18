@@ -1,6 +1,13 @@
 // # LLVM type names from Ooda tokens
 //
 // Logline: Map IDENT types to slist, ilist, str, i64, i1, resi, opti. Caps are i64.
+//
+// Setup: Maps high-level Ooda types to canonical LLVM IR allocation and value types.
+//
+// Beats:
+//   1. Map primitive, list, option, result, and struct types.
+//   2. Compute capability grants and pass-by attributes.
+//   3. Helper functions for pointer and value coercion.
 import "ll_tok.oo";
 import "ll_slot.oo";
 import "ll_ir.oo";
@@ -15,34 +22,16 @@ pub fn ll_ty_at(toks: List[String], pos: Int, n: Int, stab: String) -> String {
         process_exit(1);
     }
     let t: String = ll_t(toks, p);
-    if t == "Int" || t == "i64" {
-        if isref { return "ri64"; }
-        return "i64";
-    }
-    if t == "Float" {
-        if isref { return "rf64"; }
-        return "f64";
-    }
-    if t == "u64" {
-        if isref { return "ru64"; }
-        return "u64";
-    }
-    if t == "i32" {
-        if isref { return "ri32"; }
-        return "i32";
-    }
-    if t == "u32" {
-        if isref { return "ru32"; }
-        return "u32";
-    }
+    if t == "Int" || t == "i64" { if isref { return "ri64"; } return "i64"; }
+    if t == "Float" { if isref { return "rf64"; } return "f64"; }
+    if t == "u64" { if isref { return "ru64"; } return "u64"; }
+    if t == "i32" { if isref { return "ri32"; } return "i32"; }
+    if t == "u32" { if isref { return "ru32"; } return "u32"; }
     if t == "u8" || t == "i8" || t == "u16" || t == "i16" {
         println("ERR\tllvm\tnarrow int not lowered " + t);
         process_exit(1);
     }
-    if t == "Bool" {
-        if isref { return "ri1"; }
-        return "i1";
-    }
+    if t == "Bool" { if isref { return "ri1"; } return "i1"; }
     if t == "f32x8" { return "v8f32"; }
     if t == "f64x4" { return "v4f64"; }
     if t == "String" { return "str"; }

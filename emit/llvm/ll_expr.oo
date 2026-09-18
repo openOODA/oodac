@@ -1,5 +1,13 @@
 // # LLVM expression lowering
+//
 // Logline: Walk primary, postfix, unary, and binop tokens. Locals in env.
+//
+// Setup: Parses expressions via precedence climbing. Dispatches calls and constructors.
+//
+// Beats:
+//   1. Primary expressions lower literals, identifiers, and paren groupings.
+//   2. Unary operators handle borrow, deref, negation, and logical not.
+//   3. Precedence climbing lowers binary arithmetic, comparison, and short-circuit logic.
 import "ll_tok.oo";
 import "ll_ty.oo";
 import "ll_int.oo";

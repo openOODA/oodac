@@ -1,0 +1,200 @@
+// # LLVM MIR Typed Operands and Instructions
+//
+// Logline: Typed in-memory operand and instruction structures decoupling AST from emission.
+//
+// Setup: MIR instructions represent SSA operations with exact types and source coordinates.
+//
+// Beats:
+//   1. MirOpnd encapsulates registers, immediates, null, globals, and labels.
+//   2. MirInst represents typed SSA instructions with operands and DWARF coordinates.
+//   3. Constructors and formatting helpers provide clean assembly production.
+
+pub type MirOpnd = struct {
+    kind: Int,
+    val: String,
+    ty: String,
+    is_reg: Bool,
+    imm_int: Int
+};
+
+pub type MirInst = struct {
+    op: String,
+    dst: String,
+    ty: String,
+    args: List[MirOpnd],
+    raw_args: String,
+    line: Int,
+    col: Int,
+    scope_id: Int
+};
+
+pub fn mir_opnd_none() -> MirOpnd {
+    return MirOpnd { kind: 0, val: "", ty: "void", is_reg: false, imm_int: 0 };
+}
+
+pub fn mir_opnd_reg(name: String, ty: String) -> MirOpnd {
+    return MirOpnd { kind: 1, val: name, ty: ty, is_reg: true, imm_int: 0 };
+}
+
+pub fn mir_opnd_imm_int(val: Int, ty: String) -> MirOpnd {
+    return MirOpnd { kind: 2, val: val.to_string(), ty: ty, is_reg: false, imm_int: val };
+}
+
+pub fn mir_opnd_imm_str(txt: String) -> MirOpnd {
+    return MirOpnd { kind: 3, val: txt, ty: "str", is_reg: false, imm_int: 0 };
+}
+
+pub fn mir_opnd_null(ty: String) -> MirOpnd {
+    return MirOpnd { kind: 4, val: "null", ty: ty, is_reg: false, imm_int: 0 };
+}
+
+pub fn mir_opnd_global(name: String, ty: String) -> MirOpnd {
+    return MirOpnd { kind: 5, val: name, ty: ty, is_reg: false, imm_int: 0 };
+}
+
+pub fn mir_opnd_label(label: String) -> MirOpnd {
+    return MirOpnd { kind: 6, val: label, ty: "label", is_reg: false, imm_int: 0 };
+}
+
+pub fn mir_opnd_is_reg(o: MirOpnd) -> Bool {
+    return o.is_reg;
+}
+
+pub fn mir_opnd_is_imm(o: MirOpnd) -> Bool {
+    return o.kind == 2 || o.kind == 3;
+}
+
+pub fn mir_opnd_format(o: MirOpnd) -> String {
+    if o.kind == 6 {
+        return "label %" + o.val;
+    }
+    return o.val;
+}
+
+pub fn mir_opnd_format_typed(o: MirOpnd) -> String {
+    if o.kind == 0 { return ""; }
+    if o.kind == 6 { return "label %" + o.val; }
+    if o.ty == "" { return o.val; }
+    return o.ty + " " + o.val;
+}
+
+pub fn mir_inst_new(op: String, ty: String, dst: String, args: List[MirOpnd], line: Int, col: Int, scope_id: Int) -> MirInst {
+    return MirInst {
+        op: op,
+        dst: dst,
+        ty: ty,
+        args: args,
+        raw_args: "",
+        line: line,
+        col: col,
+        scope_id: scope_id
+    };
+}
+
+pub fn mir_inst_raw(op: String, ty: String, dst: String, raw: String, line: Int, col: Int, scope_id: Int) -> MirInst {
+    let empty_args: List[MirOpnd] = list_new();
+    return MirInst {
+        op: op,
+        dst: dst,
+        ty: ty,
+        args: empty_args,
+        raw_args: raw,
+        line: line,
+        col: col,
+        scope_id: scope_id
+    };
+}
+
+pub fn mir_inst_0(op: String, ty: String, dst: String, line: Int, col: Int, scope_id: Int) -> MirInst {
+    let empty_args: List[MirOpnd] = list_new();
+    return MirInst {
+        op: op,
+        dst: dst,
+        ty: ty,
+        args: empty_args,
+        raw_args: "",
+        line: line,
+        col: col,
+        scope_id: scope_id
+    };
+}
+
+pub fn mir_inst_1(op: String, ty: String, dst: String, a1: MirOpnd, line: Int, col: Int, scope_id: Int) -> MirInst {
+    let mut args: List[MirOpnd] = list_new();
+    args = list_push(args, a1);
+    return MirInst {
+        op: op,
+        dst: dst,
+        ty: ty,
+        args: args,
+        raw_args: "",
+        line: line,
+        col: col,
+        scope_id: scope_id
+    };
+}
+
+pub fn mir_inst_2(op: String, ty: String, dst: String, a1: MirOpnd, a2: MirOpnd, line: Int, col: Int, scope_id: Int) -> MirInst {
+    let mut args: List[MirOpnd] = list_new();
+    args = list_push(args, a1);
+    args = list_push(args, a2);
+    return MirInst {
+        op: op,
+        dst: dst,
+        ty: ty,
+        args: args,
+        raw_args: "",
+        line: line,
+        col: col,
+        scope_id: scope_id
+    };
+}
+
+pub fn mir_inst_3(op: String, ty: String, dst: String, a1: MirOpnd, a2: MirOpnd, a3: MirOpnd, line: Int, col: Int, scope_id: Int) -> MirInst {
+    let mut args: List[MirOpnd] = list_new();
+    args = list_push(args, a1);
+    args = list_push(args, a2);
+    args = list_push(args, a3);
+    return MirInst {
+        op: op,
+        dst: dst,
+        ty: ty,
+        args: args,
+        raw_args: "",
+        line: line,
+        col: col,
+        scope_id: scope_id
+    };
+}
+
+pub fn mir_is_terminator(op: String) -> Bool {
+    if op == "br" || op == "ret" || op == "unreachable" || op == "switch" {
+        return true;
+    }
+    return false;
+}
+
+pub fn mir_is_branch(op: String) -> Bool {
+    return op == "br";
+}
+
+pub fn mir_is_alloca(op: String) -> Bool {
+    return op == "alloca";
+}
+
+pub fn mir_inst_format_args(inst: MirInst) -> String {
+    if inst.raw_args != "" {
+        return inst.raw_args;
+    }
+    let n: Int = list_len(inst.args);
+    if n == 0 { return ""; }
+    let mut out: String = "";
+    let mut i: Int = 0;
+    while i < n {
+        let opnd: MirOpnd = list_get(inst.args, i);
+        if i > 0 { out = out + ", "; }
+        out = out + mir_opnd_format(opnd);
+        i = i + 1;
+    }
+    return out;
+}
