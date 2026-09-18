@@ -1,0 +1,63 @@
+// # Bounded Integer Ranges Edge Cases Probe
+//
+// Logline: Stress-tests bounded integers with degenerate, negative, and extreme intervals.
+//
+// Setup: Compile with oodac check and emit-llvm, verify llvm-as, opt, and execute.
+//
+// Beats:
+//   1. Zero-width range Int[0..0].
+//   2. Negative bounds Int[-100..-10].
+//   3. Zero-crossing bounds Int[-50..50].
+//   4. Single-point negative bound Int[-5..-5].
+//   5. Extreme 64-bit limits Int[-9223372036854775807..9223372036854775806].
+//   6. Positive bounds Int[100..200].
+//   7. Parameter passing across calls and local variable stores.
+
+pub fn fn_zero(x: Int[0..0]) -> Int[0..0] {
+    return x;
+}
+
+pub fn fn_neg(x: Int[-100..-10]) -> Int[-100..-10] {
+    return x;
+}
+
+pub fn fn_cross(x: Int[-50..50]) -> Int[-50..50] {
+    return x;
+}
+
+pub fn fn_single_neg(x: Int[-5..-5]) -> Int[-5..-5] {
+    return x;
+}
+
+pub fn fn_extreme(x: Int[-9223372036854775807..9223372036854775806]) -> Int[-9223372036854775807..9223372036854775806] {
+    return x;
+}
+
+pub fn fn_pos(x: Int[100..200]) -> Int[100..200] {
+    return x;
+}
+
+pub fn fn_transfer(a: Int[0..0], b: Int[-100..-10], c: Int[100..200]) -> Int {
+    let mut sum: Int = 0;
+    sum = sum + a;
+    sum = sum + b;
+    sum = sum + c;
+    return sum;
+}
+
+pub fn main() -> Int {
+    let v_zero: Int[0..0] = fn_zero(0);
+    let v_neg: Int[-100..-10] = fn_neg(-40);
+    let v_cross: Int[-50..50] = fn_cross(15);
+    let v_single: Int[-5..-5] = fn_single_neg(-5);
+    let v_ext: Int[-9223372036854775807..9223372036854775806] = fn_extreme(12345);
+    let v_pos: Int[100..200] = fn_pos(150);
+
+    let sum: Int = fn_transfer(v_zero, v_neg, v_pos);
+    // sum = 0 + (-40) + 150 = 110
+
+    if v_zero == 0 && v_neg == -40 && v_cross == 15 && v_single == -5 && v_ext == 12345 && v_pos == 150 && sum == 110 {
+        return 0;
+    }
+    return 1;
+}

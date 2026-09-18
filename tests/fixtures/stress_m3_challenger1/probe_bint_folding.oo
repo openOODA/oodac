@@ -1,0 +1,46 @@
+// # Bounded Integer Optimization and Branch Pruning Probe
+//
+// Logline: Verifies LLVM eliminates dead branches based on range attributes.
+//
+// Setup: Compile with oodac check and emit-llvm, optimize with opt -O3.
+//
+// Beats:
+//   1. Guard against impossible values below and above range.
+//   2. Function returning bounded integer.
+//   3. Caller verifying range-implied assertions fold to straight-line SSA.
+
+pub fn range_prune(x: Int[10..20]) -> Int {
+    if x < 10 {
+        return 999;
+    }
+    if x > 20 {
+        return 888;
+    }
+    return x * 3 + 1;
+}
+
+pub fn range_source() -> Int[50..60] {
+    return 55;
+}
+
+pub fn caller_test() -> Int {
+    let r: Int[50..60] = range_source();
+    if r < 50 {
+        return 777;
+    }
+    if r > 60 {
+        return 666;
+    }
+    return r + 5;
+}
+
+pub fn main() -> Int {
+    let a: Int = range_prune(15);
+    let b: Int = caller_test();
+    // a = 15 * 3 + 1 = 46
+    // b = 55 + 5 = 60
+    if a == 46 && b == 60 {
+        return 0;
+    }
+    return 1;
+}

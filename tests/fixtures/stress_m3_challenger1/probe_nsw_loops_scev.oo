@@ -1,0 +1,34 @@
+// # Signed NSW Arithmetic and Loop Scalar Evolution Probe
+//
+// Logline: Probes signed NSW loop arithmetic and SCEV closed-form evaluation.
+//
+// Setup: Compile with oodac check and emit-llvm, optimize with opt -O3.
+//
+// Beats:
+//   1. Loop accumulator with signed add, sub, and mul.
+//   2. Induction variable incrementing with add nsw.
+//   3. Verification of exact arithmetic execution.
+
+pub fn nsw_loop_scev(n: Int) -> Int {
+    let mut acc: Int = 0;
+    let mut i: Int = 0;
+    while i < n {
+        let prod: Int = i * 4;
+        let sum: Int = prod + 3;
+        let diff: Int = sum - 2;
+        acc = acc + diff;
+        i = i + 1;
+    }
+    return acc;
+}
+
+pub fn main() -> Int {
+    // For n=10, i=0..9:
+    // term_i = 4*i + 1
+    // sum = 4*(9*10/2) + 1*10 = 4*45 + 10 = 180 + 10 = 190
+    let res: Int = nsw_loop_scev(10);
+    if res == 190 {
+        return 0;
+    }
+    return 1;
+}
