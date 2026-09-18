@@ -52,9 +52,28 @@ EOF
     if llvm-as "$d/span_bnd.ll" -o "$d/sb.bc" >/dev/null 2>&1; then b14_as=0; fi
   fi
   record_test "T2-F14-02" "Multi-statement coordinates pass llvm-as" "$b14_as"
-  record_test "T2-F14-03" "Column offsets track statement positions" 0
-  record_test "T2-F14-04" "Line coordinates increase monotonically" 0
-  record_test "T2-F14-05" "Zero duplicate coordinate descriptors" 0
+  local b14_col=1
+  if grep -q 'DILocation(line: 6, column: 7' "$d/span_bnd.ll" 2>/dev/null && \
+     grep -q 'DILocation(line: 6, column: 18' "$d/span_bnd.ll" 2>/dev/null; then
+    b14_col=0
+  fi
+  record_test "T2-F14-03" "Column offsets track statement positions" "$b14_col"
+
+  local b14_mono=1
+  if grep -q 'DISubprogram(name: "calc".*line: 5' "$d/span_bnd.ll" 2>/dev/null && \
+     grep -q 'DILocalVariable(name: "a".*line: 6' "$d/span_bnd.ll" 2>/dev/null && \
+     grep -q 'DILocation(line: 7,' "$d/span_bnd.ll" 2>/dev/null; then
+    b14_mono=0
+  fi
+  record_test "T2-F14-04" "Line coordinates increase monotonically" "$b14_mono"
+
+  local b14_nodup=1
+  local var_dups
+  var_dups=$(grep -o '^![0-9]* = !DILocalVariable' "$d/span_bnd.ll" 2>/dev/null | sort | uniq -d | wc -l)
+  if [[ "$var_dups" -eq 0 ]] && grep -q '!DILocalVariable' "$d/span_bnd.ll" 2>/dev/null; then
+    b14_nodup=0
+  fi
+  record_test "T2-F14-05" "Zero duplicate coordinate descriptors" "$b14_nodup"
 
   # Feature 15 Boundaries
   local b15_subp=1
@@ -67,9 +86,26 @@ EOF
   local b15_cu=1
   if grep -q "!DICompileUnit" "$d/span_bnd.ll" 2>/dev/null; then b15_cu=0; fi
   record_test "T2-F15-02" "DICompileUnit present with correct metadata" "$b15_cu"
-  record_test "T2-F15-03" "DISubroutineType describes argument signatures" 0
-  record_test "T2-F15-04" "DILocation scopes reference enclosing subprogram" 0
-  record_test "T2-F15-05" "FullDebug metadata format conforms to DWARF" 0
+
+  local b15_sig=1
+  if grep -q '!DISubroutineType(types: ![0-9]*)' "$d/span_bnd.ll" 2>/dev/null; then
+    b15_sig=0
+  fi
+  record_test "T2-F15-03" "DISubroutineType describes argument signatures" "$b15_sig"
+
+  local b15_sc=1
+  local calc_sp
+  calc_sp=$(grep -o '^![0-9]* = distinct !DISubprogram(name: "calc"' "$d/span_bnd.ll" 2>/dev/null | grep -o '![0-9]*')
+  if [[ -n "$calc_sp" ]] && grep -q "DILocation(.*scope: $calc_sp" "$d/span_bnd.ll" 2>/dev/null; then
+    b15_sc=0
+  fi
+  record_test "T2-F15-04" "DILocation scopes reference enclosing subprogram" "$b15_sc"
+
+  local b15_full=1
+  if grep -q '!DICompileUnit(.*emissionKind: FullDebug' "$d/span_bnd.ll" 2>/dev/null; then
+    b15_full=0
+  fi
+  record_test "T2-F15-05" "FullDebug metadata format conforms to DWARF" "$b15_full"
 
   # Feature 16 Boundaries
   local b16_tool=1
@@ -87,8 +123,43 @@ EOF
     if llvm-dwarfdump --verify "$d/sb.o" >/dev/null 2>&1; then b16_verify=0; fi
   fi
   record_test "T2-F16-03" "llvm-dwarfdump --verify completes with 0 errors" "$b16_verify"
-  record_test "T2-F16-04" "Zero invalid debug info warnings under clang" 0
-  record_test "T2-F16-05" "Debug sections preserved across translation" 0
+
+  local b16_warn=1
+  cat << 'EOF' > "$d/verify_bnd.oo"
+pub fn main() { println(1); }
+verify bnd_smoke {
+  let x: Int = 10;
+  if x != 10 { println(0); }
+}
+EOF
+  local warn_cnt=0
+  if emit "$d/verify_bnd.oo" "$d/verify_bnd.ll"; then
+    clang -c "$d/verify_bnd.ll" -o "$d/vb.o" 2>"$d/vb_err.txt" || true
+    if grep -q "ignoring invalid debug info" "$d/vb_err.txt" 2>/dev/null; then
+      warn_cnt=$((warn_cnt + 1))
+    fi
+  else
+    warn_cnt=$((warn_cnt + 1))
+  fi
+  clang -c "$d/span_bnd.ll" -o "$d/sb2.o" 2>"$d/sb_err.txt" || true
+  if grep -q "ignoring invalid debug info" "$d/sb_err.txt" 2>/dev/null; then
+    warn_cnt=$((warn_cnt + 1))
+  fi
+  if [[ "$warn_cnt" -eq 0 ]]; then
+    b16_warn=0
+  fi
+  record_test "T2-F16-04" "Zero invalid debug info warnings under clang" "$b16_warn"
+
+  local b16_sec=1
+  if [[ -f "$d/sb.o" ]]; then
+    local ddump
+    ddump=$(llvm-dwarfdump -v "$d/sb.o" 2>/dev/null || true)
+    if echo "$ddump" | grep -q "DW_TAG_compile_unit" && \
+       echo "$ddump" | grep -q "DW_TAG_subprogram"; then
+      b16_sec=0
+    fi
+  fi
+  record_test "T2-F16-05" "Debug sections preserved across translation" "$b16_sec"
 }
 
 # Double-run determinism protocol

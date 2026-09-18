@@ -26,7 +26,12 @@ pub fn ll_emit_verify(toks: List[String], pos: Int, n: Int, stab: String, ir: &m
     if p >= n || ll_k(toks, p) != "LBRACE" { return ll_pack(p, 0, "", ""); }
     let id: String = pos.to_string();
     let fnn: String = "oo_verify_" + vname + "_" + id;
-    ll_ir_fn_open(ir, "define internal void @" + fnn + "() nounwind {");
+    let db: Int = pos + 20;
+    let fn_line: Int = ll_line(toks, pos);
+    ll_ir_sub(fnn, fn_line, db);
+    ll_ir_set_loc(ir, fn_line, 1);
+    ll_ir_set_scope(ir, db);
+    ll_ir_fn_open(ir, "define internal void @" + fnn + "() nounwind !dbg !" + db.to_string() + " {");
     ll_ir_label(ir, "entry");
     ll_heap(ir);
     ll_ir_inst(ir, "call", "ptr", "%g", "@getenv(ptr @.oodatest)", 1, 1);
@@ -47,6 +52,7 @@ pub fn ll_emit_verify(toks: List[String], pos: Int, n: Int, stab: String, ir: &m
     ll_heap_end(ir);
     ll_ir_inst(ir, "ret", "void", "", "", 1, 1);
     ll_ir_fn_close(ir);
+    ll_ir_set_scope(ir, 0);
     return ll_pack(skip_balanced(toks, p), 0, fnn, "");
 }
 

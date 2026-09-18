@@ -135,23 +135,22 @@ pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String, env
         } else if k == "KW_FOR" {
             let p_sc: Int = ir.scope_id;
             let for_sc: Int = ll_di_lex_block(p_sc, ll_line(toks, p), ll_col(toks, p), p);
-            let fname: String = ll_t(toks, p + 1);
-            let fi: String = ll_for_init(toks, p + 1, n, ssa, env, ir);
+            let p_var: Int = p + 1;
+            let fname: String = ll_t(toks, p_var);
+            let fi: String = ll_for_init(toks, p_var, n, ssa, env, ir);
             p = ll_ppos(fi); ssa = ll_pssa(fi);
             let fid: String = ll_pk(fi);
             let fvar: String = ll_pptr(fi);
-            let fvid: Int = ll_di_local_var(fname, for_sc, ll_line(toks, p + 1), 15, p + 1);
-            ll_ir_inst(ir, "call", "void", "", "@llvm.dbg.declare(metadata ptr " + fvar + ", metadata !" + fvid.to_string() + ", metadata !DIExpression())", ll_line(toks, p + 1), ll_col(toks, p + 1));
             let envf: String = type_env_put(type_env_put(type_env_put(type_env_put(type_env_put(env, fname, "i64"), "__l__" + fname, fvar), "__brk__", "fend" + fid), "__cont__", "fstep" + fid), "__one__", "");
             if p < n && ll_k(toks, p) == "LBRACE" { p = p + 1; }
             ll_ir_label(ir, "fbody" + fid);
             ll_ir_set_scope(ir, for_sc);
+            let fvid: Int = ll_di_local_var(fname, for_sc, ll_line(toks, p_var), 15, p_var);
+            ll_ir_inst(ir, "call", "void", "", "@llvm.dbg.declare(metadata ptr " + fvar + ", metadata !" + fvid.to_string() + ", metadata !DIExpression())", ll_line(toks, p_var), ll_col(toks, p_var));
             let fb: String = ll_emit_stmts(toks, p, n, ret_kind, envf, ssa, stab, ir);
             p = ll_ppos(fb); ssa = ll_pssa(fb);
             if p < n && ll_k(toks, p) == "RBRACE" { p = p + 1; }
-            if ll_pterm(fb) == 0 {
-                ll_ir_inst(ir, "br", "", "", "label %fstep" + fid, 1, 1);
-            }
+            if ll_pterm(fb) == 0 { ll_ir_inst(ir, "br", "", "", "label %fstep" + fid, 1, 1); }
             ssa = ll_for_step(fid, fvar, ssa, ir);
             ll_ir_set_scope(ir, p_sc);
         } else if k == "LBRACE" {
@@ -162,16 +161,12 @@ pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String, env
             p = ll_ppos(blk); ssa = ll_pssa(blk);
             if p < n && ll_k(toks, p) == "RBRACE" { p = p + 1; }
             ll_ir_set_scope(ir, p_sc);
-
         } else if k == "KW_MATCH" {
             let ms: String = ll_match_stmt(toks, p, n, ssa, env, ret_kind, stab, ir);
             p = ll_ppos(ms); ssa = ll_pssa(ms);
-            if ll_pterm(ms) != 0 {
-                return ms;
-            }
+            if ll_pterm(ms) != 0 { return ms; }
         } else if k == "KW_RETURN" {
-            let rt: String = ll_return_stmt(toks, p, n, ssa, env, ret_kind, stab, ir);
-            return rt;
+            return ll_return_stmt(toks, p, n, ssa, env, ret_kind, stab, ir);
         } else if k == "IDENT" && ll_t(toks, p) == "println" {
             let v: String = ll_expr(toks, p + 2, n, ssa, env, ir);
             p = ll_ppos(v);
@@ -179,8 +174,7 @@ pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String, env
             if p < n && ll_k(toks, p) == "SEMI" { p = p + 1; }
             ssa = ll_print_val(ll_pk(v), ll_pssa(v), ll_pptr(v), ll_pssa(v), ir);
         } else if k == "IDENT" && (ll_t(toks, p) == "break" || ll_t(toks, p) == "continue") && p + 1 < n && (ll_k(toks, p + 1) == "SEMI" || ll_k(toks, p + 1) == "RBRACE") {
-            let bk: String = ll_break_stmt(toks, p, n, ssa, env, ret_kind, ir);
-            return bk;
+            return ll_break_stmt(toks, p, n, ssa, env, ret_kind, ir);
         } else if k == "IDENT" && p + 3 < n && ll_k(toks, p + 1) == "DOT" && ll_k(toks, p + 2) == "IDENT" && ll_k(toks, p + 3) == "EQ" && ll_is_struct(type_env_get(env, ll_t(toks, p))) {
             let sf: String = ll_store_field_stmt(toks, p, n, ssa, env, stab, ir);
             p = ll_ppos(sf); ssa = ll_pssa(sf);
@@ -210,9 +204,7 @@ pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String, env
                 return ll_pack(p, ssa, ret_kind, ll_arc_pop(env)) + "\t1";
             }
         }
-        if type_env_get(env0, "__one__") != "" {
-            return ll_pack(p, ssa, ret_kind, env);
-        }
+        if type_env_get(env0, "__one__") != "" { return ll_pack(p, ssa, ret_kind, env); }
     }
     return ll_pack(p, ssa, ret_kind, env);
 }

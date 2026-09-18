@@ -123,7 +123,7 @@ EOF
 
   local f16_obj=1
   if [[ "$f14_as" -eq 0 && -f "$d/coords.bc" ]]; then
-    if clang -c "$d/coords.bc" -o "$d/coords.o" >/dev/null 2>&1; then
+    if clang -c "$d/coords.bc" -o "$d/coords.o" 2>"$d/clang_err.txt"; then
       f16_obj=0
     fi
   fi
@@ -140,8 +140,8 @@ EOF
   record_test "T1-F16-03" "llvm-dwarfdump parses debug sections" "$f16_dump"
 
   local f16_no_warn=1
-  if [[ "$f16_obj" -eq 0 ]]; then
-    if ! grep -q "ignoring invalid debug info" "$d/coords.ll" 2>/dev/null; then
+  if [[ "$f16_obj" -eq 0 && -f "$d/clang_err.txt" ]]; then
+    if ! grep -q "ignoring invalid debug info" "$d/clang_err.txt" 2>/dev/null; then
       f16_no_warn=0
     fi
   fi
