@@ -94,34 +94,38 @@ EOF
   fi
   record_test "CHAL2-M5-05" "DWARF info verified on niche option variable" "$c_dwarf"
 
-  # 6. Falsification Probe: C ABI extractvalue Syntax Corruption (Feature 18)
-  # Detects whether ll_c_abi_unpack_ret generates invalid LLVM syntax (comma after type)
-  local c_unpack_falsified=0
+  # 6. Falsification Probe: C ABI extractvalue Syntax (Feature 18)
+  local c_unpack_valid=1
   "$OODAC" check "$FIXTURES/oo_niche_c_ext.oo" >/dev/null 2>&1 || true
-  if "$OODAC" check "$FIXTURES/probe_c_unpack_syntax.oo" >/dev/null 2>&1; then
-    "$OODAC" emit-llvm "$FIXTURES/probe_c_unpack_syntax.oo" > "$d/unpack.ll" 2>&1 || true
-    if grep -q "extractvalue %OoOpt_Ptr, " "$d/unpack.ll" 2>/dev/null; then
-      c_unpack_falsified=1
+  if emit "$FIXTURES/probe_c_unpack_syntax.oo" "$d/unpack.ll"; then
+    if ! grep -q "extractvalue %OoOpt_Ptr, " "$d/unpack.ll" && \
+       grep -q "extractvalue %OoOpt_Ptr %" "$d/unpack.ll" && \
+       llvm-as "$d/unpack.ll" -o "$d/unpack.bc" >/dev/null 2>&1; then
+      c_unpack_valid=0
     fi
   fi
-  record_test "CHAL2-M5-06" "Probe reveals C ABI extractvalue comma defect" "$((1 - c_unpack_falsified))"
+  record_test "CHAL2-M5-06" "extractvalue %OoOpt_Ptr produces valid LLVM IR" "$c_unpack_valid"
 
-  # 7. Falsification Probe: C ABI Parameter Passing byval vs Reg Mismatch (Feature 18)
-  local c_byval_falsified=0
+  # 7. Falsification Probe: C ABI Parameter Passing byval Execution (Feature 18)
+  local c_byval_exec=1
   if emit "$FIXTURES/probe_byval_mismatch.oo" "$d/byval.ll"; then
-    if grep -q "define default .*@oo_consume(ptr noalias nocapture noundef" "$d/byval.ll" && \
+    if grep -q "define default .*@oo_consume(ptr byval(%OoOpt_Ptr)" "$d/byval.ll" && \
        grep -q "call i64 @oo_consume(ptr byval(%OoOpt_Ptr)" "$d/byval.ll"; then
-      c_byval_falsified=1
+      if clang -O2 "$d/byval.ll" "$PROJECT_ROOT/oodar/liboodar.a" -lm -lpthread -o "$d/byval_bin" >/dev/null 2>&1; then
+        if "$d/byval_bin" >/dev/null 2>&1; then
+          c_byval_exec=0
+        fi
+      fi
     fi
   fi
-  record_test "CHAL2-M5-07" "Probe reveals byval stack vs scalar reg mismatch" "$((1 - c_byval_falsified))"
+  record_test "CHAL2-M5-07" "Calling export fn passing Option[&Int] exits 0" "$c_byval_exec"
 
-  # 8. Falsification Probe: Capability Reference Wildcard Blindspot (Feature 19)
-  local c_blindspot=0
-  if "$OODAC" check "$FIXTURES/probe_cap_blindspot.oo" >/dev/null 2>&1; then
-    c_blindspot=1
+  # 8. Falsification Probe: Capability Reference Type Safety (Feature 19)
+  local c_blindspot_rejected=1
+  if ! "$OODAC" check "$FIXTURES/probe_cap_blindspot.oo" >/dev/null 2>&1; then
+    c_blindspot_rejected=0
   fi
-  record_test "CHAL2-M5-08" "Probe reveals &Cap wildcard typechecker blindspot" "$((1 - c_blindspot))"
+  record_test "CHAL2-M5-08" "Passing Option[&Int] to &ProcessCap is strictly rejected" "$c_blindspot_rejected"
 }
 
 run_suite 1
