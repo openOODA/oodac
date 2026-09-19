@@ -46,14 +46,19 @@ pub fn smt_vc_has_loop(toks: List[String], body_start: Int, body_end: Int) -> Bo
     return false;
 }
 
+pub fn smt_vc_has_dot(toks: List[String], body_start: Int, body_end: Int) -> Bool {
+    let mut i: Int = body_start;
+    while i < body_end {
+        if tok_k(toks, i) == "DOT" { return true; }
+        i = i + 1;
+    }
+    return false;
+}
+
 pub fn smt_vc_extract_assign(toks: List[String], ret_idx: Int, body_end: Int) -> String {
-    if ret_idx < 0 {
-        return smt_wp_calc_assign_pack("result", "", 0, 0);
-    }
+    if ret_idx < 0 { return smt_wp_calc_assign_pack("result", "", 0, 0); }
     let mut p: Int = ret_idx + 1;
-    if p >= body_end || tok_k(toks, p) == "SEMI" {
-        return smt_wp_calc_assign_pack("result", "", 0, 0);
-    }
+    if p >= body_end || tok_k(toks, p) == "SEMI" { return smt_wp_calc_assign_pack("result", "", 0, 0); }
     let k0: String = tok_k(toks, p);
     let t0: String = tok_t(toks, p);
     if k0 == "INT" {
@@ -63,19 +68,21 @@ pub fn smt_vc_extract_assign(toks: List[String], ret_idx: Int, body_end: Int) ->
     if k0 == "IDENT" {
         let var_name: String = t0;
         p = p + 1;
-        if p < body_end && tok_k(toks, p) == "STAR" && p + 1 < body_end && tok_k(toks, p + 1) == "INT" {
+        if p >= body_end || tok_k(toks, p) == "SEMI" { return smt_wp_calc_assign_pack("result", var_name, 1, 0); }
+        let is_term: Bool = p + 2 >= body_end || tok_k(toks, p + 2) == "SEMI";
+        if is_term && tok_k(toks, p) == "STAR" && p + 1 < body_end && tok_k(toks, p + 1) == "INT" {
             let mul: Int = parse_int(tok_t(toks, p + 1));
             return smt_wp_calc_assign_pack("result", var_name, mul, 0);
         }
-        if p < body_end && tok_k(toks, p) == "PLUS" && p + 1 < body_end && tok_k(toks, p + 1) == "INT" {
+        if is_term && tok_k(toks, p) == "PLUS" && p + 1 < body_end && tok_k(toks, p + 1) == "INT" {
             let add_k: Int = parse_int(tok_t(toks, p + 1));
             return smt_wp_calc_assign_pack("result", var_name, 1, add_k);
         }
-        if p < body_end && tok_k(toks, p) == "MINUS" && p + 1 < body_end && tok_k(toks, p + 1) == "INT" {
+        if is_term && tok_k(toks, p) == "MINUS" && p + 1 < body_end && tok_k(toks, p + 1) == "INT" {
             let sub_k: Int = parse_int(tok_t(toks, p + 1));
             return smt_wp_calc_assign_pack("result", var_name, 1, 0 - sub_k);
         }
-        return smt_wp_calc_assign_pack("result", var_name, 1, 0);
+        return smt_wp_calc_assign_pack("result", "", 0, 0);
     }
     return smt_wp_calc_assign_pack("result", "", 0, 0);
 }
@@ -178,6 +185,15 @@ pub fn smt_vc_prove_function_clauses(toks: List[String], fn_idx: Int, fn_name: S
         i = 0;
         while i < n_cl {
             verdicts = list_push(verdicts, fn_name + "\t" + i.to_string() + "\tDYNAMIC\tcontains_loop");
+            i = i + 1;
+        }
+        return verdicts;
+    }
+
+    if smt_vc_has_dot(toks, b_start, b_end) {
+        i = 0;
+        while i < n_cl {
+            verdicts = list_push(verdicts, fn_name + "\t" + i.to_string() + "\tDYNAMIC\tstruct_access");
             i = i + 1;
         }
         return verdicts;

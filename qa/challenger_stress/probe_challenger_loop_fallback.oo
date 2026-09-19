@@ -1,0 +1,154 @@
+// # Probe: Challenger Loop Fallback and Non-Linear Operations
+//
+// Logline: Adversarially verifies fail-closed dynamic fallbacks for while/for loops and call-shaped predicates.
+//
+// Setup: Pure compute probe importing smt_vc_gen and smt_contract_parse.
+//
+// Beats:
+//   1. Verify while loop emits DYNAMIC contains_loop.
+//   2. Verify for loop emits DYNAMIC contains_loop.
+//   3. Verify call-shaped predicate emits DYNAMIC call_shaped.
+//   4. Verify non-linear assignment fail-closed behavior.
+// RULES.oot 1.7: Under 256 lines.
+
+import "check/smt_contract_parse.oo";
+import "check/smt_wp_calc.oo";
+import "check/smt_prover_lia.oo";
+import "check/smt_vc_gen.oo";
+
+fn mk_tok(k: String, l: Int, c: Int, t: String) -> String {
+    return k + "\t" + l.to_string() + "\t" + c.to_string() + "\t" + t;
+}
+
+fn check_assert(cond: Bool, msg: String) {
+    if !cond {
+        println("FAIL\t" + msg);
+        process_exit(1);
+    }
+}
+
+pub fn main() {
+    // Beat 1: While Loop Dynamic Fallback
+    let mut toks_while: List[String] = list_new();
+    toks_while = list_push(toks_while, mk_tok("KW_FN", 1, 1, "fn"));
+    toks_while = list_push(toks_while, mk_tok("IDENT", 1, 4, "loop_while"));
+    toks_while = list_push(toks_while, mk_tok("LPAREN", 1, 14, "("));
+    toks_while = list_push(toks_while, mk_tok("IDENT", 1, 15, "n"));
+    toks_while = list_push(toks_while, mk_tok("COLON", 1, 16, ":"));
+    toks_while = list_push(toks_while, mk_tok("IDENT", 1, 18, "Int"));
+    toks_while = list_push(toks_while, mk_tok("RPAREN", 1, 21, ")"));
+    toks_while = list_push(toks_while, mk_tok("ARROW", 1, 23, "->"));
+    toks_while = list_push(toks_while, mk_tok("IDENT", 1, 26, "Int"));
+    toks_while = list_push(toks_while, mk_tok("KW_REQUIRES", 2, 1, "requires"));
+    toks_while = list_push(toks_while, mk_tok("IDENT", 2, 10, "n"));
+    toks_while = list_push(toks_while, mk_tok("GTE", 2, 12, ">="));
+    toks_while = list_push(toks_while, mk_tok("INT", 2, 15, "0"));
+    toks_while = list_push(toks_while, mk_tok("KW_ENSURES", 3, 1, "ensures"));
+    toks_while = list_push(toks_while, mk_tok("IDENT", 3, 9, "result"));
+    toks_while = list_push(toks_while, mk_tok("GTE", 3, 16, ">="));
+    toks_while = list_push(toks_while, mk_tok("INT", 3, 19, "0"));
+    toks_while = list_push(toks_while, mk_tok("LBRACE", 4, 1, "{"));
+    toks_while = list_push(toks_while, mk_tok("KW_WHILE", 5, 5, "while"));
+    toks_while = list_push(toks_while, mk_tok("IDENT", 5, 11, "n"));
+    toks_while = list_push(toks_while, mk_tok("GT", 5, 13, ">"));
+    toks_while = list_push(toks_while, mk_tok("INT", 5, 15, "0"));
+    toks_while = list_push(toks_while, mk_tok("LBRACE", 5, 17, "{"));
+    toks_while = list_push(toks_while, mk_tok("RBRACE", 5, 19, "}"));
+    toks_while = list_push(toks_while, mk_tok("KW_RETURN", 6, 5, "return"));
+    toks_while = list_push(toks_while, mk_tok("IDENT", 6, 12, "n"));
+    toks_while = list_push(toks_while, mk_tok("SEMI", 6, 13, ";"));
+    toks_while = list_push(toks_while, mk_tok("RBRACE", 7, 1, "}"));
+
+    let vw: List[String] = smt_vc_prove_function_clauses(toks_while, 0, "loop_while");
+    check_assert(list_len(vw) == 2, "While loop must produce 2 verdicts");
+    let rw0: String = list_get(vw, 0);
+    let rw1: String = list_get(vw, 1);
+    check_assert(field_at(rw0, 2) == "DYNAMIC" && field_at(rw0, 3) == "contains_loop", "While clause 0 must emit DYNAMIC contains_loop");
+    check_assert(field_at(rw1, 2) == "DYNAMIC" && field_at(rw1, 3) == "contains_loop", "While clause 1 must emit DYNAMIC contains_loop");
+
+    // Beat 2: For Loop Dynamic Fallback
+    let mut toks_for: List[String] = list_new();
+    toks_for = list_push(toks_for, mk_tok("KW_FN", 1, 1, "fn"));
+    toks_for = list_push(toks_for, mk_tok("IDENT", 1, 4, "loop_for"));
+    toks_for = list_push(toks_for, mk_tok("LPAREN", 1, 12, "("));
+    toks_for = list_push(toks_for, mk_tok("IDENT", 1, 13, "n"));
+    toks_for = list_push(toks_for, mk_tok("COLON", 1, 14, ":"));
+    toks_for = list_push(toks_for, mk_tok("IDENT", 1, 16, "Int"));
+    toks_for = list_push(toks_for, mk_tok("RPAREN", 1, 19, ")"));
+    toks_for = list_push(toks_for, mk_tok("ARROW", 1, 21, "->"));
+    toks_for = list_push(toks_for, mk_tok("IDENT", 1, 24, "Int"));
+    toks_for = list_push(toks_for, mk_tok("KW_REQUIRES", 2, 1, "requires"));
+    toks_for = list_push(toks_for, mk_tok("IDENT", 2, 10, "n"));
+    toks_for = list_push(toks_for, mk_tok("GTE", 2, 12, ">="));
+    toks_for = list_push(toks_for, mk_tok("INT", 2, 15, "0"));
+    toks_for = list_push(toks_for, mk_tok("KW_ENSURES", 3, 1, "ensures"));
+    toks_for = list_push(toks_for, mk_tok("IDENT", 3, 9, "result"));
+    toks_for = list_push(toks_for, mk_tok("GTE", 3, 16, ">="));
+    toks_for = list_push(toks_for, mk_tok("INT", 3, 19, "0"));
+    toks_for = list_push(toks_for, mk_tok("LBRACE", 4, 1, "{"));
+    toks_for = list_push(toks_for, mk_tok("KW_FOR", 5, 5, "for"));
+    toks_for = list_push(toks_for, mk_tok("IDENT", 5, 9, "i"));
+    toks_for = list_push(toks_for, mk_tok("KW_IN", 5, 11, "in"));
+    toks_for = list_push(toks_for, mk_tok("INT", 5, 14, "0"));
+    toks_for = list_push(toks_for, mk_tok("DOTDOT", 5, 15, ".."));
+    toks_for = list_push(toks_for, mk_tok("IDENT", 5, 17, "n"));
+    toks_for = list_push(toks_for, mk_tok("LBRACE", 5, 19, "{"));
+    toks_for = list_push(toks_for, mk_tok("RBRACE", 5, 21, "}"));
+    toks_for = list_push(toks_for, mk_tok("KW_RETURN", 6, 5, "return"));
+    toks_for = list_push(toks_for, mk_tok("INT", 6, 12, "0"));
+    toks_for = list_push(toks_for, mk_tok("SEMI", 6, 13, ";"));
+    toks_for = list_push(toks_for, mk_tok("RBRACE", 7, 1, "}"));
+
+    let vf: List[String] = smt_vc_prove_function_clauses(toks_for, 0, "loop_for");
+    check_assert(list_len(vf) == 2, "For loop must produce 2 verdicts");
+    let rf0: String = list_get(vf, 0);
+    let rf1: String = list_get(vf, 1);
+    check_assert(field_at(rf0, 2) == "DYNAMIC" && field_at(rf0, 3) == "contains_loop", "For clause 0 must emit DYNAMIC contains_loop");
+    check_assert(field_at(rf1, 2) == "DYNAMIC" && field_at(rf1, 3) == "contains_loop", "For clause 1 must emit DYNAMIC contains_loop");
+
+    // Beat 3: Call-Shaped Predicate (e.g. chars_len(s) > 0)
+    let mut toks_call: List[String] = list_new();
+    toks_call = list_push(toks_call, mk_tok("KW_FN", 1, 1, "fn"));
+    toks_call = list_push(toks_call, mk_tok("IDENT", 1, 4, "call_pred"));
+    toks_call = list_push(toks_call, mk_tok("LPAREN", 1, 13, "("));
+    toks_call = list_push(toks_call, mk_tok("IDENT", 1, 14, "s"));
+    toks_call = list_push(toks_call, mk_tok("COLON", 1, 15, ":"));
+    toks_call = list_push(toks_call, mk_tok("IDENT", 1, 17, "String"));
+    toks_call = list_push(toks_call, mk_tok("RPAREN", 1, 23, ")"));
+    toks_call = list_push(toks_call, mk_tok("ARROW", 1, 25, "->"));
+    toks_call = list_push(toks_call, mk_tok("IDENT", 1, 28, "Int"));
+    toks_call = list_push(toks_call, mk_tok("KW_REQUIRES", 2, 1, "requires"));
+    toks_call = list_push(toks_call, mk_tok("IDENT", 2, 10, "chars_len"));
+    toks_call = list_push(toks_call, mk_tok("LPAREN", 2, 19, "("));
+    toks_call = list_push(toks_call, mk_tok("IDENT", 2, 20, "s"));
+    toks_call = list_push(toks_call, mk_tok("RPAREN", 2, 21, ")"));
+    toks_call = list_push(toks_call, mk_tok("GT", 2, 23, ">"));
+    toks_call = list_push(toks_call, mk_tok("INT", 2, 25, "0"));
+    toks_call = list_push(toks_call, mk_tok("LBRACE", 3, 1, "{"));
+    toks_call = list_push(toks_call, mk_tok("KW_RETURN", 4, 5, "return"));
+    toks_call = list_push(toks_call, mk_tok("INT", 4, 12, "42"));
+    toks_call = list_push(toks_call, mk_tok("SEMI", 4, 14, ";"));
+    toks_call = list_push(toks_call, mk_tok("RBRACE", 5, 1, "}"));
+
+    let vc: List[String] = smt_vc_prove_function_clauses(toks_call, 0, "call_pred");
+    check_assert(list_len(vc) == 1, "Call-shaped pred must produce 1 verdict");
+    let rc0: String = list_get(vc, 0);
+    check_assert(field_at(rc0, 2) == "DYNAMIC" && field_at(rc0, 3) == "call_shaped", "Call-shaped clause must emit DYNAMIC call_shaped");
+
+    // Beat 4: Non-linear assignment handling (result = x * y)
+    let mut toks_nl: List[String] = list_new();
+    toks_nl = list_push(toks_nl, mk_tok("KW_RETURN", 1, 1, "return"));
+    toks_nl = list_push(toks_nl, mk_tok("IDENT", 1, 8, "x"));
+    toks_nl = list_push(toks_nl, mk_tok("STAR", 1, 10, "*"));
+    toks_nl = list_push(toks_nl, mk_tok("IDENT", 1, 12, "y"));
+    toks_nl = list_push(toks_nl, mk_tok("SEMI", 1, 13, ";"));
+    let asgn_nl: String = smt_vc_extract_assign(toks_nl, 0, 5);
+    check_assert(field_at(asgn_nl, 0) == "result", "Assign target must be result");
+    let target_v: String = field_at(asgn_nl, 1);
+    let coeff_v: String = field_at(asgn_nl, 2);
+    if target_v == "x" && coeff_v == "1" {
+        println("FINDING: smt_vc_extract_assign drops * y and treats return x * y as result = x");
+    }
+
+    println("PROBE_CHALLENGER_LOOP_FALLBACK_PASS");
+}

@@ -1,0 +1,23 @@
+// # Test Dynamic Contract Execution Trap
+//
+// Logline: Verify dynamic contract allows valid inputs and passes cleanly.
+//
+// Setup: Pure compute.
+//
+// Beats:
+//   1. Call function with valid input satisfying dynamic contract.
+// RULES.oot 1.7: Under 256 lines.
+
+fn dyn_check(x: Int) -> Int
+requires x >= 10
+ensures result >= 10
+{
+    let mut i: Int = 0;
+    while i < 1 { i = i + 1; }
+    return x;
+}
+
+pub fn main() {
+    let r: Int = dyn_check(15);
+    println("DYNAMIC_CHECK_PASS: " + r.to_string());
+}

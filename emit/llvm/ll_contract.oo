@@ -67,13 +67,7 @@ pub fn ll_contract_collect(toks: List[String], p0: Int, n: Int, env0: String, na
         if k == "LBRACE" {
             done = true;
         } else if k == "IDENT" && ll_t(toks, p) == "spec" {
-            let cs: Int = p + 1;
-            let ce: Int = ll_con_end(toks, cs, n);
-            if smt_clause_is_unsat(toks, cs, ce, "spec") { smt_clause_unsat_exit(toks, cs, "spec"); }
-            if ll_is_clause_proven(toks, cs, ce, "spec", name, cl_idx, env) { preqs = preqs + cs.to_string() + ":" + ce.to_string() + ":spec;"; }
-            else { reqs = reqs + cs.to_string() + ":" + ce.to_string() + ":spec;"; ll_con_global(name, ri, "spec"); ri = ri + 1; }
-            cl_idx = cl_idx + 1;
-            p = ce;
+            p = ll_con_end(toks, p + 1, n);
         } else if k == "KW_REQUIRES" {
             let cs: Int = p + 1;
             let ce: Int = ll_con_end(toks, cs, n);

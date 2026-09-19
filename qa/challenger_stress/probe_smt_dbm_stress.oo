@@ -1,0 +1,125 @@
+// # Probe: SMT DBM Stress and Falsification Harness
+//
+// Logline: Adversarially stress tests DBM Floyd-Warshall solver on multi-variable systems and extreme bounds.
+//
+// Setup: Pure compute. Evaluates negative cycles, large constants, boundary values, and models.
+//
+// Beats:
+//   1. Multi-variable 3-variable and 4-variable systems with positive and negative cycles.
+//   2. Boundary values and large integer constants (k = 1,000,000 to 100,000,000).
+//   3. Negative bounds and tautologies.
+//   4. Counterexample extraction and model validation in [-D[0][i], D[i][0]].
+// RULES.oot 1.7: Under 256 lines.
+
+import "check/smt_contract_parse.oo";
+import "check/smt_wp_calc.oo";
+import "check/smt_prover_lia.oo";
+
+fn check_assert(cond: Bool, msg: String) {
+    if !cond {
+        println("FAIL\t" + msg);
+        process_exit(1);
+    }
+}
+
+pub fn main() {
+    // Beat 1: Multi-variable Difference Systems
+    // System: x - y <= 10, y - z <= 20  => shortest path x - z <= 30
+    let names: List[String] = list_push(list_push(list_push(list_new(), "x"), "y"), "z");
+    let n: Int = 4; // 0 (zero), 1 (x), 2 (y), 3 (z)
+
+    // Subcase 1A: Contradictory x - z >= 31 (i.e. z - x <= -31)
+    let mut d_unsat: List[Int] = dbm_init(n);
+    d_unsat = dbm_set(d_unsat, n, 1, 2, 10); // x - y <= 10
+    d_unsat = dbm_set(d_unsat, n, 2, 3, 20); // y - z <= 20
+    d_unsat = dbm_set(d_unsat, n, 3, 1, 0 - 31); // z - x <= -31
+    check_assert(dbm_solve_cycle(d_unsat, n), "Multi-var triangle cycle must be UNSAT");
+
+    // Subcase 1B: Feasible boundary x - z >= 30 (i.e. z - x <= -30)
+    let mut d_sat: List[Int] = dbm_init(n);
+    d_sat = dbm_set(d_sat, n, 1, 2, 10);
+    d_sat = dbm_set(d_sat, n, 2, 3, 20);
+    d_sat = dbm_set(d_sat, n, 3, 1, 0 - 30);
+    check_assert(!dbm_solve_cycle(d_sat, n), "Multi-var exact boundary must be SAT (no cycle)");
+
+    // Subcase 1C: 4-variable loop (x -> y -> z -> w -> x)
+    // x - y <= 5, y - z <= 5, z - w <= 5, w - x <= -16 (sum = -1)
+    let n4: Int = 5;
+    let mut d4_bad: List[Int] = dbm_init(n4);
+    d4_bad = dbm_set(d4_bad, n4, 1, 2, 5);
+    d4_bad = dbm_set(d4_bad, n4, 2, 3, 5);
+    d4_bad = dbm_set(d4_bad, n4, 3, 4, 5);
+    d4_bad = dbm_set(d4_bad, n4, 4, 1, 0 - 16);
+    check_assert(dbm_solve_cycle(d4_bad, n4), "4-var loop with sum -1 must detect negative cycle");
+
+    // Subcase 1D: 4-variable feasible loop (sum = 0)
+    let mut d4_ok: List[Int] = dbm_init(n4);
+    d4_ok = dbm_set(d4_ok, n4, 1, 2, 5);
+    d4_ok = dbm_set(d4_ok, n4, 2, 3, 5);
+    d4_ok = dbm_set(d4_ok, n4, 3, 4, 5);
+    d4_ok = dbm_set(d4_ok, n4, 4, 1, 0 - 15);
+    check_assert(!dbm_solve_cycle(d4_ok, n4), "4-var loop with sum 0 must be SAT");
+
+    // Beat 2: Large Integer Constants (k > 1,000,000)
+    let k1: Int = 2500000;
+    let k2: Int = 3500000;
+    let mut d_large_bad: List[Int] = dbm_init(n);
+    d_large_bad = dbm_set(d_large_bad, n, 1, 2, k1);
+    d_large_bad = dbm_set(d_large_bad, n, 2, 3, k2);
+    d_large_bad = dbm_set(d_large_bad, n, 3, 1, 0 - (k1 + k2 + 1));
+    check_assert(dbm_solve_cycle(d_large_bad, n), "Large constants (>1M) cycle must detect UNSAT");
+
+    let mut d_large_ok: List[Int] = dbm_init(n);
+    d_large_ok = dbm_set(d_large_ok, n, 1, 2, k1);
+    d_large_ok = dbm_set(d_large_ok, n, 2, 3, k2);
+    d_large_ok = dbm_set(d_large_ok, n, 3, 1, 0 - (k1 + k2));
+    check_assert(!dbm_solve_cycle(d_large_ok, n), "Large constants exact boundary must be SAT");
+
+    // Beat 3: Negative Bounds and Tautologies
+    // Pre: x >= -200 && x <= -100  (feasible)
+    let mut d_neg_ok: List[Int] = dbm_init(2); // 0 (zero), 1 (x)
+    d_neg_ok = dbm_set(d_neg_ok, 2, 0, 1, 200); // 0 - x <= 200 => x >= -200
+    d_neg_ok = dbm_set(d_neg_ok, 2, 1, 0, 0 - 100); // x - 0 <= -100 => x <= -100
+    check_assert(!dbm_solve_cycle(d_neg_ok, 2), "Negative interval [-200, -100] must be SAT");
+    let sol_neg: List[Int] = dbm_floyd_warshall(d_neg_ok, 2);
+    let lo_neg: Int = 0 - dbm_get(sol_neg, 2, 0, 1);
+    let hi_neg: Int = dbm_get(sol_neg, 2, 1, 0);
+    check_assert(lo_neg == 0 - 200 && hi_neg == 0 - 100, "Negative bounds extraction match");
+
+    // Pre: x >= -100 && x <= -200 (contradictory)
+    let mut d_neg_bad: List[Int] = dbm_init(2);
+    d_neg_bad = dbm_set(d_neg_bad, 2, 0, 1, 100); // x >= -100
+    d_neg_bad = dbm_set(d_neg_bad, 2, 1, 0, 0 - 200); // x <= -200
+    check_assert(dbm_solve_cycle(d_neg_bad, 2), "Contradictory negative bounds must be UNSAT");
+
+    // Tautology: x >= 5 implies x >= 5
+    let pre_tau: String = smt_contract_parse_pack("requires", "x", 1, ">=", 5, "", 0, "1", "1", false, 0);
+    let wp_tau: String = smt_contract_parse_pack("ensures", "x", 1, ">=", 5, "", 0, "2", "1", false, 0);
+    let res_tau: String = smt_prover_lia_prove_clause(pre_tau, wp_tau);
+    check_assert(smt_prover_lia_is_valid(res_tau), "Tautology x >= 5 => x >= 5 must be PROVEN (UNSAT)");
+
+    // Beat 4: Counterexample Model Extraction Validity
+    // Test that when SAT, extracted counterexample value satisfies Pre && !WP
+    // Pre: x >= 10 && x <= 20
+    // WP:  x >= 15  (negation: x <= 14)
+    // Feasible counterexample interval is [10, 14]
+    let mut d_cex: List[Int] = dbm_init(2);
+    d_cex = dbm_set(d_cex, 2, 0, 1, 0 - 10); // 0 - x <= -10 => x >= 10
+    d_cex = dbm_set(d_cex, 2, 1, 0, 20);      // x - 0 <= 20   => x <= 20
+    d_cex = dbm_set(d_cex, 2, 1, 0, 14);      // negation: x <= 14
+    check_assert(!dbm_solve_cycle(d_cex, 2), "Conjunction Pre && !WP must be SAT");
+    let sol_cex: List[Int] = dbm_floyd_warshall(d_cex, 2);
+    let d01: Int = dbm_get(sol_cex, 2, 0, 1);
+    let d10: Int = dbm_get(sol_cex, 2, 1, 0);
+    let lo_c: Int = 0 - d01;
+    let hi_c: Int = d10;
+    check_assert(lo_c == 10 && hi_c == 14, "Counterexample interval must be [10, 14]");
+    let mut chosen_cex: Int = 0;
+    if lo_c <= 0 && 0 <= hi_c { chosen_cex = 0; }
+    else if lo_c > 0 { chosen_cex = lo_c; }
+    else { chosen_cex = hi_c; }
+    check_assert(chosen_cex >= lo_c && chosen_cex <= hi_c, "Chosen counterexample must be in [lo, hi]");
+    check_assert(chosen_cex == 10, "Chosen counterexample for [10, 14] is 10");
+
+    println("PROBE_SMT_DBM_STRESS_PASS");
+}

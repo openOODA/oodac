@@ -9,6 +9,7 @@ LOG_DIR="$PROJECT_ROOT/.ooda-cache"
 LOG_FILE="$LOG_DIR/contracts.log"
 
 export OODAC_BIN="${OODAC_BIN:-$PROJECT_ROOT/bin/oodac}"
+export OODAC="${OODAC:-$OODAC_BIN}"
 export OODA_FS_READDIR="${OODA_FS_READDIR:-$PROJECT_ROOT}"
 export OO_LIST_AMBIENT_QUOTA="${OO_LIST_AMBIENT_QUOTA:-34359738368}"
 export OODA_NO_JAIL="${OODA_NO_JAIL:-1}"
@@ -120,25 +121,31 @@ run_contract_suite() {
 
   # 8. LLVM Assume Lowering and Dead Branch Elimination
   local opt_fail=0
-  cat << 'EOF' > "$d/assume_branch.ll"
-declare void @llvm.assume(i1) nounwind
-define i32 @test_safe_double_opt(i32 %x) {
+  local oodac_cmd="${OODAC:-$OODAC_BIN}"
+  local ll_src="$d/valid_contracts.ll"
+  local emit_out
+  if emit_out=$(cd "$PROJECT_ROOT/oodac" && "$oodac_cmd" emit-llvm tests/fixtures/valid_contracts.oo 2>"$d/emit.err"); then
+    printf "%s\n" "$emit_out" > "$ll_src"
+    if ! grep -q "call void @llvm.assume" "$ll_src" || grep -q "@.con_" "$ll_src" || grep -q "ctrap" "$ll_src"; then
+      opt_fail=1
+    fi
+    cat << 'EOF' >> "$ll_src"
+define i64 @test_assume_dead_branch(i64 %x) {
 entry:
-  %c_pre = icmp sge i32 %x, 0
-  call void @llvm.assume(i1 %c_pre)
-  %res = mul i32 %x, 2
-  %c_post = icmp sge i32 %res, %x
-  call void @llvm.assume(i1 %c_post)
-  %c_dead = icmp slt i32 %x, 0
+  %res = call i64 @safe_double(i64 %x)
+  %c_dead = icmp slt i64 %x, 0
   br i1 %c_dead, label %dead, label %alive
 dead:
-  ret i32 -1
+  ret i64 -999
 alive:
-  ret i32 %res
+  ret i64 %res
 }
 EOF
-  if opt -passes=instcombine,simplifycfg -S "$d/assume_branch.ll" -o "$d/assume_opt.ll" > "$d/opt.log" 2>&1; then
-    if grep -q "dead:" "$d/assume_opt.ll" || grep -q "ret i32 -1" "$d/assume_opt.ll"; then
+    if opt -O3 -S "$ll_src" -o "$d/valid_opt.ll" > "$d/opt.log" 2>&1; then
+      if grep -q "dead:" "$d/valid_opt.ll" || grep -q -- "-999" "$d/valid_opt.ll"; then
+        opt_fail=1
+      fi
+    else
       opt_fail=1
     fi
   else

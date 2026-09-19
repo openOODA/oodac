@@ -51,14 +51,16 @@ pub fn smt_wp_calc_step(post: String, assign: String) -> String {
 
     if lhs_v == target {
         lhs_v = a_rhs_v;
+        let old_c: Int = lhs_c;
         lhs_c = lhs_c * a_c;
-        rhs_k = rhs_k - (lhs_c * a_k);
+        rhs_k = rhs_k - (old_c * a_k);
     }
 
     if rhs_v == target {
         rhs_v = a_rhs_v;
+        let old_c: Int = rhs_c;
         rhs_c = rhs_c * a_c;
-        rhs_k = rhs_k + (rhs_c * a_k);
+        rhs_k = rhs_k + (old_c * a_k);
     }
 
     if lhs_v != "" && lhs_v == rhs_v {

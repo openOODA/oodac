@@ -1,0 +1,15 @@
+// # Test Constant True Contract Fixture
+//
+// Logline: Test constant true contract lowering to llvm.assume.
+//
+// Setup: Pure compute.
+//
+// Beats:
+//   1. Function with requires true.
+// RULES.oot 1.7: Under 256 lines.
+
+pub fn test_true(x: Int) -> Int
+requires true
+{
+    return x + 1;
+}

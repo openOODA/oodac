@@ -11,7 +11,7 @@
 
 import "types/typed_artifact.oo";
 import "check/tc_struct_field_table.oo";
-import "check/smt_contract_parse.oo";
+import "check/smt_verify.oo";
 
 
 pub fn artifact_ensure_dir(sys: &ProcessCap) {
@@ -83,63 +83,10 @@ pub fn artifact_caps_of(toks: List[String]) -> String {
 }
 
 // Contract verdict: structured OODAART3 smt: section schema records.
-// Phase 0 establishes the schema lock:
-// - Modules with 0 contract clauses emit "0 clauses proved".
-// - Modules with contract clauses emit structured PROVEN:<vc_hash> or DYNAMIC records
-//   scoped strictly to their owning function declaration.
-// - Full Dijkstra WP calculus and SMT decision procedure are integrated in Phase 1 (M1-M3).
+// SMT verification pass proves function contracts via WP calculus and DBM,
+// sealing proof certificates (PROVEN:<vc_hash>) or dynamic clauses proved tally.
 pub fn artifact_smt_of(toks: List[String]) -> String {
-    let clauses: List[String] = smt_contract_parse_tokens(toks);
-    let n_cl: Int = list_len(clauses);
-    if n_cl == 0 { return "0 clauses proved"; }
-    let mut out: String = "";
-    let n_tok: Int = list_len(toks);
-    let mut i: Int = 0;
-    while i < n_tok {
-        let k: String = art_kind(toks, i);
-        if k == "KW_FN" && i + 1 < n_tok {
-            let fn_name: String = art_text(toks, i + 1);
-            let mut p: Int = i + 1;
-            while p < n_tok && art_kind(toks, p) != "LBRACE" && art_kind(toks, p) != "SEMI" {
-                p = p + 1;
-            }
-            let mut cl_idx: Int = 0;
-            let mut c: Int = i + 1;
-            while c < p {
-                let ck: String = art_kind(toks, c);
-                if ck == "KW_REQUIRES" || ck == "KW_ENSURES" {
-                    let mut kind: String = "requires";
-                    if ck == "KW_ENSURES" { kind = "ensures"; }
-                    let mut end_c: Int = c + 1;
-                    while end_c < p {
-                        let ek: String = art_kind(toks, end_c);
-                        if ek == "KW_REQUIRES" || ek == "KW_ENSURES" { break; }
-                        end_c = end_c + 1;
-                    }
-                    if end_c > c + 1 {
-                        let cl: String = smt_contract_parse_span(toks, c + 1, end_c, kind);
-                        let is_c: Bool = smt_contract_parse_is_const(cl);
-                        let c_val: Int = 0 + smt_contract_parse_const_val(cl);
-                        if is_c && c_val != 0 {
-                            let form: String = fn_name + ":" + cl_idx.to_string() + ":" + kind;
-                            let dig: String = crypto_sha256_internal(form);
-                            let vc_hash: String = str_slice(dig, 0, 16);
-                            out = out + smt_record_pack_proven(fn_name, cl_idx, vc_hash, "constant_true") + "\n";
-                        } else {
-                            out = out + smt_record_pack_dynamic(fn_name, cl_idx, "dynamic") + "\n";
-                        }
-                        cl_idx = cl_idx + 1;
-                    }
-                    c = end_c - 1;
-                }
-                c = c + 1;
-            }
-            i = p;
-        }
-        i = i + 1;
-    }
-    if out == "" { return n_cl.to_string() + " clauses proved"; }
-    return artifact_norm_section(out);
+    return smt_verify_build_smt_section(toks);
 }
 
 pub fn artifact_write_toks(fs_w: &FsWriteCap, sys: &ProcessCap, path: String, src: String, toks: List[String]) -> String {

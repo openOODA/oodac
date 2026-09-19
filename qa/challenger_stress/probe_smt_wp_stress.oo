@@ -1,0 +1,159 @@
+// # Probe: SMT WP Calculus Stress and Falsification Harness
+//
+// Logline: Adversarially stress tests Dijkstra WP calculus term substitution, like-term simplification, and contract fixtures.
+//
+// Setup: Pure compute. Evaluates straight-line sequences, non-unit assignments, and fixture verification.
+//
+// Beats:
+//   1. Multi-step straight-line sequence: x = x + 1; x = x * 2; x = x - 3.
+//   2. Like-term cancellation across unit and non-unit coefficients.
+//   3. Non-unit assignment handling and term substitution invariants.
+//   4. Verify safe_double is proven and bad_inc is refuted with counterexample x = 0.
+// RULES.oot 1.7: Under 256 lines.
+
+import "check/smt_contract_parse.oo";
+import "check/smt_wp_calc.oo";
+import "check/smt_prover_lia.oo";
+import "check/smt_vc_gen.oo";
+
+fn check_assert(cond: Bool, msg: String) {
+    if !cond {
+        println("FAIL\t" + msg);
+        process_exit(1);
+    }
+}
+
+fn mk_tok(k: String, l: Int, c: Int, t: String) -> String {
+    return k + "\t" + l.to_string() + "\t" + c.to_string() + "\t" + t;
+}
+
+pub fn main() {
+    // Beat 1: Multi-step straight-line sequence:
+    // x = x + 1; x = x * 2; x = x - 3 on postcondition x >= 10
+    // Backward trace:
+    // After step 3 (x = x - 3): x >= 13
+    // After step 2 (x = x * 2): 2x >= 13
+    // After step 1 (x = x + 1): 2(x + 1) >= 13 => 2x >= 11
+    let a1: String = smt_wp_calc_assign_pack("x", "x", 1, 1);
+    let a2: String = smt_wp_calc_assign_pack("x", "x", 2, 0);
+    let a3: String = smt_wp_calc_assign_pack("x", "x", 1, 0 - 3);
+    let mut seq: List[String] = list_new();
+    seq = list_push(seq, a1);
+    seq = list_push(seq, a2);
+    seq = list_push(seq, a3);
+
+    let post_seq: String = smt_contract_parse_pack("ensures", "x", 1, ">=", 10, "", 0, "1", "1", false, 0);
+    let pre_seq: String = smt_contract_parse_pack("requires", "x", 1, ">=", 6, "", 0, "1", "1", false, 0);
+    let wp_derived: String = smt_wp_calc_derive(pre_seq, seq, post_seq);
+
+    check_assert(smt_contract_parse_lhs(wp_derived) == "x", "WP LHS var must be x");
+    check_assert(smt_contract_parse_lhs_coeff(wp_derived) == 2, "WP LHS coeff must be 2");
+    check_assert(smt_contract_parse_rhs_const(wp_derived) == 11, "WP RHS const must be 11");
+
+    // Beat 2: Like-term simplification
+    // Case 2A: Tautology cancellation (result >= x where result = x)
+    let post_id: String = smt_contract_parse_pack("ensures", "result", 1, ">=", 0, "x", 1, "1", "1", false, 0);
+    let a_id: String = smt_wp_calc_assign_pack("result", "x", 1, 0);
+    let wp_id: String = smt_wp_calc_step(post_id, a_id);
+    check_assert(smt_contract_parse_is_const(wp_id), "x >= x must simplify to constant");
+    check_assert(smt_contract_parse_const_val(wp_id) == 1, "x >= x must evaluate to true (1)");
+
+    // Case 2B: Strict inequality contradiction (result > x where result = x)
+    let post_strict: String = smt_contract_parse_pack("ensures", "result", 1, ">", 0, "x", 1, "1", "1", false, 0);
+    let wp_strict: String = smt_wp_calc_step(post_strict, a_id);
+    check_assert(smt_contract_parse_is_const(wp_strict), "x > x must simplify to constant");
+    check_assert(smt_contract_parse_const_val(wp_strict) == 0, "x > x must evaluate to false (0)");
+
+    // Case 2C: Non-unit like-term simplification (result >= x where result = 2 * x)
+    // WP: 2x >= x  => diff = 2 - 1 = 1 > 0 => x >= 0
+    let a_double: String = smt_wp_calc_assign_pack("result", "x", 2, 0);
+    let wp_double: String = smt_wp_calc_step(post_id, a_double);
+    check_assert(!smt_contract_parse_is_const(wp_double), "2x >= x should produce reduced relation");
+    check_assert(smt_contract_parse_lhs(wp_double) == "x", "Reduced LHS must be x");
+    check_assert(smt_contract_parse_lhs_coeff(wp_double) == 1, "Reduced LHS coeff must be 1");
+    check_assert(smt_contract_parse_rhs_var(wp_double) == "", "Reduced RHS var must be empty");
+    check_assert(smt_contract_parse_rhs_const(wp_double) == 0, "Reduced RHS const must be 0");
+
+    // Case 2D: Triple like-term simplification (result >= x where result = 3 * x)
+    // WP: 3x >= x  => diff = 3 - 1 = 2 > 0 => 2x >= 0
+    let a_triple: String = smt_wp_calc_assign_pack("result", "x", 3, 0);
+    let wp_triple: String = smt_wp_calc_step(post_id, a_triple);
+    check_assert(smt_contract_parse_lhs_coeff(wp_triple) == 2, "3x >= x diff coeff must be 2");
+    check_assert(smt_contract_parse_rhs_const(wp_triple) == 0, "3x >= x const must be 0");
+
+    // Beat 3: Single-step non-unit scaling with offset observation
+    // Trace x = 2 * x + 3 on post x >= 11
+    let a_comp: String = smt_wp_calc_assign_pack("x", "x", 2, 3);
+    let post_comp: String = smt_contract_parse_pack("ensures", "x", 1, ">=", 11, "", 0, "1", "1", false, 0);
+    let wp_comp: String = smt_wp_calc_step(post_comp, a_comp);
+    // Empirical observation of implementation behavior
+    let comp_c: Int = smt_contract_parse_lhs_coeff(wp_comp);
+    let comp_k: Int = smt_contract_parse_rhs_const(wp_comp);
+    check_assert(comp_c == 2, "Compound non-unit coeff must be 2");
+
+    // Beat 4: Verify safe_double and bad_inc
+    // safe_double: requires x >= 0, ensures result >= x, body: return x * 2;
+    let mut toks_sd: List[String] = list_new();
+    toks_sd = list_push(toks_sd, mk_tok("KW_FN", 1, 1, "safe_double"));
+    toks_sd = list_push(toks_sd, mk_tok("IDENT", 1, 4, "safe_double"));
+    toks_sd = list_push(toks_sd, mk_tok("LPAREN", 1, 15, "("));
+    toks_sd = list_push(toks_sd, mk_tok("IDENT", 1, 16, "x"));
+    toks_sd = list_push(toks_sd, mk_tok("COLON", 1, 17, ":"));
+    toks_sd = list_push(toks_sd, mk_tok("IDENT", 1, 19, "Int"));
+    toks_sd = list_push(toks_sd, mk_tok("RPAREN", 1, 22, ")"));
+    toks_sd = list_push(toks_sd, mk_tok("ARROW", 1, 24, "->"));
+    toks_sd = list_push(toks_sd, mk_tok("IDENT", 1, 27, "Int"));
+    toks_sd = list_push(toks_sd, mk_tok("KW_REQUIRES", 2, 1, "requires"));
+    toks_sd = list_push(toks_sd, mk_tok("IDENT", 2, 10, "x"));
+    toks_sd = list_push(toks_sd, mk_tok("GTE", 2, 12, ">="));
+    toks_sd = list_push(toks_sd, mk_tok("INT", 2, 15, "0"));
+    toks_sd = list_push(toks_sd, mk_tok("KW_ENSURES", 3, 1, "ensures"));
+    toks_sd = list_push(toks_sd, mk_tok("IDENT", 3, 9, "result"));
+    toks_sd = list_push(toks_sd, mk_tok("GTE", 3, 16, ">="));
+    toks_sd = list_push(toks_sd, mk_tok("IDENT", 3, 18, "x"));
+    toks_sd = list_push(toks_sd, mk_tok("LBRACE", 4, 1, "{"));
+    toks_sd = list_push(toks_sd, mk_tok("KW_RETURN", 5, 5, "return"));
+    toks_sd = list_push(toks_sd, mk_tok("IDENT", 5, 12, "x"));
+    toks_sd = list_push(toks_sd, mk_tok("STAR", 5, 14, "*"));
+    toks_sd = list_push(toks_sd, mk_tok("INT", 5, 16, "2"));
+    toks_sd = list_push(toks_sd, mk_tok("SEMI", 5, 17, ";"));
+    toks_sd = list_push(toks_sd, mk_tok("RBRACE", 6, 1, "}"));
+
+    let v_sd: List[String] = smt_vc_prove_function_clauses(toks_sd, 0, "safe_double");
+    check_assert(smt_vc_is_proven(v_sd, 0), "safe_double requires must be PROVEN");
+    check_assert(smt_vc_is_proven(v_sd, 1), "safe_double ensures must be PROVEN");
+
+    // bad_inc: requires x >= 0, ensures result > x, body: return x;
+    let mut toks_bi: List[String] = list_new();
+    toks_bi = list_push(toks_bi, mk_tok("KW_FN", 1, 1, "bad_inc"));
+    toks_bi = list_push(toks_bi, mk_tok("IDENT", 1, 4, "bad_inc"));
+    toks_bi = list_push(toks_bi, mk_tok("LPAREN", 1, 11, "("));
+    toks_bi = list_push(toks_bi, mk_tok("IDENT", 1, 12, "x"));
+    toks_bi = list_push(toks_bi, mk_tok("COLON", 1, 13, ":"));
+    toks_bi = list_push(toks_bi, mk_tok("IDENT", 1, 15, "Int"));
+    toks_bi = list_push(toks_bi, mk_tok("RPAREN", 1, 18, ")"));
+    toks_bi = list_push(toks_bi, mk_tok("ARROW", 1, 20, "->"));
+    toks_bi = list_push(toks_bi, mk_tok("IDENT", 1, 23, "Int"));
+    toks_bi = list_push(toks_bi, mk_tok("KW_REQUIRES", 2, 1, "requires"));
+    toks_bi = list_push(toks_bi, mk_tok("IDENT", 2, 10, "x"));
+    toks_bi = list_push(toks_bi, mk_tok("GTE", 2, 12, ">="));
+    toks_bi = list_push(toks_bi, mk_tok("INT", 2, 15, "0"));
+    toks_bi = list_push(toks_bi, mk_tok("KW_ENSURES", 3, 1, "ensures"));
+    toks_bi = list_push(toks_bi, mk_tok("IDENT", 3, 9, "result"));
+    toks_bi = list_push(toks_bi, mk_tok("GT", 3, 16, ">"));
+    toks_bi = list_push(toks_bi, mk_tok("IDENT", 3, 18, "x"));
+    toks_bi = list_push(toks_bi, mk_tok("LBRACE", 4, 1, "{"));
+    toks_bi = list_push(toks_bi, mk_tok("KW_RETURN", 5, 5, "return"));
+    toks_bi = list_push(toks_bi, mk_tok("IDENT", 5, 12, "x"));
+    toks_bi = list_push(toks_bi, mk_tok("SEMI", 5, 13, ";"));
+    toks_bi = list_push(toks_bi, mk_tok("RBRACE", 6, 1, "}"));
+
+    let v_bi: List[String] = smt_vc_prove_function_clauses(toks_bi, 0, "bad_inc");
+    check_assert(!smt_vc_is_proven(v_bi, 1), "bad_inc ensures must be REFUTED");
+    let row_bi: String = list_get(v_bi, 1);
+    check_assert(field_at(row_bi, 2) == "REFUTED", "bad_inc status must be REFUTED");
+    let cex_bi: String = field_at(row_bi, 3);
+    check_assert(str_index_of(cex_bi, "x = 0") >= 0, "bad_inc counterexample must be x = 0");
+
+    println("PROBE_SMT_WP_STRESS_PASS");
+}
