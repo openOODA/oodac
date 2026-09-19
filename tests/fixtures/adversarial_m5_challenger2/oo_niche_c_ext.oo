@@ -1,0 +1,7 @@
+// # C ABI External Callee
+// Logline: Simulates C ABI function returning Option[&Int]
+// Setup: check and emit-llvm
+// Beats: get_none
+pub fn oo_niche_c_ext_get() -> Option[&Int] {
+    return None;
+}

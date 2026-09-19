@@ -1,0 +1,13 @@
+// # Cap Blindspot Probe
+// Logline: Probes typechecker blindspot allowing Option[&Int] to pass to &ProcessCap
+// Setup: check
+// Beats: need_cap, main
+pub fn need_cap(p: &ProcessCap) -> Int {
+    return 0;
+}
+
+pub fn main() -> Int {
+    let a: Int = 10;
+    let o: Option[&Int] = Some(&a);
+    return need_cap(o);
+}

@@ -1,0 +1,19 @@
+// # Mut Opt Probe
+// Logline: Probes Option[&mut T] mutation and SSA promotion
+// Setup: emit-llvm
+// Beats: mutate_opt, main
+pub fn mutate_opt(o: Option[&mut Int], delta: Int) {
+    match o {
+        Some(p) => {
+            *p = *p + delta;
+        }
+        None => {}
+    }
+}
+
+pub fn main() -> Int {
+    let mut x: Int = 100;
+    mutate_opt(Some(&mut x), 50);
+    mutate_opt(None, 25);
+    return x;
+}

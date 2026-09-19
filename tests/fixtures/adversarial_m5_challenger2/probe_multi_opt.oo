@@ -1,0 +1,22 @@
+// # Multi Opt Probe
+// Logline: Probes multiple concurrent options and pure SSA alloca elimination
+// Setup: emit-llvm
+// Beats: multi_opt, main
+pub fn multi_opt(o1: Option[&Int], o2: Option[&Int]) -> Int {
+    let mut s: Int = 0;
+    match o1 {
+        Some(p1) => { s = s + *p1; }
+        None => {}
+    }
+    match o2 {
+        Some(p2) => { s = s + *p2; }
+        None => {}
+    }
+    return s;
+}
+
+pub fn main() -> Int {
+    let a: Int = 10;
+    let b: Int = 20;
+    return multi_opt(Some(&a), Some(&b));
+}

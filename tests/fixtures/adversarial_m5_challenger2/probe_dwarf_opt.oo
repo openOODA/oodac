@@ -1,0 +1,12 @@
+// # Dwarf Opt Probe
+// Logline: Probes DWARF debug info validity on local niche option variable
+// Setup: emit-llvm
+// Beats: main
+pub fn main() -> Int {
+    let a: Int = 42;
+    let opt_var: Option[&Int] = Some(&a);
+    match opt_var {
+        Some(p) => { return *p; }
+        None => { return 0; }
+    }
+}

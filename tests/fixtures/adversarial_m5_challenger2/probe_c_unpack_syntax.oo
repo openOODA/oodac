@@ -1,0 +1,13 @@
+// # C ABI Unpack Syntax Probe
+// Logline: Calls C ABI function returning Option[&Int] to expose extractvalue comma bug
+// Setup: imports oo_niche_c_ext.oo
+// Beats: main
+import "oo_niche_c_ext.oo";
+
+pub fn main() -> Int {
+    let o = oo_niche_c_ext_get();
+    match o {
+        Some(p) => { return *p; }
+        None => { return 0; }
+    }
+}

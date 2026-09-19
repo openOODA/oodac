@@ -1,0 +1,12 @@
+// # Cap Substrate Probe
+// Logline: Probes capability token bitmask preservation in substrate calls
+// Setup: emit-llvm
+// Beats: test_cap, main
+pub fn test_cap(fs: &FsReadCap) -> List[String] {
+    return oo_fs_read_dir(fs, ".");
+}
+
+pub fn main(fs: &FsReadCap) -> Int {
+    let e = test_cap(fs);
+    return e.len();
+}
