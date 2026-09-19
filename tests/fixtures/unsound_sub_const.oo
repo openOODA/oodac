@@ -1,0 +1,17 @@
+// # Unsound Subtraction from Constant Fixture
+//
+// Logline: Check if sub_from_c emits @llvm.assume and elides dynamic trap.
+//
+// Setup: Pure compute.
+//
+// Beats:
+//   1. Function with requires x >= 1000, ensures result >= 100, return 100 - x.
+// RULES.oot 1.7: Under 256 lines.
+
+pub fn sub_from_c(x: Int) -> Int
+requires x >= 1000
+ensures result >= 100
+spec "Unsound sub constant"
+{
+    return 100 - x;
+}

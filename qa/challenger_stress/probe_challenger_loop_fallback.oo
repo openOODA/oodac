@@ -143,12 +143,7 @@ pub fn main() {
     toks_nl = list_push(toks_nl, mk_tok("IDENT", 1, 12, "y"));
     toks_nl = list_push(toks_nl, mk_tok("SEMI", 1, 13, ";"));
     let asgn_nl: String = smt_vc_extract_assign(toks_nl, 0, 5);
-    check_assert(field_at(asgn_nl, 0) == "result", "Assign target must be result");
-    let target_v: String = field_at(asgn_nl, 1);
-    let coeff_v: String = field_at(asgn_nl, 2);
-    if target_v == "x" && coeff_v == "1" {
-        println("FINDING: smt_vc_extract_assign drops * y and treats return x * y as result = x");
-    }
+    check_assert(asgn_nl == "", "Non-linear assignment must fail closed to empty string");
 
     println("PROBE_CHALLENGER_LOOP_FALLBACK_PASS");
 }

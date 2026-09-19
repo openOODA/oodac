@@ -27,6 +27,10 @@ fn tok_t(toks: List[String], i: Int) -> String {
     return field_at(list_get(toks, i), 3);
 }
 
+fn str_len(s: String) -> Int {
+    return chars_len(s);
+}
+
 pub fn smt_vc_find_return(toks: List[String], body_start: Int, body_end: Int) -> Int {
     let mut i: Int = body_start;
     while i < body_end {
@@ -56,49 +60,42 @@ pub fn smt_vc_has_dot(toks: List[String], body_start: Int, body_end: Int) -> Boo
 }
 
 pub fn smt_vc_extract_assign(toks: List[String], ret_idx: Int, body_end: Int) -> String {
-    if ret_idx < 0 { return smt_wp_calc_assign_pack("result", "", 0, 0); }
+    if ret_idx < 0 { return ""; }
     let mut p: Int = ret_idx + 1;
-    if p >= body_end || tok_k(toks, p) == "SEMI" { return smt_wp_calc_assign_pack("result", "", 0, 0); }
+    if p >= body_end || tok_k(toks, p) == "SEMI" { return ""; }
     let k0: String = tok_k(toks, p);
     let t0: String = tok_t(toks, p);
     if k0 == "INT" {
-        let val: Int = parse_int(t0);
-        return smt_wp_calc_assign_pack("result", "", 0, val);
+        if p + 1 < body_end && tok_k(toks, p + 1) != "SEMI" { return ""; }
+        return smt_wp_calc_assign_pack("result", "", 0, parse_int(t0));
     }
     if k0 == "IDENT" {
         let var_name: String = t0;
         p = p + 1;
         if p >= body_end || tok_k(toks, p) == "SEMI" { return smt_wp_calc_assign_pack("result", var_name, 1, 0); }
         let is_term: Bool = p + 2 >= body_end || tok_k(toks, p + 2) == "SEMI";
-        if is_term && tok_k(toks, p) == "STAR" && p + 1 < body_end && tok_k(toks, p + 1) == "INT" {
-            let mul: Int = parse_int(tok_t(toks, p + 1));
-            return smt_wp_calc_assign_pack("result", var_name, mul, 0);
+        let op: String = tok_k(toks, p);
+        let has_i: Bool = is_term && p + 1 < body_end && tok_k(toks, p + 1) == "INT";
+        if has_i && op == "STAR" {
+            return smt_wp_calc_assign_pack("result", var_name, parse_int(tok_t(toks, p + 1)), 0);
         }
-        if is_term && tok_k(toks, p) == "PLUS" && p + 1 < body_end && tok_k(toks, p + 1) == "INT" {
-            let add_k: Int = parse_int(tok_t(toks, p + 1));
-            return smt_wp_calc_assign_pack("result", var_name, 1, add_k);
+        if has_i && op == "PLUS" {
+            return smt_wp_calc_assign_pack("result", var_name, 1, parse_int(tok_t(toks, p + 1)));
         }
-        if is_term && tok_k(toks, p) == "MINUS" && p + 1 < body_end && tok_k(toks, p + 1) == "INT" {
-            let sub_k: Int = parse_int(tok_t(toks, p + 1));
-            return smt_wp_calc_assign_pack("result", var_name, 1, 0 - sub_k);
+        if has_i && op == "MINUS" {
+            return smt_wp_calc_assign_pack("result", var_name, 1, 0 - parse_int(tok_t(toks, p + 1)));
         }
-        return smt_wp_calc_assign_pack("result", "", 0, 0);
+        return "";
     }
-    return smt_wp_calc_assign_pack("result", "", 0, 0);
+    return "";
 }
 
 pub fn smt_vc_find_body_bounds(toks: List[String], fn_idx: Int) -> List[Int] {
     let mut out: List[Int] = list_new();
     let n: Int = list_len(toks);
     let mut p: Int = fn_idx + 1;
-    while p < n && tok_k(toks, p) != "LBRACE" && tok_k(toks, p) != "SEMI" {
-        p = p + 1;
-    }
-    if p >= n || tok_k(toks, p) == "SEMI" {
-        out = list_push(out, 0 - 1);
-        out = list_push(out, 0 - 1);
-        return out;
-    }
+    while p < n && tok_k(toks, p) != "LBRACE" && tok_k(toks, p) != "SEMI" { p = p + 1; }
+    if p >= n || tok_k(toks, p) == "SEMI" { return list_push(list_push(out, 0 - 1), 0 - 1); }
     let body_start: Int = p;
     let mut depth: Int = 1;
     p = p + 1;
@@ -109,10 +106,7 @@ pub fn smt_vc_find_body_bounds(toks: List[String], fn_idx: Int) -> List[Int] {
         if depth == 0 { break; }
         p = p + 1;
     }
-    let body_end: Int = p;
-    out = list_push(out, body_start);
-    out = list_push(out, body_end);
-    return out;
+    return list_push(list_push(out, body_start), p);
 }
 
 fn fn_clauses(toks: List[String], fn_idx: Int, b_start: Int) -> List[String] {
@@ -129,10 +123,7 @@ fn fn_clauses(toks: List[String], fn_idx: Int, b_start: Int) -> List[String] {
                 if ek == "KW_REQUIRES" || ek == "KW_ENSURES" || ek == "LBRACE" || ek == "SEMI" { break; }
                 end_c = end_c + 1;
             }
-            if end_c > c + 1 {
-                let cl: String = smt_contract_parse_span(toks, c + 1, end_c, kind);
-                clauses = list_push(clauses, cl);
-            }
+            if end_c > c + 1 { clauses = list_push(clauses, smt_contract_parse_span(toks, c + 1, end_c, kind)); }
             c = end_c - 1;
         }
         c = c + 1;
@@ -171,13 +162,9 @@ pub fn smt_vc_prove_function_clauses(toks: List[String], fn_idx: Int, fn_name: S
     let mut i: Int = 0;
     while i < n_cl {
         let cl: String = list_get(clauses, i);
-        if smt_contract_parse_kind(cl) == "requires" {
-            pre_cl = cl;
-            has_pre = true;
-        }
-        if smt_contract_parse_kind(cl) == "ensures" {
-            has_ensures = true;
-        }
+        let ck: String = smt_contract_parse_kind(cl);
+        if ck == "requires" { pre_cl = cl; has_pre = true; }
+        if ck == "ensures" { has_ensures = true; }
         i = i + 1;
     }
 
@@ -201,6 +188,14 @@ pub fn smt_vc_prove_function_clauses(toks: List[String], fn_idx: Int, fn_name: S
 
     let ret_idx: Int = smt_vc_find_return(toks, b_start, b_end);
     let assign: String = smt_vc_extract_assign(toks, ret_idx, b_end);
+    if str_len(assign) == 0 {
+        i = 0;
+        while i < n_cl {
+            verdicts = list_push(verdicts, fn_name + "\t" + i.to_string() + "\tDYNAMIC\tunsupported_expr");
+            i = i + 1;
+        }
+        return verdicts;
+    }
 
     i = 0;
     while i < n_cl {
@@ -230,8 +225,7 @@ pub fn smt_vc_prove_function_clauses(toks: List[String], fn_idx: Int, fn_name: S
             if smt_prover_lia_is_valid(res) {
                 verdicts = list_push(verdicts, fn_name + "\t" + i.to_string() + "\tPROVEN\t" + smt_contract_parse_lhs(cl3));
             } else {
-                let cex: String = smt_prover_lia_counterexample(res);
-                verdicts = list_push(verdicts, fn_name + "\t" + i.to_string() + "\tREFUTED\t" + cex);
+                verdicts = list_push(verdicts, fn_name + "\t" + i.to_string() + "\tREFUTED\t" + smt_prover_lia_counterexample(res));
             }
         }
         i = i + 1;
@@ -244,10 +238,7 @@ pub fn smt_vc_is_proven(verdicts: List[String], cl_idx: Int) -> Bool {
     let mut i: Int = 0;
     while i < n {
         let row: String = list_get(verdicts, i);
-        let idx_str: String = field_at(row, 1);
-        if parse_int(idx_str) == cl_idx {
-            return field_at(row, 2) == "PROVEN";
-        }
+        if parse_int(field_at(row, 1)) == cl_idx { return field_at(row, 2) == "PROVEN"; }
         i = i + 1;
     }
     return false;

@@ -1,0 +1,86 @@
+// # Probe: Soundness probe for non-linear operations
+//
+// Logline: Test division, modulo, bitwise, and unhandled return expressions under SMT VC gen.
+//
+// Setup: Pure compute.
+//
+// Beats:
+//   1. Test non-linear operations under result >= x.
+//   2. Test non-linear operations under result == 0.
+// RULES.oot 1.7: Under 256 lines.
+
+import "check/smt_contract_parse.oo";
+import "check/smt_wp_calc.oo";
+import "check/smt_prover_lia.oo";
+import "check/smt_vc_gen.oo";
+
+fn mk_tok(k: String, l: Int, c: Int, t: String) -> String {
+    return k + "\t" + l.to_string() + "\t" + c.to_string() + "\t" + t;
+}
+
+fn build_fn(name: String, op_tok: String, op_str: String, post_op: String, post_rhs: String, is_rhs_ident: Bool) -> List[String] {
+    let mut toks: List[String] = list_new();
+    toks = list_push(toks, mk_tok("KW_FN", 1, 1, "fn"));
+    toks = list_push(toks, mk_tok("IDENT", 1, 4, name));
+    toks = list_push(toks, mk_tok("LPAREN", 1, 17, "("));
+    toks = list_push(toks, mk_tok("IDENT", 1, 18, "x"));
+    toks = list_push(toks, mk_tok("COLON", 1, 19, ":"));
+    toks = list_push(toks, mk_tok("IDENT", 1, 21, "Int"));
+    toks = list_push(toks, mk_tok("COMMA", 1, 24, ","));
+    toks = list_push(toks, mk_tok("IDENT", 1, 26, "y"));
+    toks = list_push(toks, mk_tok("COLON", 1, 27, ":"));
+    toks = list_push(toks, mk_tok("IDENT", 1, 29, "Int"));
+    toks = list_push(toks, mk_tok("RPAREN", 1, 32, ")"));
+    toks = list_push(toks, mk_tok("ARROW", 1, 34, "->"));
+    toks = list_push(toks, mk_tok("IDENT", 1, 37, "Int"));
+    toks = list_push(toks, mk_tok("KW_REQUIRES", 2, 1, "requires"));
+    toks = list_push(toks, mk_tok("IDENT", 2, 10, "x"));
+    toks = list_push(toks, mk_tok("GT", 2, 12, ">"));
+    toks = list_push(toks, mk_tok("INT", 2, 14, "0"));
+    toks = list_push(toks, mk_tok("KW_ENSURES", 3, 1, "ensures"));
+    toks = list_push(toks, mk_tok("IDENT", 3, 9, "result"));
+    if post_op == "==" {
+        toks = list_push(toks, mk_tok("EQEQ", 3, 16, "=="));
+    } else {
+        toks = list_push(toks, mk_tok("GTE", 3, 16, ">="));
+    }
+    if is_rhs_ident {
+        toks = list_push(toks, mk_tok("IDENT", 3, 19, post_rhs));
+    } else {
+        toks = list_push(toks, mk_tok("INT", 3, 19, post_rhs));
+    }
+    toks = list_push(toks, mk_tok("LBRACE", 4, 1, "{"));
+    toks = list_push(toks, mk_tok("KW_RETURN", 5, 5, "return"));
+    toks = list_push(toks, mk_tok("IDENT", 5, 12, "x"));
+    toks = list_push(toks, mk_tok(op_tok, 5, 14, op_str));
+    toks = list_push(toks, mk_tok("IDENT", 5, 16, "y"));
+    toks = list_push(toks, mk_tok("SEMI", 5, 17, ";"));
+    toks = list_push(toks, mk_tok("RBRACE", 6, 1, "}"));
+    return toks;
+}
+
+pub fn main() {
+    let toks_div: List[String] = build_fn("bad_div", "SLASH", "/", ">=", "x", true);
+    let v_div: List[String] = smt_vc_prove_function_clauses(toks_div, 0, "bad_div");
+    println("DIV_GTE: " + list_get(v_div, 1));
+
+    let toks_mod: List[String] = build_fn("bad_mod", "PERCENT", "%", ">=", "x", true);
+    let v_mod: List[String] = smt_vc_prove_function_clauses(toks_mod, 0, "bad_mod");
+    println("MOD_GTE: " + list_get(v_mod, 1));
+
+    let toks_bit: List[String] = build_fn("bad_bit", "AMP", "&", ">=", "x", true);
+    let v_bit: List[String] = smt_vc_prove_function_clauses(toks_bit, 0, "bad_bit");
+    println("BIT_GTE: " + list_get(v_bit, 1));
+
+    let toks_mul_z: List[String] = build_fn("unsound_mul_zero", "STAR", "*", "==", "0", false);
+    let v_mul_z: List[String] = smt_vc_prove_function_clauses(toks_mul_z, 0, "unsound_mul_zero");
+    println("MUL_ZERO: " + list_get(v_mul_z, 1));
+
+    let toks_div_z: List[String] = build_fn("unsound_div_zero", "SLASH", "/", "==", "0", false);
+    let v_div_z: List[String] = smt_vc_prove_function_clauses(toks_div_z, 0, "unsound_div_zero");
+    println("DIV_ZERO: " + list_get(v_div_z, 1));
+
+    let toks_mod_z: List[String] = build_fn("unsound_mod_zero", "PERCENT", "%", "==", "0", false);
+    let v_mod_z: List[String] = smt_vc_prove_function_clauses(toks_mod_z, 0, "unsound_mod_zero");
+    println("MOD_ZERO: " + list_get(v_mod_z, 1));
+}

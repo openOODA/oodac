@@ -1,0 +1,57 @@
+// # Probe: Non-linear fallback to zero soundness hole
+//
+// Logline: Tests whether unmodeled non-linear body return x * y falsely proves ensures result >= 0.
+//
+// Setup: Pure compute probe.
+//
+// Beats:
+//   1. Function return x * y with requires x >= 10, ensures result >= 0.
+// RULES.oot 1.7: Under 256 lines.
+
+import "check/smt_contract_parse.oo";
+import "check/smt_wp_calc.oo";
+import "check/smt_prover_lia.oo";
+import "check/smt_vc_gen.oo";
+
+fn mk_tok(k: String, l: Int, c: Int, t: String) -> String {
+    return k + "\t" + l.to_string() + "\t" + c.to_string() + "\t" + t;
+}
+
+pub fn main() {
+    let mut toks: List[String] = list_new();
+    toks = list_push(toks, mk_tok("KW_FN", 1, 1, "fn"));
+    toks = list_push(toks, mk_tok("IDENT", 1, 4, "bad_nl_zero"));
+    toks = list_push(toks, mk_tok("LPAREN", 1, 15, "("));
+    toks = list_push(toks, mk_tok("IDENT", 1, 16, "x"));
+    toks = list_push(toks, mk_tok("COLON", 1, 17, ":"));
+    toks = list_push(toks, mk_tok("IDENT", 1, 19, "Int"));
+    toks = list_push(toks, mk_tok("COMMA", 1, 22, ","));
+    toks = list_push(toks, mk_tok("IDENT", 1, 24, "y"));
+    toks = list_push(toks, mk_tok("COLON", 1, 25, ":"));
+    toks = list_push(toks, mk_tok("IDENT", 1, 27, "Int"));
+    toks = list_push(toks, mk_tok("RPAREN", 1, 30, ")"));
+    toks = list_push(toks, mk_tok("ARROW", 1, 32, "->"));
+    toks = list_push(toks, mk_tok("IDENT", 1, 35, "Int"));
+    toks = list_push(toks, mk_tok("KW_REQUIRES", 2, 1, "requires"));
+    toks = list_push(toks, mk_tok("IDENT", 2, 10, "x"));
+    toks = list_push(toks, mk_tok("GTE", 2, 12, ">="));
+    toks = list_push(toks, mk_tok("INT", 2, 15, "10"));
+    toks = list_push(toks, mk_tok("KW_ENSURES", 3, 1, "ensures"));
+    toks = list_push(toks, mk_tok("IDENT", 3, 9, "result"));
+    toks = list_push(toks, mk_tok("GTE", 3, 16, ">="));
+    toks = list_push(toks, mk_tok("INT", 3, 19, "0"));
+    toks = list_push(toks, mk_tok("LBRACE", 4, 1, "{"));
+    toks = list_push(toks, mk_tok("KW_RETURN", 5, 5, "return"));
+    toks = list_push(toks, mk_tok("IDENT", 5, 12, "x"));
+    toks = list_push(toks, mk_tok("STAR", 5, 14, "*"));
+    toks = list_push(toks, mk_tok("IDENT", 5, 16, "y"));
+    toks = list_push(toks, mk_tok("SEMI", 5, 17, ";"));
+    toks = list_push(toks, mk_tok("RBRACE", 6, 1, "}"));
+
+    let verdicts: List[String] = smt_vc_prove_function_clauses(toks, 0, "bad_nl_zero");
+    let mut i: Int = 0;
+    while i < list_len(verdicts) {
+        println("VERDICT: " + list_get(verdicts, i));
+        i = i + 1;
+    }
+}

@@ -1,0 +1,16 @@
+// # Unsound Non-linear Zero Test
+//
+// Logline: Check if bad_nl_zero emits @llvm.assume and elides dynamic trap.
+//
+// Setup: Pure compute.
+//
+// Beats:
+//   1. Function with requires x >= 10, ensures result >= 0, return x * y.
+
+pub fn bad_nl_zero(x: Int, y: Int) -> Int
+requires x >= 10
+ensures result >= 0
+spec "Soundness flaw test"
+{
+    return x * y;
+}
