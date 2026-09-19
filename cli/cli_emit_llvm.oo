@@ -51,7 +51,27 @@ fn ll_skip_anchor_tu(p: String) -> Bool {
     return str_slice(p, n - 9, n) == "ANCHOR.oo";
 }
 
-fn ll_toks_file(fs: &FsReadCap, path: String, src: String) -> List[String] {
+fn ll_smt_sanitize(smt: String) -> String {
+    let n: Int = chars_len(smt);
+    let mut out: String = "";
+    let mut i: Int = 0;
+    while i < n {
+        let c: String = char_at(smt, i);
+        if c == "\t" {
+            out = out + "|";
+        } else if c == "\n" {
+            out = out + ",";
+        } else if c == ";" {
+            out = out + ":";
+        } else {
+            out = out + c;
+        }
+        i = i + 1;
+    }
+    return out;
+}
+
+fn ll_art_file(fs: &FsReadCap, path: String, src: String) -> TypedArtifact {
     let auto: String = artifact_cache_path(artifact_sha(path, src));
     if !path_exists(fs, auto) {
         println("ERR\tllvm\tno artifact; run check first: " + path);
@@ -64,6 +84,11 @@ fn ll_toks_file(fs: &FsReadCap, path: String, src: String) -> List[String] {
         process_exit(1);
     }
     artifact_verify_sections(art, "llvm");
+    return art;
+}
+
+fn ll_toks_file(fs: &FsReadCap, path: String, src: String) -> List[String] {
+    let art: TypedArtifact = ll_art_file(fs, path, src);
     return art.toks;
 }
 
@@ -75,7 +100,8 @@ pub fn run_emit_llvm(fs: &FsReadCap, fs_w: &FsWriteCap, env: &EnvCap, path: Stri
             process_exit(1);
         }
         let src: String = match pr { Ok(s) => s, Err(_) => "" };
-        let toks: List[String] = ll_toks_file(fs, path, src);
+        let art: TypedArtifact = ll_art_file(fs, path, src);
+        let toks: List[String] = art.toks;
         let root: String = ll_extra_root(env, path);
         let cx: Result[String, String] = env_get(env, "OODA_LLVM_EXTRA_CACHE");
         let cp: String = match cx { Ok(s) => s, Err(_) => "" };
@@ -110,6 +136,11 @@ pub fn run_emit_llvm(fs: &FsReadCap, fs_w: &FsWriteCap, env: &EnvCap, path: Stri
                 let _: Result[Void, String] = write_file(fs_w, cp, extra);
             }
         }
+        if art.smt != "" {
+            let s_smt: String = ll_smt_sanitize(art.smt);
+            extra = extra + "__sym____art_smt__=" + s_smt + ";";
+            extra = extra + "__art_smt__=" + s_smt + ";";
+        }
         let tx: Result[String, String] = env_get(env, "OODA_LLVM_TRIPLE");
         let mut triple: String = match tx { Ok(s) => s, Err(_) => "" };
         if triple == "" { triple = "x86_64-unknown-linux-gnu"; }
@@ -119,6 +150,7 @@ pub fn run_emit_llvm(fs: &FsReadCap, fs_w: &FsWriteCap, env: &EnvCap, path: Stri
     let paths: List[String] = collect_module_paths(fs, path);
     let nle: Int = list_len(paths);
     let mut toks: List[String] = list_new();
+    let mut all_smt: String = "";
     let mut i: Int = 0;
     while i < nle {
         let p: String = list_get(paths, i);
@@ -132,7 +164,11 @@ pub fn run_emit_llvm(fs: &FsReadCap, fs_w: &FsWriteCap, env: &EnvCap, path: Stri
             process_exit(1);
         }
         let fsx: String = match pr { Ok(s) => s, Err(_) => "" };
-        let part: List[String] = ll_toks_file(fs, p, fsx);
+        let part_art: TypedArtifact = ll_art_file(fs, p, fsx);
+        if part_art.smt != "" {
+            all_smt = all_smt + part_art.smt + "\n";
+        }
+        let part: List[String] = part_art.toks;
         let pn: Int = list_len(part);
         let mut j: Int = 0;
         while j < pn {
