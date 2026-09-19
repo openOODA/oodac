@@ -50,6 +50,7 @@ run_contract_suite() {
     "oodac/check/check_artifact.oo"
     "oodac/tests/fixtures/valid_contracts.oo"
     "oodac/tests/fixtures/invalid_contracts_bad_inc.oo"
+    "oodac/tests/fixtures/adversarial_branching.oo"
   )
   for f in "${track2_files[@]}"; do
     local fpath="$PROJECT_ROOT/$f"
@@ -152,6 +153,20 @@ EOF
     opt_fail=1
   fi
   record_test "C-OPT-01" "LLVM @llvm.assume enables dead branch elimination under opt" "$opt_fail"
+
+  # 9. Branching Control-Flow Soundness & Fail-Closed Fallback
+  local br_fail=0 br_ll="$d/adversarial_branching.ll"
+  local br_emit
+  (cd "$PROJECT_ROOT/oodac" && "$oodac_cmd" check tests/fixtures/adversarial_branching.oo >/dev/null 2>&1) || br_fail=1
+  if [[ "$br_fail" -eq 0 ]] && br_emit=$(cd "$PROJECT_ROOT/oodac" && "$oodac_cmd" emit-llvm tests/fixtures/adversarial_branching.oo 2>"$d/br_emit.err"); then
+    printf "%s\n" "$br_emit" > "$br_ll"
+    if grep -q "call void @llvm\.assume" "$br_ll" || ! grep -q "ctrap" "$br_ll"; then
+      br_fail=1
+    fi
+  else
+    br_fail=1
+  fi
+  record_test "C-BRANCH-01" "Branching functions fail closed to DYNAMIC without @llvm.assume" "$br_fail"
 }
 
 run_contract_suite "1"

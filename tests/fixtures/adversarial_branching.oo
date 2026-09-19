@@ -1,0 +1,82 @@
+// # Adversarial Branching Contract Fixture
+//
+// Logline: Check whether branching functions fail closed or if SMT VC gen erroneously proves them.
+//
+// Setup: Pure compute functions with branching returns and contracts.
+//
+// Beats:
+//   1. Function with if-statement and two return branches.
+//   2. Function with if-else where both branches return.
+//   3. Function with early return guard.
+//   4. Function with match statement.
+//   5. Function with nested branching.
+// RULES.oot 1.7: Under 256 lines.
+
+pub fn bad_branch(x: Int) -> Int
+requires x >= 0
+ensures result >= 10
+spec "Branching if without else soundness check"
+{
+    if x > 5 {
+        return 100;
+    }
+    return 0;
+}
+
+pub fn branch_if_else(x: Int) -> Int
+requires x >= 0
+ensures result >= 10
+spec "Branching if-else both return soundness check"
+{
+    if x > 5 {
+        return 100;
+    } else {
+        return 0;
+    }
+}
+
+pub fn branch_early_guard(x: Int) -> Int
+requires x >= -5
+ensures result >= 0
+spec "Branching early guard soundness check"
+{
+    if x < 0 {
+        return 0;
+    }
+    return x + 10;
+}
+
+pub fn branch_match(cmd: String) -> Int
+requires 1 == 1
+ensures result >= 10
+spec "Branching match statement soundness check"
+{
+    match cmd {
+        "admin" => {
+            return 100;
+        },
+        _ => {
+            return 0;
+        }
+    }
+    return 0;
+}
+
+pub fn branch_nested(x: Int, y: Int) -> Int
+requires x >= 0
+ensures result >= 10
+spec "Branching nested branching soundness check"
+{
+    if x > 10 {
+        if y > 5 {
+            return 100;
+        } else {
+            return 50;
+        }
+    } else {
+        if y < 0 {
+            return 5;
+        }
+    }
+    return 0;
+}
