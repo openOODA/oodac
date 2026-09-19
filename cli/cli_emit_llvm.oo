@@ -180,5 +180,14 @@ pub fn run_emit_llvm(fs: &FsReadCap, fs_w: &FsWriteCap, env: &EnvCap, path: Stri
         }
         i = i + 1;
     }
-    ll_emit_stream_toks(toks);
+    let mut extra: String = "";
+    if all_smt != "" {
+        let s_smt: String = ll_smt_sanitize(all_smt);
+        extra = extra + "__sym____art_smt__=" + s_smt + ";";
+        extra = extra + "__art_smt__=" + s_smt + ";";
+    }
+    let tx: Result[String, String] = env_get(env, "OODA_LLVM_TRIPLE");
+    let mut triple: String = match tx { Ok(s) => s, Err(_) => "" };
+    if triple == "" { triple = "x86_64-unknown-linux-gnu"; }
+    ll_emit_stream_plus_t(toks, extra, triple);
 }

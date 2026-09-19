@@ -206,15 +206,25 @@ pub fn smt_status_extract_hash(status: String) -> String {
     return "";
 }
 
+fn art_clean(s: String) -> String {
+    let n: Int = chars_len(s); let mut o: String = ""; let mut i: Int = 0;
+    while i < n {
+        let c: String = char_at(s, i);
+        if c == "\t" || c == "\n" { o = o + " "; } else { o = o + c; }
+        i = i + 1;
+    }
+    return o;
+}
+
 pub fn smt_record_pack_proven(fn_name: String, cl_idx: Int, vc_hash: String, detail: String) -> String {
     let mut row: String = fn_name + "\t" + cl_idx.to_string() + "\tPROVEN:" + vc_hash;
-    if detail != "" { row = row + "\t" + detail; }
+    if detail != "" { row = row + "\t" + art_clean(detail); }
     return row;
 }
 
 pub fn smt_record_pack_dynamic(fn_name: String, cl_idx: Int, reason: String) -> String {
     let mut row: String = fn_name + "\t" + cl_idx.to_string() + "\tDYNAMIC";
-    if reason != "" { row = row + "\t" + reason; }
+    if reason != "" { row = row + "\t" + art_clean(reason); }
     return row;
 }
 

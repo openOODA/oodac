@@ -87,20 +87,26 @@ for suite in "${TRACK1_SUITES[@]}"; do
   echo ""
 done
 
-echo "======================================================================"
-echo "=== openOODA Track 1 E2E Test Runner Scorecard                     ==="
-echo "======================================================================"
-echo "  Total Track 1 Test Suites : $TOTAL_SUITES"
-echo "  Passed Test Suites        : $PASSED_SUITES"
-echo "  Failed Test Suites        : $FAILED_SUITES"
-echo "  Line Limit Compliance     : 100% (All files <= 256 lines)"
-echo "  Double-Run Determinism    : Enforced across all suites"
-echo "======================================================================"
+LOG_FILE="$SCRIPT_DIR/test_track1_runner.log"
+{
+  echo "======================================================================"
+  echo "=== openOODA Track 1 E2E Test Runner Scorecard                     ==="
+  echo "======================================================================"
+  echo "  Total Track 1 Test Suites : $TOTAL_SUITES"
+  echo "  Passed Test Suites        : $PASSED_SUITES"
+  echo "  Failed Test Suites        : $FAILED_SUITES"
+  echo "  Line Limit Compliance     : 100% (All files <= 256 lines)"
+  echo "  Double-Run Determinism    : Enforced across all suites"
+  echo "======================================================================"
+  if [[ "$FAILED_SUITES" -gt 0 ]]; then
+    echo "STATUS: Track 1 test suite encountered failures."
+  else
+    echo "STATUS: ALL TRACK 1 SUITES GREEN (100% PASS)"
+  fi
+} | tee "$LOG_FILE"
 
 if [[ "$FAILED_SUITES" -gt 0 ]]; then
-  echo "STATUS: Track 1 test suite encountered failures."
   exit 1
 fi
 
-echo "STATUS: ALL TRACK 1 SUITES GREEN (100% PASS)"
 exit 0

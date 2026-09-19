@@ -12,6 +12,7 @@
 test_*.out
 test_*.err
 *.log
+!tests/e2e/test_track1_runner.log
 
 # ==========================================
 # Editor / OS
