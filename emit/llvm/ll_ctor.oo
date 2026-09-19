@@ -12,6 +12,7 @@ import "ll_int.oo";
 import "ll_struct.oo";
 import "ll_slot.oo";
 import "ll_ir.oo";
+import "ll_niche.oo";
 
 fn ll_resst_base(expect: String) -> String {
     if chars_len(expect) >= 6 && str_slice(expect, 0, 6) == "resSt_" {
@@ -36,6 +37,7 @@ fn ll_struct_base_of(ak: String) -> String {
 
 pub fn ll_ctor(name: String, arg: String, ssa0: Int, expect: String, ir: &mut IrBuf) -> String {
     if name == "None" {
+        if expect == "optp" { return ll_niche_none(ssa0); }
         let nb: String = ll_optst_base(expect);
         if nb != "" {
             let a: String = ll_tmpa(ssa0 + 1);
@@ -58,9 +60,20 @@ pub fn ll_ctor(name: String, arg: String, ssa0: Int, expect: String, ir: &mut Ir
         }
         return ll_pack(0, s, expect, a);
     }
-    if name == "Some" { return ll_ctor_some(arg, ssa0, expect, ir); }
-    if name == "Ok" { return ll_ctor_ok(arg, ssa0, expect, ir); }
-    if name == "Err" { return ll_ctor_err(arg, ssa0, expect, ir); }
+    if name == "Some" {
+        if expect == "optp" || ll_is_refk(ll_pk(arg)) {
+            return ll_niche_some(arg, ssa0, ir);
+        }
+        return ll_ctor_some(arg, ssa0, expect, ir);
+    }
+    if name == "Ok" {
+        if expect == "resp" { return ll_niche_ok(arg, ssa0, ir); }
+        return ll_ctor_ok(arg, ssa0, expect, ir);
+    }
+    if name == "Err" {
+        if expect == "resp" { return ll_niche_err(arg, ssa0, ir); }
+        return ll_ctor_err(arg, ssa0, expect, ir);
+    }
     println("ERR\tllvm\tctor " + name);
     process_exit(1);
     return arg;

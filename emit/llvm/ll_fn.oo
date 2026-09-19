@@ -22,6 +22,8 @@ import "types/types_core.oo";
 import "ll_range.oo";
 import "lex/token_parse_int.oo";
 import "ll_di.oo";
+import "ll_cap.oo";
+import "ll_c_abi.oo";
 
 pub fn ll_fn_name_at(toks: List[String], pos: Int, n: Int) -> String {
     let mut p: Int = pos;
@@ -174,7 +176,11 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String, stab: Stri
     let has_side_effects: Bool = ll_has_side_effects(toks, p, fn_end);
     let is_pure: Bool = name != "main" && caps == "" && !has_mut_ref && is_scalar_ret && !has_side_effects;
     let fn_attrs: String = if is_pure { "readonly nounwind" } else { "nounwind" };
-    if ll_is_mem(rk) {
+    if is_export && ll_is_niche_ptr(rk) {
+        let ret_sret: String = "ptr noalias sret(%OoOpt_Ptr) align 8 %ret";
+        let sig_p: String = if plist != "" { ret_sret + ", " + plist } else { ret_sret };
+        ll_ir_fn_open(ir, "define default void @" + gnm + "(" + sig_p + ") nounwind" + ds + " {");
+    } else if ll_is_mem(rk) {
         if plist != "" {
             ll_ir_fn_open(ir, "define " + vis + "void @" + gnm + "(ptr noalias sret(" + ll_ir_alloc(rk) + ") align 8 %ret, " + plist + ") nounwind" + ds + " {");
         } else {
@@ -227,13 +233,14 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String, stab: Stri
         fi = fi + 1;
     }
     env = type_env_put(env, "__rk__", rk);
+    if is_export { env = type_env_put(env, "__export__", "1"); }
     let ce: String = ll_contract_entry(toks, env, ssa, name, ir);
     ssa = ll_pssa(ce);
     env = ll_pptr(ce);
     let fb: String = ll_emit_stmts(toks, p, n, rk, env, ssa + 1, stab, ir);
     if ll_pterm(fb) == 0 {
         ll_heap_end(ir);
-        if rk == "void" || ll_is_mem(rk) { ll_ir_inst(ir, "ret", "void", "", "", 1, 1); }
+        if rk == "void" || ll_is_mem(rk) || (is_export && ll_is_niche_ptr(rk)) { ll_ir_inst(ir, "ret", "void", "", "", 1, 1); }
         else { ll_ir_inst(ir, "unreachable", "", "", "", 1, 1); }
     }
     ll_ir_fn_close(ir);

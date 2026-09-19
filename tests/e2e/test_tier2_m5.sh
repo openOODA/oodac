@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tier 2 M5: Boundary Cases for Features 17-19
+# Tier 2 M5: Boundary Cases and E2E Execution for Features 17-19
 # Compliance: wc -l <= 256, Double-Run (Run_1 == Run_2 = 0), Zero-Trust.
 set -euo pipefail
 
@@ -18,11 +18,24 @@ record_test() {
     echo "  [FAIL] $id: $desc"; FAIL_COUNT=$((FAIL_COUNT + 1))
   fi
 }
-
 emit() {
   local src="$1" out="$2"
   timeout 5s "$OODAC" check "$src" >/dev/null 2>&1
   timeout 5s "$OODAC" emit-llvm "$src" > "$out" 2>&1
+}
+record_run() {
+  local id="$1" desc="$2" src="$3" ll="$4" bin="$5"
+  local s=1
+  if emit "$src" "$ll"; then
+    if clang -O2 "$ll" -o "$bin" >/dev/null 2>&1 && "$bin"; then s=0; fi
+  fi
+  record_test "$id" "$desc" "$s"
+}
+record_as() {
+  local id="$1" desc="$2" src="$3" ll="$4" bc="$5"
+  local s=1
+  if emit "$src" "$ll" && llvm-as "$ll" -o "$bc" >/dev/null 2>&1; then s=0; fi
+  record_test "$id" "$desc" "$s"
 }
 
 run_suite() {
@@ -31,89 +44,199 @@ run_suite() {
   local d="$TMPDIR/run_$r_id"
   mkdir -p "$d"
 
-  # Feature 17 Boundaries
+  # T2-F17-01: Intra-function Option[&Int] unwrap and read
+  cat << 'EOF' > "$d/opt_read.oo"
+// # Opt Read
+// Logline: Option[&Int] read
+// Setup: emit-llvm
+// Beats: opt, main
+pub fn get_val(o: Option[&Int]) -> Int {
+  match o {
+    Some(p) => { return *p; }
+    None => { return -1; }
+  }
+}
+pub fn main() -> Int {
+  let x: Int = 42;
+  let o = Some(&x);
+  if get_val(o) != 42 { return 1; }
+  return 0;
+}
+EOF
+  record_run "T2-F17-01" "Option[&Int] unwrap executes" \
+    "$d/opt_read.oo" "$d/opt_read.ll" "$d/opt_read_bin"
+
+  # T2-F17-02: Intra-function Option[&Int] None branch
+  cat << 'EOF' > "$d/opt_none.oo"
+// # Opt None
+// Logline: Option[&Int] None
+// Setup: emit-llvm
+// Beats: opt_none, main
+pub fn get_val_or_default(o: Option[&Int], def: Int) -> Int {
+  match o {
+    Some(p) => { return *p; }
+    None => { return def; }
+  }
+}
+pub fn main() -> Int {
+  let o: Option[&Int] = None;
+  if get_val_or_default(o, 99) != 99 { return 1; }
+  return 0;
+}
+EOF
+  record_run "T2-F17-02" "Option[&Int] None branch executes" \
+    "$d/opt_none.oo" "$d/opt_none.ll" "$d/opt_none_bin"
+
+  # T2-F17-03: Option[&mut Int] write through reference
+  cat << 'EOF' > "$d/opt_mut.oo"
+// # Opt Mut Write
+// Logline: Option[&mut Int] write
+// Setup: emit-llvm
+// Beats: opt_mut, main
+pub fn mutate_if_some(o: Option[&mut Int], val: Int) {
+  match o {
+    Some(p) => { *p = val; }
+    None => {}
+  }
+}
+pub fn main() -> Int {
+  let mut x: Int = 10;
+  mutate_if_some(Some(&mut x), 50);
+  if x != 50 { return 1; }
+  return 0;
+}
+EOF
+  record_run "T2-F17-03" "Option[&mut Int] mutation executes" \
+    "$d/opt_mut.oo" "$d/opt_mut.ll" "$d/opt_mut_bin"
+
+  # T2-F17-04: Result[&Int, Int] Ok branch unwrap and read
+  cat << 'EOF' > "$d/res_ok.oo"
+// # Res Ok
+// Logline: Result[&Int, Int] Ok
+// Setup: emit-llvm
+// Beats: res_ok, main
+pub fn unwrap_res(r: Result[&Int, Int]) -> Int {
+  match r {
+    Ok(p) => { return *p; }
+    Err(_) => { return -1; }
+  }
+}
+pub fn main() -> Int {
+  let x: Int = 77;
+  let r: Result[&Int, Int] = Ok(&x);
+  if unwrap_res(r) != 77 { return 1; }
+  return 0;
+}
+EOF
+  record_run "T2-F17-04" "Result[&Int, Int] Ok unwrap executes" \
+    "$d/res_ok.oo" "$d/res_ok.ll" "$d/res_ok_bin"
+
+  # T2-F17-05: Result[&Int, Int] Err branch
+  cat << 'EOF' > "$d/res_err.oo"
+// # Res Err
+// Logline: Result[&Int, Int] Err
+// Setup: emit-llvm
+// Beats: res_err, main
+pub fn is_err(r: Result[&Int, Int]) -> Bool {
+  match r {
+    Ok(_) => { return false; }
+    Err(_) => { return true; }
+  }
+}
+pub fn main() -> Int {
+  let r: Result[&Int, Int] = Err(99);
+  if !is_err(r) { return 1; }
+  return 0;
+}
+EOF
+  record_run "T2-F17-05" "Result[&Int, Int] Err executes" \
+    "$d/res_err.oo" "$d/res_err.ll" "$d/res_err_bin"
+
+  # T2-F17-06: Chained pointer options
   cat << 'EOF' > "$d/opt_chain.oo"
 // # Option Chain
 // Logline: Option chaining
 // Setup: emit-llvm
 // Beats: chain, main
-pub fn step(x: Option[Int]) -> Option[Int] {
-  match x {
-    Some(v) => { return Some(v + 1); }
-    None => { return None; }
-  }
+pub fn check_pos(p: &Int) -> Option[&Int] {
+  if *p > 0 { return Some(p); }
+  return None;
 }
 pub fn main() -> Int {
-  let o = step(Some(10));
-  match o {
-    Some(v) => { return v; }
-    None => { return 0; }
+  let a: Int = 15;
+  let b: Int = -5;
+  match check_pos(&a) {
+    Some(p) => { if *p != 15 { return 1; } }
+    None => { return 2; }
   }
+  match check_pos(&b) {
+    Some(_) => { return 3; }
+    None => {}
+  }
+  return 0;
 }
 EOF
-  local b17_chain=1
-  if emit "$d/opt_chain.oo" "$d/opt_chain.ll"; then b17_chain=0; fi
-  record_test "T2-F17-01" "Chained Option transformation lowers" "$b17_chain"
+  record_run "T2-F17-06" "Chained Option[&Int] executes" \
+    "$d/opt_chain.oo" "$d/opt_chain.ll" "$d/opt_chain_bin"
 
-  local b17_as=1
-  if [[ -f "$d/opt_chain.ll" ]]; then
-    if llvm-as "$d/opt_chain.ll" -o "$d/oc.bc" >/dev/null 2>&1; then b17_as=0; fi
-  fi
-  record_test "T2-F17-02" "Chained Option IR passes llvm-as" "$b17_as"
-  record_test "T2-F17-03" "Option match arms cover all variants" 0
-  record_test "T2-F17-04" "None variant does not read uninitialized payload" 0
-  record_test "T2-F17-05" "Intra-function Option eliminates extra tagging" 0
-
-  # Feature 18 Boundaries
+  # Feature 18: C ABI Marshalling Boundaries
   cat << 'EOF' > "$d/str_bnd.oo"
 // # String Boundary
 // Logline: String boundaries
 // Setup: emit-llvm
 // Beats: str, main
 pub fn empty_str() -> String { return ""; }
-pub fn main() -> Int {
-  let s = empty_str();
-  return s.len();
-}
+pub fn main() -> Int { return empty_str().len(); }
 EOF
-  local b18_str=1
-  if emit "$d/str_bnd.oo" "$d/str_bnd.ll"; then b18_str=0; fi
-  record_test "T2-F18-01" "Empty string literal lowers cleanly" "$b18_str"
+  record_as "T2-F18-01" "String boundary IR passes llvm-as" \
+    "$d/str_bnd.oo" "$d/str_bnd.ll" "$d/sb.bc"
 
-  local b18_as=1
-  if [[ -f "$d/str_bnd.ll" ]]; then
-    if llvm-as "$d/str_bnd.ll" -o "$d/sb.bc" >/dev/null 2>&1; then b18_as=0; fi
+  local b18_types=1
+  if [[ -f "$d/opt_read.ll" ]]; then
+    if grep -q "%OoOpt_Ptr = type { i32, ptr }" "$d/opt_read.ll" && \
+       grep -q "%OoRes_Ptr = type { i32, ptr }" "$d/opt_read.ll"; then
+      b18_types=0
+    fi
   fi
-  record_test "T2-F18-02" "String boundary IR passes llvm-as" "$b18_as"
-  record_test "T2-F18-03" "C ABI string layout preserves { ptr, i64 }" 0
-  record_test "T2-F18-04" "String length accurately returned at runtime" 0
-  record_test "T2-F18-05" "String memory managed without double-free" 0
+  record_test "T2-F18-02" "C ABI %OoOpt_Ptr and %OoRes_Ptr types verified" "$b18_types"
 
-  # Feature 19 Boundaries
+  # Feature 19: Capability Bitmasks Boundaries
   cat << 'EOF' > "$d/multi_cap.oo"
 // # Multi Cap
 // Logline: Multiple capabilities
 // Setup: emit-llvm
 // Beats: caps, main
-pub fn multi_action(p: &ProcessCap, m: &MetricsCap) -> Int {
-  return 42;
-}
-pub fn main(p: &ProcessCap, m: &MetricsCap) -> Int {
-  return multi_action(p, m);
-}
+pub fn multi_act(p: &ProcessCap, m: &MetricsCap) -> Int { return 42; }
+pub fn main(p: &ProcessCap, m: &MetricsCap) -> Int { return multi_act(p, m); }
 EOF
   local b19_caps=1
-  if emit "$d/multi_cap.oo" "$d/multi_cap.ll"; then b19_caps=0; fi
-  record_test "T2-F19-01" "Multiple capability parameters lower to IR" "$b19_caps"
-
-  local b19_as=1
-  if [[ -f "$d/multi_cap.ll" ]]; then
-    if llvm-as "$d/multi_cap.ll" -o "$d/mc.bc" >/dev/null 2>&1; then b19_as=0; fi
+  if emit "$d/multi_cap.oo" "$d/multi_cap.ll"; then
+    if grep -q "i64 noundef" "$d/multi_cap.ll" 2>/dev/null && \
+       llvm-as "$d/multi_cap.ll" -o "$d/mc.bc" >/dev/null 2>&1; then
+      b19_caps=0
+    fi
   fi
-  record_test "T2-F19-02" "Multi-capability IR passes llvm-as" "$b19_as"
-  record_test "T2-F19-03" "Capability parameters are scalar i64 registers" 0
-  record_test "T2-F19-04" "Capability grants bypass ambient authority" 0
-  record_test "T2-F19-05" "Capability attenuation compiles to bitwise operations" 0
+  record_test "T2-F19-01" "Multiple capability parameters lower to scalar i64" "$b19_caps"
+
+  cat << 'EOF' > "$d/cap_chain.oo"
+// # Cap Chain
+// Logline: Capability pass chain
+// Setup: emit-llvm
+// Beats: c1, c2, c3, main
+pub fn c3(p: &ProcessCap) -> Int { return 7; }
+pub fn c2(p: &ProcessCap) -> Int { return c3(p); }
+pub fn c1(p: &ProcessCap) -> Int { return c2(p); }
+pub fn main(p: &ProcessCap) -> Int { return c1(p); }
+EOF
+  local b19_chain=1
+  if emit "$d/cap_chain.oo" "$d/cap_chain.ll"; then
+    if grep -q "call i64 @c2" "$d/cap_chain.ll" 2>/dev/null && \
+       grep -q "call i64 @c3" "$d/cap_chain.ll" 2>/dev/null && \
+       llvm-as "$d/cap_chain.ll" -o "$d/cc.bc" >/dev/null 2>&1; then
+      b19_chain=0
+    fi
+  fi
+  record_test "T2-F19-02" "Capability chain passes via scalar registers" "$b19_chain"
 }
 
 # Double-run determinism protocol

@@ -1,0 +1,107 @@
+// # LLVM Intra-Function Pointer Niche Lowering
+//
+// Logline: Zero-alloca nullable ptr SSA niche for Option[&T] and Result[&T, E].
+//
+// Setup: None is ptr null; Some(p) is ptr %p; icmp ne ptr, null discriminant.
+//
+// Beats:
+//   1. Niche classification and type query predicates.
+//   2. None and Some constructor lowering directly in SSA registers.
+//   3. Discriminant condition and branch emission without struct allocas.
+//   4. Method queries (is_some, is_none, is_ok, is_err) on niche pointers.
+
+import "ll_tok.oo";
+import "ll_ir.oo";
+import "ll_slot.oo";
+
+pub fn ll_is_opt_niche(kind: String) -> Bool {
+    return kind == "optp";
+}
+
+pub fn ll_is_res_niche(kind: String) -> Bool {
+    return kind == "resp";
+}
+
+pub fn ll_is_niche(kind: String) -> Bool {
+    return kind == "optp" || kind == "resp";
+}
+
+pub fn ll_niche_none(ssa0: Int) -> String {
+    return ll_pack(0, ssa0, "optp", "#null");
+}
+
+pub fn ll_niche_some(arg: String, ssa0: Int, ir: &mut IrBuf) -> String {
+    let mut pval: String = ll_opnd(arg);
+    if ll_pptr(arg) != "" {
+        pval = ll_pptr(arg);
+    }
+    return ll_pack(0, ssa0, "optp", pval);
+}
+
+pub fn ll_niche_ok(arg: String, ssa0: Int, ir: &mut IrBuf) -> String {
+    let mut pval: String = ll_opnd(arg);
+    if ll_pptr(arg) != "" {
+        pval = ll_pptr(arg);
+    }
+    return ll_pack(0, ssa0, "resp", pval);
+}
+
+pub fn ll_niche_err(arg: String, ssa0: Int, ir: &mut IrBuf) -> String {
+    return ll_pack(0, ssa0, "resp", "#null");
+}
+
+pub fn ll_niche_match_tag(sk: String, ptr: String, ssa0: Int, ir: &mut IrBuf) -> Int {
+    let s: Int = ssa0 + 1;
+    let s2: Int = s + 1;
+    ll_ir_inst(ir, "load", "ptr", ll_ssa(s), "ptr " + ptr + ", align 8", 1, 1);
+    ll_ir_inst(ir, "icmp ne", "ptr", ll_ssa(s2), ll_ssa(s) + ", null", 1, 1);
+    return s2;
+}
+
+pub fn ll_niche_match_bind(sk: String, ptr: String, bn: String, ok: Int, id: Int, ssa0: Int, ir: &mut IrBuf) -> String {
+    if ok == 0 || bn == "_" {
+        return ll_pack(0, ssa0, "ri64", "");
+    }
+    let locn: String = "%v_" + bn + "_" + id.to_string();
+    ll_slot_ty(locn, "ptr", ir);
+    let s: Int = ssa0 + 1;
+    ll_ir_inst(ir, "load", "ptr", ll_ssa(s), "ptr " + ptr + ", align 8", 1, 1);
+    ll_ir_inst(ir, "store", "ptr", "", ll_ssa(s) + ", ptr " + locn + ", align 8", 1, 1);
+    return ll_pack(0, s, "ri64", locn);
+}
+
+pub fn ll_niche_method(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, arg: String, ir: &mut IrBuf) -> String {
+    let mut s: Int = ssa0;
+    let mut val: String = "";
+    if chars_len(ptr) >= 2 && char_at(ptr, 0) == "#" {
+        val = str_slice(ptr, 1, chars_len(ptr));
+    } else if ptr != "" {
+        s = s + 1;
+        ll_ir_inst(ir, "load", "ptr", ll_ssa(s), "ptr " + ptr + ", align 8", 1, 1);
+        val = ll_ssa(s);
+    } else {
+        val = ll_ssa(ssa);
+    }
+    if m == "is_some" || m == "is_ok" {
+        s = s + 1;
+        ll_ir_inst(ir, "icmp ne", "ptr", ll_ssa(s), val + ", null", 1, 1);
+        return ll_pack(0, s, "i1", "");
+    }
+    if m == "is_none" || m == "is_err" {
+        s = s + 1;
+        ll_ir_inst(ir, "icmp eq", "ptr", ll_ssa(s), val + ", null", 1, 1);
+        return ll_pack(0, s, "i1", "");
+    }
+    return "";
+}
+
+pub fn ll_niche_store(dst: String, v: String, ssa0: Int, ir: &mut IrBuf) -> Int {
+    let mut pval: String = ll_opnd(v);
+    if ll_is_imm(v) {
+        pval = str_slice(ll_pptr(v), 1, chars_len(ll_pptr(v)));
+    } else if ll_pptr(v) != "" {
+        pval = ll_pptr(v);
+    }
+    ll_ir_inst(ir, "store", "ptr", "", pval + ", ptr " + dst + ", align 8", 1, 1);
+    return ssa0;
+}

@@ -1,0 +1,53 @@
+// # LLVM Capability Token Lowers
+//
+// Logline: Capability token predicates, grant mapping, and scalar invariants.
+//
+// Setup: Capability tokens are strictly lowered as scalar i64 noundef registers.
+//
+// Beats:
+//   1. Grant name mapping for runtime capabilities.
+//   2. Capability type detection and token classification.
+//   3. Extract capability names from token streams.
+
+import "ll_tok.oo";
+
+pub fn ll_is_cap_ty(t: String) -> Bool {
+    return str_index_of(t, "Cap") >= 0;
+}
+
+pub fn ll_cap_grant(ty: String) -> String {
+    if ty == "ProcessCap" { return "process"; }
+    if ty == "EnvCap" { return "env"; }
+    if ty == "FsReadCap" { return "fsread"; }
+    if ty == "FsWriteCap" { return "fswrite"; }
+    if ty == "BindCap" { return "bind"; }
+    if ty == "SysCap" { return "sys"; }
+    if ty == "TimeCap" { return "time"; }
+    if ty == "AllocCap" { return "alloc"; }
+    if ty == "TcpCap" { return "tcp"; }
+    if ty == "UdpCap" { return "udp"; }
+    if ty == "NetCap" { return "net"; }
+    if ty == "FsCap" { return "fs"; }
+    if ty == "RandCap" { return "rand"; }
+    if ty == "ArenaCap" { return "arena"; }
+    if ty == "FfiCap" { return "ffi"; }
+    if ty == "ThreadCap" { return "thread"; }
+    if ty == "GpuCap" { return "gpu"; }
+    if ty == "CompilerReadCap" { return "compiler_read"; }
+    if ty == "SignCap" { return "sign"; }
+    if ty == "AudioCap" { return "audio"; }
+    if ty == "CameraCap" { return "camera"; }
+    if ty == "UsbCap" { return "usb"; }
+    if ty == "HidCap" { return "hid"; }
+    if ty == "WindowCap" { return "window"; }
+    if ty == "FrameCap" { return "frame"; }
+    if ty == "MetricsCap" { return "metrics"; }
+    return "";
+}
+
+pub fn ll_peek_cap_name(toks: List[String], pos: Int, n: Int) -> String {
+    let mut p: Int = pos;
+    if p < n && ll_k(toks, p) == "AMP" { p = p + 1; }
+    if p < n && ll_k(toks, p) == "IDENT" { return ll_t(toks, p); }
+    return "";
+}

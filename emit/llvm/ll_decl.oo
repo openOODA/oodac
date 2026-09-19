@@ -13,6 +13,7 @@ import "ll_tok.oo";
 import "ll_ty.oo";
 import "ll_int.oo";
 import "ll_range.oo";
+import "ll_c_abi.oo";
 
 fn ll_decl_params(aks: String) -> String {
     let n: Int = chars_len(aks); let mut o: String = ""; let mut start: Int = 0; let mut p: Int = 0;
@@ -34,6 +35,14 @@ fn ll_emit_one_decl(name: String, sig: String) {
     if gt < 0 { return; }
     let ps: String = ll_decl_params(str_slice(sig, 0, gt));
     let rk: String = str_slice(sig, gt + 1, chars_len(sig));
+    if (rk == "optp" || rk == "resp") && ll_is_c_abi_call(name) {
+        if ps != "" {
+            println("declare void @" + name + "(ptr noalias sret(%OoOpt_Ptr) align 8, " + ps + ")");
+        } else {
+            println("declare void @" + name + "(ptr noalias sret(%OoOpt_Ptr) align 8)");
+        }
+        return;
+    }
     if ll_is_mem(rk) {
         if ps != "" {
             println("declare void @" + name + "(ptr noalias sret(" + ll_ir_alloc(rk) + ") align 8, " + ps + ")");

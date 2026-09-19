@@ -18,6 +18,7 @@ import "ll_slot.oo";
 import "types/types_core.oo";
 import "ll_ir.oo";
 import "ll_range.oo";
+import "ll_niche.oo";
 
 
 pub fn ll_str_gep(toks: List[String], pos: Int, ssa0: Int, ir: &mut IrBuf) -> String {
@@ -64,6 +65,9 @@ pub fn ll_load_ident(name: String, env: String, ssa0: Int, ir: &mut IrBuf) -> St
 }
 
 pub fn ll_match_tag(sk: String, ptr: String, ssa0: Int, ir: &mut IrBuf) -> Int {
+    if ll_is_niche(sk) {
+        return ll_niche_match_tag(sk, ptr, ssa0, ir);
+    }
     let p: String = if ptr != "" { ptr } else { "%ret" };
     let s: Int = ssa0 + 1;
     ll_ir_inst(ir, "getelementptr inbounds", ll_ir_alloc(sk), ll_ssa(s), "ptr " + p + ", i32 0, i32 0", 1, 1);
@@ -75,6 +79,9 @@ pub fn ll_match_tag(sk: String, ptr: String, ssa0: Int, ir: &mut IrBuf) -> Int {
 }
 
 pub fn ll_match_bind(sk: String, ptr: String, bn: String, ok: Int, id: Int, ssa0: Int, ir: &mut IrBuf) -> String {
+    if ll_is_niche(sk) {
+        return ll_niche_match_bind(sk, ptr, bn, ok, id, ssa0, ir);
+    }
     let mut bk: String = "str";
     let mut fi: String = "1";
     if sk == "opti" { bk = "i64"; }
@@ -184,6 +191,9 @@ pub fn ll_store(name: String, kind: String, v: String, ssa0: Int, env: String, i
         }
         ll_ir_inst(ir, "store", ll_ir_val(kind), "", ll_opnd(v) + ", ptr " + dst + ", align 8", 1, 1);
         return ssa0;
+    }
+    if ll_is_niche(kind) {
+        return ll_niche_store(dst, v, ssa0, ir);
     }
     if ll_is_refk(kind) {
         let pval: String = if ll_pptr(v) != "" { ll_pptr(v) } else { ll_opnd(v) };

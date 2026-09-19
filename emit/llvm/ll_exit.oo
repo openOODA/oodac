@@ -19,6 +19,7 @@ import "ll_arc.oo";
 import "ll_slot.oo";
 import "types/types_core.oo";
 import "ll_ir.oo";
+import "ll_c_abi.oo";
 
 pub fn ll_return_stmt(toks: List[String], p: Int, n: Int, ssa: Int, env: String, ret_kind: String, stab: String, ir: &mut IrBuf) -> String {
     let rl: Int = ll_line(toks, p);
@@ -76,6 +77,9 @@ pub fn ll_return_stmt(toks: List[String], p: Int, n: Int, ssa: Int, env: String,
         ns = ll_ret_opt(v, ret_kind, ns, ir);
     } else if ret_kind == "main_i32" {
         ll_ir_inst(ir, "ret", "i32", "", "0", 1, 1);
+    } else if type_env_get(env, "__export__") == "1" && ll_is_niche_ptr(ret_kind) {
+        ns = ll_c_abi_pack_ret(v, "%ret", ns, ir);
+        ll_ir_inst(ir, "ret", "void", "", "", 1, 1);
     } else if ll_has_slot(v) {
         ns = ns + 1;
         ll_ir_inst(ir, "load", ll_ir_val(ret_kind), ll_ssa(ns), "ptr " + ll_pptr(v) + ", align 8", 1, 1);

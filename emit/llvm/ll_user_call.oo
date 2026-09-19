@@ -17,11 +17,12 @@ import "ll_expr.oo";
 import "types/types_core.oo";
 import "ll_ir.oo";
 import "ll_range.oo";
+import "ll_c_abi.oo";
 
 pub fn ll_user_call(name: String, sig: String, args: List[String], ssa0: Int, ir: &mut IrBuf) -> String {
     let gt: Int = str_index_of(sig, ">");
     if gt < 0 {
-        println("ERR\tllvm\tbad sig " + name);
+        println("ERR\tllvm\tmissing sig for " + name);
         process_exit(1);
     }
     let ret: String = str_slice(sig, gt + 1, chars_len(sig));
@@ -38,7 +39,23 @@ pub fn ll_user_call(name: String, sig: String, args: List[String], ssa0: Int, ir
             call = call + ll_pass(ll_pk(ap)) + " " + ll_pptr(ap);
         } else {
             let k: String = ll_pk(a);
-            if ll_is_refk(k) {
+            if ll_is_niche_ptr(k) {
+                if ll_is_c_abi_call(name) {
+                    let packed: String = ll_c_abi_pack_arg(a, s, ir);
+                    s = ll_pssa(packed);
+                    if call != "" { call = call + ", "; }
+                    call = call + "ptr byval(%OoOpt_Ptr) align 8 " + ll_pptr(packed);
+                } else {
+                    if call != "" { call = call + ", "; }
+                    let mut pval: String = ll_opnd(a);
+                    if ll_is_imm(a) {
+                        pval = str_slice(ll_pptr(a), 1, chars_len(ll_pptr(a)));
+                    } else if ll_pptr(a) != "" {
+                        pval = ll_pptr(a);
+                    }
+                    call = call + "ptr " + pval;
+                }
+            } else if ll_is_refk(k) {
                 if call != "" { call = call + ", "; }
                 call = call + "ptr " + ll_pptr(a);
             } else if k == "str" {
@@ -64,6 +81,22 @@ pub fn ll_user_call(name: String, sig: String, args: List[String], ssa0: Int, ir
     if ret == "void" || ret == "" {
         ll_ir_inst(ir, "call", "void", "", "@" + name + "(" + call + ")", 1, 1);
         return ll_pack(0, s, "void", "");
+    }
+    if ll_is_niche_ptr(ret) {
+        if ll_is_c_abi_call(name) {
+            let a: String = ll_tmpa(s + 1);
+            s = s + 1;
+            ll_slot_ty(a, "%OoOpt_Ptr", ir);
+            if call != "" {
+                ll_ir_inst(ir, "call", "void", "", "@" + name + "(ptr sret(%OoOpt_Ptr) align 8 " + a + ", " + call + ")", 1, 1);
+            } else {
+                ll_ir_inst(ir, "call", "void", "", "@" + name + "(ptr sret(%OoOpt_Ptr) align 8 " + a + ")", 1, 1);
+            }
+            return ll_c_abi_unpack_ret(a, s, ir);
+        }
+        let s2: Int = s + 1;
+        ll_ir_inst(ir, "call", "ptr", ll_ssa(s2), "@" + name + "(" + call + ")", 1, 1);
+        return ll_pack(0, s2, ret, "");
     }
     if ll_is_mem(ret) {
         let a: String = ll_tmpa(s + 1);

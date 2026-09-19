@@ -83,6 +83,8 @@ pub fn ll_rt_header_triple(toks: List[String], triple: String) {
     println("%OoResS = type { i32, %OoStr }");
     println("%OoOptI = type { i32, i64 }");
     println("%OoOptS = type { i32, %OoStr }");
+    println("%OoOpt_Ptr = type { i32, ptr }");
+    println("%OoRes_Ptr = type { i32, ptr }");
     println("%OoResV = type { i32, %OoStr }");
     println("%OoClosure = type { ptr, ptr, ptr }");
     ll_need_emit_referenced(ll_need_scan(toks));

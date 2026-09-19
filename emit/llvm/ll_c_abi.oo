@@ -1,0 +1,103 @@
+// # LLVM C ABI Marshalling & Niche Boundary Conversions
+//
+// Logline: Pack/unpack Option[&T] and Result[&T, E] across C ABI boundaries.
+//
+// Setup: Sovereign calls pass nullable ptr in SSA; C ABI uses { i32, ptr }.
+//
+// Beats:
+//   1. Classify sovereign vs C ABI calling conventions.
+//   2. Pack SSA nullable ptr into { i32, ptr } for C ABI arguments and returns.
+//   3. Unpack C ABI { i32, ptr } into SSA nullable ptr for returns and parameters.
+
+import "ll_tok.oo";
+import "ll_ir.oo";
+import "ll_slot.oo";
+
+pub fn ll_is_optp(kind: String) -> Bool {
+    return kind == "optp";
+}
+
+pub fn ll_is_resp(kind: String) -> Bool {
+    return kind == "resp";
+}
+
+pub fn ll_is_niche_ptr(kind: String) -> Bool {
+    return kind == "optp" || kind == "resp";
+}
+
+pub fn ll_is_c_abi_call(name: String) -> Bool {
+    let n: Int = chars_len(name);
+    if n >= 3 && str_slice(name, 0, 3) == "oo_" { return true; }
+    if name == "malloc" || name == "free" || name == "realloc" { return true; }
+    if name == "dlopen" || name == "dlsym" || name == "dlclose" { return true; }
+    return false;
+}
+
+pub fn ll_c_abi_pack_arg(val: String, ssa0: Int, ir: &mut IrBuf) -> String {
+    let mut ptr_opnd: String = ll_opnd(val);
+    if ll_is_imm(val) {
+        ptr_opnd = str_slice(ll_pptr(val), 1, chars_len(ll_pptr(val)));
+    } else if ll_pptr(val) != "" {
+        ptr_opnd = ll_pptr(val);
+    }
+    let s1: Int = ssa0 + 1;
+    ll_ir_inst(ir, "icmp ne", "ptr", ll_ssa(s1), ptr_opnd + ", null", 1, 1);
+    let s2: Int = s1 + 1;
+    ll_ir_inst(ir, "select", "i1", ll_ssa(s2), ll_ssa(s1) + ", i32 1, i32 0", 1, 1);
+    let s3: Int = s2 + 1;
+    ll_ir_inst(ir, "insertvalue", "%OoOpt_Ptr", ll_ssa(s3), "{ i32 0, ptr null }, i32 " + ll_ssa(s2) + ", 0", 1, 1);
+    let s4: Int = s3 + 1;
+    ll_ir_inst(ir, "insertvalue", "%OoOpt_Ptr", ll_ssa(s4), ll_ssa(s3) + ", ptr " + ptr_opnd + ", 1", 1, 1);
+    let a: String = ll_tmpa(s4 + 1);
+    let s5: Int = s4 + 1;
+    ll_slot_ty(a, "%OoOpt_Ptr", ir);
+    ll_ir_inst(ir, "store", "%OoOpt_Ptr", "", ll_ssa(s4) + ", ptr " + a + ", align 8", 1, 1);
+    return ll_pack(0, s5, "optp", a);
+}
+
+pub fn ll_c_abi_unpack_ret(slot: String, ssa0: Int, ir: &mut IrBuf) -> String {
+    let s1: Int = ssa0 + 1;
+    ll_ir_inst(ir, "load", "%OoOpt_Ptr", ll_ssa(s1), "ptr " + slot + ", align 8", 1, 1);
+    let s2: Int = s1 + 1;
+    ll_ir_inst(ir, "extractvalue", "%OoOpt_Ptr", ll_ssa(s2), ll_ssa(s1) + ", 0", 1, 1);
+    let s3: Int = s2 + 1;
+    ll_ir_inst(ir, "extractvalue", "%OoOpt_Ptr", ll_ssa(s3), ll_ssa(s1) + ", 1", 1, 1);
+    let s4: Int = s3 + 1;
+    ll_ir_inst(ir, "icmp ne", "i32", ll_ssa(s4), ll_ssa(s2) + ", 0", 1, 1);
+    let s5: Int = s4 + 1;
+    ll_ir_inst(ir, "select", "i1", ll_ssa(s5), ll_ssa(s4) + ", ptr " + ll_ssa(s3) + ", ptr null", 1, 1);
+    return ll_pack(0, s5, "optp", "");
+}
+
+pub fn ll_c_abi_pack_ret(val: String, ret_ptr: String, ssa0: Int, ir: &mut IrBuf) -> Int {
+    let mut ptr_opnd: String = ll_opnd(val);
+    if ll_is_imm(val) {
+        ptr_opnd = str_slice(ll_pptr(val), 1, chars_len(ll_pptr(val)));
+    } else if ll_pptr(val) != "" {
+        ptr_opnd = ll_pptr(val);
+    }
+    let s1: Int = ssa0 + 1;
+    ll_ir_inst(ir, "icmp ne", "ptr", ll_ssa(s1), ptr_opnd + ", null", 1, 1);
+    let s2: Int = s1 + 1;
+    ll_ir_inst(ir, "select", "i1", ll_ssa(s2), ll_ssa(s1) + ", i32 1, i32 0", 1, 1);
+    let s3: Int = s2 + 1;
+    ll_ir_inst(ir, "insertvalue", "%OoOpt_Ptr", ll_ssa(s3), "{ i32 0, ptr null }, i32 " + ll_ssa(s2) + ", 0", 1, 1);
+    let s4: Int = s3 + 1;
+    ll_ir_inst(ir, "insertvalue", "%OoOpt_Ptr", ll_ssa(s4), ll_ssa(s3) + ", ptr " + ptr_opnd + ", 1", 1, 1);
+    ll_ir_inst(ir, "store", "%OoOpt_Ptr", "", ll_ssa(s4) + ", ptr " + ret_ptr + ", align 8", 1, 1);
+    return s4;
+}
+
+pub fn ll_c_abi_unpack_param(p_arg: String, ssa0: Int, ir: &mut IrBuf) -> String {
+    let s1: Int = ssa0 + 1;
+    ll_ir_inst(ir, "load", "%OoOpt_Ptr", ll_ssa(s1), "ptr " + p_arg + ", align 8", 1, 1);
+    let s2: Int = s1 + 1;
+    ll_ir_inst(ir, "extractvalue", "%OoOpt_Ptr", ll_ssa(s2), ll_ssa(s1) + ", 0", 1, 1);
+    let s3: Int = s2 + 1;
+    ll_ir_inst(ir, "extractvalue", "%OoOpt_Ptr", ll_ssa(s3), ll_ssa(s1) + ", 1", 1, 1);
+    let s4: Int = s3 + 1;
+    ll_ir_inst(ir, "icmp ne", "i32", ll_ssa(s4), ll_ssa(s2) + ", 0", 1, 1);
+    let s5: Int = s4 + 1;
+    ll_ir_inst(ir, "select", "i1", ll_ssa(s5), ll_ssa(s4) + ", ptr " + ll_ssa(s3) + ", ptr null", 1, 1);
+    return ll_pack(0, s5, "optp", "");
+}

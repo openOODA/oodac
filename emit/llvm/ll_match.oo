@@ -24,7 +24,7 @@ pub fn ll_match_stmt(toks: List[String], p0: Int, n: Int, ssa0: Int, env: String
     if sk == "str" {
         return ll_str_match_stmt(toks, scr, p, n, env, ret_kind, stab, ir);
     }
-    if sk != "resi" && sk != "ress" && sk != "resl" && sk != "opti" && sk != "opts" && !ll_is_resst(sk) && !ll_is_optst(sk) {
+    if sk != "resi" && sk != "ress" && sk != "resl" && sk != "opti" && sk != "opts" && sk != "optp" && sk != "resp" && !ll_is_resst(sk) && !ll_is_optst(sk) {
         println("ERR\tllvm\tmatch scrutinee kind " + sk);
         process_exit(1);
     }

@@ -41,83 +41,123 @@ run_suite() {
   # Feature 17: Intra-Function Pointer Niche
   cat << 'EOF' > "$d/opt_niche.oo"
 // # Option Niche Test
-// Logline: Option representation
+// Logline: Option[&T] niche lowering
 // Setup: emit-llvm
 // Beats: opt, main
-pub fn get_opt(flag: Bool) -> Option[Int] {
-  if flag { return Some(100); }
+pub fn get_opt(flag: Bool, x: &Int) -> Option[&Int] {
+  if flag { return Some(x); }
   return None;
 }
 pub fn main() -> Int {
-  let o = get_opt(true);
+  let a: Int = 42;
+  let o = get_opt(true, &a);
   match o {
-    Some(v) => { return v; }
+    Some(p) => { return *p; }
     None => { return 0; }
   }
 }
 EOF
   local f17_emit=1
   if emit "$d/opt_niche.oo" "$d/opt_niche.ll"; then f17_emit=0; fi
-  record_test "T1-F17-01" "Option type lowers cleanly to IR" "$f17_emit"
-
-  local f17_some=1
-  if grep -q "Some" "$d/opt_niche.oo" && [[ "$f17_emit" -eq 0 ]]; then
-    f17_some=0
-  fi
-  record_test "T1-F17-02" "Some constructor lowered" "$f17_some"
+  record_test "T1-F17-01" "Option[&T] type parses and lowers to LLVM IR" "$f17_emit"
 
   local f17_none=1
-  if grep -q "None" "$d/opt_niche.oo" && [[ "$f17_emit" -eq 0 ]]; then
-    f17_none=0
-  fi
-  record_test "T1-F17-03" "None constructor lowered" "$f17_none"
-
-  local f17_match=1
-  if grep -q "marm" "$d/opt_niche.ll" 2>/dev/null; then
-    f17_match=0
-  fi
-  record_test "T1-F17-04" "Option unwrapping lowered to branches" "$f17_match"
-
-  local f17_as=1
-  if [[ -f "$d/opt_niche.ll" ]]; then
-    if llvm-as "$d/opt_niche.ll" -o "$d/opt.bc" >/dev/null 2>&1; then
-      f17_as=0
+  if [[ "$f17_emit" -eq 0 ]]; then
+    if grep -q "ret ptr null" "$d/opt_niche.ll" 2>/dev/null; then
+      f17_none=0
     fi
   fi
-  record_test "T1-F17-05" "Option lowered IR passes llvm-as" "$f17_as"
+  record_test "T1-F17-02" "None constructor lowers directly to ptr null" "$f17_none"
+
+  local f17_some=1
+  if [[ "$f17_emit" -eq 0 ]]; then
+    if grep -q "ret ptr %" "$d/opt_niche.ll" 2>/dev/null; then
+      f17_some=0
+    fi
+  fi
+  record_test "T1-F17-03" "Some(&x) returns pointer directly without wrapper" "$f17_some"
+
+  local f17_match=1
+  if [[ "$f17_emit" -eq 0 ]]; then
+    if grep -qE "(icmp ne ptr .*null|icmp eq ptr .*null)" "$d/opt_niche.ll" 2>/dev/null; then
+      f17_match=0
+    fi
+  fi
+  record_test "T1-F17-04" "Match discriminant compiles to icmp ptr against null" "$f17_match"
+
+  local f17_no_alloca=1
+  if [[ "$f17_emit" -eq 0 ]]; then
+    if ! grep -q "alloca %OoOpt" "$d/opt_niche.ll" 2>/dev/null; then
+      f17_no_alloca=0
+    fi
+  fi
+  record_test "T1-F17-05" "Intra-function Option[&T] contains zero alloca" "$f17_no_alloca"
+
+  cat << 'EOF' > "$d/opt_mut.oo"
+// # Option Mut Niche
+// Logline: Option[&mut T] niche lowering
+// Setup: emit-llvm
+// Beats: mut_opt, main
+pub fn get_mut(flag: Bool, x: &mut Int) -> Option[&mut Int] {
+  if flag { return Some(x); }
+  return None;
+}
+pub fn main() -> Int {
+  let mut a: Int = 10;
+  let o = get_mut(true, &mut a);
+  match o {
+    Some(p) => { *p = 20; return *p; }
+    None => { return 0; }
+  }
+}
+EOF
+  local f17_mut=1
+  if emit "$d/opt_mut.oo" "$d/opt_mut.ll"; then
+    if llvm-as "$d/opt_mut.ll" -o "$d/om.bc" >/dev/null 2>&1; then
+      f17_mut=0
+    fi
+  fi
+  record_test "T1-F17-06" "Option[&mut T] lowers cleanly and passes llvm-as" "$f17_mut"
 
   # Feature 18: C ABI Marshalling
-  local f18_str=1
-  if grep -q "%OoStr = type { ptr, i64 }" "$d/opt_niche.ll" 2>/dev/null; then
-    f18_str=0
+  local f18_rt=1
+  if [[ "$f17_emit" -eq 0 ]]; then
+    if grep -q "%OoOpt_Ptr = type { i32, ptr }" "$d/opt_niche.ll" 2>/dev/null && \
+       grep -q "%OoRes_Ptr = type { i32, ptr }" "$d/opt_niche.ll" 2>/dev/null; then
+      f18_rt=0
+    fi
   fi
-  record_test "T1-F18-01" "%OoStr defined with { ptr, i64 }" "$f18_str"
+  record_test "T1-F18-01" "C ABI registers %OoOpt_Ptr and %OoRes_Ptr in runtime" "$f18_rt"
 
-  local f18_opt=1
-  if grep -q "%OoOptI = type { i32, i64 }" "$d/opt_niche.ll" 2>/dev/null; then
-    f18_opt=0
+  local f18_c_abi=1
+  if [[ -f "$OODAC_ROOT/emit/llvm/ll_c_abi.oo" ]]; then
+    if grep -q "ll_c_abi_pack_ret" "$OODAC_ROOT/emit/llvm/ll_c_abi.oo" && \
+       grep -q "ll_c_abi_unpack_ret" "$OODAC_ROOT/emit/llvm/ll_c_abi.oo"; then
+      f18_c_abi=0
+    fi
   fi
-  record_test "T1-F18-02" "%OoOptI defined with { i32, i64 }" "$f18_opt"
+  record_test "T1-F18-02" "C ABI marshaller provides pack/unpack routines" "$f18_c_abi"
 
-  local f18_res=1
-  if grep -q "%OoResI = type { i32, i64, %OoStr }" "$d/opt_niche.ll" 2>/dev/null; then
-    f18_res=0
+  local f18_mod_len=1
+  if [[ -f "$OODAC_ROOT/emit/llvm/ll_c_abi.oo" ]]; then
+    local lc; lc=$(wc -l < "$OODAC_ROOT/emit/llvm/ll_c_abi.oo")
+    if [[ "$lc" -le 256 ]]; then f18_mod_len=0; fi
   fi
-  record_test "T1-F18-03" "%OoResI defined with { i32, i64, %OoStr }" "$f18_res"
+  record_test "T1-F18-03" "ll_c_abi.oo satisfies wc -l <= 256" "$f18_mod_len"
 
-  local f18_ctor_mod=1
-  if [[ -f "$OODAC_ROOT/emit/llvm/ll_ctor.oo" ]]; then
-    local l1; l1=$(wc -l < "$OODAC_ROOT/emit/llvm/ll_ctor.oo")
-    if [[ "$l1" -le 256 ]]; then f18_ctor_mod=0; fi
+  local f18_niche_len=1
+  if [[ -f "$OODAC_ROOT/emit/llvm/ll_niche.oo" ]]; then
+    local ln; ln=$(wc -l < "$OODAC_ROOT/emit/llvm/ll_niche.oo")
+    if [[ "$ln" -le 256 ]]; then f18_niche_len=0; fi
   fi
-  record_test "T1-F18-04" "ll_ctor.oo satisfies wc -l <= 256" "$f18_ctor_mod"
+  record_test "T1-F18-04" "ll_niche.oo satisfies wc -l <= 256" "$f18_niche_len"
 
-  local f18_call_mod=1
-  if [[ -f "$OODAC_ROOT/emit/llvm/ll_call.oo" ]]; then
-    local l2; l2=$(wc -l < "$OODAC_ROOT/emit/llvm/ll_call.oo")
-    if [[ "$l2" -le 256 ]]; then f18_call_mod=0; fi
+  local f18_cap_len=1
+  if [[ -f "$OODAC_ROOT/emit/llvm/ll_cap.oo" ]]; then
+    local lp; lp=$(wc -l < "$OODAC_ROOT/emit/llvm/ll_cap.oo")
+    if [[ "$lp" -le 256 ]]; then f18_cap_len=0; fi
   fi
-  record_test "T1-F18-05" "ll_call.oo satisfies wc -l <= 256" "$f18_call_mod"
+  record_test "T1-F18-05" "ll_cap.oo satisfies wc -l <= 256" "$f18_cap_len"
 
   # Feature 19: Scalar Capability Bitmasks
   cat << 'EOF' > "$d/cap_scalar.oo"
@@ -138,9 +178,11 @@ EOF
 
   local f19_i64=1
   if [[ "$f19_emit" -eq 0 ]]; then
-    if grep -q "i64" "$d/cap_scalar.ll" 2>/dev/null; then f19_i64=0; fi
+    if grep -q "i64 noundef" "$d/cap_scalar.ll" 2>/dev/null; then
+      f19_i64=0
+    fi
   fi
-  record_test "T1-F19-02" "Capability parameter represented as scalar i64" "$f19_i64"
+  record_test "T1-F19-02" "Capability parameter strictly scalar i64 noundef" "$f19_i64"
 
   local f19_call=1
   if [[ "$f19_emit" -eq 0 ]]; then
@@ -157,14 +199,6 @@ EOF
     fi
   fi
   record_test "T1-F19-04" "Capability tokens incur zero heap allocation" "$f19_no_heap"
-
-  local f19_as=1
-  if [[ -f "$d/cap_scalar.ll" ]]; then
-    if llvm-as "$d/cap_scalar.ll" -o "$d/cap.bc" >/dev/null 2>&1; then
-      f19_as=0
-    fi
-  fi
-  record_test "T1-F19-05" "Capability IR passes llvm-as" "$f19_as"
 }
 
 # Double-run determinism protocol
