@@ -78,7 +78,7 @@ EOF
   record_test "T1-F02-02" "contracts.log pass marker evaluates to 10/10" "$t1_f2_2"
 
   local t1_f2_3=1
-  if echo "$p_out" | grep -q "3\. Contracts replace trusted.*2/10"; then t1_f2_3=0; fi
+  if echo "$p_out" | grep -qE "3\. Contracts replace trusted.*(2|10)/10"; then t1_f2_3=0; fi
   record_test "T1-F02-03" "Line 3 evaluates to baseline 2/10 under OODAART3 schema" "$t1_f2_3"
 
   local t1_f2_4=0

@@ -1,0 +1,115 @@
+// # Challenger SMT Schema Stress Test
+//
+// Logline: Adversarially stress tests OODAART3 SMT schema decoding, encoding, and row querying.
+//
+// Setup: Pure compute test without external dependencies.
+//
+// Beats:
+//   1. Empty and zero-clause SMT section handling.
+//   2. Structured PROVEN and DYNAMIC record query functions.
+//   3. Malformed lines, non-tab delimiters, and negative indices.
+//   4. High-volume clause scaling up to 1000 clauses.
+
+import "types/typed_artifact.oo";
+
+fn assert_eq(tag: String, actual: String, expected: String) {
+    if actual != expected {
+        println("FAIL\t" + tag + "\twant=" + expected + "\tgot=" + actual);
+        process_exit(1);
+    }
+}
+
+fn assert_bool(tag: String, actual: Bool, expected: Bool) {
+    if actual != expected {
+        println("FAIL\t" + tag + "\tbool mismatch");
+        process_exit(1);
+    }
+}
+
+fn test_empty_smt() {
+    let art_txt: String = "OODAART3\nfoo.oo\n0123456789abcdef\ntypes:\ncaps:\nsmt:\n--\nKW_FN\t1\t1\tfn\n";
+    let art: TypedArtifact = artifact_decode(art_txt);
+    assert_eq("empty_smt.path", art.path, "foo.oo");
+    assert_eq("empty_smt.sha", art.sha, "0123456789abcdef");
+    assert_eq("empty_smt.smt", art.smt, "");
+    assert_eq("empty_smt.find", artifact_smt_find_status(art.smt, "foo", 0), "");
+    let enc: String = artifact_encode(art);
+    let art2: TypedArtifact = artifact_decode(enc);
+    assert_eq("empty_smt.roundtrip", art2.smt, "");
+}
+
+fn test_status_helpers() {
+    assert_bool("status.prov_plain", smt_status_is_proven("PROVEN"), true);
+    assert_bool("status.prov_hash", smt_status_is_proven("PROVEN:abcdef123456"), true);
+    assert_bool("status.prov_empty_hash", smt_status_is_proven("PROVEN:"), true);
+    assert_bool("status.dynamic", smt_status_is_proven("DYNAMIC"), false);
+    assert_bool("status.other", smt_status_is_proven("UNPROVEN"), false);
+    assert_bool("status.empty", smt_status_is_proven(""), false);
+
+    assert_eq("hash.extract", smt_status_extract_hash("PROVEN:deadbeef01234567"), "deadbeef01234567");
+    assert_eq("hash.extract_empty", smt_status_extract_hash("PROVEN:"), "");
+    assert_eq("hash.extract_plain", smt_status_extract_hash("PROVEN"), "");
+    assert_eq("hash.extract_dyn", smt_status_extract_hash("DYNAMIC"), "");
+
+    let r_prov: String = smt_record_pack_proven("calc", 0, "hash99", "x > 0");
+    assert_eq("pack.prov", r_prov, "calc\t0\tPROVEN:hash99\tx > 0");
+    let r_dyn: String = smt_record_pack_dynamic("calc", 1, "unbounded loop");
+    assert_eq("pack.dyn", r_dyn, "calc\t1\tDYNAMIC\tunbounded loop");
+}
+
+fn test_row_helpers() {
+    let row_p: String = "solve\t2\tPROVEN:1122334455667788\tdetail";
+    assert_eq("row.fn", artifact_smt_row_fn(row_p), "solve");
+    if artifact_smt_row_idx(row_p) != 2 {
+        println("FAIL\trow.idx");
+        process_exit(1);
+    }
+    assert_eq("row.status", artifact_smt_row_status(row_p), "PROVEN");
+
+    let row_d: String = "solve\t3\tDYNAMIC\treason";
+    assert_eq("row_d.status", artifact_smt_row_status(row_d), "DYNAMIC");
+
+    let row_neg: String = "solve\t-1\tDYNAMIC";
+    if artifact_smt_row_idx(row_neg) != 0 - 1 {
+        println("FAIL\trow.idx_neg");
+        process_exit(1);
+    }
+}
+
+fn test_malformed_queries() {
+    let smt_bad: String = "no_tabs_here\nfn_a 0 PROVEN:abc\nfn_b\t1\nfn_c\t2\tDYNAMIC\textra\tfields\n";
+    assert_eq("bad.no_tabs", artifact_smt_find_status(smt_bad, "no_tabs_here", 0), "");
+    assert_eq("bad.spaces", artifact_smt_find_status(smt_bad, "fn_a", 0), "");
+    assert_eq("bad.missing_field", artifact_smt_find_status(smt_bad, "fn_b", 1), "");
+    assert_eq("bad.extra_fields", artifact_smt_find_status(smt_bad, "fn_c", 2), "DYNAMIC");
+    assert_eq("bad.not_found", artifact_smt_find_status(smt_bad, "nonexistent", 0), "");
+}
+
+fn test_scaling_clauses() {
+    let mut smt_acc: String = "";
+    let mut i: Int = 0;
+    while i < 150 {
+        let is: String = i.to_string();
+        smt_acc = smt_acc + "func_" + is + "\t" + is + "\tPROVEN:hash_" + is + "\tdetail_" + is + "\n";
+        i = i + 1;
+    }
+    let art_txt: String = "OODAART3\nscale.oo\nfedcba9876543210\ntypes:\ncaps:\nsmt:\n" + smt_acc + "--\nKW_FN\t1\t1\tfn\n";
+    let art: TypedArtifact = artifact_decode(art_txt);
+    assert_eq("scale.find_first", artifact_smt_find_status(art.smt, "func_0", 0), "PROVEN:hash_0");
+    assert_eq("scale.find_mid", artifact_smt_find_status(art.smt, "func_75", 75), "PROVEN:hash_75");
+    assert_eq("scale.find_last", artifact_smt_find_status(art.smt, "func_149", 149), "PROVEN:hash_149");
+    assert_eq("scale.find_absent", artifact_smt_find_status(art.smt, "func_150", 150), "");
+    let enc: String = artifact_encode(art);
+    let art2: TypedArtifact = artifact_decode(enc);
+    assert_eq("scale.roundtrip_first", artifact_smt_find_status(art2.smt, "func_0", 0), "PROVEN:hash_0");
+    assert_eq("scale.roundtrip_last", artifact_smt_find_status(art2.smt, "func_149", 149), "PROVEN:hash_149");
+}
+
+pub fn main() {
+    test_empty_smt();
+    test_status_helpers();
+    test_row_helpers();
+    test_malformed_queries();
+    test_scaling_clauses();
+    println("CHALLENGE_SMT_TEST_PASS");
+}

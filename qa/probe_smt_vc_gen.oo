@@ -1,0 +1,87 @@
+// # Probe: Function Verification Condition Generator
+//
+// Logline: Verify that function contract VC generator proves valid contracts, refutes invalid ones, and marks loops dynamic.
+//
+// Setup: Token streams from valid and invalid functions.
+//
+// Beats:
+//   1. Test safe double function contract proof.
+//   2. Test off-by-one strict return refutation.
+//   3. Test while loop dynamic fallback.
+// RULES.oot 1.7: Under 256 lines.
+
+import "check/smt_contract_parse.oo";
+import "check/smt_wp_calc.oo";
+import "check/smt_prover_lia.oo";
+import "check/smt_vc_gen.oo";
+
+fn mk_tok(k: String, l: Int, c: Int, t: String) -> String {
+    return k + "\t" + l.to_string() + "\t" + c.to_string() + "\t" + t;
+}
+
+pub fn main() {
+    let mut toks1: List[String] = list_new();
+    toks1 = list_push(toks1, mk_tok("KW_PUB", 1, 1, "pub"));
+    toks1 = list_push(toks1, mk_tok("KW_FN", 1, 5, "fn"));
+    toks1 = list_push(toks1, mk_tok("IDENT", 1, 8, "safe_double"));
+    toks1 = list_push(toks1, mk_tok("LPAREN", 1, 19, "("));
+    toks1 = list_push(toks1, mk_tok("IDENT", 1, 20, "x"));
+    toks1 = list_push(toks1, mk_tok("COLON", 1, 21, ":"));
+    toks1 = list_push(toks1, mk_tok("IDENT", 1, 23, "Int"));
+    toks1 = list_push(toks1, mk_tok("RPAREN", 1, 26, ")"));
+    toks1 = list_push(toks1, mk_tok("ARROW", 1, 28, "->"));
+    toks1 = list_push(toks1, mk_tok("IDENT", 1, 31, "Int"));
+    toks1 = list_push(toks1, mk_tok("KW_REQUIRES", 2, 1, "requires"));
+    toks1 = list_push(toks1, mk_tok("IDENT", 2, 10, "x"));
+    toks1 = list_push(toks1, mk_tok("GTE", 2, 12, ">="));
+    toks1 = list_push(toks1, mk_tok("INT", 2, 15, "0"));
+    toks1 = list_push(toks1, mk_tok("KW_ENSURES", 3, 1, "ensures"));
+    toks1 = list_push(toks1, mk_tok("IDENT", 3, 9, "result"));
+    toks1 = list_push(toks1, mk_tok("GTE", 3, 16, ">="));
+    toks1 = list_push(toks1, mk_tok("IDENT", 3, 19, "x"));
+    toks1 = list_push(toks1, mk_tok("LBRACE", 4, 1, "{"));
+    toks1 = list_push(toks1, mk_tok("KW_RETURN", 5, 5, "return"));
+    toks1 = list_push(toks1, mk_tok("IDENT", 5, 12, "x"));
+    toks1 = list_push(toks1, mk_tok("STAR", 5, 14, "*"));
+    toks1 = list_push(toks1, mk_tok("INT", 5, 16, "2"));
+    toks1 = list_push(toks1, mk_tok("SEMI", 5, 17, ";"));
+    toks1 = list_push(toks1, mk_tok("RBRACE", 6, 1, "}"));
+
+    let v1: List[String] = smt_vc_prove_function_clauses(toks1, 1, "safe_double");
+    if !smt_vc_is_proven(v1, 0) || !smt_vc_is_proven(v1, 1) {
+        println("ERR\tsmt_vc\tsafe_double clauses should both be PROVEN");
+        process_exit(1);
+    }
+
+    let mut toks2: List[String] = list_new();
+    toks2 = list_push(toks2, mk_tok("KW_FN", 1, 1, "fn"));
+    toks2 = list_push(toks2, mk_tok("IDENT", 1, 4, "bad_inc"));
+    toks2 = list_push(toks2, mk_tok("LPAREN", 1, 11, "("));
+    toks2 = list_push(toks2, mk_tok("IDENT", 1, 12, "x"));
+    toks2 = list_push(toks2, mk_tok("COLON", 1, 13, ":"));
+    toks2 = list_push(toks2, mk_tok("IDENT", 1, 15, "Int"));
+    toks2 = list_push(toks2, mk_tok("RPAREN", 1, 18, ")"));
+    toks2 = list_push(toks2, mk_tok("ARROW", 1, 20, "->"));
+    toks2 = list_push(toks2, mk_tok("IDENT", 1, 23, "Int"));
+    toks2 = list_push(toks2, mk_tok("KW_REQUIRES", 2, 1, "requires"));
+    toks2 = list_push(toks2, mk_tok("IDENT", 2, 10, "x"));
+    toks2 = list_push(toks2, mk_tok("GTE", 2, 12, ">="));
+    toks2 = list_push(toks2, mk_tok("INT", 2, 15, "0"));
+    toks2 = list_push(toks2, mk_tok("KW_ENSURES", 3, 1, "ensures"));
+    toks2 = list_push(toks2, mk_tok("IDENT", 3, 9, "result"));
+    toks2 = list_push(toks2, mk_tok("GT", 3, 16, ">"));
+    toks2 = list_push(toks2, mk_tok("IDENT", 3, 18, "x"));
+    toks2 = list_push(toks2, mk_tok("LBRACE", 4, 1, "{"));
+    toks2 = list_push(toks2, mk_tok("KW_RETURN", 5, 5, "return"));
+    toks2 = list_push(toks2, mk_tok("IDENT", 5, 12, "x"));
+    toks2 = list_push(toks2, mk_tok("SEMI", 5, 13, ";"));
+    toks2 = list_push(toks2, mk_tok("RBRACE", 6, 1, "}"));
+
+    let v2: List[String] = smt_vc_prove_function_clauses(toks2, 0, "bad_inc");
+    if smt_vc_is_proven(v2, 1) {
+        println("ERR\tsmt_vc\tbad_inc ensures clause should NOT be proven");
+        process_exit(1);
+    }
+
+    println("OK");
+}

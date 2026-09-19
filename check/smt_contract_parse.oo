@@ -11,8 +11,8 @@
 //   4. Emit canonical SMT clause records.
 // RULES.oot 1.7: Under 256 lines.
 
-
-
+import "lex/token_fmt.oo";
+import "lex/token_parse_int.oo";
 
 pub fn smt_contract_parse_pack(
     kind: String,

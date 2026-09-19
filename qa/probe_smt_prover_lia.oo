@@ -1,0 +1,56 @@
+// # Probe: SMT DBM Difference Logic and WP Prover
+//
+// Logline: Verify that Difference Bound Matrix solver correctly decides valid theorems and refutations.
+//
+// Setup: Pure compute. Runs DBM refutation tests.
+//
+// Beats:
+//   1. Test monotonic postcondition proof (UNSAT).
+//   2. Test strict off-by-one postcondition refutation (SAT).
+//   3. Test multi-variable difference constraint proof.
+// RULES.oot 1.7: Under 256 lines.
+
+import "check/smt_contract_parse.oo";
+import "check/smt_wp_calc.oo";
+import "check/smt_prover_lia.oo";
+
+pub fn main() {
+    let pre1: String = smt_contract_parse_pack("requires", "x", 1, ">=", 0, "", 0, "1", "1", false, 0);
+    let post1: String = smt_contract_parse_pack("ensures", "result", 1, ">=", 0, "x", 1, "2", "1", false, 0);
+    let mut assigns1: List[String] = list_new();
+    assigns1 = list_push(assigns1, smt_wp_calc_assign_pack("result", "x", 2, 0));
+
+    let res1: String = smt_prover_lia_prove_vc(pre1, assigns1, post1);
+    if !smt_prover_lia_is_valid(res1) {
+        println("ERR\tsmt_dbm\tmonotonic postcondition should be valid");
+        process_exit(1);
+    }
+
+    let post2: String = smt_contract_parse_pack("ensures", "result", 1, ">", 0, "x", 1, "3", "1", false, 0);
+    let mut assigns2: List[String] = list_new();
+    assigns2 = list_push(assigns2, smt_wp_calc_assign_pack("result", "x", 1, 0));
+
+    let res2: String = smt_prover_lia_prove_vc(pre1, assigns2, post2);
+    if smt_prover_lia_is_valid(res2) {
+        println("ERR\tsmt_dbm\tstrict inequality should be refuted");
+        process_exit(1);
+    }
+    let cex: String = smt_prover_lia_counterexample(res2);
+    if str_index_of(cex, "x = 0") < 0 {
+        println("ERR\tsmt_dbm\tcounterexample should identify x = 0: " + cex);
+        process_exit(1);
+    }
+
+    let pre3: String = smt_contract_parse_pack("requires", "x", 1, ">=", 5, "", 0, "4", "1", false, 0);
+    let post3: String = smt_contract_parse_pack("ensures", "result", 1, ">=", 10, "", 0, "5", "1", false, 0);
+    let mut assigns3: List[String] = list_new();
+    assigns3 = list_push(assigns3, smt_wp_calc_assign_pack("result", "x", 1, 5));
+
+    let res3: String = smt_prover_lia_prove_vc(pre3, assigns3, post3);
+    if !smt_prover_lia_is_valid(res3) {
+        println("ERR\tsmt_dbm\toffset inequality should be valid");
+        process_exit(1);
+    }
+
+    println("OK");
+}

@@ -7,63 +7,95 @@
 // Beats:
 //   1. Define assignment transition descriptors (v <- c * x + k).
 //   2. Perform backwards substitution into relational postconditions.
-//   3. Formulate verification conditions P => WP(S, Q).
+//   3. Formulate verification conditions P => WP(S, Q) with like-term cancellation.
 // RULES.oot 1.7: Under 256 lines.
 
 import "smt_contract_parse.oo";
-
+import "lex/token_fmt.oo";
+import "lex/token_parse_int.oo";
 
 pub fn smt_wp_calc_assign_pack(var_name: String, rhs_var: String, coeff: Int, k: Int) -> String {
     let mut c: Int = coeff;
-    if c == 0 && rhs_var != "" { c = 1;
-    }
+    if c == 0 && rhs_var != "" { c = 1; }
     return var_name + "\t" + rhs_var + "\t" + c.to_string() + "\t" + k.to_string();
 }
 
 pub fn smt_wp_calc_assign_target(a: String) -> String {
     return field_at(a, 0);
 }
+
 pub fn smt_wp_calc_assign_rhs_var(a: String) -> String {
     return field_at(a, 1);
 }
+
 pub fn smt_wp_calc_assign_coeff(a: String) -> Int {
     return 0 + parse_int(field_at(a, 2));
 }
+
 pub fn smt_wp_calc_assign_const(a: String) -> Int {
     return 0 + parse_int(field_at(a, 3));
 }
 
 pub fn smt_wp_calc_step(post: String, assign: String) -> String {
     let target: String = smt_wp_calc_assign_target(assign);
-    let mut new_lhs: String = smt_contract_parse_lhs(post);
-    let mut new_k: Int = 0 + smt_contract_parse_rhs_const(post);
-    let mut new_rhs_var: String = smt_contract_parse_rhs_var(post);
+    let mut lhs_v: String = smt_contract_parse_lhs(post);
+    let mut lhs_c: Int = 0 + smt_contract_parse_lhs_coeff(post);
+    let mut rhs_v: String = smt_contract_parse_rhs_var(post);
+    let mut rhs_c: Int = 0 + smt_contract_parse_rhs_coeff(post);
+    let mut rhs_k: Int = 0 + smt_contract_parse_rhs_const(post);
+    let op: String = smt_contract_parse_op(post);
 
-    let p_rc: Int = 0 + smt_contract_parse_rhs_const(post);
-    let a_rc: Int = 0 + smt_wp_calc_assign_const(assign);
+    let a_rhs_v: String = smt_wp_calc_assign_rhs_var(assign);
+    let a_c: Int = smt_wp_calc_assign_coeff(assign);
+    let a_k: Int = smt_wp_calc_assign_const(assign);
 
-    if smt_contract_parse_lhs(post) == target {
-        let ar: String = smt_wp_calc_assign_rhs_var(assign);
-        if ar != "" { new_lhs = ar;
-        }
-        new_k = p_rc - a_rc;
+    if lhs_v == target {
+        lhs_v = a_rhs_v;
+        lhs_c = lhs_c * a_c;
+        rhs_k = rhs_k - (lhs_c * a_k);
     }
 
-    if smt_contract_parse_rhs_var(post) == target {
-        let ar2: String = smt_wp_calc_assign_rhs_var(assign);
-        if ar2 != "" { new_rhs_var = ar2;
+    if rhs_v == target {
+        rhs_v = a_rhs_v;
+        rhs_c = rhs_c * a_c;
+        rhs_k = rhs_k + (rhs_c * a_k);
+    }
+
+    if lhs_v != "" && lhs_v == rhs_v {
+        let diff: Int = lhs_c - rhs_c;
+        if diff == 0 {
+            let mut holds: Bool = false;
+            if op == ">=" { holds = 0 >= rhs_k; }
+            if op == ">"  { holds = 0 > rhs_k; }
+            if op == "<=" { holds = 0 <= rhs_k; }
+            if op == "<"  { holds = 0 < rhs_k; }
+            if op == "==" { holds = 0 == rhs_k; }
+            if op == "!=" { holds = 0 != rhs_k; }
+            let mut cv: Int = 0;
+            if holds { cv = 1; }
+            return smt_contract_parse_pack(
+                smt_contract_parse_kind(post),
+                "", 0, op, 0, "", 0,
+                smt_contract_parse_line(post),
+                smt_contract_parse_col(post),
+                true, cv
+            );
         }
-        new_k = p_rc + a_rc;
+        if diff > 0 {
+            lhs_c = diff;
+            rhs_v = "";
+            rhs_c = 0;
+        }
     }
 
     return smt_contract_parse_pack(
         smt_contract_parse_kind(post),
-        new_lhs,
-        0 + smt_contract_parse_lhs_coeff(post),
-        smt_contract_parse_op(post),
-        new_k,
-        new_rhs_var,
-        0 + smt_contract_parse_rhs_coeff(post),
+        lhs_v,
+        lhs_c,
+        op,
+        rhs_k,
+        rhs_v,
+        rhs_c,
         smt_contract_parse_line(post),
         smt_contract_parse_col(post),
         smt_contract_parse_is_const(post),
@@ -73,11 +105,12 @@ pub fn smt_wp_calc_step(post: String, assign: String) -> String {
 
 pub fn smt_wp_calc_derive(pre: String, assigns: List[String], post: String) -> String {
     let mut cur: String = str_slice(post, 0, chars_len(post));
-let n: Int = list_len(assigns);
-let mut i: Int = n - 1;
-while i >= 0 { let st: String = list_get(assigns, i);
-cur = smt_wp_calc_step(cur, st);
-i = i - 1;
-}
+    let n: Int = list_len(assigns);
+    let mut i: Int = n - 1;
+    while i >= 0 {
+        let st: String = list_get(assigns, i);
+        cur = smt_wp_calc_step(cur, st);
+        i = i - 1;
+    }
     return cur;
 }

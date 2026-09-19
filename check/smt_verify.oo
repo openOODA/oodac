@@ -1,83 +1,81 @@
-// # Ahead-of-Time SMT Contract Verification Pass / SMT-LIB2 Formula Generator
+// # Ahead-of-Time SMT Contract Verification Pass
 //
-// Logline: Refuse const-false contracts and unproven ident relations. Do not claim QF_LIA for call-shaped requires.
+// Logline: Proves function contracts via WP calculus and DBM, sealing proof certificates or reporting counterexamples.
 //
-// Setup: Merged cohesive compiler module.
+// Setup: Integrates smt_prover_lia and smt_vc_gen with OODAART3 schema serialization.
 //
 // Beats:
-//   1. Unified cohesive implementation.
+//   1. Run verification conditions on straight-line function bodies.
+//   2. Extract and report actionable counterexamples on refutations.
+//   3. Seal proof certificates into OODAART3 smt: section.
+// RULES.oot 1.7: Under 256 lines.
 
 import "smt_contract_parse.oo";
-
 import "smt_wp_calc.oo";
-
 import "smt_prover_lia.oo";
+import "smt_vc_gen.oo";
+import "types/typed_artifact.oo";
+import "lex/token_fmt.oo";
+import "lex/token_parse_int.oo";
 
+fn smt_tok_k(toks: List[String], i: Int) -> String {
+    if i < 0 || i >= list_len(toks) { return ""; }
+    return field_at(list_get(toks, i), 0);
+}
 
-fn smt_verify_pass_refuse(kind: String, line: String, col: String) {
-    println("ERR\tsmt\tunsat " + kind + " at " + line + ":" + col);
+fn smt_tok_t(toks: List[String], i: Int) -> String {
+    if i < 0 || i >= list_len(toks) { return ""; }
+    return field_at(list_get(toks, i), 3);
+}
+
+pub fn smt_verify_pass_refuse(kind: String, line: String, col: String, cex: String) {
+    if cex != "" {
+        println("ERR\tsmt\tunsat " + kind + " at " + line + ":" + col + ": counterexample " + cex + " (unproven)");
+    } else {
+        println("ERR\tsmt\tunsat " + kind + " at " + line + ":" + col + " (unproven)");
+    }
     process_exit(1);
-}
-
-fn smt_is_ident(s: String) -> Bool {
-    let n: Int = chars_len(s);
-    if n <= 0 { return false; }
-    let c0: String = char_at(s, 0);
-    if !char_is_alpha(c0) && c0 != "_" { return false; }
-    let mut i = 1;
-    while i < n {
-        let c: String = char_at(s, i);
-        if !char_is_alpha(c) && !char_is_digit(c) && c != "_" { return false; }
-        i = i + 1;
-    }
-    return true;
-}
-
-fn smt_is_int_lit(s: String) -> Bool {
-    let n: Int = chars_len(s);
-    if n <= 0 { return false; }
-    let mut i: Int = 0;
-    if char_at(s, 0) == "-" {
-        if n == 1 { return false; }
-        i = 1;
-    }
-    while i < n {
-        let c: String = char_at(s, i);
-        if str_index_of("0123456789", c) < 0 { return false; }
-        i = i + 1;
-    }
-    return true;
 }
 
 pub fn smt_verify_pass_run(toks: List[String]) -> Bool {
     let clauses: List[String] = smt_contract_parse_tokens(toks);
-    let n: Int = list_len(clauses);
+    let n_cl: Int = list_len(clauses);
+    if n_cl == 0 { return true; }
+    let n_tok: Int = list_len(toks);
     let mut i: Int = 0;
-    while i < n {
-        let cl: String = list_get(clauses, i);
-        let kind: String = smt_contract_parse_kind(cl);
-        let line: String = smt_contract_parse_line(cl);
-        let col: String = smt_contract_parse_col(cl);
-        let op_str: String = smt_contract_parse_op(cl);
-        let rc: Int = 0 + smt_contract_parse_rhs_const(cl);
-        let rv: String = smt_contract_parse_rhs_var(cl);
-        let lhs: String = smt_contract_parse_lhs(cl);
-        let is_c: Bool = smt_contract_parse_is_const(cl);
-        if kind == "requires" || kind == "ensures" {
-            if is_c {
-                let cv: Int = 0 + smt_contract_parse_const_val(cl);
-                if lhs == "" && cv == 0 {
-                    smt_verify_pass_refuse(kind, line, col);
+    while i < n_tok {
+        let k: String = smt_tok_k(toks, i);
+        if k == "KW_FN" && i + 1 < n_tok {
+            let fn_name: String = smt_tok_t(toks, i + 1);
+            let verdicts: List[String] = smt_vc_prove_function_clauses(toks, i, fn_name);
+            let nv: Int = list_len(verdicts);
+            let mut j: Int = 0;
+            while j < nv {
+                let row: String = list_get(verdicts, j);
+                let stat: String = field_at(row, 2);
+                if stat == "REFUTED" {
+                    let cl_idx: Int = parse_int(field_at(row, 1));
+                    let cex: String = field_at(row, 3);
+                    let mut line: String = "1";
+                    let mut col: String = "1";
+                    let mut kind: String = "ensures";
+                    if cl_idx < n_cl {
+                        let cl_info: String = list_get(clauses, cl_idx);
+                        line = smt_contract_parse_line(cl_info);
+                        col = smt_contract_parse_col(cl_info);
+                        kind = smt_contract_parse_kind(cl_info);
+                    }
+                    if cex == "unproven requires" {
+                        println("ERR\tsmt\tunproven " + kind + " at " + line + ":" + col);
+                        process_exit(1);
+                    } else if cex == "constant_false" {
+                        println("ERR\tsmt\tunsat " + kind + " at " + line + ":" + col);
+                        process_exit(1);
+                    } else {
+                        smt_verify_pass_refuse(kind, line, col, cex);
+                    }
                 }
-            }
-            if rv == "" && smt_is_int_lit(lhs) {
-                let lv: Int = parse_int(lhs);
-                if !smt_prover_lia_eval_rel(op_str, lv, rc) {
-                    smt_verify_pass_refuse(kind, line, col);
-                }
-            } else if smt_is_ident(lhs) && rv == "" {
-                println("ERR\tsmt\tunproven " + kind + " at " + line + ":" + col);
-                process_exit(1);
+                j = j + 1;
             }
         }
         i = i + 1;
@@ -86,64 +84,44 @@ pub fn smt_verify_pass_run(toks: List[String]) -> Bool {
 }
 
 pub fn smt_verify_pass_stream(src: String, toks: List[String]) -> Int {
-    let ok: Bool = smt_verify_pass_run(toks);
-    if ok { return 0;
-    }
+    if smt_verify_pass_run(toks) { return 0; }
     return 1;
 }
 
-pub fn smt_formula_gen_op_to_smt2(op: String) -> String {
-    if op == "==" { return "=";
+pub fn smt_verify_build_smt_section(toks: List[String]) -> String {
+    let clauses: List[String] = smt_contract_parse_tokens(toks);
+    let n_cl: Int = list_len(clauses);
+    if n_cl == 0 { return "0 clauses proved"; }
+    let mut out: String = "";
+    let n_tok: Int = list_len(toks);
+    let mut i: Int = 0;
+    while i < n_tok {
+        let k: String = smt_tok_k(toks, i);
+        if k == "KW_FN" && i + 1 < n_tok {
+            let fn_name: String = smt_tok_t(toks, i + 1);
+            let verdicts: List[String] = smt_vc_prove_function_clauses(toks, i, fn_name);
+            let nv: Int = list_len(verdicts);
+            let mut j: Int = 0;
+            while j < nv {
+                let row: String = list_get(verdicts, j);
+                let cl_idx: Int = parse_int(field_at(row, 1));
+                let stat: String = field_at(row, 2);
+                let detail: String = field_at(row, 3);
+                if stat == "PROVEN" {
+                    let form: String = fn_name + ":" + cl_idx.to_string() + ":" + detail;
+                    let dig: String = crypto_sha256_internal(form);
+                    let vc_hash: String = str_slice(dig, 0, 16);
+                    out = out + smt_record_pack_proven(fn_name, cl_idx, vc_hash, detail) + "\n";
+                } else if stat == "DYNAMIC" {
+                    out = out + smt_record_pack_dynamic(fn_name, cl_idx, detail) + "\n";
+                } else if stat == "REFUTED" {
+                    smt_verify_pass_refuse("ensures", "1", "1", detail);
+                }
+                j = j + 1;
+            }
+        }
+        i = i + 1;
     }
-    if op == "!=" { return "distinct";
-    }
-    if op == ">" { return ">";
-    }
-    if op == ">=" { return ">=";
-    }
-    if op == "<" { return "<";
-    }
-    if op == "<=" { return "<=";
-    }
-    return "=";
-}
-
-pub fn smt_formula_gen_clause_sexpr(cl: String) -> String {
-    let smt_op: String = smt_formula_gen_op_to_smt2(smt_contract_parse_op(cl));
-    let mut lhs: String = smt_contract_parse_lhs(cl);
-    let rc: Int = 0 + smt_contract_parse_rhs_const(cl);
-    let mut rhs: String = rc.to_string();
-    let rv: String = smt_contract_parse_rhs_var(cl);
-    if rv != "" { rhs = rv;
-    }
-    if lhs == "" { lhs = "0";
-    }
-    if smt_op == "distinct" {
-        return "(distinct " + lhs + " " + rhs + ")";
-    }
-    return "(" + smt_op + " " + lhs + " " + rhs + ")";
-}
-
-pub fn smt_formula_gen_negated_sexpr(cl: String) -> String {
-    let pos_sexpr: String = smt_formula_gen_clause_sexpr(cl);
-return "(not " + pos_sexpr + ")";
-}
-
-pub fn smt_formula_gen_build(decls: List[String], asserts: List[String], check_sat: Bool) -> String {
-    let mut out: String = "(set-logic QF_LIA)\n";
-let n_decl: Int = list_len(decls);
-let mut i: Int = 0;
-while i < n_decl { let vname: String = list_get(decls, i);
-out = out + "(declare-const " + vname + " Int)\n";
-i = i + 1;
-}
-    let n_ass: Int = list_len(asserts);
-    i = 0;
-    while i < n_ass { let ass_str: String = list_get(asserts, i);
-    out = out + "(assert " + ass_str + ")\n";
-    i = i + 1;
-    }
-    if check_sat { out = out + "(check-sat)\n(get-model)\n";
-    }
-    return out;
+    if out == "" { return n_cl.to_string() + " clauses proved"; }
+    return artifact_norm_section(out);
 }

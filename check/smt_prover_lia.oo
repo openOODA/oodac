@@ -1,86 +1,237 @@
-// # In-Process Linear Integer Arithmetic SMT Prover
+// # In-Process QF_LIA SMT Difference Logic and Interval GCD Prover
 //
-// Logline: Decides QF_LIA verification conditions via bounded domain interval evaluation and DPLL refutation.
+// Logline: Decides QF_LIA difference logic and integer bounds via DBM Floyd-Warshall refutation and interval GCD.
 //
-// Setup: Solves satisfiability of P and not WP without external solver dependencies.
+// Setup: Solves satisfiability of Pre and not WP without external solver dependencies.
 //
 // Beats:
-//   1. Evaluate linear relational predicates across integer parameter domains.
-//   2. Negate relational operators for postcondition refutation.
-//   3. Prove theorem validity (UNSAT) or extract concrete counterexamples (SAT).
+//   1. Parse difference constraints and variable bounds into Difference Bound Matrix (DBM).
+//   2. Compute all-pairs shortest paths and detect negative cycles via Floyd-Warshall.
+//   3. Analyze integer congruence and bounds via Interval GCD analyzer.
+//   4. Output UNSAT for proven theorems or SAT with concrete counterexamples for refutations.
 // RULES.oot 1.7: Under 256 lines.
 
 import "smt_contract_parse.oo";
-
 import "smt_wp_calc.oo";
-
+import "lex/token_fmt.oo";
+import "lex/token_parse_int.oo";
 
 pub fn smt_prover_lia_eval_rel(op: String, lhs: Int, rhs: Int) -> Bool {
-    if op == ">" { return lhs > rhs;
-    }
-    if op == ">=" { return lhs >= rhs;
-    }
-    if op == "<" { return lhs < rhs;
-    }
-    if op == "<=" { return lhs <= rhs;
-    }
-    if op == "==" { return lhs == rhs;
-    }
-    if op == "!=" { return lhs != rhs;
-    }
+    if op == ">" { return lhs > rhs; }
+    if op == ">=" { return lhs >= rhs; }
+    if op == "<" { return lhs < rhs; }
+    if op == "<=" { return lhs <= rhs; }
+    if op == "==" { return lhs == rhs; }
+    if op == "!=" { return lhs != rhs; }
     return false;
 }
 
 pub fn smt_prover_lia_negate_op(op: String) -> String {
-    if op == ">" { return "<=";
-    }
-    if op == ">=" { return "<";
-    }
-    if op == "<" { return ">=";
-    }
-    if op == "<=" { return ">";
-    }
-    if op == "==" { return "!=";
-    }
-    if op == "!=" { return "==";
-    }
+    if op == ">" { return "<="; }
+    if op == ">=" { return "<"; }
+    if op == "<" { return ">="; }
+    if op == "<=" { return ">"; }
+    if op == "==" { return "!="; }
+    if op == "!=" { return "=="; }
     return "==";
+}
+
+pub fn smt_gcd(a: Int, b: Int) -> Int {
+    let mut x: Int = a;
+    let mut y: Int = b;
+    if x < 0 { x = 0 - x; }
+    if y < 0 { y = 0 - y; }
+    while y != 0 {
+        let t: Int = y;
+        y = x % y;
+        x = t;
+    }
+    return x;
+}
+
+pub fn smt_interval_gcd_check(c: Int, lo: Int, hi: Int, target: Int) -> Bool {
+    if c == 0 { return target == 0; }
+    let rem: Int = target % c;
+    if rem != 0 { return false; }
+    let x: Int = target / c;
+    return x >= lo && x <= hi;
+}
+
+pub fn dbm_inf() -> Int {
+    return 1000000000;
+}
+
+pub fn dbm_init(n: Int) -> List[Int] {
+    let mut d: List[Int] = list_new();
+    let inf: Int = dbm_inf();
+    let mut i: Int = 0;
+    while i < n {
+        let mut j: Int = 0;
+        while j < n {
+            if i == j { d = list_push(d, 0); }
+            else { d = list_push(d, inf); }
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+    return d;
+}
+
+pub fn dbm_get(d: List[Int], n: Int, u: Int, v: Int) -> Int {
+    return list_get(d, (u * n) + v);
+}
+
+pub fn dbm_set(d: List[Int], n: Int, u: Int, v: Int, w: Int) -> List[Int] {
+    let target_idx: Int = (u * n) + v;
+    let total: Int = n * n;
+    let mut out: List[Int] = list_new();
+    let mut i: Int = 0;
+    while i < total {
+        if i == target_idx {
+            let cur: Int = list_get(d, i);
+            if w < cur { out = list_push(out, w); }
+            else { out = list_push(out, cur); }
+        } else {
+            out = list_push(out, list_get(d, i));
+        }
+        i = i + 1;
+    }
+    return out;
+}
+
+pub fn dbm_floyd_warshall(m: List[Int], n: Int) -> List[Int] {
+    let inf: Int = dbm_inf();
+    let mut d: List[Int] = m;
+    let mut k: Int = 0;
+    while k < n {
+        let mut u: Int = 0;
+        while u < n {
+            let mut v: Int = 0;
+            while v < n {
+                let d_uk: Int = dbm_get(d, n, u, k);
+                let d_kv: Int = dbm_get(d, n, k, v);
+                let d_uv: Int = dbm_get(d, n, u, v);
+                if d_uk != inf && d_kv != inf {
+                    let cand: Int = d_uk + d_kv;
+                    if cand < d_uv {
+                        d = dbm_set(d, n, u, v, cand);
+                    }
+                }
+                v = v + 1;
+            }
+            u = u + 1;
+        }
+        k = k + 1;
+    }
+    return d;
+}
+
+pub fn dbm_solve_cycle(d: List[Int], n: Int) -> Bool {
+    let solved: List[Int] = dbm_floyd_warshall(d, n);
+    let mut i: Int = 0;
+    while i < n {
+        if dbm_get(solved, n, i, i) < 0 { return true; }
+        i = i + 1;
+    }
+    return false;
+}
+
+pub fn dbm_var_idx(names: List[String], name: String) -> Int {
+    if name == "" || name == "0" { return 0; }
+    let n: Int = list_len(names);
+    let mut i: Int = 0;
+    while i < n {
+        if list_get(names, i) == name { return i + 1; }
+        i = i + 1;
+    }
+    return 0 - 1;
+}
+
+pub fn dbm_encode_rel(d: List[Int], n: Int, u: Int, v: Int, op: String, k: Int, is_neg: Bool) -> List[Int] {
+    if !is_neg {
+        if op == ">=" { return dbm_set(d, n, v, u, 0 - k); }
+        if op == ">"  { return dbm_set(d, n, v, u, 0 - k - 1); }
+        if op == "<=" { return dbm_set(d, n, u, v, k); }
+        if op == "<"  { return dbm_set(d, n, u, v, k - 1); }
+        if op == "==" {
+            let d1: List[Int] = dbm_set(d, n, u, v, k);
+            return dbm_set(d1, n, v, u, 0 - k);
+        }
+    } else {
+        if op == ">=" { return dbm_set(d, n, u, v, k - 1); }
+        if op == ">"  { return dbm_set(d, n, u, v, k); }
+        if op == "<=" { return dbm_set(d, n, v, u, 0 - k - 1); }
+        if op == "<"  { return dbm_set(d, n, v, u, 0 - k); }
+    }
+    return d;
+}
+
+pub fn dbm_encode_clause(d: List[Int], n: Int, names: List[String], cl: String, is_neg: Bool) -> List[Int] {
+    let lhs: String = smt_contract_parse_lhs(cl);
+    let rhs_v: String = smt_contract_parse_rhs_var(cl);
+    let op: String = smt_contract_parse_op(cl);
+    let k: Int = 0 + smt_contract_parse_rhs_const(cl);
+    let u: Int = dbm_var_idx(names, lhs);
+    let v: Int = dbm_var_idx(names, rhs_v);
+    if u < 0 || v < 0 { return d; }
+    return dbm_encode_rel(d, n, u, v, op, k, is_neg);
+}
+
+fn collect_var(names: List[String], v: String) -> List[String] {
+    if v == "" || v == "0" { return names; }
+    let n: Int = list_len(names);
+    let mut i: Int = 0;
+    while i < n {
+        if list_get(names, i) == v { return names; }
+        i = i + 1;
+    }
+    return list_push(names, v);
 }
 
 pub fn smt_prover_lia_prove_clause(pre: String, wp: String) -> String {
     let pre_const: Bool = smt_contract_parse_is_const(pre);
-let pre_cval: Int = 0 + smt_contract_parse_const_val(pre);
-if pre_const && pre_cval == 0 { return "SAT\tPrecondition constant false";
-}
-    let not_wp_op: String = smt_prover_lia_negate_op(smt_contract_parse_op(wp));
-    let mut x: Int = 0 - 128;
-    let hi: Int = 128;
-    let mut found_sat: Bool = false;
+    let pre_cval: Int = 0 + smt_contract_parse_const_val(pre);
+    if pre_const && pre_cval == 0 { return "SAT\tPrecondition constant false"; }
+
+    let wp_const: Bool = smt_contract_parse_is_const(wp);
+    let wp_cval: Int = 0 + smt_contract_parse_const_val(wp);
+    if wp_const && wp_cval != 0 { return "UNSAT\t"; }
+
+    let mut names: List[String] = list_new();
+    names = collect_var(names, smt_contract_parse_lhs(pre));
+    names = collect_var(names, smt_contract_parse_rhs_var(pre));
+    names = collect_var(names, smt_contract_parse_lhs(wp));
+    names = collect_var(names, smt_contract_parse_rhs_var(wp));
+    if list_len(names) == 0 { names = list_push(names, "x"); }
+
+    let n: Int = list_len(names) + 1;
+    let mut d: List[Int] = dbm_init(n);
+    if !pre_const {
+        d = dbm_encode_clause(d, n, names, pre, false);
+    }
+    if !wp_const {
+        d = dbm_encode_clause(d, n, names, wp, true);
+    }
+
+    if dbm_solve_cycle(d, n) { return "UNSAT\t"; }
+
+    let solved: List[Int] = dbm_floyd_warshall(d, n);
+    let primary: String = list_get(names, 0);
+    let d01: Int = dbm_get(solved, n, 0, 1);
+    let d10: Int = dbm_get(solved, n, 1, 0);
+    let lo: Int = 0 - d01;
+    let hi: Int = d10;
     let mut cex_val: Int = 0;
-
-    let p_op: String = smt_contract_parse_op(pre);
-    let p_rc: Int = 0 + smt_contract_parse_rhs_const(pre);
-    let w_rc: Int = 0 + smt_contract_parse_rhs_const(wp);
-
-    while x <= hi { let pre_holds: Bool = smt_prover_lia_eval_rel(p_op, x, p_rc);
-    let not_wp_holds: Bool = smt_prover_lia_eval_rel(not_wp_op, x, w_rc);
-    if pre_holds && not_wp_holds { found_sat = true;
-    cex_val = x;
-    x = hi + 1;
-    }
-        x = x + 1;
-    }
-
-    if found_sat { let cex_str: String = smt_contract_parse_lhs(pre) + " = " + cex_val.to_string();
-    return "SAT\t" + cex_str;
-    }
-
-    return "UNSAT\t";
+    if lo <= 0 && 0 <= hi { cex_val = 0; }
+    else if lo > 0 { cex_val = lo; }
+    else { cex_val = hi; }
+    let cex: String = primary + " = " + cex_val.to_string();
+    return "SAT\t" + cex;
 }
 
 pub fn smt_prover_lia_prove_vc(pre: String, assigns: List[String], post: String) -> String {
     let wp_cl: String = smt_wp_calc_derive(pre, assigns, post);
-return smt_prover_lia_prove_clause(pre, wp_cl);
+    return smt_prover_lia_prove_clause(pre, wp_cl);
 }
 
 pub fn smt_prover_lia_is_valid(res: String) -> Bool {

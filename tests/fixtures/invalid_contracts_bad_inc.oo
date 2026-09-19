@@ -1,0 +1,18 @@
+// # Invalid Contract Specification Fixture: bad_inc
+//
+// Logline: Invalid module where postcondition result > x fails at boundary x = 0.
+//
+// Setup: Pure compute returning un-incremented x.
+//
+// Beats:
+//   1. Precondition requires x >= 0.
+//   2. Postcondition ensures result > x.
+//   3. Body returns x instead of x + 1, violating ensures when x = 0.
+
+pub fn bad_inc(x: Int) -> Int
+requires x >= 0
+ensures result > x
+spec "Increments non-negative integer (intentionally flawed)"
+{
+    return x;
+}
