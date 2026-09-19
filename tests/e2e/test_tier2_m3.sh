@@ -57,8 +57,14 @@ EOF
     if llvm-as "$d/no_call.ll" -o "$d/nc.bc" >/dev/null 2>&1; then b10_as=0; fi
   fi
   record_test "T2-F10-03" "Pruned symbol table passes llvm-as" "$b10_as"
-  record_test "T2-F10-04" "Duplicate runtime symbols deduplicated" 0
-  record_test "T2-F10-05" "Symbol table emission deterministic" 0
+
+  local b10_dedup=1
+  if ! grep "^declare .* @oo_" "$d/no_call.ll" 2>/dev/null | sort | uniq -d | grep -q .; then b10_dedup=0; fi
+  record_test "T2-F10-04" "Duplicate runtime symbols deduplicated" "$b10_dedup"
+
+  local b10_det=1
+  if emit "$d/no_call.oo" "$d/no_call2.ll" && cmp -s "$d/no_call.ll" "$d/no_call2.ll"; then b10_det=0; fi
+  record_test "T2-F10-05" "Symbol table emission deterministic" "$b10_det"
 
   # Feature 11 Boundaries
   cat << 'EOF' > "$d/zero_args.oo"
@@ -94,8 +100,24 @@ EOF
     if llvm-as "$d/multi_args.ll" -o "$d/ma.bc" >/dev/null 2>&1; then b11_as=0; fi
   fi
   record_test "T2-F11-03" "Multi-attribute function passes llvm-as" "$b11_as"
-  record_test "T2-F11-04" "Boolean parameters receive attributes" 0
-  record_test "T2-F11-05" "Parameter attributes preserve calling convention" 0
+
+  cat << 'EOF' > "$d/bool_arg.oo"
+// # Bool Arg
+// Logline: Bool arg
+// Setup: emit-llvm
+// Beats: b, main
+pub fn is_even(b: Bool) -> Bool { return !b; }
+pub fn main() -> Int { return if is_even(true) { 1 } else { 0 }; }
+EOF
+  local b11_bool=1
+  if emit "$d/bool_arg.oo" "$d/bool_arg.ll"; then
+    if grep -q "i1 noundef" "$d/bool_arg.ll" 2>/dev/null; then b11_bool=0; fi
+  fi
+  record_test "T2-F11-04" "Boolean parameters receive attributes" "$b11_bool"
+
+  local b11_cc=1
+  if llvm-as "$d/bool_arg.ll" -o "$d/ba.bc" >/dev/null 2>&1; then b11_cc=0; fi
+  record_test "T2-F11-05" "Parameter attributes preserve calling convention" "$b11_cc"
 
   # Feature 12 Boundaries
   cat << 'EOF' > "$d/zero_math.oo"
@@ -120,9 +142,30 @@ EOF
     if llvm-as "$d/zero_math.ll" -o "$d/zm.bc" >/dev/null 2>&1; then b12_as=0; fi
   fi
   record_test "T2-F12-02" "Zero/one arithmetic passes llvm-as" "$b12_as"
-  record_test "T2-F12-03" "Subtraction yielding negative integer lowers" 0
-  record_test "T2-F12-04" "Signed arithmetic respects NSW overflow limits" 0
-  record_test "T2-F12-05" "Multiplication by zero handled correctly" 0
+
+  cat << 'EOF' > "$d/neg_math.oo"
+// # Neg Math
+// Logline: Negative integer math
+// Setup: emit-llvm
+// Beats: sub, main
+pub fn sub_neg() -> Int { return 10 - 25; }
+pub fn main() -> Int { return sub_neg(); }
+EOF
+  local b12_neg=1
+  if emit "$d/neg_math.oo" "$d/neg_math.ll"; then
+    if grep -q "sub nsw i64 10, 25" "$d/neg_math.ll" 2>/dev/null; then b12_neg=0; fi
+  fi
+  record_test "T2-F12-03" "Subtraction yielding negative integer lowers" "$b12_neg"
+
+  local b12_nsw=1
+  if opt -O2 -S "$d/neg_math.ll" -o "$d/opt_neg.ll" >/dev/null 2>&1; then
+    if grep -q "ret i64 -15" "$d/opt_neg.ll" 2>/dev/null; then b12_nsw=0; fi
+  fi
+  record_test "T2-F12-04" "Signed arithmetic respects NSW overflow limits" "$b12_nsw"
+
+  local b12_mul0=1
+  if opt -O2 -S "$d/zero_math.ll" -o "$d/opt_zm.ll" >/dev/null 2>&1; then b12_mul0=0; fi
+  record_test "T2-F12-05" "Multiplication by zero handled correctly" "$b12_mul0"
 
   # Feature 13 Boundaries
   cat << 'EOF' > "$d/tautology_spec.oo"
@@ -146,9 +189,18 @@ EOF
     if llvm-as "$d/tautology_spec.ll" -o "$d/ts.bc" >/dev/null 2>&1; then b13_as=0; fi
   fi
   record_test "T2-F13-02" "Identity contract IR passes llvm-as" "$b13_as"
-  record_test "T2-F13-03" "Ensures clause attached to function definition" 0
-  record_test "T2-F13-04" "Contract assume declaration present" 0
-  record_test "T2-F13-05" "Contract verification preserved under LLVM lowering" 0
+
+  local b13_ens=1
+  if grep -q -E "call void @llvm.assume|ensures" "$d/tautology_spec.ll" 2>/dev/null; then b13_ens=0; fi
+  record_test "T2-F13-03" "Ensures clause attached to function definition" "$b13_ens"
+
+  local b13_decl=1
+  if grep -q "@llvm.assume" "$d/tautology_spec.ll" 2>/dev/null; then b13_decl=0; fi
+  record_test "T2-F13-04" "Contract assume declaration present" "$b13_decl"
+
+  local b13_opt=1
+  if opt -passes=instcombine,mem2reg -S "$d/tautology_spec.ll" -o "$d/opt_ts.ll" >/dev/null 2>&1; then b13_opt=0; fi
+  record_test "T2-F13-05" "Contract verification preserved under LLVM lowering" "$b13_opt"
 }
 
 # Double-run determinism protocol

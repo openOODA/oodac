@@ -133,7 +133,7 @@ pub fn ll_break_stmt(toks: List[String], p: Int, n: Int, ssa: Int, env: String, 
         println("ERR\tllvm\tbreak outside loop");
         process_exit(1);
     }
-    let ssa2: Int = ll_arc_exit(env, ssa, ir);
+    let ssa2: Int = ll_arc_exit_loop(env, ssa, ir);
     ll_ir_inst(ir, "br", "label", "", "%" + dst, 1, 1);
     let mut np: Int = p + 1;
     if np < n && ll_k(toks, np) == "SEMI" { np = np + 1; }

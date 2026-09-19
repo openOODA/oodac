@@ -202,8 +202,13 @@ EOF
   if llvm-as "$d/multi_fn.ll" -o "$d/mf.bc" >/dev/null 2>&1; then b3_as=0; fi
   record_test "T2-F03-03" "Multi-function module passes llvm-as" "$b3_as"
 
-  record_test "T2-F03-04" "Function body labels unique per function" 0
-  record_test "T2-F03-05" "MIR body flush deterministic across runs" 0
+  local b3_lbl=1
+  if ! grep -E '^[a-zA-Z0-9_]+:' "$d/multi_fn.ll" | sort | uniq -d | grep -q .; then b3_lbl=0; fi
+  record_test "T2-F03-04" "Function body labels unique per function" "$b3_lbl"
+
+  local b3_det=1
+  if emit "$d/multi_fn.oo" "$d/multi_fn2.ll" && cmp -s "$d/multi_fn.ll" "$d/multi_fn2.ll"; then b3_det=0; fi
+  record_test "T2-F03-05" "MIR body flush deterministic across runs" "$b3_det"
 
   # Feature 4 Boundaries
   cat << 'EOF' > "$d/min_header.oo"
@@ -214,9 +219,7 @@ EOF
 pub fn main() -> Int { return 0; }
 EOF
   local b4_min=1
-  if timeout 5s "$OODAC" check "$d/min_header.oo" >/dev/null 2>&1; then
-    b4_min=0
-  fi
+  if timeout 5s "$OODAC" check "$d/min_header.oo" >/dev/null 2>&1; then b4_min=0; fi
   record_test "T2-F04-01" "Minimal 1-char Academy header accepted" "$b4_min"
 
   local b4_no_header=0
@@ -225,9 +228,17 @@ pub fn main() -> Int { return 0; }
 EOF
   record_test "T2-F04-02" "Header check recognizes unadorned file" "$b4_no_header"
 
-  record_test "T2-F04-03" "Header parser preserves line positions" 0
-  record_test "T2-F04-04" "Header comment delimiters isolated from code" 0
-  record_test "T2-F04-05" "Academy header elements validated sequentially" 0
+  local b4_pos=1
+  if emit "$d/min_header.oo" "$d/min_header.ll" && grep -q "line: 5" "$d/min_header.ll" 2>/dev/null; then b4_pos=0; fi
+  record_test "T2-F04-03" "Header parser preserves line positions" "$b4_pos"
+
+  local b4_delim=1
+  if ! grep -q "// Logline:" "$d/min_header.ll" 2>/dev/null; then b4_delim=0; fi
+  record_test "T2-F04-04" "Header comment delimiters isolated from code" "$b4_delim"
+
+  local b4_seq=1
+  if awk 'NR==1 && /^\/\/ # / {t=1} NR>1 && /Logline:/ && t==1 {l=1} NR>1 && /Setup:/ && l==1 {s=1} NR>1 && /Beats:/ && s==1 {b=1} END {exit !(t&&l&&s&&b)}' "$d/min_header.oo"; then b4_seq=0; fi
+  record_test "T2-F04-05" "Academy header elements validated sequentially" "$b4_seq"
 }
 
 # Double-run determinism protocol

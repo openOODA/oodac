@@ -178,8 +178,9 @@ EOF
   local f3_inst=1
   if grep -q "ret i64 42" "$d/ret.ll" 2>/dev/null; then f3_inst=0; fi
   record_test "T1-F03-04" "Direct MIR structured instruction emission" "$f3_inst"
-
-  record_test "T1-F03-05" "MIR flush produces deterministic output" 0
+  local f3_det=1
+  if emit "$d/ret.oo" "$d/ret2.ll" && cmp -s "$d/ret.ll" "$d/ret2.ll"; then f3_det=0; fi
+  record_test "T1-F03-05" "MIR flush produces deterministic output" "$f3_det"
 
   # Feature 4: Academy Header Compliance
   local f4_expr=1

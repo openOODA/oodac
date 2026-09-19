@@ -182,3 +182,32 @@ pub fn ll_arc_exit_all(env: String, ssa0: Int, ir: &mut IrBuf) -> Int {
     return s;
 }
 
+pub fn ll_arc_exit_loop(env: String, ssa0: Int, ir: &mut IrBuf) -> Int {
+    let dst: String = type_env_get(env, "__brk__");
+    if dst == "" { return ll_arc_exit(env, ssa0, ir); }
+    let tag: String = "__brk__=" + dst + ";";
+    let tn: Int = bytes_len(tag);
+    let en: Int = bytes_len(env);
+    let mut bp: Int = 0 - 1;
+    let mut i: Int = en - tn;
+    while i >= 0 {
+        let mut ok: Bool = true;
+        let mut j: Int = 0;
+        while j < tn {
+            if byte_at(env, i + j) != byte_at(tag, j) { ok = false; j = tn; }
+            j = j + 1;
+        }
+        if ok { bp = i; i = 0 - 1; }
+        i = i - 1;
+    }
+    if bp < 0 { return ll_arc_exit(env, ssa0, ir); }
+    let mut cur: String = env;
+    let mut s: Int = ssa0;
+    while ll_arc_frame_at(cur) > bp {
+        s = ll_arc_exit(cur, s, ir);
+        cur = ll_arc_pop(cur);
+    }
+    return s;
+}
+
+

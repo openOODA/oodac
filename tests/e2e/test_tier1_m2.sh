@@ -186,7 +186,11 @@ EOF
   fi
   record_test "T1-F08-03" "Emits lifetime.start around alloca" "$f8_emit_start"
 
-  record_test "T1-F08-04" "Lifetime bounds symmetrically balance" 0
+  local f8_bal=1 ns ne
+  ns=$(grep -c "call void @llvm.lifetime.start.p0" "$d/scalar_alloca.ll" 2>/dev/null || true)
+  ne=$(grep -c "call void @llvm.lifetime.end.p0" "$d/scalar_alloca.ll" 2>/dev/null || true)
+  if [[ "$ns" -gt 0 && "$ns" -eq "$ne" ]]; then f8_bal=0; fi
+  record_test "T1-F08-04" "Lifetime bounds symmetrically balance" "$f8_bal"
 
   local f8_as=1
   if llvm-as "$d/scalar_alloca.ll" -o "$d/lt.bc" >/dev/null 2>&1; then
@@ -199,7 +203,9 @@ EOF
   if which opt >/dev/null 2>&1; then f9_opt=0; fi
   record_test "T1-F09-01" "opt tool available in system" "$f9_opt"
 
-  record_test "T1-F09-02" "Arithmetic IR available for optimization" 0
+  local f9_ir=1
+  if grep -q "add nsw i64" "$d/scalar_alloca.ll" 2>/dev/null; then f9_ir=0; fi
+  record_test "T1-F09-02" "Arithmetic IR available for optimization" "$f9_ir"
 
   local f9_mem2reg=1
   if [[ "$f9_opt" -eq 0 && -f "$d/scalar_alloca.ll" ]]; then

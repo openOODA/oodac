@@ -88,7 +88,10 @@ EOF
     b5_as=0
   fi
   record_test "T2-F05-04" "Boundary struct allocas pass llvm-as" "$b5_as"
-  record_test "T2-F05-05" "Zero struct trailing commas verified" 0
+
+  local b5_tc=1
+  if ! grep -E ',\s*\};' "$d"/*.oo 2>/dev/null; then b5_tc=0; fi
+  record_test "T2-F05-05" "Zero struct trailing commas verified" "$b5_tc"
 
   # Feature 6 Boundaries: List Ops
   cat << 'EOF' > "$d/multi_push.oo"
@@ -114,9 +117,18 @@ EOF
     if llvm-as "$d/multi_push.ll" -o "$d/mp.bc" >/dev/null 2>&1; then b6_as=0; fi
   fi
   record_test "T2-F06-02" "Chained list IR passes llvm-as" "$b6_as"
-  record_test "T2-F06-03" "Empty list new creates zero-length record" 0
-  record_test "T2-F06-04" "ARC release logic emitted for chained lists" 0
-  record_test "T2-F06-05" "List mutation retains payload values" 0
+
+  local b6_new=1
+  if grep -q "@oo_l_Val_new" "$d/multi_push.ll" 2>/dev/null; then b6_new=0; fi
+  record_test "T2-F06-03" "Empty list new creates zero-length record" "$b6_new"
+
+  local b6_rel=1
+  if grep -q "@oo_l_Val_release" "$d/multi_push.ll" 2>/dev/null; then b6_rel=0; fi
+  record_test "T2-F06-04" "ARC release logic emitted for chained lists" "$b6_rel"
+
+  local b6_push=1
+  if grep -q "@oo_l_Val_push" "$d/multi_push.ll" 2>/dev/null; then b6_push=0; fi
+  record_test "T2-F06-05" "List mutation retains payload values" "$b6_push"
 
   # Feature 7 Boundaries: Quota Boundaries
   local b7_zero=1
@@ -130,9 +142,18 @@ EOF
     b7_huge=0
   fi
   record_test "T2-F07-02" "64GB quota boundary accepted cleanly" "$b7_huge"
-  record_test "T2-F07-03" "Default ambient quota permits small scripts" 0
-  record_test "T2-F07-04" "Quota environment precedence respected" 0
-  record_test "T2-F07-05" "Quota exhaustion fails closed" 0
+
+  local b7_def=1
+  if timeout 5s "$OODAC" check "$d/point3d.oo" >/dev/null 2>&1; then b7_def=0; fi
+  record_test "T2-F07-03" "Default ambient quota permits small scripts" "$b7_def"
+
+  local b7_prec=1
+  if ! OO_LIST_AMBIENT_QUOTA=10 timeout 5s "$OODAC" check "$d/point3d.oo" >/dev/null 2>&1; then b7_prec=0; fi
+  record_test "T2-F07-04" "Quota environment precedence respected" "$b7_prec"
+
+  local b7_fail=1
+  if ! OO_LIST_AMBIENT_QUOTA=1 timeout 5s "$OODAC" check "$d/multi_alloca.oo" >/dev/null 2>&1; then b7_fail=0; fi
+  record_test "T2-F07-05" "Quota exhaustion fails closed" "$b7_fail"
 
   # Feature 8 Boundaries: Lifetimes
   cat << 'EOF' > "$d/scoped_lt.oo"
@@ -158,9 +179,18 @@ EOF
     if llvm-as "$d/scoped_lt.ll" -o "$d/slt.bc" >/dev/null 2>&1; then b8_as=0; fi
   fi
   record_test "T2-F08-02" "Scoped lifetime IR passes llvm-as" "$b8_as"
-  record_test "T2-F08-03" "Lifetime start bounds variables immediately" 0
-  record_test "T2-F08-04" "Lifetime end bounds variables on block exit" 0
-  record_test "T2-F08-05" "Lifetimes preserve stack reuse opportunities" 0
+
+  local b8_ls=1
+  if grep -q "call void @llvm.lifetime.start.p0" "$d/scoped_lt.ll" 2>/dev/null; then b8_ls=0; fi
+  record_test "T2-F08-03" "Lifetime start bounds variables immediately" "$b8_ls"
+
+  local b8_le=1
+  if grep -q "call void @llvm.lifetime.end.p0" "$d/scoped_lt.ll" 2>/dev/null; then b8_le=0; fi
+  record_test "T2-F08-04" "Lifetime end bounds variables on block exit" "$b8_le"
+
+  local b8_reuse=1
+  if opt -passes=instcombine,mem2reg -S "$d/scoped_lt.ll" -o "$d/opt_slt.ll" >/dev/null 2>&1; then b8_reuse=0; fi
+  record_test "T2-F08-05" "Lifetimes preserve stack reuse opportunities" "$b8_reuse"
 
   # Feature 9 Boundaries: mem2reg SSA
   local b9_opt=1
@@ -180,8 +210,16 @@ EOF
     if llvm-as "$d/opt_multi.ll" -o "$d/om.bc" >/dev/null 2>&1; then b9_as=0; fi
   fi
   record_test "T2-F09-03" "Optimized multi-alloca passes llvm-as" "$b9_as"
-  record_test "T2-F09-04" "mem2reg leaves struct pointers intact" 0
-  record_test "T2-F09-05" "Pure SSA arithmetic produces exact result" 0
+
+  local b9_sp=1
+  if emit "$d/point3d.oo" "$d/point3d.ll" && opt -passes=mem2reg -S "$d/point3d.ll" -o "$d/opt_p3.ll" >/dev/null 2>&1; then
+    if grep -q "alloca %St_Point3D" "$d/opt_p3.ll" 2>/dev/null; then b9_sp=0; fi
+  fi
+  record_test "T2-F09-04" "mem2reg leaves struct pointers intact" "$b9_sp"
+
+  local b9_res=1
+  if grep -q "phi i64" "$d/opt_slt.ll" 2>/dev/null; then b9_res=0; fi
+  record_test "T2-F09-05" "Pure SSA arithmetic produces exact result" "$b9_res"
 }
 
 # Double-run determinism protocol

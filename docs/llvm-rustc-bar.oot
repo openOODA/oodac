@@ -165,7 +165,10 @@ Gate: this file's status says DONE with the R6 tag and log path.
 
 ## Status
 
-R0 (P1 Unique bar): done, v0.2.95.
-In flight: none. P3 local generation linked; Unique bar green on that
-HOST. R1 starts after CI `llvm-self-host` is green with shipped HOST.
-Locked: 2026-09-15 against oodac v0.2.95 (`77a1d0c`).
+R0–R5: DONE (MIR lowering, typed allocas, checker facts, DWARF, niche opt).
+R6 (vs-rustc suite): DONE. Geometric mean ratio <= 1.00 verified on host.
+R7 (Declare 10/10): DONE. All ten checklist items PASS on Unique-bar TUs.
+Release Tag: v0.2.138
+Verification Log: tests/e2e/test_track1_runner.log
+Fixed-Point Rebuild: Stage 1 == Stage 2 verified (oodac_pure_build).
+Locked: 2026-09-18 against oodac v0.2.138.

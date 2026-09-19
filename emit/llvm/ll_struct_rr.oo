@@ -79,13 +79,26 @@ pub fn ll_st_rr(fl: String, nm: String, is_ret: Int, ir: &mut IrBuf) {
                         ll_ir_inst(ir, "getelementptr inbounds", ll_ir_alloc(fk), ll_ssa(s + 1), "ptr " + ll_ssa(s) + ", i32 0, i32 " + inner.to_string(), 1, 1);
                         ll_ir_inst(ir, "load", "{ ptr, i64 }", ll_ssa(s + 2), "ptr " + ll_ssa(s + 1) + ", align 8", 1, 1);
                         ll_ir_inst(ir, "call", "void", "", "@oo_str_" + op + "({ ptr, i64 } " + ll_ssa(s + 2) + ")", 1, 1);
+                    } else if fk == "opts" {
+                        let otag: String = "rr_" + op + "_" + nm + "_" + idx.to_string();
+                        ll_ir_inst(ir, "getelementptr inbounds", "%OoOptS", ll_ssa(s + 1), "ptr " + ll_ssa(s) + ", i32 0, i32 0", 1, 1);
+                        ll_ir_inst(ir, "load", "i32", ll_ssa(s + 2), "ptr " + ll_ssa(s + 1) + ", align 4", 1, 1);
+                        ll_ir_inst(ir, "icmp ne", "i32", ll_ssa(s + 3), ll_ssa(s + 2) + ", 0", 1, 1);
+                        ll_ir_inst(ir, "br", "i1", "", ll_ssa(s + 3) + ", label %" + otag + "_has, label %" + otag + "_skip", 1, 1);
+                        ll_ir_label(ir, otag + "_has");
+                        ll_ir_inst(ir, "getelementptr inbounds", "%OoOptS", ll_ssa(s + 4), "ptr " + ll_ssa(s) + ", i32 0, i32 1", 1, 1);
+                        ll_ir_inst(ir, "load", "{ ptr, i64 }", ll_ssa(s + 5), "ptr " + ll_ssa(s + 4) + ", align 8", 1, 1);
+                        ll_ir_inst(ir, "call", "void", "", "@oo_str_" + op + "({ ptr, i64 } " + ll_ssa(s + 5) + ")", 1, 1);
+                        ll_ir_inst(ir, "br", "label", "", "%" + otag + "_skip", 1, 1);
+                        ll_ir_label(ir, otag + "_skip");
+                        s = s + 6;
                     }
                 }
                 if fk == "slist" || fk == "ilist" || (chars_len(fk) >= 3 && str_slice(fk, 0, 3) == "St_") || ll_is_olist(fk) {
                     s = s + 1;
                 } else if fk == "i64" || fk == "i1" || fk == "opti" || fk == "f64" || fk == "v8f32" || fk == "v4f64" || ll_is_int(fk) {
                     s = s;
-                } else if ll_is_optst(fk) || ll_is_resst(fk) {
+                } else if ll_is_optst(fk) || ll_is_resst(fk) || fk == "opts" {
                     s = s;
                 } else if fk == "str" {
                     s = s + 2;
