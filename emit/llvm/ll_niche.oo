@@ -32,18 +32,24 @@ pub fn ll_niche_none(ssa0: Int) -> String {
 
 pub fn ll_niche_some(arg: String, ssa0: Int, ir: &mut IrBuf) -> String {
     let mut pval: String = ll_opnd(arg);
-    if ll_pptr(arg) != "" {
+    if !ll_is_imm(arg) && ll_pptr(arg) != "" {
         pval = ll_pptr(arg);
     }
-    return ll_pack(0, ssa0, "optp", pval);
+    if chars_len(pval) > 0 && char_at(pval, 0) == "#" {
+        return ll_pack(0, ssa0, "optp", pval);
+    }
+    return ll_pack(0, ssa0, "optp", "#" + pval);
 }
 
 pub fn ll_niche_ok(arg: String, ssa0: Int, ir: &mut IrBuf) -> String {
     let mut pval: String = ll_opnd(arg);
-    if ll_pptr(arg) != "" {
+    if !ll_is_imm(arg) && ll_pptr(arg) != "" {
         pval = ll_pptr(arg);
     }
-    return ll_pack(0, ssa0, "resp", pval);
+    if chars_len(pval) > 0 && char_at(pval, 0) == "#" {
+        return ll_pack(0, ssa0, "resp", pval);
+    }
+    return ll_pack(0, ssa0, "resp", "#" + pval);
 }
 
 pub fn ll_niche_err(arg: String, ssa0: Int, ir: &mut IrBuf) -> String {

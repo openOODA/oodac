@@ -40,6 +40,8 @@ pub fn call_arg_prep(toks: List[String]) -> List[String] {
             p = p + 1;
             let mut ann = "";
             if p < n { if field_at(list_get(toks, p), 0) == "COLON" { p = p + 1;
+            if p < n && field_at(list_get(toks, p), 0) == "AMP" { p = p + 1; }
+            if p < n && field_at(list_get(toks, p), 0) == "KW_MUT" { p = p + 1; }
             if p < n { if field_at(list_get(toks, p), 0) == "IDENT" { ann = resolve_type_alias(aliases, field_at(list_get(toks, p), 3));
             p = p + 1;
             if p < n { ann = tc_read_result_ann(ann, toks, p);
@@ -119,14 +121,24 @@ pub fn call_arg_prep(toks: List[String]) -> List[String] {
                                 if depth == 0 { cont2 = false;
                                 }
                             }
-                            if depth == 1 { if kk == "COLON" { if p + 1 < n { if field_at(list_get(toks, p + 1), 0) == "IDENT" { let raw: String = field_at(list_get(toks, p + 1), 3);
-                            let mut pty: String = resolve_type_alias(aliases, raw);
-                            if p + 2 < n { pty = tc_read_result_ann(pty, toks, p + 2);
-                            }
-                                            types = types + pty + ",";
-                                        } else {
-                                            types = types + "_,";
+                            if depth == 1 {
+                                if kk == "COLON" {
+                                    let mut tp: Int = p + 1;
+                                    if tp < n && field_at(list_get(toks, tp), 0) == "AMP" {
+                                        tp = tp + 1;
+                                    }
+                                    if tp < n && field_at(list_get(toks, tp), 0) == "KW_MUT" {
+                                        tp = tp + 1;
+                                    }
+                                    if tp < n && field_at(list_get(toks, tp), 0) == "IDENT" {
+                                        let raw: String = field_at(list_get(toks, tp), 3);
+                                        let mut pty: String = resolve_type_alias(aliases, raw);
+                                        if tp + 1 < n {
+                                            pty = tc_read_result_ann(pty, toks, tp + 1);
                                         }
+                                        types = types + pty + ",";
+                                    } else {
+                                        types = types + "_,";
                                     }
                                 }
                             }

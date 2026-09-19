@@ -38,6 +38,12 @@ pub fn borrow_is_managed(ty: String) -> Bool {
     return false;
 }
 
+pub fn borrow_is_ctor(name: String) -> Bool {
+    if name == "None" || name == "Some" || name == "Ok" || name == "Err" { return true; }
+    if name == "True" || name == "False" || name == "true" || name == "false" { return true; }
+    return false;
+}
+
 fn borrow_skip_type(toks: List[String], i0: Int, n: Int) -> Int {
     let mut i: Int = i0;
     if i < n && bk(toks, i) == "AMP" { i = i + 1; }
@@ -115,9 +121,9 @@ fn borrow_walk_let(toks: List[String], i0: Int, n: Int, moved0: String, shr0: St
         } else if p < n && bk(toks, p) == "IDENT" {
             let src: String = bt(toks, p);
             let nxt: String = bk(toks, p + 1);
-            if bag_has(moved, src) { borrow_die_move(src, line); }
+            if !borrow_is_ctor(src) && bag_has(moved, src) { borrow_die_move(src, line); }
             if nxt != "LPAREN" && nxt != "DOT" && nxt != "COLON" && !borrow_is_copy_op(nxt) {
-                if bag_has(owned, src) || borrow_is_managed(ty) {
+                if !borrow_is_ctor(src) && (bag_has(owned, src) || borrow_is_managed(ty)) {
                     moved = bag_add(moved, src);
                     owned = bag_add(owned, vname);
                 }
@@ -162,7 +168,7 @@ fn borrow_walk_fn(toks: List[String], i0: Int, n: Int) -> Int {
             let prev: String = bk(toks, i - 1);
             let name: String = bt(toks, i);
             if prev != "DOT" && prev != "COLON" && prev != "KW_FN" && prev != "KW_LET" && prev != "KW_MUT" && prev != "AMP" {
-                if bag_has(moved, name) {
+                if !borrow_is_ctor(name) && bag_has(moved, name) {
                     borrow_die_move(name, field_at(list_get(toks, i), 1));
                 }
             }

@@ -59,9 +59,9 @@ pub fn ll_c_abi_unpack_ret(slot: String, ssa0: Int, ir: &mut IrBuf) -> String {
     let s1: Int = ssa0 + 1;
     ll_ir_inst(ir, "load", "%OoOpt_Ptr", ll_ssa(s1), "ptr " + slot + ", align 8", 1, 1);
     let s2: Int = s1 + 1;
-    ll_ir_inst(ir, "extractvalue", "%OoOpt_Ptr", ll_ssa(s2), ll_ssa(s1) + ", 0", 1, 1);
+    ll_ir_inst(ir, "extractvalue", "%OoOpt_Ptr " + ll_ssa(s1), ll_ssa(s2), "0", 1, 1);
     let s3: Int = s2 + 1;
-    ll_ir_inst(ir, "extractvalue", "%OoOpt_Ptr", ll_ssa(s3), ll_ssa(s1) + ", 1", 1, 1);
+    ll_ir_inst(ir, "extractvalue", "%OoOpt_Ptr " + ll_ssa(s1), ll_ssa(s3), "1", 1, 1);
     let s4: Int = s3 + 1;
     ll_ir_inst(ir, "icmp ne", "i32", ll_ssa(s4), ll_ssa(s2) + ", 0", 1, 1);
     let s5: Int = s4 + 1;
@@ -92,9 +92,9 @@ pub fn ll_c_abi_unpack_param(p_arg: String, ssa0: Int, ir: &mut IrBuf) -> String
     let s1: Int = ssa0 + 1;
     ll_ir_inst(ir, "load", "%OoOpt_Ptr", ll_ssa(s1), "ptr " + p_arg + ", align 8", 1, 1);
     let s2: Int = s1 + 1;
-    ll_ir_inst(ir, "extractvalue", "%OoOpt_Ptr", ll_ssa(s2), ll_ssa(s1) + ", 0", 1, 1);
+    ll_ir_inst(ir, "extractvalue", "%OoOpt_Ptr " + ll_ssa(s1), ll_ssa(s2), "0", 1, 1);
     let s3: Int = s2 + 1;
-    ll_ir_inst(ir, "extractvalue", "%OoOpt_Ptr", ll_ssa(s3), ll_ssa(s1) + ", 1", 1, 1);
+    ll_ir_inst(ir, "extractvalue", "%OoOpt_Ptr " + ll_ssa(s1), ll_ssa(s3), "1", 1, 1);
     let s4: Int = s3 + 1;
     ll_ir_inst(ir, "icmp ne", "i32", ll_ssa(s4), ll_ssa(s2) + ", 0", 1, 1);
     let s5: Int = s4 + 1;
