@@ -163,6 +163,12 @@ EOF
     if grep -q "call void @llvm\.assume" "$br_ll" || ! grep -q "ctrap" "$br_ll"; then
       br_fail=1
     fi
+    if ! llvm-as "$br_ll" -o /dev/null > "$d/br_as.log" 2>&1 || grep -qiE "(terminator|broken module)" "$d/br_as.log"; then
+      br_fail=1
+    fi
+    if ! opt -O3 -S "$br_ll" -o "$d/br_opt.ll" > "$d/br_opt.log" 2>&1 || grep -qiE "(terminator|broken module)" "$d/br_opt.log"; then
+      br_fail=1
+    fi
   else
     br_fail=1
   fi
