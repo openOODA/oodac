@@ -1,0 +1,226 @@
+// # Pure .oo Multi-Module Compiler Driver
+//
+// Logline: Topologically compile all imported modules to .o and link via @objs.rsp.
+//
+// Setup: Uses check_collect for topological DFS, caches .ll to .ooda-cache/oodac_emit.
+//
+// Beats:
+//   1. Run check on entry point to ensure all .art artifacts are generated.
+//   2. Topologically walk modules; skip anchor.oo module indexes.
+//   3. Check input_fp Merkle cache for .ll; emit and compile to .o on miss.
+//   4. Write strictly newline-delimited object paths to objs.rsp.
+//   5. Link via clang @objs.rsp, clean up response file, and report OK_PURE_NATIVE.
+
+import "lex/token_parse_int.oo";
+import "check/check_collect.oo";
+import "cli_oodar.oo";
+
+fn is_anchor_module(p: String) -> Bool {
+    let n: Int = chars_len(p);
+    if n == 9 {
+        return p == "anchor.oo" || p == "ANCHOR.oo";
+    }
+    if n > 9 {
+        let suf: String = str_slice(p, n - 10, n);
+        return suf == "/anchor.oo" || suf == "/ANCHOR.oo";
+    }
+    return false;
+}
+
+fn safe_rel_name(p: String) -> String {
+    let n: Int = chars_len(p);
+    let mut out: String = "";
+    let mut i: Int = 0;
+    while i < n {
+        let c: String = char_at(p, i);
+        if c == "/" || c == "." || c == "-" {
+            out = out + "_";
+        } else {
+            out = out + c;
+        }
+        i = i + 1;
+    }
+    return out;
+}
+
+fn emit_cache_dir(env: &EnvCap) -> String {
+    let ec: Result[String, String] = env_get(env, "OODAC_EMIT_CACHE");
+    if ec.is_ok() {
+        if ec.val != "" {
+            return ec.val;
+        }
+    }
+    return ".ooda-cache/oodac_emit";
+}
+
+fn is_valid_ll(src: String) -> Bool {
+    if chars_len(src) == 0 {
+        return false;
+    }
+    if str_index_of(src, "target triple") < 0 {
+        return false;
+    }
+    if str_index_of(src, "ERR\t") >= 0 {
+        return false;
+    }
+    return true;
+}
+
+fn rsp_quote(p: String) -> String {
+    if str_index_of(p, " ") >= 0 {
+        return "\"" + p + "\"";
+    }
+    return p;
+}
+
+fn oodar_lib_multi(fs_r: &FsReadCap, od: String) -> String {
+    if path_exists(fs_r, od + "/lib/liboodar.a") {
+        return od + "/lib/liboodar.a";
+    }
+    if path_exists(fs_r, od + "/../lib/liboodar.a") {
+        return od + "/../lib/liboodar.a";
+    }
+    if path_exists(fs_r, "oodar/lib/liboodar.a") {
+        return "oodar/lib/liboodar.a";
+    }
+    if path_exists(fs_r, "../oodar/lib/liboodar.a") {
+        return "../oodar/lib/liboodar.a";
+    }
+    return "oodar/lib/liboodar.a";
+}
+
+fn clang_major(sys: &ProcessCap) -> Int {
+    let vr: Result[String, String] = sys_exec(sys, "clang", "--no-default-config", "--version");
+    if vr.is_err() {
+        return 0 - 1;
+    }
+    let v: String = match vr { Ok(s) => s, Err(_) => "" };
+    let at: Int = str_index_of(v, "clang version ");
+    if at < 0 {
+        return 0 - 1;
+    }
+    return parse_int(str_slice(v, at + 14, chars_len(v)));
+}
+
+pub fn build_multi(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env: &EnvCap, host: String, od: String, tmp_dir: String, path: String, out: String, is_shared: Bool) {
+    let cm: Int = clang_major(sys);
+    if cm < 15 {
+        println("ERR\tbuild\tclang >= 15 required for LLVM IR; got major " + cm.to_string());
+        process_exit(1);
+    }
+    let ck: Result[String, String] = sys_exec(sys, host, "check", path);
+    if !ck.is_ok() {
+        println("ERR\tbuild\tcheck failed");
+        let cmsg: String = match ck { Ok(s) => s, Err(e) => e };
+        println(cmsg);
+        process_exit(1);
+    }
+    let paths: List[String] = collect_module_paths(fs_r, path);
+    let fp: String = compute_input_fp(fs_r, paths);
+    let ec: String = emit_cache_dir(env);
+    let _: Result[String, String] = sys_exec(sys, "/usr/bin/mkdir", "-p", ec);
+    let _: Result[String, String] = sys_exec(sys, "/usr/bin/mkdir", "-p", tmp_dir);
+
+    let obj: String = tmp_dir + "/oodar.o";
+    if !is_shared {
+        let co: Result[String, String] = sys_exec(sys, "clang", "--no-default-config", "-c", "-O2", "-g0", "-fno-ident", "-I" + od, od + "/oodar.c", "-o", obj);
+        if !co.is_ok() {
+            println("ERR\tbuild\toodar.o failed");
+            let ct: String = match co { Ok(s) => s, Err(e) => e };
+            println(ct);
+            process_exit(1);
+        }
+    }
+    let hr: String = write_host_rt(fs_w, tmp_dir);
+
+    let mut objs: List[String] = list_new();
+    let npaths: Int = list_len(paths);
+    let mut i: Int = 0;
+    while i < npaths {
+        let p: String = list_get(paths, i);
+        if !is_anchor_module(p) {
+            let sr: Result[String, String] = read_file(fs_r, p);
+            let mut src_hash: String = "";
+            if sr.is_ok() {
+                src_hash = crypto_sha256_internal(sr.val);
+            }
+            let cache_ll: String = ec + "/" + fp + "_" + src_hash + ".ll";
+            let ml: String = tmp_dir + "/" + safe_rel_name(p) + ".ll";
+            let mo: String = tmp_dir + "/" + safe_rel_name(p) + ".o";
+
+            let mut have_ll: Bool = false;
+            if src_hash != "" && path_exists(fs_r, cache_ll) {
+                let cll_r: Result[String, String] = read_file(fs_r, cache_ll);
+                if cll_r.is_ok() && is_valid_ll(cll_r.val) {
+                    let wr_ml: Result[Void, String] = write_file(fs_w, ml, cll_r.val);
+                    if wr_ml.is_ok() {
+                        have_ll = true;
+                    }
+                }
+            }
+            if !have_ll {
+                let mut em: Result[String, String] = sys_exec(sys, host, "emit-llvm", p);
+                let mut emsg: String = match em { Ok(s) => s, Err(e) => e };
+                if str_index_of(emsg, "no artifact") >= 0 {
+                    let _: Result[String, String] = sys_exec(sys, host, "check", p);
+                    em = sys_exec(sys, host, "emit-llvm", p);
+                    emsg = match em { Ok(s) => s, Err(e) => e };
+                }
+                if !em.is_ok() || !is_valid_ll(emsg) {
+                    println("ERR\tbuild\temit-llvm failed: " + p);
+                    println(emsg);
+                    process_exit(1);
+                }
+                let _: Result[Void, String] = write_file(fs_w, ml, emsg);
+                if src_hash != "" {
+                    let _: Result[Void, String] = write_file(fs_w, cache_ll, emsg);
+                }
+            }
+            let cr: Result[String, String] = sys_exec(sys, "clang", "--no-default-config", "-c", "-O2", "-g0", "-fno-ident", "-Wno-override-module", "-frandom-seed=0", ml, "-o", mo);
+            if !cr.is_ok() {
+                println("ERR\tbuild\tclang -c failed: " + p);
+                let ctxt: String = match cr { Ok(s) => s, Err(e) => e };
+                println(ctxt);
+                process_exit(1);
+            }
+            objs = list_push(objs, mo);
+        }
+        i = i + 1;
+    }
+
+    let mut rsp_content: String = "";
+    let no: Int = list_len(objs);
+    let mut j: Int = 0;
+    while j < no {
+        rsp_content = rsp_content + rsp_quote(list_get(objs, j)) + "\n";
+        j = j + 1;
+    }
+    let rsp_path: String = tmp_dir + "/objs.rsp";
+    let wr_rsp: Result[Void, String] = write_file(fs_w, rsp_path, rsp_content);
+    if wr_rsp.is_err() {
+        println("ERR\tbuild\twrite objs.rsp failed");
+        process_exit(1);
+    }
+
+    let mut lr: Result[String, String] = Err("");
+    if is_shared {
+        let lib_a: String = oodar_lib_multi(fs_r, od);
+        lr = sys_exec(sys, "clang", "--no-default-config", "-shared", "-fPIC", "-DOO_SHARED=1", "-fvisibility=hidden", "-Wl,--exclude-libs,ALL", "-O2", "-g0", "-fno-ident", "-Wno-override-module", "-I" + od, hr, "@" + rsp_path, lib_a, "-frandom-seed=0", "-Wl,--build-id=none", "-Wl,--strip-debug", "-lm", "-ldl", "-lpthread", "-o", out);
+    } else {
+        lr = sys_exec(sys, "clang", "--no-default-config", "-O2", "-g0", "-fno-ident", "-Wno-override-module", "-I" + od, obj, hr, "@" + rsp_path, "-frandom-seed=0", "-Wl,--build-id=none", "-Wl,--strip-debug", "-lm", "-ldl", "-lpthread", "-o", out);
+    }
+    let _: Result[String, String] = sys_exec(sys, "/usr/bin/rm", "-f", rsp_path);
+    if !lr.is_ok() {
+        println("ERR\tbuild\tclang llvm failed");
+        let gtxt: String = match lr { Ok(s) => s, Err(e) => e };
+        println(gtxt);
+        process_exit(1);
+    }
+    let ch: Result[String, String] = sys_exec(sys, "/usr/bin/chmod", "+x", out);
+    if ch.is_err() {
+        println("ERR\tbuild\tchmod failed");
+        process_exit(1);
+    }
+    println("OK_PURE_NATIVE");
+    println("OK\tbuild\t" + out);
+}

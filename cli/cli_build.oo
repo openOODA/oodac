@@ -11,7 +11,9 @@
 
 import "lex/token_fmt.oo";
 import "lex/token_parse_int.oo";
+import "check/check_collect.oo";
 import "cli_oodar.oo";
+import "cli_build_multi.oo";
 import "emit/elf/elf_emit.oo";
 
 // Probe mirrors the link invocation: --no-default-config keeps distro
@@ -114,10 +116,6 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
         println("ERR\tbuild\tbackend residual: " + backend);
         process_exit(2);
     }
-    if path_is_compiler_main(path) {
-        println("ERR\tbuild\tcompiler rebuild is unique_fns");
-        process_exit(1);
-    }
     if path_exists(fs_r, out) {
         if path_exists(fs_r, out + "/.") {
             println("ERR\tbuild\t-o is a directory");
@@ -143,6 +141,12 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
     if mk.is_err() {
         println("ERR\tbuild\tmkdir failed");
         process_exit(1);
+    }
+    let paths: List[String] = collect_module_paths(fs_r, path);
+    let is_multi: Bool = path_is_compiler_main(path);
+    if backend != "elf" && is_multi {
+        build_multi(fs_r, fs_w, sys, env, host, od, tmp_dir, path, out, is_shared);
+        return;
     }
     let ck: Result[String, String] = sys_exec(sys, host, "check", path);
     if !ck.is_ok() {

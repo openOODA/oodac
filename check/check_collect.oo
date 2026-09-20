@@ -8,6 +8,7 @@
 //   1. collect_module_paths DFS-expands a root path and splits the joined newline list into paths.
 //   2. collect_expand fail-closes on cycles and missing files, resolves std and relative imports, then appends the current path.
 //   3. strip_import_lines keeps a blank line for each import so per-file line numbers stay put.
+//   4. compute_input_fp hashes canonical manifest of paths and content hashes to a 16-char Merkle root.
 
 import "check_scan.oo";
 import "ast/load_import_parse.oo";
@@ -143,4 +144,41 @@ if !at_end { if char_at(src, i) == "\n" { nl = true;
         }
     }
     return body;
+}
+
+// Normalize path by stripping leading "./"
+fn normalize_path_prefix(path: String) -> String {
+    let n: Int = chars_len(path);
+    if n >= 2 {
+        if str_slice(path, 0, 2) == "./" {
+            return str_slice(path, 2, n);
+        }
+    }
+    return path;
+}
+
+// Computes Merkle root over canonical manifest of module relative paths and content hashes.
+pub fn compute_input_fp(fs: &FsReadCap, paths: List[String]) -> String {
+    let np: Int = list_len(paths);
+    let mut manifest: String = "";
+    let mut i: Int = 0;
+    while i < np {
+        let pth: String = list_get(paths, i);
+        let norm_pth: String = normalize_path_prefix(pth);
+        let sr: Result[String, String] = read_file(fs, pth);
+        let src: String = match sr { Ok(s) => s, Err(_) => "" };
+        let h: String = crypto_sha256_internal(src);
+        manifest = manifest + norm_pth + "\t" + h + "\n";
+        i = i + 1;
+    }
+    let digest: String = crypto_sha256_internal(manifest);
+    if chars_len(digest) >= 16 {
+        return str_slice(digest, 0, 16);
+    }
+    return digest;
+}
+
+// Generates the canonical CAS cache path for an emitted .ll file
+pub fn emit_cache_path(merkle_root: String, src_hash: String) -> String {
+    return ".ooda-cache/oodac_emit/" + merkle_root + "_" + src_hash + ".ll";
 }

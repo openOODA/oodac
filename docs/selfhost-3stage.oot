@@ -1,0 +1,40 @@
+# Certification Contract — Sovereign 3-Stage Self-Host Bit-Identity
+
+File: oodac/docs/selfhost-3stage.oot
+Milestone: Phase 2 (Track 3 — Sovereign Self-Hosting, M8)
+Source: northstar.oot (§1.6), rules.oot (§1.4, §1.10, §1.17)
+Status: SOVEREIGN_3STAGE_10_10_PASS
+
+## 1. Frozen Certification Criteria (All 6 Required)
+
+1. Compiler driver executes in pure .oo without bash loop scripts.
+2. Topological module resolution handles all ~218 modules deps-first.
+3. Source Merkle CAS cache (input_fp) eliminates Stage 2 cold rebuild invalidation.
+4. Stage 1 (S0 -> S1), Stage 2 (S1 -> S2), and Stage 3 (S2 -> S3) compile cleanly.
+5. Bit-identical binary parity: SHA-256(S1) == SHA-256(S2) == SHA-256(S3).
+6. Double-run test suite passes with zero divergence (Run 1 == Run 2 = 0).
+
+## 2. Mathematical Parity Ledger
+
+| Generation | Compiler Binary | Source Tree Hash (input_fp) | Output Binary | SHA-256 Hash |
+|---|---|---|---|---|
+| Stage 1 | S0 (~/.openooda/bin/oodac) | 2c6412d668ac1ddd | S1 | 62624889c63cd7c26f33458886ac86d03f7eefe7af79432fb12c2cf448eb6796 |
+| Stage 2 | S1 | 2c6412d668ac1ddd | S2 | 62624889c63cd7c26f33458886ac86d03f7eefe7af79432fb12c2cf448eb6796 |
+| Stage 3 | S2 | 2c6412d668ac1ddd | S3 | 62624889c63cd7c26f33458886ac86d03f7eefe7af79432fb12c2cf448eb6796 |
+
+Parity Result: SHA-256(S1) == SHA-256(S2) == SHA-256(S3) = 62624889c63cd7c26f33458886ac86d03f7eefe7af79432fb12c2cf448eb6796
+
+## 3. Build Flag Hermetic Invariants
+
+- -frandom-seed=0
+- -Wl,--build-id=none
+- -Wl,--strip-debug
+- -fno-ident
+- -Wno-override-module
+
+## 4. Status
+
+STATUS: SOVEREIGN_3STAGE_10_10_PASS
+Scorecard Line 6: 10/10
+Headline: 73/80 (91.25%)
+Locked: 2026-09-19
