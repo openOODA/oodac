@@ -1,0 +1,12 @@
+// # Node 4 Module
+// Logline: Deep level 4 module.
+// Setup: Imports leaf and extra1.
+// Beats:
+//   1. Combines values from level 5.
+
+import "lvl5/leaf.oo";
+import "lvl5/extra1.oo";
+
+pub fn node4_val() -> Int {
+    return leaf_val() + extra1_val() + 10;
+}

@@ -1,0 +1,9 @@
+// # Branch C Extra
+// Logline: Branch C module.
+// Setup: Pure scalar calculation.
+// Beats:
+//   1. Computes branch C value.
+
+pub fn branch_c_val() -> Int {
+    return 500;
+}

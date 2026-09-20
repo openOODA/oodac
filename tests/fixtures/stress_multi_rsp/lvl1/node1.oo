@@ -1,0 +1,11 @@
+// # Node 1 Module
+// Logline: Deep level 1 module.
+// Setup: Imports node2.
+// Beats:
+//   1. Combines node2 value.
+
+import "lvl2/node2.oo";
+
+pub fn node1_val() -> Int {
+    return node2_val() + 40;
+}

@@ -1,0 +1,9 @@
+// # Leaf Module
+// Logline: Deepest leaf module in stress hierarchy.
+// Setup: Pure scalar computation.
+// Beats:
+//   1. Returns leaf constant.
+
+pub fn leaf_val() -> Int {
+    return 42;
+}

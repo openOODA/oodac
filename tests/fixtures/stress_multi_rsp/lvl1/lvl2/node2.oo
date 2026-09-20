@@ -1,0 +1,12 @@
+// # Node 2 Module
+// Logline: Deep level 2 module.
+// Setup: Imports node3 and branch_b calc via sibling walk.
+// Beats:
+//   1. Combines node3 and branch_b values.
+
+import "lvl3/node3.oo";
+import "branch_b/sub1/sub2/sub3/calc.oo";
+
+pub fn node2_val() -> Int {
+    return node3_val() + branch_b_factor() + 30;
+}

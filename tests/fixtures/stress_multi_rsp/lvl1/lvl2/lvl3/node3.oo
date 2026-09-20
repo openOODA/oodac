@@ -1,0 +1,11 @@
+// # Node 3 Module
+// Logline: Deep level 3 module.
+// Setup: Imports node4.
+// Beats:
+//   1. Combines node4 value.
+
+import "lvl4/node4.oo";
+
+pub fn node3_val() -> Int {
+    return node4_val() + 20;
+}

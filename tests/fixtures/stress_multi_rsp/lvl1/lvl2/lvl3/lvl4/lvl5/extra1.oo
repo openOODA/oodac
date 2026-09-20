@@ -1,0 +1,9 @@
+// # Extra 1 Module
+// Logline: Sibling leaf module in level 5.
+// Setup: Pure scalar computation.
+// Beats:
+//   1. Returns extra constant.
+
+pub fn extra1_val() -> Int {
+    return 7;
+}

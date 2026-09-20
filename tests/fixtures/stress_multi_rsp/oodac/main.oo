@@ -1,0 +1,15 @@
+// # Multi-Module Stress Entry Point
+// Logline: Entry point for response file stress-testing.
+// Setup: Imports node1 and branch_c.
+// Beats:
+//   1. Evaluates all module values and prints verification sum.
+
+import "lvl1/node1.oo";
+import "branch_c/extra_c.oo";
+
+fn main() {
+    let a: Int = node1_val();
+    let b: Int = branch_c_val();
+    let sum: Int = a + b;
+    println("STRESS_MULTI_RESULT=" + sum.to_string());
+}
