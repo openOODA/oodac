@@ -1,0 +1,218 @@
+// # SMT Boundary Refutation Fuzzer
+//
+// Logline: Fuzzes DBM difference logic solver with boundary inequality graphs and asserts refutation soundness.
+//
+// Setup: Generates >=1000 adversarial constraint graphs verifying zero false positives and certified cycles.
+//
+// Beats:
+//   1. Deterministic PRNG and boundary inequality graph generation.
+//   2. Test tight equality bounds, zero-weight cycles, and offsets near infinity sentinel.
+//   3. Test contradictory negative cycles (N=2,3,4,8) and substitution systems.
+//   4. Assert refutation soundness oracle: zero false refutations, certified cycle verification, counterexample validity.
+// RULES.oot 1.7: Under 256 lines.
+
+import "check/smt_contract_parse.oo";
+import "check/smt_wp_calc.oo";
+import "check/smt_prover_lia.oo";
+
+fn prng_step(s: Int) -> Int {
+    let s_b: Int = s % 1000000;
+    let nxt: Int = (s_b * 1103515245 + 12345) % 2147483647;
+    if nxt < 0 { return 0 - nxt; }
+    return nxt;
+}
+
+fn test_tight_equality(seed: Int) -> List[Int] {
+    let s1: Int = prng_step(seed);
+    let s2: Int = prng_step(s1);
+    let c: Int = (s1 % 20000) - 10000;
+    let mode: Int = s2 % 3;
+    let n: Int = 3;
+    let mut d: List[Int] = dbm_init(n);
+    d = dbm_set(d, n, 1, 2, c);
+    let mut expect_unsat: Bool = false;
+    if mode == 0 {
+        d = dbm_set(d, n, 2, 1, 0 - c);
+    } else if mode == 1 {
+        d = dbm_set(d, n, 2, 1, 0 - c + 1);
+    } else {
+        d = dbm_set(d, n, 2, 1, 0 - c - 1);
+        expect_unsat = true;
+    }
+    let is_unsat: Bool = dbm_solve_cycle(d, n);
+    if !expect_unsat && is_unsat {
+        println("ERR\tsmt_fuzz\tfalse positive on tight equality");
+        process_exit(1);
+    }
+    if expect_unsat && !is_unsat {
+        println("ERR\tsmt_fuzz\tmissed tight equality negative cycle");
+        process_exit(1);
+    }
+    let mut out: List[Int] = list_new();
+    out = list_push(out, s2);
+    if is_unsat { out = list_push(out, 1); } else { out = list_push(out, 0); }
+    return out;
+}
+
+fn test_zero_cycle(seed: Int) -> List[Int] {
+    let s1: Int = prng_step(seed);
+    let N: Int = 2 + (s1 % 7);
+    let n: Int = N + 1;
+    let mut d: List[Int] = dbm_init(n);
+    let mut sum_w: Int = 0;
+    let mut cur_s: Int = s1;
+    let mut i: Int = 1;
+    while i < N {
+        cur_s = prng_step(cur_s);
+        let w: Int = (cur_s % 200) - 100;
+        sum_w = sum_w + w;
+        d = dbm_set(d, n, i, i + 1, w);
+        i = i + 1;
+    }
+    d = dbm_set(d, n, N, 1, 0 - sum_w);
+    let is_unsat: Bool = dbm_solve_cycle(d, n);
+    if is_unsat {
+        println("ERR\tsmt_fuzz\tfalse positive on zero-weight cycle");
+        process_exit(1);
+    }
+    let mut out: List[Int] = list_new();
+    out = list_push(out, cur_s);
+    out = list_push(out, 0);
+    return out;
+}
+
+fn test_large_offset(seed: Int) -> List[Int] {
+    let s1: Int = prng_step(seed);
+    let s2: Int = prng_step(s1);
+    let c: Int = 100000000 + (s1 % 50000000);
+    let mode: Int = s2 % 2;
+    let n: Int = 3;
+    let mut d: List[Int] = dbm_init(n);
+    d = dbm_set(d, n, 1, 2, c);
+    let mut expect_unsat: Bool = false;
+    if mode == 0 {
+        d = dbm_set(d, n, 2, 1, 0 - c);
+    } else {
+        d = dbm_set(d, n, 2, 1, 0 - c - 1);
+        expect_unsat = true;
+    }
+    let is_unsat: Bool = dbm_solve_cycle(d, n);
+    if !expect_unsat && is_unsat {
+        println("ERR\tsmt_fuzz\tfalse positive on 10^8 offset");
+        process_exit(1);
+    }
+    if expect_unsat && !is_unsat {
+        println("ERR\tsmt_fuzz\tmissed 10^8 negative cycle");
+        process_exit(1);
+    }
+    let mut out: List[Int] = list_new();
+    out = list_push(out, s2);
+    if is_unsat { out = list_push(out, 1); } else { out = list_push(out, 0); }
+    return out;
+}
+
+fn test_negative_cycle(seed: Int) -> List[Int] {
+    let s1: Int = prng_step(seed);
+    let ch: Int = s1 % 4;
+    let mut N: Int = 2;
+    if ch == 1 { N = 3; }
+    if ch == 2 { N = 4; }
+    if ch == 3 { N = 8; }
+    let n: Int = N + 1;
+    let mut d: List[Int] = dbm_init(n);
+    let mut sum_w: Int = 0;
+    let mut cur_s: Int = s1;
+    let mut i: Int = 1;
+    while i < N {
+        cur_s = prng_step(cur_s);
+        let w: Int = (cur_s % 200) - 100;
+        sum_w = sum_w + w;
+        d = dbm_set(d, n, i, i + 1, w);
+        i = i + 1;
+    }
+    cur_s = prng_step(cur_s);
+    let neg_slack: Int = 1 + (cur_s % 50);
+    let closing_w: Int = 0 - sum_w - neg_slack;
+    d = dbm_set(d, n, N, 1, closing_w);
+    let cert_sum: Int = sum_w + closing_w;
+    if cert_sum >= 0 {
+        println("ERR\tsmt_fuzz\tcycle oracle certificate sum not negative");
+        process_exit(1);
+    }
+    let is_unsat: Bool = dbm_solve_cycle(d, n);
+    if !is_unsat {
+        println("ERR\tsmt_fuzz\tmissed negative cycle of length " + N.to_string());
+        process_exit(1);
+    }
+    let mut out: List[Int] = list_new();
+    out = list_push(out, cur_s);
+    out = list_push(out, 1);
+    return out;
+}
+
+fn test_substitution_clause(seed: Int) -> List[Int] {
+    let s1: Int = prng_step(seed);
+    let s2: Int = prng_step(s1);
+    let k1: Int = (s1 % 50) + 1;
+    let k2: Int = (s2 % 50) + 1;
+    let pre: String = smt_contract_parse_pack("requires", "x", 1, ">=", 0, "", 0, "1", "1", false, 0);
+    let mut assigns: List[String] = list_new();
+    assigns = list_push(assigns, smt_wp_calc_assign_pack("result", "x", 1, k1));
+    let mode: Int = s2 % 2;
+    let mut post_k: Int = k1;
+    let mut expect_valid: Bool = true;
+    if mode == 1 {
+        post_k = k1 + k2;
+        expect_valid = false;
+    }
+    let post: String = smt_contract_parse_pack("ensures", "result", 1, ">=", post_k, "", 0, "2", "1", false, 0);
+    let res: String = smt_prover_lia_prove_vc(pre, assigns, post);
+    let is_valid: Bool = smt_prover_lia_is_valid(res);
+    if !expect_valid && is_valid {
+        println("ERR\tsmt_fuzz\tfalse positive on substitution clause");
+        process_exit(1);
+    }
+    if !is_valid {
+        let cex: String = smt_prover_lia_counterexample(res);
+        if str_index_of(cex, "x = 0") < 0 {
+            println("ERR\tsmt_fuzz\tinvalid counterexample: " + cex);
+            process_exit(1);
+        }
+    }
+    let mut out: List[Int] = list_new();
+    out = list_push(out, s2);
+    if is_valid { out = list_push(out, 1); } else { out = list_push(out, 0); }
+    return out;
+}
+
+pub fn main() {
+    let mut seed: Int = 42;
+    let mut iter: Int = 0;
+    let total_iters: Int = 1000;
+    let mut unsat_count: Int = 0;
+    let mut sat_count: Int = 0;
+
+    while iter < total_iters {
+        seed = prng_step(seed);
+        let cat: Int = seed % 5;
+        let mut res: List[Int] = list_new();
+        if cat == 0 {
+            res = test_tight_equality(seed);
+        } else if cat == 1 {
+            res = test_zero_cycle(seed);
+        } else if cat == 2 {
+            res = test_large_offset(seed);
+        } else if cat == 3 {
+            res = test_negative_cycle(seed);
+        } else {
+            res = test_substitution_clause(seed);
+        }
+        seed = list_get(res, 0);
+        let status: Int = list_get(res, 1);
+        if status == 1 { unsat_count = unsat_count + 1; }
+        else { sat_count = sat_count + 1; }
+        iter = iter + 1;
+    }
+
+    println("SMT_FUZZER_PASS\titers=" + total_iters.to_string() + "\tsat=" + sat_count.to_string() + "\tunsat=" + unsat_count.to_string() + "\tfalse_positives=0");
+}

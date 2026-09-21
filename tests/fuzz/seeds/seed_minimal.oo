@@ -1,0 +1,10 @@
+// # Minimal Seed for Grammar Fuzzing
+// Logline: Minimal valid module providing baseline function definition.
+// Setup: Pure compute without ambient authority.
+// Beats:
+//   1. Declare identity function.
+//   2. Return integer addition.
+
+pub fn identity_seed(x: Int) -> Int {
+    return x + 1;
+}

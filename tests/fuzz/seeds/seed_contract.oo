@@ -1,0 +1,14 @@
+// # Formal Contract Seed for Grammar Fuzzing
+// Logline: Function with preconditions, postconditions, and specification.
+// Setup: Pure arithmetic under difference logic.
+// Beats:
+//   1. Declare contract bounds.
+//   2. Perform verified computation.
+
+pub fn safe_double_seed(x: Int) -> Int
+requires x >= 0
+ensures result >= x
+spec "Double non-negative integer under QF_LIA"
+{
+    return x * 2;
+}

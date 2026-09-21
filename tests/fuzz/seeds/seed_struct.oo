@@ -1,0 +1,23 @@
+// # Struct Field Seed for Grammar Fuzzing
+// Logline: Product type struct declaration and field access evaluation.
+// Setup: Pure compute.
+// Beats:
+//   1. Declare struct type without trailing comma.
+//   2. Access fields in calculation.
+
+pub type Coordinate = struct { x: Int, y: Int };
+
+pub fn distance_taxicab_seed(c: Coordinate) -> Int {
+    let mut sum: Int = 0;
+    if c.x >= 0 {
+        sum = sum + c.x;
+    } else {
+        sum = sum - c.x;
+    }
+    if c.y >= 0 {
+        sum = sum + c.y;
+    } else {
+        sum = sum - c.y;
+    }
+    return sum;
+}

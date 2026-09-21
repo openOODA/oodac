@@ -1,0 +1,17 @@
+// # ADT Match Seed for Grammar Fuzzing
+// Logline: Algebraic data type declaration and exhaustive pattern match.
+// Setup: Pure compute.
+// Beats:
+//   1. Declare sum type variants.
+//   2. Evaluate match expression.
+
+pub type Signal = Red | Yellow | Green;
+
+pub fn signal_code_seed(s: Signal) -> Int {
+    let code = match s {
+        Red => 1,
+        Yellow => 2,
+        Green => 3
+    };
+    return code;
+}
