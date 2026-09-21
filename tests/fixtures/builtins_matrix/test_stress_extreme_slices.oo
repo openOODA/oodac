@@ -1,0 +1,112 @@
+// # Stress Test: Extreme Slice Bounds Clamping & ARC
+//
+// Logline: Robust clamping of negative, reversed, and out-of-bounds slices without corruption.
+//
+// Setup: Native LLVM lowering of list_slice for List[Int] and List[String].
+//
+// Beats:
+//   1. Negative bounds both sides and clamping.
+//   2. Inverted bounds (start > end) returning empty lists.
+//   3. Massive out-of-bounds start and end clamping.
+//   4. Empty list slicing under extreme parameters.
+//   5. 5,000-iteration string list slice stress loop verifying ARC retention.
+
+pub fn test_extreme_int_slices() -> Bool {
+    let mut xs: List[Int] = list_new();
+    let mut i: Int = 0;
+    while i < 10 {
+        xs = list_push(xs, i * 10);
+        i = i + 1;
+    }
+    // Double negative
+    let s1: List[Int] = list_slice(xs, 0 - 100, 0 - 50);
+    if list_len(s1) != 0 { println("FAIL: double negative slice not empty"); process_exit(1); }
+
+    let s2: List[Int] = list_slice(xs, 0 - 5, 0 - 1);
+    if list_len(s2) != 0 { println("FAIL: negative slice not empty"); process_exit(1); }
+
+    // Inverted bounds (start > end)
+    let s3: List[Int] = list_slice(xs, 8, 2);
+    if list_len(s3) != 0 { println("FAIL: inverted slice not empty"); process_exit(1); }
+
+    let s4: List[Int] = list_slice(xs, 100, 0);
+    if list_len(s4) != 0 { println("FAIL: huge inverted slice not empty"); process_exit(1); }
+
+    let s5: List[Int] = list_slice(xs, 5, 5);
+    if list_len(s5) != 0 { println("FAIL: equal bounds slice not empty"); process_exit(1); }
+
+    // Massive bounds
+    let s6: List[Int] = list_slice(xs, 0, 1000000);
+    if list_len(s6) != 10 || list_get(s6, 0) != 0 || list_get(s6, 9) != 90 {
+        println("FAIL: massive hi clamp mismatch");
+        process_exit(1);
+    }
+
+    let s7: List[Int] = list_slice(xs, 5, 1000000);
+    if list_len(s7) != 5 || list_get(s7, 0) != 50 || list_get(s7, 4) != 90 {
+        println("FAIL: massive hi with start=5 mismatch");
+        process_exit(1);
+    }
+
+    let s8: List[Int] = list_slice(xs, 10, 1000000);
+    if list_len(s8) != 0 { println("FAIL: start=len not empty"); process_exit(1); }
+
+    let s9: List[Int] = list_slice(xs, 50, 1000000);
+    if list_len(s9) != 0 { println("FAIL: start>len not empty"); process_exit(1); }
+
+    // Clamped both
+    let s10: List[Int] = list_slice(xs, 0 - 50, 1000000);
+    if list_len(s10) != 10 || list_get(s10, 0) != 0 || list_get(s10, 9) != 90 {
+        println("FAIL: clamped both mismatch");
+        process_exit(1);
+    }
+
+    // Empty list slicing
+    let empty: List[Int] = list_new();
+    let se1: List[Int] = list_slice(empty, 0 - 10, 10);
+    let se2: List[Int] = list_slice(empty, 10, 0 - 10);
+    let se3: List[Int] = list_slice(empty, 0, 0);
+    if list_len(se1) != 0 || list_len(se2) != 0 || list_len(se3) != 0 {
+        println("FAIL: empty list slicing non-empty");
+        process_exit(1);
+    }
+    return true;
+}
+
+pub fn test_extreme_str_slices() -> Bool {
+    let mut sxs: List[String] = list_new();
+    sxs = list_push(sxs, "zero");
+    sxs = list_push(sxs, "one");
+    sxs = list_push(sxs, "two");
+    sxs = list_push(sxs, "three");
+    sxs = list_push(sxs, "four");
+
+    // 5,000 slice iterations testing ARC retain/release balances
+    let mut k: Int = 0;
+    while k < 5000 {
+        let sl_full: List[String] = list_slice(sxs, 0 - 10, 100);
+        if list_len(sl_full) != 5 || list_get(sl_full, 0) != "zero" || list_get(sl_full, 4) != "four" {
+            println("FAIL: str slice full mismatch in loop");
+            process_exit(1);
+        }
+        let sl_sub: List[String] = list_slice(sxs, 1, 4);
+        if list_len(sl_sub) != 3 || list_get(sl_sub, 0) != "one" || list_get(sl_sub, 2) != "three" {
+            println("FAIL: str slice sub mismatch in loop");
+            process_exit(1);
+        }
+        let sl_inv: List[String] = list_slice(sxs, 4, 1);
+        if list_len(sl_inv) != 0 {
+            println("FAIL: str slice inv not empty");
+            process_exit(1);
+        }
+        k = k + 1;
+    }
+    return true;
+}
+
+pub fn main() -> Int {
+    test_extreme_int_slices();
+    test_extreme_str_slices();
+    println("PASS: extreme slice parameters verified");
+    return 0;
+}

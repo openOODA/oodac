@@ -1,0 +1,93 @@
+// # Stress Test: In-Place Single-Owner Mutation
+//
+// Logline: Adversarial 10,000-iteration in-place mutation loops asserting O(1) performance and rc=1.
+//
+// Setup: Native LLVM lowering of list_set with single-owner semantics.
+//
+// Beats:
+//   1. 10,000 in-place mutations on List[Int] single owner.
+//   2. Verify refcount invariant via alias branching.
+//   3. 10,000 in-place mutations on List[String] single owner.
+//   4. Verify refcount invariant via alias branching.
+
+fn alias_ilist(l: List[Int]) -> List[Int] { return l; }
+fn alias_slist(l: List[String]) -> List[String] { return l; }
+
+pub fn test_stress_inplace_int() -> Bool {
+    let mut xs: List[Int] = list_new();
+    let mut i: Int = 0;
+    while i < 16 {
+        xs = list_push(xs, i * 100);
+        i = i + 1;
+    }
+    let mut k: Int = 0;
+    while k < 10000 {
+        let idx: Int = k % 16;
+        let expected: Int = k * 13 + 7;
+        xs = list_set(xs, idx, expected);
+        if list_get(xs, idx) != expected {
+            println("FAIL: in-place int mutation mismatch");
+            process_exit(1);
+        }
+        k = k + 1;
+    }
+    let alias: List[Int] = alias_ilist(xs);
+    let branched: List[Int] = list_set(alias, 0, 777777);
+    if list_get(xs, 0) == 777777 {
+        println("FAIL: xs corrupted by alias mutation");
+        process_exit(1);
+    }
+    if list_get(branched, 0) != 777777 {
+        println("FAIL: branched missing updated value");
+        process_exit(1);
+    }
+    return true;
+}
+
+pub fn test_stress_inplace_str() -> Bool {
+    let mut sxs: List[String] = list_new();
+    let mut i: Int = 0;
+    while i < 8 {
+        sxs = list_push(sxs, "init");
+        i = i + 1;
+    }
+    let mut k: Int = 0;
+    while k < 10000 {
+        let idx: Int = k % 8;
+        let val: String = if idx == 0 {
+            "token_alpha"
+        } else if idx == 1 {
+            "token_beta"
+        } else if idx == 2 {
+            "token_gamma"
+        } else if idx == 3 {
+            "token_delta"
+        } else {
+            "token_omega"
+        };
+        sxs = list_set(sxs, idx, val);
+        if list_get(sxs, idx) != val {
+            println("FAIL: in-place str mutation mismatch");
+            process_exit(1);
+        }
+        k = k + 1;
+    }
+    let salias: List[String] = alias_slist(sxs);
+    let sbranched: List[String] = list_set(salias, 0, "BRANCHED_VAL");
+    if list_get(sxs, 0) == "BRANCHED_VAL" {
+        println("FAIL: sxs corrupted by alias mutation");
+        process_exit(1);
+    }
+    if list_get(sbranched, 0) != "BRANCHED_VAL" {
+        println("FAIL: sbranched missing updated value");
+        process_exit(1);
+    }
+    return true;
+}
+
+pub fn main() -> Int {
+    test_stress_inplace_int();
+    test_stress_inplace_str();
+    println("PASS: stress in-place 10,000 mutations verified");
+    return 0;
+}

@@ -1,0 +1,111 @@
+// # Stress Test: Nested 2D Lists Mutation & COW
+//
+// Logline: Stress-test 2D matrix mutation and COW isolation for Int and String.
+//
+// Setup: Native LLVM lowering of nested list_set for List[List[Int]] and List[List[String]].
+//
+// Beats:
+//   1. 3x3 Int matrix construction and 500 inner mutations.
+//   2. 2D Int matrix COW isolation upon row replacement.
+//   3. 3x3 String matrix construction and 500 inner mutations.
+//   4. 2D String matrix COW isolation upon row replacement.
+
+fn alias_ll_i(l: List[List[Int]]) -> List[List[Int]] { return l; }
+fn alias_ll_s(l: List[List[String]]) -> List[List[String]] { return l; }
+
+pub fn test_nested_int_stress() -> Bool {
+    let mut m: List[List[Int]] = list_new();
+    let mut r: Int = 0;
+    while r < 3 {
+        let mut row: List[Int] = list_new();
+        let mut c: Int = 0;
+        while c < 3 {
+            row = list_push(row, r * 10 + c);
+            c = c + 1;
+        }
+        m = list_push(m, row);
+        r = r + 1;
+    }
+    let mut k: Int = 0;
+    while k < 500 {
+        let i: Int = k % 3;
+        let j: Int = (k / 3) % 3;
+        let mut row_cur: List[Int] = list_get(m, i);
+        let val: Int = k * 7;
+        row_cur = list_set(row_cur, j, val);
+        m = list_set(m, i, row_cur);
+        if list_get(list_get(m, i), j) != val {
+            println("FAIL: nested int matrix update mismatch");
+            process_exit(1);
+        }
+        k = k + 1;
+    }
+    // Outer COW isolation
+    let m_alias: List[List[Int]] = alias_ll_i(m);
+    let mut new_row: List[Int] = list_new();
+    new_row = list_push(new_row, 999);
+    new_row = list_push(new_row, 888);
+    new_row = list_push(new_row, 777);
+    let m_branched: List[List[Int]] = list_set(m_alias, 0, new_row);
+    if list_get(list_get(m, 0), 0) == 999 {
+        println("FAIL: original int matrix row 0 corrupted by COW branch");
+        process_exit(1);
+    }
+    if list_get(list_get(m_branched, 0), 0) != 999 {
+        println("FAIL: branched int matrix row 0 missing updated value");
+        process_exit(1);
+    }
+    return true;
+}
+
+pub fn test_nested_str_stress() -> Bool {
+    let mut sm: List[List[String]] = list_new();
+    let mut r: Int = 0;
+    while r < 3 {
+        let mut row: List[String] = list_new();
+        let mut c: Int = 0;
+        while c < 3 {
+            row = list_push(row, "init_" + r.to_string() + "_" + c.to_string());
+            c = c + 1;
+        }
+        sm = list_push(sm, row);
+        r = r + 1;
+    }
+    let mut k: Int = 0;
+    while k < 500 {
+        let i: Int = k % 3;
+        let j: Int = (k / 3) % 3;
+        let mut row_cur: List[String] = list_get(sm, i);
+        let val: String = "cell_" + k.to_string();
+        row_cur = list_set(row_cur, j, val);
+        sm = list_set(sm, i, row_cur);
+        if list_get(list_get(sm, i), j) != val {
+            println("FAIL: nested str matrix update mismatch");
+            process_exit(1);
+        }
+        k = k + 1;
+    }
+    // Outer COW isolation
+    let sm_alias: List[List[String]] = alias_ll_s(sm);
+    let mut new_srow: List[String] = list_new();
+    new_srow = list_push(new_srow, "REPLACED_0");
+    new_srow = list_push(new_srow, "REPLACED_1");
+    new_srow = list_push(new_srow, "REPLACED_2");
+    let sm_branched: List[List[String]] = list_set(sm_alias, 1, new_srow);
+    if list_get(list_get(sm, 1), 0) == "REPLACED_0" {
+        println("FAIL: original str matrix row 1 corrupted by COW branch");
+        process_exit(1);
+    }
+    if list_get(list_get(sm_branched, 1), 0) != "REPLACED_0" {
+        println("FAIL: branched str matrix row 1 missing updated value");
+        process_exit(1);
+    }
+    return true;
+}
+
+pub fn main() -> Int {
+    test_nested_int_stress();
+    test_nested_str_stress();
+    println("PASS: nested 2D lists mutation & COW verified");
+    return 0;
+}
