@@ -37,10 +37,11 @@ pub fn ll_return_stmt(toks: List[String], p: Int, n: Int, ssa: Int, env: String,
             println("ERR\tllvm\tbare return needs void");
             process_exit(1);
         }
+        let ns: Int = ll_arc_exit_all(env, ssa, ir);
         ll_heap_end(ir);
         ll_ir_inst(ir, "ret", "void", "", "", 1, 1);
         let q: Int = ll_skip_to_rbrace(toks, p + 1, n);
-        return ll_pack(q, ssa, ret_kind, env) + "\t1";
+        return ll_pack(q, ns, ret_kind, env) + "\t1";
     }
     let mut exp_kind: String = "";
     if ret_kind == "optim" {

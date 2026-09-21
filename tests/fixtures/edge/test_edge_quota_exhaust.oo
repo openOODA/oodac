@@ -1,0 +1,24 @@
+// # Ambient List Quota Exhaustion Fixture
+//
+// Logline: Allocates a list pushing elements to verify memory quota enforcement.
+//
+// Setup: Native LLVM execution under configured OO_LIST_AMBIENT_QUOTA.
+//
+// Beats:
+//   1. Allocate list and push 10,000 integer elements.
+//   2. Output success message when execution completes within quota.
+
+pub fn main() -> Int {
+    let mut xs: List[Int] = list_new();
+    let mut i: Int = 0;
+    while i < 10000 {
+        xs = list_push(xs, i);
+        i = i + 1;
+    }
+    if list_len(xs) != 10000 {
+        println("FAIL: list length mismatch");
+        return 1;
+    }
+    println("PASS: list memory within quota");
+    return 0;
+}

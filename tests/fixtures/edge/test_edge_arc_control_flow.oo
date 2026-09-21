@@ -1,0 +1,172 @@
+// # LLVM ARC Scope and Control-Flow Edge Suite
+//
+// Logline: Verify ARC drops across nested loops, early returns, matches, and recursion.
+//
+// Setup: Compile via oodac emit-llvm, link with liboodar.a, and execute.
+//
+// Beats:
+//   1. Verify early returns from nested while loops release all outer and inner locals.
+//   2. Verify early returns from Option and Result match arms release scrutinee and locals.
+//   3. Verify multi-level break and continue release inner scope allocations.
+//   4. Verify deep recursion (depth >= 1,000) returning heap collections produces 0 leaks.
+
+fn check_early_ret_loops(limit: Int, trigger: Int) -> Int {
+    let s_outer: String = "outer_active_str";
+    let mut i: Int = 0;
+    while i < limit {
+        let s_mid: String = "mid_active_str";
+        let mut j: Int = 0;
+        while j < limit {
+            let s_inn: String = "inn_active_str";
+            if i * 10 + j == trigger {
+                return chars_len(s_outer) + chars_len(s_mid) + chars_len(s_inn) + trigger;
+            }
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+    return 0;
+}
+
+fn check_early_ret_match(mode: Int) -> Int {
+    let s_sc: String = "scrutinee_context";
+    if mode == 1 {
+        let opt: Option[String] = Some("payload_data");
+        match opt {
+            Some(p) => {
+                let s_arm: String = "arm_active_data";
+                if chars_len(p) > 0 {
+                    return chars_len(s_sc) + chars_len(p) + chars_len(s_arm);
+                }
+            },
+            None => {
+                return 0;
+            }
+        }
+    } else {
+        let res: Result[Int, String] = Err("failure_reason");
+        match res {
+            Ok(v) => {
+                return v;
+            },
+            Err(e) => {
+                let s_err: String = "err_active_data";
+                if chars_len(e) > 0 {
+                    return chars_len(s_sc) + chars_len(e) + chars_len(s_err);
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+fn check_void_early_ret(x: Int) {
+    let s1: String = "void_check_str1";
+    if x > 0 {
+        let s2: String = "void_check_str2";
+        if chars_len(s2) > 0 {
+            return;
+        }
+    }
+    let s3: String = "void_check_str3";
+    if chars_len(s3) > 0 {
+        return;
+    }
+}
+
+fn check_break_continue_flow() -> Int {
+    let mut accum: Int = 0;
+    let mut i: Int = 0;
+    while i < 15 {
+        let s_out: String = "outer_loop_token";
+        let mut j: Int = 0;
+        while j < 10 {
+            let s_inn: String = "inner_loop_token";
+            if j == 1 {
+                j = j + 1;
+                continue;
+            }
+            if j == 4 {
+                break;
+            }
+            accum = accum + chars_len(s_out) + chars_len(s_inn);
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+    return accum;
+}
+
+fn check_match_unused_arm(choose_ok: Bool) -> Int {
+    let res: Result[Int, String] = if choose_ok { Ok(77) } else { Err("bad_input") };
+    let mut outcome: Int = 0;
+    match res {
+        Ok(v) => {
+            let s_ok: String = "matching_ok_arm_allocation";
+            outcome = v + chars_len(s_ok);
+        },
+        Err(e) => {
+            let s_err: String = "matching_err_arm_allocation";
+            outcome = chars_len(e) + chars_len(s_err);
+        }
+    }
+    return outcome;
+}
+
+fn check_deep_rec(depth: Int) -> List[Int] {
+    if depth <= 0 {
+        return list_new();
+    }
+    let sub: List[Int] = check_deep_rec(depth - 1);
+    let cur: List[Int] = list_push(sub, depth);
+    return cur;
+}
+
+pub fn main() -> Int {
+    let r1: Int = check_early_ret_loops(10, 34);
+    if r1 != 16 + 14 + 14 + 34 {
+        println("ERR\tearly_ret_loops mismatch");
+        return 1;
+    }
+    let r2: Int = check_early_ret_match(1);
+    if r2 != 17 + 12 + 15 {
+        println("ERR\tearly_ret_match Some mismatch");
+        return 2;
+    }
+    let r3: Int = check_early_ret_match(2);
+    if r3 != 17 + 14 + 15 {
+        println("ERR\tearly_ret_match Err mismatch");
+        return 3;
+    }
+    let mut k: Int = 0;
+    while k < 500 {
+        check_void_early_ret(k % 2);
+        k = k + 1;
+    }
+    let r4: Int = check_break_continue_flow();
+    if r4 != 15 * 3 * (16 + 16) {
+        println("ERR\tbreak_continue mismatch");
+        return 4;
+    }
+    let m1: Int = check_match_unused_arm(true);
+    if m1 != 77 + 26 {
+        println("ERR\tmatch_unused_arm Ok mismatch");
+        return 5;
+    }
+    let m2: Int = check_match_unused_arm(false);
+    if m2 != 9 + 27 {
+        println("ERR\tmatch_unused_arm Err mismatch");
+        return 6;
+    }
+    let list_res: List[Int] = check_deep_rec(1000);
+    if list_len(list_res) != 1000 {
+        println("ERR\tdeep_rec length mismatch");
+        return 7;
+    }
+    if list_get(list_res, 0) != 1 || list_get(list_res, 999) != 1000 {
+        println("ERR\tdeep_rec elements mismatch");
+        return 8;
+    }
+    println("OK\tedge_arc_control_flow all tests passed");
+    return 0;
+}

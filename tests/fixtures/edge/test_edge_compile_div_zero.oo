@@ -1,0 +1,13 @@
+// # Compile-Time Division by Zero Rejection Test
+//
+// Logline: Verifies oodac check rejects literal division by zero with error.
+//
+// Setup: Literal division by zero must fail type checking closed with code 1.
+//
+// Beats:
+//   1. Attempt literal division by 0.
+
+pub fn main() -> Int {
+    let x: Int = 100 / 0;
+    return x;
+}

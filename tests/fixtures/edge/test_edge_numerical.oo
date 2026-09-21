@@ -1,0 +1,138 @@
+// # Numerical Boundary and Hardware Trap Avoidance Test
+//
+// Logline: Comprehensive verification of 64-bit and 32-bit numerical edge cases.
+//
+// Setup: Tests INT64_MIN/MAX, div by -1 trap avoidance, shifts, logic, comparisons.
+//
+// Beats:
+//   1. Verify INT64_MIN / -1 and % -1 trap avoidance and bit-exact wrapping.
+//   2. Verify boundary arithmetic and two's-complement wrap-around.
+//   3. Verify bitwise shifts with mandatory & 63 and & 31 masking.
+//   4. Verify signed and unsigned comparisons near extreme limits.
+
+fn rt_add(a: Int, b: Int) -> Int { return a + b; }
+fn rt_sub(a: Int, b: Int) -> Int { return a - b; }
+fn rt_mul(a: Int, b: Int) -> Int { return a * b; }
+fn rt_div(a: Int, b: Int) -> Int { return a / b; }
+fn rt_rem(a: Int, b: Int) -> Int { return a % b; }
+fn rt_shl(a: Int, b: Int) -> Int { return a << b; }
+fn rt_shr(a: Int, b: Int) -> Int { return a >> b; }
+fn rt_and(a: Int, b: Int) -> Int { return a & b; }
+fn rt_or(a: Int, b: Int) -> Int { return a | b; }
+fn rt_xor(a: Int, b: Int) -> Int { return a ^ b; }
+
+fn rt_div32(a: i32, b: i32) -> i32 { return a / b; }
+fn rt_rem32(a: i32, b: i32) -> i32 { return a % b; }
+fn rt_shl32(a: i32, b: i32) -> i32 { return a << b; }
+
+fn cmp_u64(a: u64, b: u64) -> Bool { return a < b; }
+
+pub fn main() -> Int {
+    let mut fails: Int = 0;
+    let min_i: Int = 0 - 9223372036854775807 - 1;
+    let max_i: Int = 9223372036854775807;
+
+    // Beat 1: INT64_MIN / -1 and % -1 hardware trap avoidance (select guard)
+    if min_i / -1 != min_i { fails = fails + 1; }
+    if rt_div(min_i, -1) != min_i { fails = fails + 1; }
+    if min_i % -1 != 0 { fails = fails + 1; }
+    if rt_rem(min_i, -1) != 0 { fails = fails + 1; }
+    if min_i / 1 != min_i { fails = fails + 1; }
+    if min_i % 1 != 0 { fails = fails + 1; }
+    if max_i / -1 != 0 - max_i { fails = fails + 1; }
+    if max_i % -1 != 0 { fails = fails + 1; }
+    if min_i / max_i != -1 { fails = fails + 1; }
+    if min_i % max_i != -1 { fails = fails + 1; }
+    if min_i / min_i != 1 { fails = fails + 1; }
+    if min_i % min_i != 0 { fails = fails + 1; }
+    if max_i / max_i != 1 { fails = fails + 1; }
+    if max_i % max_i != 0 { fails = fails + 1; }
+    if 0 / -1 != 0 { fails = fails + 1; }
+    if 0 % -1 != 0 { fails = fails + 1; }
+
+    // Beat 2: Boundary arithmetic and two's-complement wrap-around
+    if rt_add(max_i, 1) != min_i { fails = fails + 1; }
+    if rt_sub(min_i, 1) != max_i { fails = fails + 1; }
+    if rt_add(min_i, -1) != max_i { fails = fails + 1; }
+    if rt_sub(max_i, -1) != min_i { fails = fails + 1; }
+    if rt_add(max_i, min_i) != -1 { fails = fails + 1; }
+    if rt_sub(min_i, min_i) != 0 { fails = fails + 1; }
+    if rt_sub(max_i, max_i) != 0 { fails = fails + 1; }
+    if rt_mul(min_i, -1) != min_i { fails = fails + 1; }
+    if rt_mul(max_i, -1) != 0 - max_i { fails = fails + 1; }
+    if rt_mul(min_i, 0) != 0 { fails = fails + 1; }
+    if rt_mul(max_i, 0) != 0 { fails = fails + 1; }
+    if rt_mul(min_i, 1) != min_i { fails = fails + 1; }
+    if rt_mul(max_i, 1) != max_i { fails = fails + 1; }
+    if rt_mul(min_i, 2) != 0 { fails = fails + 1; }
+    if rt_mul(max_i, 2) != -2 { fails = fails + 1; }
+
+    // Beat 3: Bitwise shifts with mandatory & 63 masking
+    let sh_0: Int = 1 << 0;
+    if sh_0 != 1 { fails = fails + 1; }
+    if rt_shl(1, 0) != 1 { fails = fails + 1; }
+    if rt_shl(1, 62) != 4611686018427387904 { fails = fails + 1; }
+    if rt_shl(1, 63) != min_i { fails = fails + 1; }
+    let sh_64: Int = 1 << 64;
+    if sh_64 != 1 { fails = fails + 1; }
+    if rt_shl(1, 64) != 1 { fails = fails + 1; }
+    if rt_shl(1, 65) != 2 { fails = fails + 1; }
+    if rt_shl(1, 127) != min_i { fails = fails + 1; }
+    if rt_shl(1, 128) != 1 { fails = fails + 1; }
+    let sh_neg1: Int = 1 << -1;
+    if sh_neg1 != min_i { fails = fails + 1; }
+    if rt_shl(1, -1) != min_i { fails = fails + 1; }
+    if rt_shl(1, -64) != 1 { fails = fails + 1; }
+    if rt_shl(1, -63) != 2 { fails = fails + 1; }
+
+    // Arithmetic right shift with sign extension
+    if rt_shr(-1, 0) != -1 { fails = fails + 1; }
+    if rt_shr(-1, 63) != -1 { fails = fails + 1; }
+    if rt_shr(-1, 64) != -1 { fails = fails + 1; }
+    if rt_shr(-1, -1) != -1 { fails = fails + 1; }
+    if rt_shr(min_i, 1) != 0 - 4611686018427387904 { fails = fails + 1; }
+    if rt_shr(min_i, 63) != -1 { fails = fails + 1; }
+    if rt_shr(min_i, 64) != min_i { fails = fails + 1; }
+    if rt_shr(max_i, 63) != 0 { fails = fails + 1; }
+    if rt_shr(max_i, 62) != 1 { fails = fails + 1; }
+    if rt_shr(max_i, 64) != max_i { fails = fails + 1; }
+
+    // Bitwise boolean operations
+    if rt_and(min_i, max_i) != 0 { fails = fails + 1; }
+    if rt_or(min_i, max_i) != -1 { fails = fails + 1; }
+    if rt_xor(min_i, max_i) != -1 { fails = fails + 1; }
+    if rt_xor(min_i, -1) != max_i { fails = fails + 1; }
+    if rt_xor(max_i, -1) != min_i { fails = fails + 1; }
+    if rt_and(min_i, 0) != 0 { fails = fails + 1; }
+    if rt_or(max_i, 0) != max_i { fails = fails + 1; }
+    if rt_xor(min_i, min_i) != 0 { fails = fails + 1; }
+
+    // Beat 4: Signed vs Unsigned comparisons and 32-bit types
+    if min_i >= max_i { fails = fails + 1; }
+    if max_i < min_i { fails = fails + 1; }
+    if min_i >= 0 { fails = fails + 1; }
+    if min_i >= -1 { fails = fails + 1; }
+    if max_i <= 0 { fails = fails + 1; }
+    if max_i <= -1 { fails = fails + 1; }
+    if min_i > min_i { fails = fails + 1; }
+    if max_i < max_i { fails = fails + 1; }
+    if min_i == max_i { fails = fails + 1; }
+
+    // Unsigned comparison: 0x7FFFFFFFFFFFFFFF < 0x8000000000000000
+    let u_max_signed: u64 = 9223372036854775807;
+    let u_min_signed: u64 = 9223372036854775808;
+    if cmp_u64(u_max_signed, u_min_signed) == false { fails = fails + 1; }
+
+    // 32-bit Integer Edge Cases
+    let min32: i32 = -2147483648;
+    if rt_div32(min32, -1) != min32 { fails = fails + 1; }
+    if rt_rem32(min32, -1) != 0 { fails = fails + 1; }
+    if rt_shl32(1, 32) != 1 { fails = fails + 1; }
+
+    if fails == 0 {
+        println("OK\tedge_numerical\tall tests passed");
+        return 0;
+    }
+    println("ERR\tedge_numerical\tfailures: " + fails.to_string());
+    return 1;
+}

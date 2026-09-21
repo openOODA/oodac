@@ -1,0 +1,13 @@
+// # Compile-Time Modulo by Zero Rejection Test
+//
+// Logline: Verifies oodac check rejects literal modulo by zero with error.
+//
+// Setup: Literal modulo by zero must fail type checking closed with code 1.
+//
+// Beats:
+//   1. Attempt literal modulo by 0.
+
+pub fn main() -> Int {
+    let x: Int = 100 % 0;
+    return x;
+}

@@ -1,0 +1,22 @@
+// # Integer Division by Zero Trap Avoidance Test
+//
+// Logline: Verifies division by zero triggers safe exit 1 without SIGFPE.
+//
+// Setup: Runtime integer division by zero calls oo_process_exit(1) cleanly.
+//
+// Beats:
+//   1. Define dynamic runtime divisor variable with value 0.
+//   2. Attempt division by zero.
+//   3. Assert execution terminates before reaching normal exit.
+
+fn runtime_div(num: Int, den: Int) -> Int {
+    return num / den;
+}
+
+pub fn main() -> Int {
+    let num: Int = 42;
+    let den: Int = 0;
+    let r: Int = runtime_div(num, den);
+    println("FAIL: division by zero did not terminate process: " + r.to_string());
+    return 0;
+}
