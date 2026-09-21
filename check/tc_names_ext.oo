@@ -1,0 +1,35 @@
+// # Typechecker Known Extension Names
+//
+// Logline: Recognize runtime extension symbols for PQC, GPU, Actor, and Audio.
+//
+// Setup: Called by is_known_name in tc_names_known.oo.
+//
+// Beats:
+//   1. Post-quantum cryptography symbols and byte-level shims.
+//   2. GPU initialization, buffer allocation, transfer, and HIP kernel dispatch.
+//   3. Actor lifecycle, supervisor trees, channels, and threads.
+//   4. Audio capture initialization and stream management.
+
+pub fn is_known_ext_name(name: String) -> Bool {
+    let mut s: String = name;
+    if chars_len(s) > 0 && str_slice(s, 0, 1) == "@" {
+        s = str_slice(s, 1, chars_len(s));
+    }
+    let n: Int = chars_len(s);
+    if n >= 7 && str_slice(s, 0, 7) == "crypto_" { return true; }
+    if n >= 7 && str_slice(s, 0, 7) == "oo_gpu_" { return true; }
+    if n >= 9 && str_slice(s, 0, 9) == "oo_actor_" { return true; }
+    if n >= 9 && str_slice(s, 0, 9) == "oo_audio_" { return true; }
+    if n >= 11 && str_slice(s, 0, 11) == "oo_channel_" { return true; }
+    if n >= 10 && str_slice(s, 0, 10) == "oo_thread_" { return true; }
+    if s == "oo_otp_supervise" { return true; }
+    if s == "oo_shake256" || s == "oo_shake128" { return true; }
+    if s == "oo_sha3_256_bytes" || s == "oo_sha3_512_bytes" { return true; }
+    if n >= 4 && str_slice(s, 0, 4) == "gpu_" { return true; }
+    if n >= 6 && str_slice(s, 0, 6) == "actor_" { return true; }
+    if n >= 6 && str_slice(s, 0, 6) == "audio_" { return true; }
+    if n >= 8 && str_slice(s, 0, 8) == "channel_" { return true; }
+    if n >= 7 && str_slice(s, 0, 7) == "thread_" { return true; }
+    if s == "otp_supervise" { return true; }
+    return false;
+}

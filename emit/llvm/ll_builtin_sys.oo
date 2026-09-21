@@ -121,5 +121,22 @@ pub fn ll_builtin_sys(name: String, args: List[String], ssa0: Int, expect: Strin
         ll_ir_inst(ir, "call", "void", "", "@oo_read_stdin_chunk(ptr sret(%OoResS) align 8 " + out + ", i64 " + ll_tok_sys_cap(args) + ", i64 " + ll_opnd(ms) + ")", 1, 1);
         return ll_pack(0, s, "ress", out);
     }
+    if (name == "arena_create" || name == "oo_arena_create") && na >= 2 {
+        let bsz: String = ll_i64arg(args, 1, ssa0, ir);
+        return ll_ty_ress("oo_arena_create", args, ll_pssa(bsz), ", i64 " + ll_opnd(bsz), ir);
+    }
+    if (name == "arena_reset" || name == "oo_arena_reset") && na >= 2 {
+        let aid: String = ll_i64arg(args, 1, ssa0, ir);
+        return ll_ty_ress("oo_arena_pass_reset", args, ll_pssa(aid), ", i64 " + ll_opnd(aid), ir);
+    }
+    if (name == "arena_destroy" || name == "oo_arena_destroy") && na >= 2 {
+        let aid: String = ll_i64arg(args, 1, ssa0, ir);
+        return ll_ty_ress("oo_arena_destroy", args, ll_pssa(aid), ", i64 " + ll_opnd(aid), ir);
+    }
+    if (name == "arena_alloc" || name == "oo_arena_alloc") && na >= 3 {
+        let aid: String = ll_i64arg(args, 1, ssa0, ir);
+        let asz: String = ll_i64arg(args, 2, ll_pssa(aid), ir);
+        return ll_ty_ress("oo_arena_alloc", args, ll_pssa(asz), ", i64 " + ll_opnd(aid) + ", i64 " + ll_opnd(asz), ir);
+    }
     return "";
 }

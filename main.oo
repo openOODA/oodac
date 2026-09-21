@@ -20,7 +20,7 @@ import "cli/cli_build.oo";
 import "cli/cli_emit.oo";
 import "cli/cli_emit_llvm.oo";
 
-pub fn main(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env: &EnvCap, args: List[String]) {
+pub fn main(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env: &EnvCap, ar: &ArenaCap, args: List[String]) {
     let a: List[String] = parse_cli_argv(fs_r, fs_w, sys, args);
     let cmd: String = list_get(a, 0);
     let path: String = list_get(a, 1);
@@ -39,11 +39,11 @@ pub fn main(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env: &EnvCap,
     }
 
     if cmd == "build" {
-        run_build_san(fs_r, fs_w, sys, env, path, out_arg, backend, is_shared);
+        run_build_san(fs_r, fs_w, sys, env, ar, path, out_arg, backend, is_shared);
         return;
     }
     if cmd == "emit-llvm" {
-        run_emit_llvm(fs_r, fs_w, env, path, concat);
+        run_emit_llvm(fs_r, fs_w, env, ar, path, concat);
         return;
     }
     if cmd == "emit-c" || cmd == "emit-protos" || cmd == "emit-bodies" || cmd == "emit-preamble" {
@@ -52,7 +52,7 @@ pub fn main(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env: &EnvCap,
     }
     if cmd == "check" {
         if json_errors { run_check_json_errors(fs_r, fs_w, sys, env, path); return; }
-        run_check_path(fs_r, fs_w, sys, path);
+        run_check_path(fs_r, fs_w, sys, ar, path);
         return;
     }
     if cmd == "tokens" {

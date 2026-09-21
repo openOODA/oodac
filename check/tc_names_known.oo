@@ -9,7 +9,10 @@
 //   2. Return true for sealed GPU, alloc, and FFI operations, residual-forbidden names, control keywords, types, caps, and contract words.
 //   3. Return false when the name is none of those.
 
+import "tc_names_ext.oo";
+
 pub fn is_known_name(name: String) -> Bool {
+    if is_known_ext_name(name) { return true; }
     if name == "println" || name == "print" || name == "eprintln" || name == "oo_print_str" { return true;
     }
     if name == "assert_eq" { return true;
@@ -149,7 +152,7 @@ pub fn is_known_name(name: String) -> Bool {
         || name == "oo_dns_resolve" || name == "oo_dns_resolve_ipv4"
         || name == "oo_arena_create" || name == "arena_create"
         || name == "oo_arena_alloc" || name == "arena_alloc"
-        || name == "oo_arena_reset" || name == "arena_reset"
+        || name == "oo_arena_reset" || name == "arena_reset" || name == "oo_arena_destroy" || name == "arena_destroy"
         || name == "oo_actor_restart" || name == "actor_restart"
         || name == "soa_layout" || name == "dod_layout"
         || name == "checkpoint" || name == "rollback"

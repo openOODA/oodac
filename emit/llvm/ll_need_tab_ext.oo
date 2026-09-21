@@ -1,0 +1,111 @@
+// # LLVM runtime extension symbol catalog
+//
+// Logline: Complete prototype catalog for PQC, GPU, Actor, and Audio extensions.
+//
+// Setup: Maps modular extension symbol names to exact LLVM declare signatures.
+//
+// Beats:
+//   1. Extension master dispatch across modular domains.
+//   2. Post-quantum cryptography (ML-KEM-768, ML-DSA-65, PQ AEAD/HMAC, SHA3/SHAKE).
+//   3. GPU acceleration and ROCm/HIP kernel dispatch.
+//   4. Actor supervision trees, threads, and channels.
+//   5. Audio hardware capture and PCM streams.
+
+pub fn ll_need_proto_ext(sym: String) -> String {
+    let d1: String = ll_need_proto_pqc(sym);
+    if d1 != "" { return d1; }
+    let d2: String = ll_need_proto_gpu(sym);
+    if d2 != "" { return d2; }
+    let d3: String = ll_need_proto_actor(sym);
+    if d3 != "" { return d3; }
+    return ll_need_proto_audio(sym);
+}
+
+fn ll_need_proto_pqc(sym: String) -> String {
+    if sym == "crypto_mlkem768_keygen_internal" { return "declare { ptr, i64 } @crypto_mlkem768_keygen_internal({ ptr, i64 }) nounwind"; }
+    if sym == "crypto_mlkem768_encaps_internal" || sym == "crypto_mlkem768_enc_internal" { return "declare { ptr, i64 } @" + sym + "({ ptr, i64 }, { ptr, i64 }) nounwind"; }
+    if sym == "crypto_mlkem768_decaps_internal" || sym == "crypto_mlkem768_dec_internal" { return "declare { ptr, i64 } @" + sym + "({ ptr, i64 }, { ptr, i64 }) nounwind"; }
+    if sym == "crypto_mldsa65_keygen_internal" { return "declare { ptr, i64 } @crypto_mldsa65_keygen_internal({ ptr, i64 }) nounwind"; }
+    if sym == "crypto_mldsa65_sign_internal" { return "declare { ptr, i64 } @crypto_mldsa65_sign_internal({ ptr, i64 }, { ptr, i64 }, { ptr, i64 }) nounwind"; }
+    if sym == "crypto_mldsa65_verify_internal" { return "declare { ptr, i64 } @crypto_mldsa65_verify_internal({ ptr, i64 }, { ptr, i64 }, { ptr, i64 }) nounwind"; }
+    if sym == "crypto_pq_aead_seal_internal" { return "declare { ptr, i64 } @crypto_pq_aead_seal_internal({ ptr, i64 }, { ptr, i64 }, { ptr, i64 }) nounwind"; }
+    if sym == "crypto_pq_aead_open_internal" { return "declare { ptr, i64 } @crypto_pq_aead_open_internal({ ptr, i64 }, { ptr, i64 }, { ptr, i64 }) nounwind"; }
+    if sym == "crypto_pq_hmac_sha256_internal" { return "declare { ptr, i64 } @crypto_pq_hmac_sha256_internal({ ptr, i64 }, { ptr, i64 }) nounwind"; }
+    if sym == "crypto_pq_hmac_sha256_verify_internal" { return "declare i32 @crypto_pq_hmac_sha256_verify_internal({ ptr, i64 }, { ptr, i64 }) nounwind"; }
+    if sym == "crypto_sha3_256_internal" { return "declare { ptr, i64 } @crypto_sha3_256_internal({ ptr, i64 }) nounwind"; }
+    if sym == "oo_shake256" { return "declare void @oo_shake256(ptr, i64, ptr, i64) nounwind"; }
+    if sym == "oo_shake128" { return "declare void @oo_shake128(ptr, i64, ptr, i64) nounwind"; }
+    if sym == "oo_sha3_256_bytes" { return "declare void @oo_sha3_256_bytes(ptr, i64, ptr) nounwind"; }
+    if sym == "oo_sha3_512_bytes" { return "declare void @oo_sha3_512_bytes(ptr, i64, ptr) nounwind"; }
+    if sym == "crypto_aes_gcm_seal_internal" { return "declare { ptr, i64 } @crypto_aes_gcm_seal_internal({ ptr, i64 }, { ptr, i64 }, { ptr, i64 }, { ptr, i64 }) nounwind"; }
+    if sym == "crypto_aes_gcm_open_internal" { return "declare { ptr, i64 } @crypto_aes_gcm_open_internal({ ptr, i64 }, { ptr, i64 }, { ptr, i64 }, { ptr, i64 }) nounwind"; }
+    return "";
+}
+
+fn ll_need_proto_gpu(sym: String) -> String {
+    let g1: String = ll_need_proto_gpu_mem(sym);
+    if g1 != "" { return g1; }
+    return ll_need_proto_gpu_exec(sym);
+}
+
+fn ll_need_proto_gpu_mem(sym: String) -> String {
+    if sym == "oo_gpu_init" { return "declare i32 @oo_gpu_init(i64) nounwind"; }
+    if sym == "oo_gpu_hip_available" { return "declare i32 @oo_gpu_hip_available() nounwind"; }
+    if sym == "oo_gpu_probe_device" { return "declare void @oo_gpu_probe_device(ptr noalias sret(%OoResS) align 8, i64, i32) nounwind"; }
+    if sym == "oo_gpu_buffer_alloc" { return "declare i64 @oo_gpu_buffer_alloc(i64, i64, i32) nounwind"; }
+    if sym == "oo_gpu_buffer_free" { return "declare i32 @oo_gpu_buffer_free(i64, i64) nounwind"; }
+    if sym == "oo_gpu_buffer_get_ptr" { return "declare ptr @oo_gpu_buffer_get_ptr(i64, i64) nounwind"; }
+    if sym == "oo_gpu_buffer_get_size" { return "declare i64 @oo_gpu_buffer_get_size(i64, i64) nounwind"; }
+    if sym == "oo_gpu_pool_purge" { return "declare void @oo_gpu_pool_purge(i64) nounwind"; }
+    if sym == "oo_gpu_copy_h2d" || sym == "oo_gpu_mem_copy_htod" { return "declare i32 @" + sym + "(i64, i64, ptr, i64) nounwind"; }
+    if sym == "oo_gpu_copy_d2h" || sym == "oo_gpu_mem_copy_dtoh" { return "declare i32 @" + sym + "(i64, ptr, i64, i64) nounwind"; }
+    if sym == "oo_gpu_copy_h2d_async" { return "declare i32 @oo_gpu_copy_h2d_async(i64, i64, ptr, i64, i64) nounwind"; }
+    if sym == "oo_gpu_copy_d2h_async" { return "declare i32 @oo_gpu_copy_d2h_async(i64, ptr, i64, i64, i64) nounwind"; }
+    return "";
+}
+
+fn ll_need_proto_gpu_exec(sym: String) -> String {
+    if sym == "oo_gpu_stream_create" { return "declare i64 @oo_gpu_stream_create(i64, i32) nounwind"; }
+    if sym == "oo_gpu_stream_destroy" { return "declare i32 @oo_gpu_stream_destroy(i64, i64) nounwind"; }
+    if sym == "oo_gpu_stream_sync" { return "declare i32 @oo_gpu_stream_sync(i64, i64) nounwind"; }
+    if sym == "oo_gpu_event_create" { return "declare i64 @oo_gpu_event_create(i64, i32) nounwind"; }
+    if sym == "oo_gpu_event_destroy" { return "declare i32 @oo_gpu_event_destroy(i64, i64) nounwind"; }
+    if sym == "oo_gpu_event_record" { return "declare i32 @oo_gpu_event_record(i64, i64, i64) nounwind"; }
+    if sym == "oo_gpu_event_sync" { return "declare i32 @oo_gpu_event_sync(i64, i64) nounwind"; }
+    if sym == "oo_gpu_event_elapsed_ms" { return "declare float @oo_gpu_event_elapsed_ms(i64, i64, i64) nounwind"; }
+    if sym == "oo_gpu_sync" { return "declare void @oo_gpu_sync(ptr noalias sret(%OoResS) align 8, i64) nounwind"; }
+    if sym == "oo_gpu_launch_kernel" || sym == "oo_gpu_launch" { return "declare void @" + sym + "(ptr noalias sret(%OoResS) align 8, i64, { ptr, i64 }, { ptr, i64 }, { ptr, i64 }, i32, i32, i32, i32, i32, i32, ptr, i32) nounwind"; }
+    if sym == "oo_gpu_hip_vec_add" { return "declare void @oo_gpu_hip_vec_add(ptr noalias sret(%OoResS) align 8, i64, ptr, ptr, ptr, i32) nounwind"; }
+    if sym == "oo_gpu_hip_sgemm" { return "declare void @oo_gpu_hip_sgemm(ptr noalias sret(%OoResS) align 8, i64, ptr, ptr, ptr, i32, i32, i32) nounwind"; }
+    if sym == "oo_gpu_hip_rmsnorm" { return "declare void @oo_gpu_hip_rmsnorm(ptr noalias sret(%OoResS) align 8, i64, ptr, ptr, ptr, i32, i32) nounwind"; }
+    if sym == "oo_gpu_hip_attention" { return "declare void @oo_gpu_hip_attention(ptr noalias sret(%OoResS) align 8, i64, ptr, ptr, ptr, ptr, i32, i32) nounwind"; }
+    if sym == "oo_gpu_hip_reduce_sum" { return "declare void @oo_gpu_hip_reduce_sum(ptr noalias sret(%OoResS) align 8, i64, ptr, ptr, i32) nounwind"; }
+    if sym == "oo_gpu_hip_rope" { return "declare void @oo_gpu_hip_rope(ptr noalias sret(%OoResS) align 8, i64, ptr, ptr, ptr, ptr, i32, i32) nounwind"; }
+    if sym == "oo_gpu_hip_stencil_3d" { return "declare void @oo_gpu_hip_stencil_3d(ptr noalias sret(%OoResS) align 8, i64, ptr, ptr, i32, i32, i32, float, float) nounwind"; }
+    if sym == "oo_gpu_hip_try_launch" { return "declare void @oo_gpu_hip_try_launch(ptr noalias sret(%OoResS) align 8, i64, { ptr, i64 }) nounwind"; }
+    return "";
+}
+
+fn ll_need_proto_actor(sym: String) -> String {
+    if sym == "oo_actor_spawn" { return "declare void @oo_actor_spawn(ptr noalias sret(%OoResS) align 8, i64, { ptr, i64 }) nounwind"; }
+    if sym == "oo_actor_send" { return "declare void @oo_actor_send(ptr noalias sret(%OoResS) align 8, i64, i64, { ptr, i64 }) nounwind"; }
+    if sym == "oo_actor_recv" { return "declare void @oo_actor_recv(ptr noalias sret(%OoResS) align 8, i64, i64) nounwind"; }
+    if sym == "oo_actor_destroy" { return "declare void @oo_actor_destroy(ptr noalias sret(%OoResS) align 8, i64, i64) nounwind"; }
+    if sym == "oo_actor_restart" { return "declare void @oo_actor_restart(ptr noalias sret(%OoResS) align 8, i64, i64) nounwind"; }
+    if sym == "oo_otp_supervise" { return "declare void @oo_otp_supervise(ptr noalias sret(%OoResS) align 8, i64, i64) nounwind"; }
+    if sym == "oo_channel_new" { return "declare void @oo_channel_new(ptr noalias sret(%OoResS) align 8, i64) nounwind"; }
+    if sym == "oo_channel_send" { return "declare void @oo_channel_send(ptr noalias sret(%OoResS) align 8, i64, i64, { ptr, i64 }) nounwind"; }
+    if sym == "oo_channel_recv" { return "declare void @oo_channel_recv(ptr noalias sret(%OoResS) align 8, i64, i64) nounwind"; }
+    if sym == "oo_channel_destroy" { return "declare void @oo_channel_destroy(ptr noalias sret(%OoResS) align 8, i64, i64) nounwind"; }
+    if sym == "oo_thread_spawn" { return "declare void @oo_thread_spawn(ptr noalias sret(%OoResS) align 8, i64, { ptr, i64 }) nounwind"; }
+    if sym == "oo_thread_join" { return "declare void @oo_thread_join(ptr noalias sret(%OoResS) align 8, i64, i64) nounwind"; }
+    if sym == "oo_thread_join_s" { return "declare void @oo_thread_join_s(ptr noalias sret(%OoResS) align 8, i64, { ptr, i64 }) nounwind"; }
+    return "";
+}
+
+fn ll_need_proto_audio(sym: String) -> String {
+    if sym == "oo_audio_init" || sym == "oo_audio_capture_init" { return "declare i32 @" + sym + "(i64) nounwind"; }
+    if sym == "oo_audio_capture" || sym == "oo_audio_capture_read" { return "declare void @" + sym + "(ptr noalias sret(%OoResS) align 8, i64, ptr) nounwind"; }
+    if sym == "oo_audio_release" { return "declare void @oo_audio_release(ptr) nounwind"; }
+    return "";
+}

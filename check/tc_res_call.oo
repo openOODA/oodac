@@ -28,8 +28,8 @@ pub fn c_is_res_s_call(name: String) -> Bool {
     if name == "sys_epoll_create" || name == "sys_inotify_init" || name == "sys_prctl" { return true; }
     if name == "oo_sys_epoll_create" || name == "oo_sys_inotify_init" || name == "oo_sys_prctl" { return true; }
     if name == "landlock_restrict" || name == "oo_landlock_restrict" || name == "dns_resolve" || name == "oo_dns_resolve" || name == "oo_dns_resolve_ipv4" { return true; }
-    if name == "arena_create" || name == "arena_alloc" || name == "arena_reset" { return true; }
-    if name == "oo_arena_create" || name == "oo_arena_alloc" || name == "oo_arena_reset" { return true; }
+    if name == "arena_create" || name == "arena_alloc" || name == "arena_reset" || name == "arena_destroy" { return true; }
+    if name == "oo_arena_create" || name == "oo_arena_alloc" || name == "oo_arena_reset" || name == "oo_arena_destroy" { return true; }
     if name == "actor_restart" || name == "otp_supervise" || name == "cap_rpc_send" || name == "cap_rpc_recv" { return true; }
     if name == "oo_actor_restart" || name == "oo_otp_supervise" || name == "oo_cap_rpc_send" || name == "oo_cap_rpc_recv" { return true; }
     if name == "parse" || name == "load_model" || name == "dlopen" || name == "oo_dlopen" || name == "dlsym" || name == "oo_dlsym" || name == "dlclose" || name == "oo_dlclose" || name == "ffi_call" || name == "oo_ffi_call" { return true; }

@@ -1,0 +1,146 @@
+// # LLVM Extension Builtin Signature Catalog
+//
+// Logline: Function signature mapping for PQC, GPU, Actor, and Audio extensions.
+//
+// Setup: Maps runtime extension symbol names to exact Ooda compiler signatures.
+//
+// Beats:
+//   1. Master signature dispatch across modular domains.
+//   2. Post-quantum cryptography signatures (ML-KEM-768, ML-DSA-65, PQ AEAD/HMAC, SHA3).
+//   3. GPU acceleration and ROCm/HIP kernel dispatch signatures.
+//   4. Actor supervision trees, threads, and channels signatures.
+//   5. Audio hardware capture and PCM streams signatures.
+
+import "ll_tok.oo";
+import "ll_ty.oo";
+
+pub fn ll_builtin_ext_sig(sym: String) -> String {
+    let mut s: String = sym;
+    if chars_len(s) > 0 && str_slice(s, 0, 1) == "@" {
+        s = str_slice(s, 1, chars_len(s));
+    }
+    let s1: String = ll_ext_sig_pqc(s);
+    if s1 != "" { return s1; }
+    let s2: String = ll_ext_sig_gpu_mem(s);
+    if s2 != "" { return s2; }
+    let s3: String = ll_ext_sig_gpu_exec(s);
+    if s3 != "" { return s3; }
+    let s4: String = ll_ext_sig_actor(s);
+    if s4 != "" { return s4; }
+    return ll_ext_sig_audio(s);
+}
+
+pub fn ll_builtin_ext_sym(sym: String) -> String {
+    let mut s: String = sym;
+    if chars_len(s) > 0 && str_slice(s, 0, 1) == "@" {
+        s = str_slice(s, 1, chars_len(s));
+    }
+    let n: Int = chars_len(s);
+    if n >= 3 && str_slice(s, 0, 3) == "oo_" { return s; }
+    if n >= 7 && str_slice(s, 0, 7) == "crypto_" { return s; }
+    if n >= 4 && str_slice(s, 0, 4) == "gpu_" { return "oo_" + s; }
+    if n >= 6 && str_slice(s, 0, 6) == "actor_" { return "oo_" + s; }
+    if n >= 6 && str_slice(s, 0, 6) == "audio_" { return "oo_" + s; }
+    if n >= 8 && str_slice(s, 0, 8) == "channel_" { return "oo_" + s; }
+    if n >= 7 && str_slice(s, 0, 7) == "thread_" { return "oo_" + s; }
+    if s == "otp_supervise" { return "oo_otp_supervise"; }
+    return s;
+}
+
+pub fn ll_c_abi_sig(args: List[String], expect: String) -> String {
+    let na: Int = list_len(args);
+    let mut aks: String = "";
+    let mut i: Int = 0;
+    while i < na {
+        let a: String = list_get(args, i);
+        let k: String = ll_pk(a);
+        if aks != "" { aks = aks + ","; }
+        aks = aks + k;
+        i = i + 1;
+    }
+    let mut ret: String = "void";
+    if expect != "" && expect != "void" {
+        ret = expect;
+    }
+    return aks + ">" + ret;
+}
+
+fn ll_ext_sig_pqc(sym: String) -> String {
+    if sym == "crypto_mlkem768_keygen_internal" { return "str>str"; }
+    if sym == "crypto_mlkem768_encaps_internal" || sym == "crypto_mlkem768_enc_internal" { return "str,str>str"; }
+    if sym == "crypto_mlkem768_decaps_internal" || sym == "crypto_mlkem768_dec_internal" { return "str,str>str"; }
+    if sym == "crypto_mldsa65_keygen_internal" { return "str>str"; }
+    if sym == "crypto_mldsa65_sign_internal" { return "str,str,str>str"; }
+    if sym == "crypto_mldsa65_verify_internal" { return "str,str,str>str"; }
+    if sym == "crypto_pq_aead_seal_internal" { return "str,str,str>str"; }
+    if sym == "crypto_pq_aead_open_internal" { return "str,str,str>str"; }
+    if sym == "crypto_pq_hmac_sha256_internal" { return "str,str>str"; }
+    if sym == "crypto_pq_hmac_sha256_verify_internal" { return "str,str>i32"; }
+    if sym == "crypto_sha3_256_internal" { return "str>str"; }
+    if sym == "oo_shake256" || sym == "oo_shake128" { return "ptr,i64,ptr,i64>void"; }
+    if sym == "oo_sha3_256_bytes" || sym == "oo_sha3_512_bytes" { return "ptr,i64,ptr>void"; }
+    if sym == "crypto_aes_gcm_seal_internal" || sym == "crypto_aes_gcm_open_internal" { return "str,str,str,str>str"; }
+    return "";
+}
+
+fn ll_ext_sig_gpu_mem(sym: String) -> String {
+    if sym == "oo_gpu_init" || sym == "gpu_init" { return "i64>i32"; }
+    if sym == "oo_gpu_hip_available" || sym == "gpu_hip_available" { return ">i32"; }
+    if sym == "oo_gpu_probe_device" || sym == "gpu_probe_device" { return "i64,i32>ress"; }
+    if sym == "oo_gpu_buffer_alloc" || sym == "gpu_buffer_alloc" { return "i64,i64,i32>i64"; }
+    if sym == "oo_gpu_buffer_free" || sym == "gpu_buffer_free" { return "i64,i64>i32"; }
+    if sym == "oo_gpu_buffer_get_ptr" || sym == "gpu_buffer_get_ptr" { return "i64,i64>ptr"; }
+    if sym == "oo_gpu_buffer_get_size" || sym == "gpu_buffer_get_size" { return "i64,i64>i64"; }
+    if sym == "oo_gpu_pool_purge" || sym == "gpu_pool_purge" { return "i64>void"; }
+    if sym == "oo_gpu_copy_h2d" || sym == "oo_gpu_mem_copy_htod" || sym == "gpu_copy_h2d" { return "i64,i64,ptr,i64>i32"; }
+    if sym == "oo_gpu_copy_d2h" || sym == "oo_gpu_mem_copy_dtoh" || sym == "gpu_copy_d2h" { return "i64,ptr,i64,i64>i32"; }
+    if sym == "oo_gpu_copy_h2d_async" || sym == "gpu_copy_h2d_async" { return "i64,i64,ptr,i64,i64>i32"; }
+    if sym == "oo_gpu_copy_d2h_async" || sym == "gpu_copy_d2h_async" { return "i64,ptr,i64,i64,i64>i32"; }
+    return "";
+}
+
+fn ll_ext_sig_gpu_exec(sym: String) -> String {
+    if sym == "oo_gpu_stream_create" || sym == "gpu_stream_create" { return "i64,i32>i64"; }
+    if sym == "oo_gpu_stream_destroy" || sym == "gpu_stream_destroy" { return "i64,i64>i32"; }
+    if sym == "oo_gpu_stream_sync" || sym == "gpu_stream_sync" { return "i64,i64>i32"; }
+    if sym == "oo_gpu_event_create" || sym == "gpu_event_create" { return "i64,i32>i64"; }
+    if sym == "oo_gpu_event_destroy" || sym == "gpu_event_destroy" { return "i64,i64>i32"; }
+    if sym == "oo_gpu_event_record" || sym == "gpu_event_record" { return "i64,i64,i64>i32"; }
+    if sym == "oo_gpu_event_sync" || sym == "gpu_event_sync" { return "i64,i64>i32"; }
+    if sym == "oo_gpu_event_elapsed_ms" || sym == "gpu_event_elapsed_ms" { return "i64,i64,i64>f32"; }
+    if sym == "oo_gpu_sync" || sym == "gpu_sync" { return "i64>ress"; }
+    if sym == "oo_gpu_launch_kernel" || sym == "oo_gpu_launch" || sym == "gpu_launch" || sym == "gpu_launch_kernel" { return "i64,str,str,str,i32,i32,i32,i32,i32,i32,ptr,i32>ress"; }
+    if sym == "oo_gpu_hip_vec_add" || sym == "gpu_hip_vec_add" { return "i64,ptr,ptr,ptr,i32>ress"; }
+    if sym == "oo_gpu_hip_sgemm" || sym == "gpu_hip_sgemm" { return "i64,ptr,ptr,ptr,i32,i32,i32>ress"; }
+    if sym == "oo_gpu_hip_rmsnorm" || sym == "gpu_hip_rmsnorm" { return "i64,ptr,ptr,ptr,i32,i32>ress"; }
+    if sym == "oo_gpu_hip_attention" || sym == "gpu_hip_attention" { return "i64,ptr,ptr,ptr,ptr,i32,i32>ress"; }
+    if sym == "oo_gpu_hip_reduce_sum" || sym == "gpu_hip_reduce_sum" { return "i64,ptr,ptr,i32>ress"; }
+    if sym == "oo_gpu_hip_rope" || sym == "gpu_hip_rope" { return "i64,ptr,ptr,ptr,ptr,i32,i32>ress"; }
+    if sym == "oo_gpu_hip_stencil_3d" || sym == "gpu_hip_stencil_3d" { return "i64,ptr,ptr,i32,i32,i32,f32,f32>ress"; }
+    if sym == "oo_gpu_hip_try_launch" || sym == "gpu_hip_try_launch" { return "i64,str>ress"; }
+    return "";
+}
+
+fn ll_ext_sig_actor(sym: String) -> String {
+    if sym == "oo_actor_spawn" || sym == "actor_spawn" { return "i64,str>ress"; }
+    if sym == "oo_actor_send" || sym == "actor_send" { return "i64,i64,str>ress"; }
+    if sym == "oo_actor_recv" || sym == "actor_recv" { return "i64,i64>ress"; }
+    if sym == "oo_actor_destroy" || sym == "actor_destroy" { return "i64,i64>ress"; }
+    if sym == "oo_actor_restart" || sym == "actor_restart" { return "i64,i64>ress"; }
+    if sym == "oo_otp_supervise" || sym == "otp_supervise" { return "i64,i64>ress"; }
+    if sym == "oo_channel_new" || sym == "channel_new" { return "i64>ress"; }
+    if sym == "oo_channel_send" || sym == "channel_send" { return "i64,i64,str>ress"; }
+    if sym == "oo_channel_recv" || sym == "channel_recv" { return "i64,i64>ress"; }
+    if sym == "oo_channel_destroy" || sym == "channel_destroy" { return "i64,i64>ress"; }
+    if sym == "oo_thread_spawn" || sym == "thread_spawn" { return "i64,str>ress"; }
+    if sym == "oo_thread_join" || sym == "thread_join" { return "i64,i64>ress"; }
+    if sym == "oo_thread_join_s" || sym == "thread_join_s" { return "i64,str>ress"; }
+    return "";
+}
+
+fn ll_ext_sig_audio(sym: String) -> String {
+    if sym == "oo_audio_init" || sym == "oo_audio_capture_init" || sym == "audio_init" { return "i64>i32"; }
+    if sym == "oo_audio_capture" || sym == "oo_audio_capture_read" || sym == "audio_capture" { return "i64,ptr>ress"; }
+    if sym == "oo_audio_release" || sym == "audio_release" { return "ptr>void"; }
+    return "";
+}

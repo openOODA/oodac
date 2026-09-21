@@ -9,7 +9,11 @@
 //   2. List operations, allocator payloads, and ARC retain/release helpers.
 //   3. Capability grant intrinsics, filesystem, system, and TUI calls.
 
+import "ll_need_tab_ext.oo";
+
 pub fn ll_need_proto(sym: String) -> String {
+    let d_ext: String = ll_need_proto_ext(sym);
+    if d_ext != "" { return d_ext; }
     let d1: String = ll_need_proto_core(sym);
     if d1 != "" { return d1; }
     let d2: String = ll_need_proto_list(sym);
@@ -152,6 +156,11 @@ fn ll_need_proto_sys(sym: String) -> String {
     if sym == "oo_landlock_is_available" { return "declare i32 @oo_landlock_is_available() nounwind"; }
     if sym == "oo_read_stdin" { return "declare { ptr, i64 } @oo_read_stdin(i64) nounwind"; }
     if sym == "oo_read_stdin_chunk" { return "declare void @oo_read_stdin_chunk(ptr noalias sret(%OoResS) align 8, i64, i64) nounwind"; }
+    if sym == "oo_arena_create" { return "declare void @oo_arena_create(ptr noalias sret(%OoResS) align 8, i64, i64) nounwind"; }
+    if sym == "oo_arena_alloc" { return "declare void @oo_arena_alloc(ptr noalias sret(%OoResS) align 8, i64, i64, i64) nounwind"; }
+    if sym == "oo_arena_reset" { return "declare void @oo_arena_reset(ptr noalias sret(%OoResS) align 8, i64, i64) nounwind"; }
+    if sym == "oo_arena_pass_reset" { return "declare void @oo_arena_pass_reset(ptr noalias sret(%OoResS) align 8, i64, i64) nounwind"; }
+    if sym == "oo_arena_destroy" { return "declare void @oo_arena_destroy(ptr noalias sret(%OoResS) align 8, i64, i64) nounwind"; }
     return "";
 }
 

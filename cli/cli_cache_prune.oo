@@ -1,0 +1,120 @@
+// # LRU Disk Cache Eviction Policy
+//
+// Logline: Prune .ooda-cache/oodac_emit/ to enforce 256 MB disk ceiling with 200 MB hysteresis.
+//
+// Setup: Uses oo_fs_read_dir, oo_file_stamp, and oo_fs_remove_file with explicit OCap tokens.
+//
+// Beats:
+//   1. Inspect directory entries and filter for .ll emitted artifacts.
+//   2. Parse size and mtime timestamp from file stamp metadata.
+//   3. If total size exceeds max ceiling (256 MB), sort files by mtime ascending.
+//   4. Evict oldest cache entries until total size drops to target hysteresis (200 MB).
+//   5. Return total evicted byte count.
+
+import "lex/token_parse_int.oo";
+
+fn parse_stamp_size(stamp: String) -> Int {
+    let col: Int = str_index_of(stamp, ":");
+    if col <= 0 {
+        return 0;
+    }
+    return parse_int(str_slice(stamp, 0, col));
+}
+
+fn parse_stamp_mtime(stamp: String) -> Int {
+    let col1: Int = str_index_of(stamp, ":");
+    if col1 < 0 {
+        return 0;
+    }
+    let rem: String = str_slice(stamp, col1 + 1, chars_len(stamp));
+    let col2: Int = str_index_of(rem, ":");
+    if col2 < 0 {
+        return parse_int(rem) * 1000;
+    }
+    let sec_str: String = str_slice(rem, 0, col2);
+    let nsec_str: String = str_slice(rem, col2 + 1, chars_len(rem));
+    let sec_val: Int = parse_int(sec_str);
+    let nsec_val: Int = parse_int(nsec_str);
+    return sec_val * 1000 + (nsec_val / 1000000);
+}
+
+fn sort_indices_by_mtime(mtimes: List[Int]) -> List[Int] {
+    let n: Int = list_len(mtimes);
+    let mut idxs: List[Int] = list_new();
+    let mut i: Int = 0;
+    while i < n {
+        idxs = list_push(idxs, i);
+        i = i + 1;
+    }
+    i = 1;
+    while i < n {
+        let cur_idx: Int = list_get(idxs, i);
+        let cur_mtime: Int = list_get(mtimes, cur_idx);
+        let mut j: Int = i;
+        while j > 0 && list_get(mtimes, list_get(idxs, j - 1)) > cur_mtime {
+            idxs = list_set(idxs, j, list_get(idxs, j - 1));
+            j = j - 1;
+        }
+        idxs = list_set(idxs, j, cur_idx);
+        i = i + 1;
+    }
+    return idxs;
+}
+
+pub fn lru_cache_prune(fs_r: &FsReadCap, fs_w: &FsWriteCap, cache_dir: String, max_bytes: Int, target_bytes: Int) -> Int {
+    if !path_exists(fs_r, cache_dir) {
+        return 0;
+    }
+    let entries: List[String] = oo_fs_read_dir(fs_r, cache_dir);
+    let n: Int = list_len(entries);
+    if n == 0 {
+        return 0;
+    }
+    let mut total_size: Int = 0;
+    let mut files_mtime: List[Int] = list_new();
+    let mut files_size: List[Int] = list_new();
+    let mut files_path: List[String] = list_new();
+
+    let mut i: Int = 0;
+    while i < n {
+        let name: String = list_get(entries, i);
+        if str_ends_with(name, ".ll") {
+            let fpath: String = cache_dir + "/" + name;
+            let stamp: String = oo_file_stamp(fs_r, fpath);
+            let fsize: Int = parse_stamp_size(stamp);
+            let fmtime: Int = parse_stamp_mtime(stamp);
+            total_size = total_size + fsize;
+            files_mtime = list_push(files_mtime, fmtime);
+            files_size = list_push(files_size, fsize);
+            files_path = list_push(files_path, fpath);
+        }
+        i = i + 1;
+    }
+
+    if total_size <= max_bytes {
+        return 0;
+    }
+
+    let sorted_indices: List[Int] = sort_indices_by_mtime(files_mtime);
+    let mut cur_size: Int = total_size;
+    let mut evicted_bytes: Int = 0;
+    let n_files: Int = list_len(sorted_indices);
+    let mut j: Int = 0;
+    while j < n_files && cur_size > target_bytes {
+        let idx: Int = list_get(sorted_indices, j);
+        let target_file: String = list_get(files_path, idx);
+        let item_size: Int = list_get(files_size, idx);
+        let res: Result[Void, String] = oo_fs_remove_file(fs_w, target_file);
+        if res.is_ok() {
+            cur_size = cur_size - item_size;
+            evicted_bytes = evicted_bytes + item_size;
+        }
+        j = j + 1;
+    }
+    return evicted_bytes;
+}
+
+pub fn prune_emit_cache(fs_r: &FsReadCap, fs_w: &FsWriteCap, cache_dir: String) -> Int {
+    // 256 MB ceiling, 200 MB target hysteresis
+    return lru_cache_prune(fs_r, fs_w, cache_dir, 268435456, 209715200);
+}

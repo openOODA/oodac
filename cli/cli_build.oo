@@ -98,23 +98,7 @@ fn cache_dir(env: &EnvCap) -> String {
     return ".ooda-cache/ooda-tmp";
 }
 
-fn oodar_lib(fs_r: &FsReadCap, od: String) -> String {
-    if path_exists(fs_r, od + "/liboodar.a") { return od + "/liboodar.a"; }
-    if path_exists(fs_r, od + "/lib/liboodar.a") { return od + "/lib/liboodar.a"; }
-    if path_exists(fs_r, od + "/scripts/lib/liboodar.a") { return od + "/scripts/lib/liboodar.a"; }
-    if path_exists(fs_r, "openOODA/dist/liboodar.a") { return "openOODA/dist/liboodar.a"; }
-    if path_exists(fs_r, "oodar/liboodar.a") { return "oodar/liboodar.a"; }
-    if path_exists(fs_r, "oodar/scripts/lib/liboodar.a") { return "oodar/scripts/lib/liboodar.a"; }
-    if path_exists(fs_r, "../oodar/liboodar.a") { return "../oodar/liboodar.a"; }
-    if path_exists(fs_r, od + "/../lib/liboodar.a") { return od + "/../lib/liboodar.a"; }
-    if path_exists(fs_r, "oodar/lib/liboodar.a") { return "oodar/lib/liboodar.a"; }
-    if path_exists(fs_r, "../oodar/lib/liboodar.a") { return "../oodar/lib/liboodar.a"; }
-    println("ERR\tbuild\tliboodar.a missing");
-    process_exit(1);
-    return "";
-}
-
-pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env: &EnvCap, path: String, out_arg: String, backend: String, is_shared: Bool) {
+pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env: &EnvCap, ar: &ArenaCap, path: String, out_arg: String, backend: String, is_shared: Bool) {
     let mut out: String = path + ".bin";
     if is_shared { out = path + ".so"; }
     if out_arg != "" { out = out_arg; }
@@ -150,7 +134,7 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
     }
     let is_multi: Bool = path_is_compiler_main(path);
     if backend != "elf" && is_multi {
-        build_multi(fs_r, fs_w, sys, env, host, od, tmp_dir, path, out, is_shared);
+        build_multi(fs_r, fs_w, sys, env, ar, host, od, tmp_dir, path, out, is_shared);
         return;
     }
     let ck: Result[String, String] = sys_exec(sys, host, "check", path);
@@ -191,7 +175,9 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
             println("ERR\tbuild\twrite LLVM IR failed");
             process_exit(1);
         }
-        let lib_a: String = oodar_lib(fs_r, od);
+        let lib_a: String = oodar_lib_core(fs_r, od);
+        let exts: List[String] = oodar_resolve_exts(fs_r, od, em.val);
+        let rsp_path: String = oodar_link_rsp(fs_w, tmp_dir, tmp_ll, exts);
         let cm: Int = clang_major(sys);
         if cm < 15 {
             println("ERR\tbuild\tclang >= 15 required for LLVM IR (opaque pointers); got major " + cm.to_string() + " via PATH");
@@ -199,10 +185,11 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
         }
         let mut r: Result[String, String] = Err("");
         if is_shared {
-            r = sys_exec(sys, "clang", "--no-default-config", "-shared", "-fPIC", "-DOO_SHARED=1", "-fvisibility=hidden", "-Wl,--exclude-libs,ALL", "-O2", "-g0", "-fno-ident", "-Wno-override-module", "-I" + od, hr, tmp_ll, lib_a, "-frandom-seed=0", "-Wl,--build-id=none", "-Wl,--strip-debug", "-lm", "-ldl", "-lpthread", "-o", out);
+            r = sys_exec(sys, "clang", "--no-default-config", "-shared", "-fPIC", "-DOO_SHARED=1", "-fvisibility=hidden", "-Wl,--exclude-libs,ALL", "-Os", "-g0", "-fno-ident", "-ffunction-sections", "-fdata-sections", "-fno-asynchronous-unwind-tables", "-fno-unwind-tables", "-Wno-override-module", "-I" + od, hr, "@" + rsp_path, lib_a, "-frandom-seed=0", "-Wl,--build-id=none", "-Wl,--gc-sections", "-Wl,-z,noseparate-code", "-Wl,--strip-all", "-lm", "-ldl", "-lpthread", "-o", out);
         } else {
-            r = sys_exec(sys, "clang", "--no-default-config", "-O2", "-g0", "-fno-ident", "-Wno-override-module", "-I" + od, hr, tmp_ll, lib_a, "-frandom-seed=0", "-Wl,--build-id=none", "-Wl,--strip-debug", "-lm", "-ldl", "-lpthread", "-o", out);
+            r = sys_exec(sys, "clang", "--no-default-config", "-Os", "-g0", "-fno-ident", "-ffunction-sections", "-fdata-sections", "-fno-asynchronous-unwind-tables", "-fno-unwind-tables", "-Wno-override-module", "-I" + od, hr, "@" + rsp_path, lib_a, "-frandom-seed=0", "-Wl,--build-id=none", "-Wl,--gc-sections", "-Wl,-z,noseparate-code", "-Wl,--strip-all", "-lm", "-ldl", "-lpthread", "-o", out);
         }
+        let _: Result[String, String] = sys_exec(sys, "/usr/bin/rm", "-f", rsp_path);
         if !r.is_ok() {
             println("ERR\tbuild\tclang llvm failed");
             let gtxt: String = match r { Ok(s) => s, Err(e) => e };

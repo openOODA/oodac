@@ -16,6 +16,17 @@
 import "check_cache.oo";
 import "check_artifact.oo";
 import "ast/load_import.oo";
+import "lex/token_parse_int.oo";
+import "check_scan.oo";
+
+fn parse_arena_id(res: Result[String, String]) -> Int {
+    if res.is_err() { return 0 - 1; }
+    let s: String = match res { Ok(v) => v, Err(_) => "" };
+    if chars_len(s) >= 7 && str_slice(s, 0, 6) == "arena:" {
+        return parse_int(str_slice(s, 6, chars_len(s)));
+    }
+    return parse_int(s);
+}
 
 
 fn sibling_anchor(fs_r: &FsReadCap, path: String) -> String {
@@ -99,13 +110,23 @@ fn count_lines(s: String) -> Int {
     return c;
 }
 
-fn check_modules(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, paths: List[String], extra_names: String) {
+fn check_one_module(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, pth2: String, is_last: Bool, binds: String, arity_all: String) {
+    let rr2: Result[String, String] = read_file(fs_r, pth2);
+    let raw2: String = match rr2 { Ok(s) => s, Err(_) => "" };
+    let mut body: String = str_slice(raw2, 0, chars_len(raw2));
+    if !is_last { body = strip_import_lines(raw2); }
+    if chars_len(body) > 0 {
+        let toks: List[String] = run_check_core_binds_at(sys, body, binds, pth2, arity_all);
+        let _: String = artifact_write_toks(fs_w, sys, pth2, raw2, toks);
+    }
+}
+
+fn check_modules(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, ar: &ArenaCap, paths: List[String], extra_names: String) {
     let np = list_len(paths);
     let mut names = extra_names;
     // E_CAP: graph-wide fn-arity table so cross-module calls cannot dodge
     // the arity check (capless net calls used to silent-OK via imports).
     let mut arity_all: String = "\t";
-    let mut raws: List[String] = list_new();
     let mut i = 0;
     while i < np {
         let pth: String = list_get(paths, i);
@@ -121,30 +142,32 @@ fn check_modules(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, paths: L
         }
         names = names + scan_fn_names(raw);
         arity_all = arity_all + scan_import_arity(raw);
-        raws = list_push(raws, raw);
         i = i + 1;
     }
     let binds: String = names_to_depth0_binds(names);
+    let ar_res: Result[String, String] = arena_create(ar, 65536);
+    let ar_id: Int = parse_arena_id(ar_res);
     i = 0;
     while i < np {
         let pth2: String = list_get(paths, i);
-        let raw2: String = list_get(raws, i);
-        let mut body: String = str_slice(raw2, 0, chars_len(raw2));
-        if i + 1 < np { body = strip_import_lines(raw2); }
-        if chars_len(body) > 0 {
-            let toks: List[String] = run_check_core_binds_at(sys, body, binds, pth2, arity_all);
-            let _: String = artifact_write_toks(fs_w, sys, pth2, raw2, toks);
+        check_one_module(fs_r, fs_w, sys, pth2, i + 1 == np, binds, arity_all);
+        if ar_id >= 0 {
+            let _: Result[String, String] = arena_reset(ar, ar_id);
         }
         i = i + 1;
     }
+    if ar_id >= 0 {
+        let _: Result[String, String] = arena_destroy(ar, ar_id);
+    }
 }
 
-pub fn run_check_path(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, path: String) {
+pub fn run_check_path(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, ar: &ArenaCap, path: String) {
     check_cache_ensure(fs_r, sys);
     let paths: List[String] = collect_module_paths(fs_r, path);
     let extra: String = anchor_extra_names(fs_r, path);
     let roll: String = check_paths_listing(fs_r, paths);
-    check_modules(fs_r, fs_w, sys, paths, extra);
+    check_modules(fs_r, fs_w, sys, ar, paths, extra);
     persist_graph(fs_r, fs_w, sys, path, roll);
     println("OK");
 }
+

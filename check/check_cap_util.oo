@@ -133,7 +133,7 @@ pub fn is_sealed_rand(name: String) -> Bool {
 // OPEN-84: arena_* prefer &ArenaCap; no legacy supersede — &AllocCap does NOT satisfy arena_*.
 // Callers must use the granular preferred kind: &ArenaCap for arena_*, &AllocCap for alloc_bytes/free_bytes/malloc/free.
 pub fn is_sealed_arena(name: String) -> Bool {
-    return name == "oo_arena_create" || name == "arena_create" || name == "oo_arena_alloc" || name == "arena_alloc" || name == "oo_arena_reset" || name == "arena_reset";
+    return name == "oo_arena_create" || name == "arena_create" || name == "oo_arena_alloc" || name == "arena_alloc" || name == "oo_arena_reset" || name == "arena_reset" || name == "oo_arena_destroy" || name == "arena_destroy";
 }
 
 // M17: explicit alloc helpers only (AllocCap) — not list_new / ambient CHS

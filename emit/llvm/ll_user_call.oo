@@ -18,6 +18,7 @@ import "types/types_core.oo";
 import "ll_ir.oo";
 import "ll_range.oo";
 import "ll_c_abi.oo";
+import "ll_builtin_ext.oo";
 
 pub fn ll_user_call(name: String, sig: String, args: List[String], ssa0: Int, ir: &mut IrBuf) -> String {
     let gt: Int = str_index_of(sig, ">");
@@ -123,7 +124,8 @@ pub fn ll_call_at(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String, 
         process_exit(1);
     }
     p = p + 1;
-    let sig0: String = type_env_get(env, "__fn__" + nm);
+    let mut sig0: String = type_env_get(env, "__fn__" + nm);
+    if sig0 == "" { sig0 = ll_builtin_ext_sig(nm); }
     let mut args: List[String] = list_new();
     let mut ssa: Int = ssa0;
     let mut ai: Int = 0;
@@ -148,12 +150,15 @@ pub fn ll_call_at(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String, 
     if b != "" {
         return ll_pack(p, ll_pssa(b), ll_pk(b), ll_pptr(b));
     }
-    let sig: String = type_env_get(env, "__fn__" + nm);
+    let mut sig: String = type_env_get(env, "__fn__" + nm);
+    if sig == "" { sig = ll_builtin_ext_sig(nm); }
+    if sig == "" && ll_is_c_abi_call(nm) { sig = ll_c_abi_sig(args, expect); }
     if sig == "" {
         println("ERR\tllvm\tunknown call " + nm);
         process_exit(1);
     }
     let mut gnm: String = type_env_get(env, "__sym__" + nm);
+    if gnm == "" { gnm = ll_builtin_ext_sym(nm); }
     if gnm == "" { gnm = nm; }
     let u: String = ll_user_call(gnm, sig, args, ssa, ir);
     return ll_pack(p, ll_pssa(u), ll_pk(u), ll_pptr(u));

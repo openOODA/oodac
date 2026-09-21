@@ -126,8 +126,8 @@ pub fn check_run_src(sys: &ProcessCap, src: String) -> Int {
     return run_check_from_src(sys, src);
 }
 
-pub fn check_run_modules(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, entry: String) -> Int {
-    run_check_path(fs_r, fs_w, sys, entry);
+pub fn check_run_modules(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, ar: &ArenaCap, entry: String) -> Int {
+    run_check_path(fs_r, fs_w, sys, ar, entry);
     return 0;
 }
 

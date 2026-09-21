@@ -14,6 +14,17 @@
 import "lex/token_parse_int.oo";
 import "check/check_collect.oo";
 import "cli_oodar.oo";
+import "cli_cache_prune.oo";
+
+fn parse_arena_id(res: Result[String, String]) -> Int {
+    if res.is_err() { return 0 - 1; }
+    let s: String = match res { Ok(v) => v, Err(_) => "" };
+    if chars_len(s) >= 7 && str_slice(s, 0, 6) == "arena:" {
+        return parse_int(str_slice(s, 6, chars_len(s)));
+    }
+    return parse_int(s);
+}
+
 
 fn is_anchor_module(p: String) -> Bool {
     let n: Int = chars_len(p);
@@ -66,27 +77,6 @@ fn is_valid_ll(src: String) -> Bool {
     return true;
 }
 
-fn rsp_quote(p: String) -> String {
-    if str_index_of(p, " ") >= 0 {
-        return "\"" + p + "\"";
-    }
-    return p;
-}
-
-fn oodar_lib_multi(fs_r: &FsReadCap, od: String) -> String {
-    if path_exists(fs_r, od + "/liboodar.a") { return od + "/liboodar.a"; }
-    if path_exists(fs_r, od + "/lib/liboodar.a") { return od + "/lib/liboodar.a"; }
-    if path_exists(fs_r, od + "/scripts/lib/liboodar.a") { return od + "/scripts/lib/liboodar.a"; }
-    if path_exists(fs_r, "openOODA/dist/liboodar.a") { return "openOODA/dist/liboodar.a"; }
-    if path_exists(fs_r, "oodar/liboodar.a") { return "oodar/liboodar.a"; }
-    if path_exists(fs_r, "oodar/scripts/lib/liboodar.a") { return "oodar/scripts/lib/liboodar.a"; }
-    if path_exists(fs_r, "../oodar/liboodar.a") { return "../oodar/liboodar.a"; }
-    if path_exists(fs_r, od + "/../lib/liboodar.a") { return od + "/../lib/liboodar.a"; }
-    if path_exists(fs_r, "oodar/lib/liboodar.a") { return "oodar/lib/liboodar.a"; }
-    if path_exists(fs_r, "../oodar/lib/liboodar.a") { return "../oodar/lib/liboodar.a"; }
-    return "oodar/liboodar.a";
-}
-
 fn clang_major(sys: &ProcessCap) -> Int {
     let vr: Result[String, String] = sys_exec(sys, "clang", "--no-default-config", "--version");
     if vr.is_err() {
@@ -100,7 +90,7 @@ fn clang_major(sys: &ProcessCap) -> Int {
     return parse_int(str_slice(v, at + 14, chars_len(v)));
 }
 
-pub fn build_multi(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env: &EnvCap, host: String, od: String, tmp_dir: String, path: String, out: String, is_shared: Bool) {
+pub fn build_multi(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env: &EnvCap, ar: &ArenaCap, host: String, od: String, tmp_dir: String, path: String, out: String, is_shared: Bool) {
     let cm: Int = clang_major(sys);
     if cm < 15 {
         println("ERR\tbuild\tclang >= 15 required for LLVM IR; got major " + cm.to_string());
@@ -121,7 +111,11 @@ pub fn build_multi(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env: &
 
     let hr: String = write_host_rt(fs_w, tmp_dir);
 
+    let ar_res: Result[String, String] = arena_create(ar, 65536);
+    let ar_id: Int = parse_arena_id(ar_res);
+
     let mut objs: List[String] = list_new();
+    let mut ext_libs: List[String] = list_new();
     let npaths: Int = list_len(paths);
     let mut i: Int = 0;
     while i < npaths {
@@ -137,12 +131,15 @@ pub fn build_multi(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env: &
             let mo: String = tmp_dir + "/" + safe_rel_name(p) + ".o";
 
             let mut have_ll: Bool = false;
+            let mut ll_text: String = "";
             if src_hash != "" && path_exists(fs_r, cache_ll) {
                 let cll_r: Result[String, String] = read_file(fs_r, cache_ll);
                 if cll_r.is_ok() && is_valid_ll(cll_r.val) {
                     let wr_ml: Result[Void, String] = write_file(fs_w, ml, cll_r.val);
                     if wr_ml.is_ok() {
+                        let _: Result[Void, String] = write_file(fs_w, cache_ll, cll_r.val);
                         have_ll = true;
+                        ll_text = cll_r.val;
                     }
                 }
             }
@@ -163,8 +160,12 @@ pub fn build_multi(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env: &
                 if src_hash != "" {
                     let _: Result[Void, String] = write_file(fs_w, cache_ll, emsg);
                 }
+                ll_text = emsg;
             }
-            let cr: Result[String, String] = sys_exec(sys, "clang", "--no-default-config", "-c", "-O2", "-g0", "-fno-ident", "-Wno-override-module", "-frandom-seed=0", ml, "-o", mo);
+            if list_len(ext_libs) < 4 {
+                ext_libs = oodar_merge_exts(ext_libs, oodar_resolve_exts(fs_r, od, ll_text));
+            }
+            let cr: Result[String, String] = sys_exec(sys, "clang", "--no-default-config", "-c", "-Os", "-g0", "-fno-ident", "-ffunction-sections", "-fdata-sections", "-fno-asynchronous-unwind-tables", "-fno-unwind-tables", "-Wno-override-module", "-frandom-seed=0", ml, "-o", mo);
             if !cr.is_ok() {
                 println("ERR\tbuild\tclang -c failed: " + p);
                 let ctxt: String = match cr { Ok(s) => s, Err(e) => e };
@@ -172,8 +173,14 @@ pub fn build_multi(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env: &
                 process_exit(1);
             }
             objs = list_push(objs, mo);
+            if ar_id >= 0 {
+                let _: Result[String, String] = arena_reset(ar, ar_id);
+            }
         }
         i = i + 1;
+    }
+    if ar_id >= 0 {
+        let _: Result[String, String] = arena_destroy(ar, ar_id);
     }
 
     let mut rsp_content: String = "";
@@ -183,6 +190,12 @@ pub fn build_multi(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env: &
         rsp_content = rsp_content + rsp_quote(list_get(objs, j)) + "\n";
         j = j + 1;
     }
+    let nexts: Int = list_len(ext_libs);
+    let mut k: Int = 0;
+    while k < nexts {
+        rsp_content = rsp_content + rsp_quote(list_get(ext_libs, k)) + "\n";
+        k = k + 1;
+    }
     let rsp_path: String = tmp_dir + "/objs.rsp";
     let wr_rsp: Result[Void, String] = write_file(fs_w, rsp_path, rsp_content);
     if wr_rsp.is_err() {
@@ -190,12 +203,12 @@ pub fn build_multi(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env: &
         process_exit(1);
     }
 
-    let lib_a: String = oodar_lib_multi(fs_r, od);
+    let lib_a: String = oodar_lib_core(fs_r, od);
     let mut lr: Result[String, String] = Err("");
     if is_shared {
-        lr = sys_exec(sys, "clang", "--no-default-config", "-shared", "-fPIC", "-DOO_SHARED=1", "-fvisibility=hidden", "-Wl,--exclude-libs,ALL", "-O2", "-g0", "-fno-ident", "-Wno-override-module", "-I" + od, hr, "@" + rsp_path, lib_a, "-frandom-seed=0", "-Wl,--build-id=none", "-Wl,--strip-debug", "-lm", "-ldl", "-lpthread", "-o", out);
+        lr = sys_exec(sys, "clang", "--no-default-config", "-shared", "-fPIC", "-DOO_SHARED=1", "-fvisibility=hidden", "-Wl,--exclude-libs,ALL", "-Os", "-g0", "-fno-ident", "-ffunction-sections", "-fdata-sections", "-fno-asynchronous-unwind-tables", "-fno-unwind-tables", "-Wno-override-module", "-I" + od, hr, "@" + rsp_path, lib_a, "-frandom-seed=0", "-Wl,--build-id=none", "-Wl,--gc-sections", "-Wl,-z,noseparate-code", "-Wl,--strip-all", "-lm", "-ldl", "-lpthread", "-o", out);
     } else {
-        lr = sys_exec(sys, "clang", "--no-default-config", "-O2", "-g0", "-fno-ident", "-Wno-override-module", "-I" + od, hr, "@" + rsp_path, lib_a, "-frandom-seed=0", "-Wl,--build-id=none", "-Wl,--strip-debug", "-lm", "-ldl", "-lpthread", "-o", out);
+        lr = sys_exec(sys, "clang", "--no-default-config", "-Os", "-g0", "-fno-ident", "-ffunction-sections", "-fdata-sections", "-fno-asynchronous-unwind-tables", "-fno-unwind-tables", "-Wno-override-module", "-I" + od, hr, "@" + rsp_path, lib_a, "-frandom-seed=0", "-Wl,--build-id=none", "-Wl,--gc-sections", "-Wl,-z,noseparate-code", "-Wl,--strip-all", "-lm", "-ldl", "-lpthread", "-o", out);
     }
     let _: Result[String, String] = sys_exec(sys, "/usr/bin/rm", "-f", rsp_path);
     if !lr.is_ok() {
@@ -209,6 +222,8 @@ pub fn build_multi(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env: &
         println("ERR\tbuild\tchmod failed");
         process_exit(1);
     }
+    let _: Int = prune_emit_cache(fs_r, fs_w, ec);
     println("OK_PURE_NATIVE");
     println("OK\tbuild\t" + out);
 }
+

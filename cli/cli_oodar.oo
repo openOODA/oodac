@@ -1,12 +1,15 @@
-// # Resolve oodar and write the host runtime TU
+// # Resolve oodar runtime and auto-link static archives
 //
-// Logline: Find oodar/oodar.c. Write emit-tmp plus jail ctor next to generated C.
+// Logline: Find oodar root, resolve liboodar-core.a, auto-link extension tiers.
 //
 // Setup: Workspace has oodar/ beside oodac/. Host path is OODA_COMPILER.
 //
 // Beats:
 //   1. oodar_root fails closed when oodar.c is missing.
 //   2. write_host_rt writes oodac_host_rt.c under the jail tmp dir.
+//   3. oodar_lib_core locates liboodar-core.a or fails closed.
+//   4. oodar_resolve_exts scans IR for symbol prefixes to auto-link extensions.
+//   5. oodar_link_rsp writes linker response files for clang invocations.
 
 import "cli_host_rt.oo";
 
@@ -44,4 +47,102 @@ pub fn write_host_rt(fs_w: &FsWriteCap, tmp_dir: String) -> String {
         process_exit(1);
     }
     return dest;
+}
+
+pub fn rsp_quote(p: String) -> String {
+    if str_index_of(p, " ") >= 0 {
+        return "\"" + p + "\"";
+    }
+    return p;
+}
+
+fn list_has_str(l: List[String], item: String) -> Bool {
+    let n: Int = list_len(l);
+    let mut i: Int = 0;
+    while i < n {
+        if list_get(l, i) == item { return true; }
+        i = i + 1;
+    }
+    return false;
+}
+
+pub fn oodar_lib_core(fs_r: &FsReadCap, od: String) -> String {
+    if path_exists(fs_r, od + "/scripts/lib/liboodar-core.a") { return od + "/scripts/lib/liboodar-core.a"; }
+    if path_exists(fs_r, od + "/lib/liboodar-core.a") { return od + "/lib/liboodar-core.a"; }
+    if path_exists(fs_r, od + "/liboodar-core.a") { return od + "/liboodar-core.a"; }
+    if path_exists(fs_r, "oodar/scripts/lib/liboodar-core.a") { return "oodar/scripts/lib/liboodar-core.a"; }
+    if path_exists(fs_r, "oodar/lib/liboodar-core.a") { return "oodar/lib/liboodar-core.a"; }
+    if path_exists(fs_r, "../oodar/scripts/lib/liboodar-core.a") { return "../oodar/scripts/lib/liboodar-core.a"; }
+    println("ERR\tbuild\tliboodar-core.a missing");
+    process_exit(1);
+    return "";
+}
+
+fn ext_archive_path(fs_r: &FsReadCap, od: String, leaf: String) -> String {
+    let p1: String = od + "/scripts/lib/" + leaf;
+    if path_exists(fs_r, p1) { return p1; }
+    let p2: String = od + "/lib/" + leaf;
+    if path_exists(fs_r, p2) { return p2; }
+    let p3: String = od + "/" + leaf;
+    if path_exists(fs_r, p3) { return p3; }
+    let p4: String = "oodar/scripts/lib/" + leaf;
+    if path_exists(fs_r, p4) { return p4; }
+    let p5: String = "../oodar/scripts/lib/" + leaf;
+    if path_exists(fs_r, p5) { return p5; }
+    return p1;
+}
+
+pub fn oodar_resolve_exts(fs_r: &FsReadCap, od: String, ir: String) -> List[String] {
+    let mut exts: List[String] = list_new();
+    if str_contains(ir, "@crypto_ml") || str_contains(ir, "@crypto_pq") || str_contains(ir, "@oo_shake") || str_contains(ir, "@oo_sha3") || str_contains(ir, "@crypto_aes_gcm") {
+        let p: String = ext_archive_path(fs_r, od, "liboodar-pqc.a");
+        if path_exists(fs_r, p) { exts = list_push(exts, p); }
+    }
+    if str_contains(ir, "@oo_gpu_") {
+        let p: String = ext_archive_path(fs_r, od, "liboodar-gpu.a");
+        if path_exists(fs_r, p) { exts = list_push(exts, p); }
+    }
+    if str_contains(ir, "@oo_actor_") || str_contains(ir, "@oo_otp_") || str_contains(ir, "@oo_channel_") || str_contains(ir, "@oo_thread_") {
+        let p: String = ext_archive_path(fs_r, od, "liboodar-actor.a");
+        if path_exists(fs_r, p) { exts = list_push(exts, p); }
+    }
+    if str_contains(ir, "@oo_audio_") {
+        let p: String = ext_archive_path(fs_r, od, "liboodar-audio.a");
+        if path_exists(fs_r, p) { exts = list_push(exts, p); }
+    }
+    return exts;
+}
+
+pub fn oodar_merge_exts(cur: List[String], newly: List[String]) -> List[String] {
+    let mut out: List[String] = cur;
+    let n: Int = list_len(newly);
+    let mut i: Int = 0;
+    while i < n {
+        let item: String = list_get(newly, i);
+        if !list_has_str(out, item) {
+            out = list_push(out, item);
+        }
+        i = i + 1;
+    }
+    return out;
+}
+
+pub fn oodar_link_rsp(fs_w: &FsWriteCap, tmp_dir: String, initial_path: String, exts: List[String]) -> String {
+    let mut s: String = "";
+    if initial_path != "" {
+        s = s + rsp_quote(initial_path) + "\n";
+    }
+    let n: Int = list_len(exts);
+    let mut i: Int = 0;
+    while i < n {
+        s = s + rsp_quote(list_get(exts, i)) + "\n";
+        i = i + 1;
+    }
+    let rsp_path: String = tmp_dir + "/link.rsp";
+    let wr: Result[Void, String] = write_file(fs_w, rsp_path, s);
+    if wr.is_err() {
+        println("ERR\tbuild\twrite link.rsp failed");
+        process_exit(1);
+    }
+    return rsp_path;
 }

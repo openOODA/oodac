@@ -17,6 +17,16 @@ import "emit/llvm/anchor.oo";
 import "emit/llvm/ll_emit.oo";
 import "emit/llvm/ll_struct.oo";
 import "emit/llvm/ll_tok.oo";
+import "lex/token_parse_int.oo";
+
+fn parse_arena_id(res: Result[String, String]) -> Int {
+    if res.is_err() { return 0 - 1; }
+    let s: String = match res { Ok(v) => v, Err(_) => "" };
+    if chars_len(s) >= 7 && str_slice(s, 0, 6) == "arena:" {
+        return parse_int(str_slice(s, 6, chars_len(s)));
+    }
+    return parse_int(s);
+}
 
 fn ll_concat(env: &EnvCap) -> Bool {
     let r: Result[String, String] = env_get(env, "OODA_EMIT_CONCAT");
@@ -92,7 +102,7 @@ fn ll_toks_file(fs: &FsReadCap, path: String, src: String) -> List[String] {
     return art.toks;
 }
 
-pub fn run_emit_llvm(fs: &FsReadCap, fs_w: &FsWriteCap, env: &EnvCap, path: String, concat: Bool) {
+pub fn run_emit_llvm(fs: &FsReadCap, fs_w: &FsWriteCap, env: &EnvCap, ar: &ArenaCap, path: String, concat: Bool) {
     if !concat && !ll_concat(env) {
         let pr: Result[String, String] = read_file(fs, path);
         if pr.is_err() {
@@ -110,6 +120,8 @@ pub fn run_emit_llvm(fs: &FsReadCap, fs_w: &FsWriteCap, env: &EnvCap, path: Stri
             let er: Result[String, String] = read_file(fs, cp);
             extra = match er { Ok(s) => s, Err(_) => "" };
         } else {
+            let ar_res: Result[String, String] = arena_create(ar, 65536);
+            let ar_id: Int = parse_arena_id(ar_res);
             let paths: List[String] = collect_module_paths(fs, root);
             let mut st_all: String = "";
             let mut i: Int = 0;
@@ -128,8 +140,14 @@ pub fn run_emit_llvm(fs: &FsReadCap, fs_w: &FsWriteCap, env: &EnvCap, path: Stri
                             extra = extra + ll_collect_pub_sigs(itoks, ll_struct_tab_of(st_all));
                         }
                     }
+                    if ar_id >= 0 {
+                        let _: Result[String, String] = arena_reset(ar, ar_id);
+                    }
                 }
                 i = i + 1;
+            }
+            if ar_id >= 0 {
+                let _: Result[String, String] = arena_destroy(ar, ar_id);
             }
             extra = st_all + extra;
             if cp != "" {

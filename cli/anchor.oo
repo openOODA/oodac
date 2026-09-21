@@ -17,6 +17,7 @@ import "cli_build.oo";
 import "cli_emit.oo";
 import "cli_emit_llvm.oo";
 import "cli_parse.oo";
+import "cli_cache_prune.oo";
 
 // ──▓▓ Public CLI API ──▓▓──
 // parse_cli_argv, run_build_san, and run_emit_c_family are pub on the imports.
@@ -27,4 +28,8 @@ pub fn cli_parse_args(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, arg
 
 pub fn cli_run_emit_c(fs: &FsReadCap, env: &EnvCap, cmd: String, path: String, is_plain: Bool) {
     run_emit_c_family(fs, env, cmd, path, is_plain, false, "");
+}
+
+pub fn cli_lru_prune(fs_r: &FsReadCap, fs_w: &FsWriteCap, cache_dir: String, max_b: Int, target_b: Int) -> Int {
+    return lru_cache_prune(fs_r, fs_w, cache_dir, max_b, target_b);
 }
