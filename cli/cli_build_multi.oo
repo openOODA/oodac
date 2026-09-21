@@ -74,19 +74,17 @@ fn rsp_quote(p: String) -> String {
 }
 
 fn oodar_lib_multi(fs_r: &FsReadCap, od: String) -> String {
-    if path_exists(fs_r, od + "/lib/liboodar.a") {
-        return od + "/lib/liboodar.a";
-    }
-    if path_exists(fs_r, od + "/../lib/liboodar.a") {
-        return od + "/../lib/liboodar.a";
-    }
-    if path_exists(fs_r, "oodar/lib/liboodar.a") {
-        return "oodar/lib/liboodar.a";
-    }
-    if path_exists(fs_r, "../oodar/lib/liboodar.a") {
-        return "../oodar/lib/liboodar.a";
-    }
-    return "oodar/lib/liboodar.a";
+    if path_exists(fs_r, od + "/liboodar.a") { return od + "/liboodar.a"; }
+    if path_exists(fs_r, od + "/lib/liboodar.a") { return od + "/lib/liboodar.a"; }
+    if path_exists(fs_r, od + "/scripts/lib/liboodar.a") { return od + "/scripts/lib/liboodar.a"; }
+    if path_exists(fs_r, "openOODA/dist/liboodar.a") { return "openOODA/dist/liboodar.a"; }
+    if path_exists(fs_r, "oodar/liboodar.a") { return "oodar/liboodar.a"; }
+    if path_exists(fs_r, "oodar/scripts/lib/liboodar.a") { return "oodar/scripts/lib/liboodar.a"; }
+    if path_exists(fs_r, "../oodar/liboodar.a") { return "../oodar/liboodar.a"; }
+    if path_exists(fs_r, od + "/../lib/liboodar.a") { return od + "/../lib/liboodar.a"; }
+    if path_exists(fs_r, "oodar/lib/liboodar.a") { return "oodar/lib/liboodar.a"; }
+    if path_exists(fs_r, "../oodar/lib/liboodar.a") { return "../oodar/lib/liboodar.a"; }
+    return "oodar/liboodar.a";
 }
 
 fn clang_major(sys: &ProcessCap) -> Int {
@@ -121,16 +119,6 @@ pub fn build_multi(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env: &
     let _: Result[String, String] = sys_exec(sys, "/usr/bin/mkdir", "-p", ec);
     let _: Result[String, String] = sys_exec(sys, "/usr/bin/mkdir", "-p", tmp_dir);
 
-    let obj: String = tmp_dir + "/oodar.o";
-    if !is_shared {
-        let co: Result[String, String] = sys_exec(sys, "clang", "--no-default-config", "-c", "-O2", "-g0", "-fno-ident", "-I" + od, od + "/oodar.c", "-o", obj);
-        if !co.is_ok() {
-            println("ERR\tbuild\toodar.o failed");
-            let ct: String = match co { Ok(s) => s, Err(e) => e };
-            println(ct);
-            process_exit(1);
-        }
-    }
     let hr: String = write_host_rt(fs_w, tmp_dir);
 
     let mut objs: List[String] = list_new();
@@ -202,12 +190,12 @@ pub fn build_multi(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env: &
         process_exit(1);
     }
 
+    let lib_a: String = oodar_lib_multi(fs_r, od);
     let mut lr: Result[String, String] = Err("");
     if is_shared {
-        let lib_a: String = oodar_lib_multi(fs_r, od);
         lr = sys_exec(sys, "clang", "--no-default-config", "-shared", "-fPIC", "-DOO_SHARED=1", "-fvisibility=hidden", "-Wl,--exclude-libs,ALL", "-O2", "-g0", "-fno-ident", "-Wno-override-module", "-I" + od, hr, "@" + rsp_path, lib_a, "-frandom-seed=0", "-Wl,--build-id=none", "-Wl,--strip-debug", "-lm", "-ldl", "-lpthread", "-o", out);
     } else {
-        lr = sys_exec(sys, "clang", "--no-default-config", "-O2", "-g0", "-fno-ident", "-Wno-override-module", "-I" + od, obj, hr, "@" + rsp_path, "-frandom-seed=0", "-Wl,--build-id=none", "-Wl,--strip-debug", "-lm", "-ldl", "-lpthread", "-o", out);
+        lr = sys_exec(sys, "clang", "--no-default-config", "-O2", "-g0", "-fno-ident", "-Wno-override-module", "-I" + od, hr, "@" + rsp_path, lib_a, "-frandom-seed=0", "-Wl,--build-id=none", "-Wl,--strip-debug", "-lm", "-ldl", "-lpthread", "-o", out);
     }
     let _: Result[String, String] = sys_exec(sys, "/usr/bin/rm", "-f", rsp_path);
     if !lr.is_ok() {

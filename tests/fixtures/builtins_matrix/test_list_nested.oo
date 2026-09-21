@@ -1,0 +1,66 @@
+// # Nested Collections List Set Test
+//
+// Logline: Verifies list_set operations on List[List[Int]] and List[String].
+//
+// Setup: Lowering and runtime support for nested collection mutation and COW.
+//
+// Beats:
+//   1. Construct 2D List[List[Int]] matrix.
+//   2. Perform inner element update via nested list_set.
+//   3. Perform outer row replacement and assert matrix integrity.
+//   4. Verify COW isolation on outer list.
+
+fn alias_llist(l: List[List[Int]]) -> List[List[Int]] { return l; }
+
+pub fn test_nested_matrix() -> Bool {
+    let mut row0: List[Int] = list_new();
+    row0 = list_push(row0, 1);
+    row0 = list_push(row0, 2);
+    let mut row1: List[Int] = list_new();
+    row1 = list_push(row1, 3);
+    row1 = list_push(row1, 4);
+    let mut matrix: List[List[Int]] = list_new();
+    matrix = list_push(matrix, row0);
+    matrix = list_push(matrix, row1);
+
+    // Assert initial values
+    if list_get(list_get(matrix, 0), 1) != 2 || list_get(list_get(matrix, 1), 0) != 3 {
+        println("FAIL: initial matrix elements mismatch");
+        process_exit(1);
+    }
+
+    // Mutate an inner list and update matrix
+    let r0: List[Int] = list_get(matrix, 0);
+    let r0_mod: List[Int] = list_set(r0, 1, 99);
+    matrix = list_set(matrix, 0, r0_mod);
+
+    if list_get(list_get(matrix, 0), 1) != 99 {
+        println("FAIL: nested list_set inner update mismatch");
+        process_exit(1);
+    }
+
+    // COW on outer list
+    let matrix_alias: List[List[Int]] = alias_llist(matrix);
+    let mut row_new: List[Int] = list_new();
+    row_new = list_push(row_new, 70);
+    row_new = list_push(row_new, 80);
+    let matrix_cow: List[List[Int]] = list_set(matrix_alias, 1, row_new);
+
+    // Original matrix unchanged
+    if list_get(list_get(matrix, 1), 0) != 3 {
+        println("FAIL: matrix corrupted by outer COW");
+        process_exit(1);
+    }
+    // Cloned matrix updated
+    if list_get(list_get(matrix_cow, 1), 0) != 70 {
+        println("FAIL: matrix_cow missing replacement row");
+        process_exit(1);
+    }
+    return true;
+}
+
+pub fn main() -> Int {
+    test_nested_matrix();
+    println("PASS: nested list_set verified");
+    return 0;
+}

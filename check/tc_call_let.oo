@@ -36,8 +36,6 @@ pub fn typecheck_let_ann_call_init(toks: List[String]) {
     }
             }
             if p < n { if field_at(list_get(toks, p), 0) == "IDENT" { let vname: String = field_at(list_get(toks, p), 3);
-            let vline: String = field_at(list_get(toks, p), 1);
-            let vcol: String = field_at(list_get(toks, p), 2);
             p = p + 1;
             if p < n { if field_at(list_get(toks, p), 0) == "COLON" { p = p + 1;
             if p < n { if field_at(list_get(toks, p), 0) == "IDENT" { let mut ann: String = resolve_type_alias(aliases, field_at(list_get(toks, p), 3));
@@ -78,13 +76,6 @@ pub fn typecheck_let_ann_call_init(toks: List[String]) {
                                                 }
                                             }
                                         }
-                                    }
-                                }
-                            }
-                        } else if field_at(list_get(toks, p), 0) == "EQ" {
-                            p = p + 1;
-                            if p < n { if field_at(list_get(toks, p), 0) == "IDENT" { if p + 1 < n { if field_at(list_get(toks, p + 1), 0) == "LPAREN" { let gty: String = cap_builtin_ret( field_at(list_get(toks, p), 3) );
-                            }
                                     }
                                 }
                             }

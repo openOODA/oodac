@@ -39,7 +39,6 @@ let pad: String = indent(depth);
 let k: String = field_at(list_get(toks, pos), 0);
 let line: String = field_at(list_get(toks, pos), 1);
 let col: String = field_at(list_get(toks, pos), 2);
-let text: String = field_at(list_get(toks, pos), 3);
 if k == "LPAREN" { pos = pos + 1;
 pos = parse_expr_dump(toks, pos, depth);
 if field_at(list_get(toks, pos), 0) == "RPAREN" { pos = pos + 1;

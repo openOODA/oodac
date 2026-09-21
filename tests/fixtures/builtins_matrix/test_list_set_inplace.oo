@@ -1,0 +1,83 @@
+// # List Set In-Place Mutation Test
+//
+// Logline: Functional verification of O(1) in-place mutation for refcount == 1 lists.
+//
+// Setup: Native LLVM lowering of list_set with single-owner semantics.
+//
+// Beats:
+//   1. Allocate and populate single-owner List[Int].
+//   2. Loop 100,000 in-place mutations asserting value update.
+//   3. Bind alias and assert COW triggers, proving refcount was exactly 1.
+//   4. Repeat in-place mutation and alias isolation for List[String].
+
+fn alias_ilist(l: List[Int]) -> List[Int] { return l; }
+fn alias_slist(l: List[String]) -> List[String] { return l; }
+
+pub fn test_inplace_int() -> Bool {
+    let mut xs: List[Int] = list_new();
+    let mut i: Int = 0;
+    while i < 10 {
+        xs = list_push(xs, i * 10);
+        i = i + 1;
+    }
+    // Single owner in-place update loop
+    let mut k: Int = 0;
+    while k < 100000 {
+        let idx: Int = k % 10;
+        xs = list_set(xs, idx, k);
+        if list_get(xs, idx) != k {
+            println("FAIL: in-place int value mismatch");
+            process_exit(1);
+        }
+        k = k + 1;
+    }
+    // Refcount stays 1 assertion via alias branching:
+    // If refcount stayed 1, binding alias makes it 2, triggering COW on list_set.
+    let alias: List[Int] = alias_ilist(xs);
+    let branched: List[Int] = list_set(alias, 0, 999999);
+    if list_get(xs, 0) == 999999 {
+        println("FAIL: xs corrupted by alias mutation - was not COW");
+        process_exit(1);
+    }
+    if list_get(branched, 0) != 999999 {
+        println("FAIL: branched list did not receive new value");
+        process_exit(1);
+    }
+    return true;
+}
+
+pub fn test_inplace_str() -> Bool {
+    let mut sxs: List[String] = list_new();
+    sxs = list_push(sxs, "alpha");
+    sxs = list_push(sxs, "beta");
+    sxs = list_push(sxs, "gamma");
+    // In-place mutation on single-owner string list
+    sxs = list_set(sxs, 1, "BETA_MUTATED");
+    if list_get(sxs, 1) != "BETA_MUTATED" {
+        println("FAIL: in-place str value mismatch");
+        process_exit(1);
+    }
+    if list_get(sxs, 0) != "alpha" || list_get(sxs, 2) != "gamma" {
+        println("FAIL: in-place str corrupted adjacent elements");
+        process_exit(1);
+    }
+    // Verify refcount stays 1 via alias COW check
+    let salias: List[String] = alias_slist(sxs);
+    let sbranched: List[String] = list_set(salias, 0, "ALPHA_BRANCHED");
+    if list_get(sxs, 0) == "ALPHA_BRANCHED" {
+        println("FAIL: sxs corrupted by alias mutation");
+        process_exit(1);
+    }
+    if list_get(sbranched, 0) != "ALPHA_BRANCHED" {
+        println("FAIL: sbranched did not receive new value");
+        process_exit(1);
+    }
+    return true;
+}
+
+pub fn main() -> Int {
+    test_inplace_int();
+    test_inplace_str();
+    println("PASS: list_set in-place mutation verified");
+    return 0;
+}

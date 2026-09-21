@@ -27,9 +27,40 @@ fn ll_ty_ress(callee: String, args: List[String], ssa0: Int, extra: String, ir: 
     return ll_pack(0, s, "ress", out);
 }
 
+fn ll_sys_exec(args: List[String], ssa0: Int, ir: &mut IrBuf) -> String {
+    let na: Int = list_len(args);
+    let argc: Int = na - 1;
+    let mut s: Int = ssa0;
+    let av: String = ll_tmpa(s + 1);
+    s = s + 1;
+    ll_slot_ty(av, "[" + argc.to_string() + " x %OoStr]", ir);
+    let mut i: Int = 1;
+    while i < na {
+        let a: String = ll_ensure_ptr(list_get(args, i), s, ir);
+        s = ll_pssa(a);
+        let sl: Int = s + 1;
+        ll_ir_inst(ir, "load", "{ ptr, i64 }", ll_ssa(sl), "ptr " + ll_pptr(a) + ", align 8", 1, 1);
+        let gp: Int = sl + 1;
+        ll_ir_inst(ir, "getelementptr inbounds", "[" + argc.to_string() + " x %OoStr]", ll_ssa(gp), "ptr " + av + ", i64 0, i64 " + (i - 1).to_string(), 1, 1);
+        ll_ir_inst(ir, "store", "{ ptr, i64 }", "", ll_ssa(sl) + ", ptr " + ll_ssa(gp) + ", align 8", 1, 1);
+        s = gp;
+        i = i + 1;
+    }
+    let res: String = ll_tmpa(s + 1);
+    s = s + 1;
+    ll_slot_ty(res, "%OoResS", ir);
+    let base: Int = s + 1;
+    ll_ir_inst(ir, "getelementptr inbounds", "[" + argc.to_string() + " x %OoStr]", ll_ssa(base), "ptr " + av + ", i64 0, i64 0", 1, 1);
+    ll_ir_inst(ir, "call", "void", "", "@oo_sys_exec(ptr sret(%OoResS) align 8 " + res + ", i64 " + ll_ssa(ll_pssa(list_get(args, 0))) + ", i32 " + argc.to_string() + ", ptr " + ll_ssa(base) + ")", 1, 1);
+    return ll_pack(0, base, "ress", res);
+}
+
 pub fn ll_builtin_sys(name: String, args: List[String], ssa0: Int, expect: String, ir: &mut IrBuf) -> String {
     let na: Int = list_len(args);
     if expect == "noret" { return ""; }
+    if (name == "sys_exec" || name == "oo_sys_exec") && na >= 2 {
+        return ll_sys_exec(args, ssa0, ir);
+    }
     if (name == "sys_args" || name == "oo_sys_args") && na >= 1 {
         let s: Int = ll_pssa(list_get(args, 0)) + 1;
         let out: String = ll_tmpa(s);

@@ -1,0 +1,82 @@
+// # List Set Copy-On-Write Test
+//
+// Logline: Verifies COW buffer duplication when list refcount exceeds 1.
+//
+// Setup: Native LLVM lowering of list_set with shared buffer ownership.
+//
+// Beats:
+//   1. Populate List[Int] and bind multiple aliases (b = a).
+//   2. Call list_set on alias; assert original list a remains unmodified.
+//   3. Assert returned list c contains new value and preserves other items.
+//   4. Repeat multi-way aliasing and verification for List[String].
+
+fn alias_ilist(l: List[Int]) -> List[Int] { return l; }
+fn alias_slist(l: List[String]) -> List[String] { return l; }
+
+pub fn test_cow_int() -> Bool {
+    let mut a: List[Int] = list_new();
+    a = list_push(a, 100);
+    a = list_push(a, 200);
+    a = list_push(a, 300);
+    // Sharing increases refcount to 2
+    let b: List[Int] = alias_ilist(a);
+    // list_set on b must duplicate buffer via COW
+    let c: List[Int] = list_set(b, 0, 999);
+    // Original a must remain unchanged
+    if list_get(a, 0) != 100 {
+        println("FAIL: original list a mutated");
+        process_exit(1);
+    }
+    // Result c has updated value at index 0
+    if list_get(c, 0) != 999 {
+        println("FAIL: result list c missing update");
+        process_exit(1);
+    }
+    // Result c preserves remaining elements
+    if list_get(c, 1) != 200 || list_get(c, 2) != 300 {
+        println("FAIL: result list c lost copied elements");
+        process_exit(1);
+    }
+    // Multi-alias check: 3 owners
+    let d: List[Int] = alias_ilist(a);
+    let e: List[Int] = alias_ilist(a);
+    let f: List[Int] = list_set(e, 2, 777);
+    if list_get(a, 2) != 300 || list_get(d, 2) != 300 {
+        println("FAIL: multi-alias a or d corrupted");
+        process_exit(1);
+    }
+    if list_get(f, 2) != 777 {
+        println("FAIL: multi-alias f missing update");
+        process_exit(1);
+    }
+    return true;
+}
+
+pub fn test_cow_str() -> Bool {
+    let mut sa: List[String] = list_new();
+    sa = list_push(sa, "first");
+    sa = list_push(sa, "second");
+    sa = list_push(sa, "third");
+    let sb: List[String] = alias_slist(sa);
+    let sc: List[String] = list_set(sb, 1, "REPLACED");
+    if list_get(sa, 1) != "second" {
+        println("FAIL: string original sa mutated");
+        process_exit(1);
+    }
+    if list_get(sc, 1) != "REPLACED" {
+        println("FAIL: string result sc missing update");
+        process_exit(1);
+    }
+    if list_get(sc, 0) != "first" || list_get(sc, 2) != "third" {
+        println("FAIL: string result sc lost copied elements");
+        process_exit(1);
+    }
+    return true;
+}
+
+pub fn main() -> Int {
+    test_cow_int();
+    test_cow_str();
+    println("PASS: list_set COW verified");
+    return 0;
+}

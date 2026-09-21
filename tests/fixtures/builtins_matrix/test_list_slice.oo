@@ -1,0 +1,99 @@
+// # List Slice Verification Test
+//
+// Logline: Verifies list_slice on empty, full, sub, and clamped boundary ranges.
+//
+// Setup: Native LLVM lowering of list_slice for List[Int] and List[String].
+//
+// Beats:
+//   1. Verify slicing empty list returns empty list.
+//   2. Verify full slice [0, len) matches original list.
+//   3. Verify standard sub-slice [1, 3).
+//   4. Verify clamped bounds: lo < 0, hi > len, lo >= hi.
+//   5. Verify string list slicing with ARC element retention.
+
+pub fn test_slice_int() -> Bool {
+    let empty: List[Int] = list_new();
+    let sl_empty: List[Int] = list_slice(empty, 0, 0);
+    if list_len(sl_empty) != 0 {
+        println("FAIL: slice on empty list non-zero len");
+        process_exit(1);
+    }
+
+    let mut xs: List[Int] = list_new();
+    xs = list_push(xs, 10);
+    xs = list_push(xs, 20);
+    xs = list_push(xs, 30);
+    xs = list_push(xs, 40);
+
+    // Full slice [0, 4)
+    let sl_full: List[Int] = list_slice(xs, 0, 4);
+    if list_len(sl_full) != 4 || list_get(sl_full, 0) != 10 || list_get(sl_full, 3) != 40 {
+        println("FAIL: full slice mismatch");
+        process_exit(1);
+    }
+
+    // Sub-slice [1, 3) -> [20, 30]
+    let sl_sub: List[Int] = list_slice(xs, 1, 3);
+    if list_len(sl_sub) != 2 || list_get(sl_sub, 0) != 20 || list_get(sl_sub, 1) != 30 {
+        println("FAIL: sub slice [1, 3) mismatch");
+        process_exit(1);
+    }
+
+    // Clamped lo < 0: [-5, 2) clamped to [0, 2) -> [10, 20]
+    let sl_lo_clamp: List[Int] = list_slice(xs, 0 - 5, 2);
+    if list_len(sl_lo_clamp) != 2 || list_get(sl_lo_clamp, 0) != 10 || list_get(sl_lo_clamp, 1) != 20 {
+        println("FAIL: lo < 0 clamp mismatch");
+        process_exit(1);
+    }
+
+    // Clamped hi > len: [2, 100) clamped to [2, 4) -> [30, 40]
+    let sl_hi_clamp: List[Int] = list_slice(xs, 2, 100);
+    if list_len(sl_hi_clamp) != 2 || list_get(sl_hi_clamp, 0) != 30 || list_get(sl_hi_clamp, 1) != 40 {
+        println("FAIL: hi > len clamp mismatch");
+        process_exit(1);
+    }
+
+    // lo >= hi: [3, 2) -> empty list
+    let sl_inv: List[Int] = list_slice(xs, 3, 2);
+    if list_len(sl_inv) != 0 {
+        println("FAIL: lo > hi did not return empty list");
+        process_exit(1);
+    }
+
+    // lo == hi: [2, 2) -> empty list
+    let sl_eq: List[Int] = list_slice(xs, 2, 2);
+    if list_len(sl_eq) != 0 {
+        println("FAIL: lo == hi did not return empty list");
+        process_exit(1);
+    }
+
+    // Both negative: [-10, -5) -> empty list
+    let sl_neg_both: List[Int] = list_slice(xs, 0 - 10, 0 - 5);
+    if list_len(sl_neg_both) != 0 {
+        println("FAIL: negative both did not return empty list");
+        process_exit(1);
+    }
+    return true;
+}
+
+pub fn test_slice_str() -> Bool {
+    let mut sxs: List[String] = list_new();
+    sxs = list_push(sxs, "a");
+    sxs = list_push(sxs, "b");
+    sxs = list_push(sxs, "c");
+    sxs = list_push(sxs, "d");
+
+    let ssl: List[String] = list_slice(sxs, 1, 3);
+    if list_len(ssl) != 2 || list_get(ssl, 0) != "b" || list_get(ssl, 1) != "c" {
+        println("FAIL: string slice [1, 3) mismatch");
+        process_exit(1);
+    }
+    return true;
+}
+
+pub fn main() -> Int {
+    test_slice_int();
+    test_slice_str();
+    println("PASS: list_slice verified");
+    return 0;
+}

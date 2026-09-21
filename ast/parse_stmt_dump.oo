@@ -15,8 +15,6 @@ let mut pos = pos0;
 let pad: String = indent(depth);
 let si_s: String = si.to_string();
 let k: String = field_at(list_get(toks, pos), 0);
-let line: String = field_at(list_get(toks, pos), 1);
-let col: String = field_at(list_get(toks, pos), 2);
 if k == "KW_LET" { pos = pos + 1;
 let mut mutable = false;
 if field_at(list_get(toks, pos), 0) == "KW_MUT" { mutable = true;

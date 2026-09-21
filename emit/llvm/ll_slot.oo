@@ -31,7 +31,7 @@ pub fn ll_slot_size(ty: String) -> Int {
     if ty == "i32" || ty == "u32" { return 4; }
     if ty == "i64" || ty == "u64" || ty == "double" || ty == "ptr" { return 8; }
     if ty == "%OoStr" || ty == "{ ptr, i64 }" { return 16; }
-    if ty == "%OoSList" || ty == "%OoIList" { return 24; }
+    if ty == "%OoSList" || ty == "%OoIList" || ty == "%OoFList" || ty == "%OoLL_I" || ty == "%OoLL_S" { return 24; }
     if chars_len(ty) >= 5 && str_slice(ty, 0, 5) == "%OoL_" { return 24; }
     if ty == "%OoOptI" { return 16; }
     if ty == "%OoOptS" || ty == "%OoResS" || ty == "%OoResV" { return 24; }

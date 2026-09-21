@@ -1,0 +1,98 @@
+// # C-ABI Aggregate Returns & Niche Pointer Verification
+//
+// Logline: End-to-end verification of Option/Result struct aggregates and niche pointers.
+//
+// Setup: Compile with oodac check and emit-llvm, verify sret and niche representations.
+//
+// Beats:
+//   1. Option[MyStruct] and Result[MyStruct, String] aggregates.
+//   2. Intra-function Option[&T] and Result[&T, E] niche pointers.
+//   3. Exported function boundary marshalling to %OoOpt_Ptr.
+
+pub type MyStruct = struct {
+    id: Int,
+    score: Int
+};
+
+pub fn make_opt(flag: Bool) -> Option[MyStruct] {
+    if flag {
+        let s: MyStruct = MyStruct { id: 10, score: 100 };
+        return Some(s);
+    }
+    return None;
+}
+
+pub fn make_res(flag: Bool) -> Result[MyStruct, String] {
+    if flag {
+        let s: MyStruct = MyStruct { id: 20, score: 200 };
+        return Ok(s);
+    }
+    return Err("operation failed");
+}
+
+pub fn sovereign_opt_ref(flag: Bool, s: &MyStruct) -> Option[&MyStruct] {
+    if flag {
+        return Some(s);
+    }
+    return None;
+}
+
+pub fn sovereign_res_ref(flag: Bool, s: &MyStruct) -> Result[&MyStruct, String] {
+    if flag {
+        return Ok(s);
+    }
+    return Err("null struct reference");
+}
+
+export fn exported_opt_ref(flag: Bool, s: &MyStruct) -> Option[&MyStruct] {
+    if flag {
+        return Some(s);
+    }
+    return None;
+}
+
+pub fn main() -> Int {
+    let o1: Option[MyStruct] = make_opt(true);
+    match o1 {
+        Some(s) => {
+            if s.id != 10 || s.score != 100 { return 1; }
+        }
+        None => { return 2; }
+    }
+    let o2: Option[MyStruct] = make_opt(false);
+    match o2 {
+        Some(_) => { return 3; }
+        None => {}
+    }
+
+    let r1: Result[MyStruct, String] = make_res(true);
+    match r1 {
+        Ok(s) => {
+            if s.id != 20 || s.score != 200 { return 4; }
+        }
+        Err(_) => { return 5; }
+    }
+    let r2: Result[MyStruct, String] = make_res(false);
+    match r2 {
+        Ok(_) => { return 6; }
+        Err(e) => {
+            if e != "operation failed" { return 7; }
+        }
+    }
+
+    let st: MyStruct = MyStruct { id: 99, score: 999 };
+    let nr1: Option[&MyStruct] = sovereign_opt_ref(true, &st);
+    if nr1.is_none() { return 8; }
+    let nr2: Option[&MyStruct] = sovereign_opt_ref(false, &st);
+    if nr2.is_some() { return 9; }
+
+    let r_ref1: Result[&MyStruct, String] = sovereign_res_ref(true, &st);
+    if r_ref1.is_err() { return 10; }
+    let r_ref2: Result[&MyStruct, String] = sovereign_res_ref(false, &st);
+    if r_ref2.is_ok() { return 11; }
+
+    let eo: Option[&MyStruct] = exported_opt_ref(true, &st);
+    if eo.is_none() { return 12; }
+
+    return 0;
+}

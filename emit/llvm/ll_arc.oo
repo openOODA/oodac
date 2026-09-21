@@ -45,7 +45,7 @@ pub fn ll_arc_pop(env: String) -> String {
 }
 
 pub fn ll_arc_owned(kind: String) -> Bool {
-    if kind == "str" || kind == "slist" || kind == "ilist" { return true; }
+    if kind == "str" || kind == "slist" || kind == "ilist" || kind == "flist" || kind == "ll_i" || kind == "ll_s" { return true; }
     if kind == "ress" || kind == "resi" || kind == "opts" { return true; }
     if chars_len(kind) >= 3 && str_slice(kind, 0, 3) == "St_" { return true; }
     if chars_len(kind) >= 6 && str_slice(kind, 0, 6) == "olist_" { return true; }
@@ -87,6 +87,18 @@ fn ll_arc_rr(kind: String, ptr: String, ssa0: Int, is_ret: Int, ir: &mut IrBuf) 
     }
     if kind == "ilist" {
         ll_ir_inst(ir, "call", "void", "", "@oo_ilist_" + op + "(ptr byval(%OoIList) align 8 " + ptr + ")", 1, 1);
+        return ssa0;
+    }
+    if kind == "flist" {
+        ll_ir_inst(ir, "call", "void", "", "@oo_flist_" + op + "(ptr byval(%OoFList) align 8 " + ptr + ")", 1, 1);
+        return ssa0;
+    }
+    if kind == "ll_i" {
+        ll_ir_inst(ir, "call", "void", "", "@oo_ll_I_" + op + "(ptr byval(%OoLL_I) align 8 " + ptr + ")", 1, 1);
+        return ssa0;
+    }
+    if kind == "ll_s" {
+        ll_ir_inst(ir, "call", "void", "", "@oo_ll_S_" + op + "(ptr byval(%OoLL_S) align 8 " + ptr + ")", 1, 1);
         return ssa0;
     }
     if kind == "ress" || kind == "opts" || kind == "resi" {

@@ -25,6 +25,7 @@ fn ll_need_drop_list(need: String, k: String) -> String {
     n = ll_need_drop(n, "oo_" + k + "_get");
     n = ll_need_drop(n, "oo_" + k + "_push");
     n = ll_need_drop(n, "oo_" + k + "_slice");
+    n = ll_need_drop(n, "oo_" + k + "_set");
     n = ll_need_drop(n, "oo_" + k + "_retain");
     n = ll_need_drop(n, "oo_" + k + "_release");
     return n;

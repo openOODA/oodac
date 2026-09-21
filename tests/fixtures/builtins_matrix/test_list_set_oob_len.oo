@@ -1,0 +1,22 @@
+// # List Set Length Out-Of-Bounds Test
+//
+// Logline: Verifies index >= len access exits code 1 with TSV error.
+//
+// Setup: Out-of-bounds access in list_set triggers stderr diagnostic and exit 1.
+//
+// Beats:
+//   1. Populate a 3-element List[Int].
+//   2. Call list_set at index equal to length (3).
+//   3. Execution must never reach normal termination.
+
+pub fn main() -> Int {
+    let mut xs: List[Int] = list_new();
+    xs = list_push(xs, 10);
+    xs = list_push(xs, 20);
+    xs = list_push(xs, 30);
+    let len: Int = list_len(xs);
+    // Index == length: must print "ERR\tlist_set OOB" and exit 1
+    xs = list_set(xs, len, 99);
+    println("FAIL: OOB length index did not terminate process");
+    return 0;
+}

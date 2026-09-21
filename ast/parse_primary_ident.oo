@@ -21,7 +21,6 @@ let nl: String = str_slice(line, 0, chars_len(line));
 let nc: String = str_slice(col, 0, chars_len(col));
 pos = pos + 1;
 if pos < n { if field_at(list_get(toks, pos), 0) == "LPAREN" { pos = pos + 1;
-let arg_start = pos;
 let mut argc = 0;
 let mut depth_a = 0;
 let mut scan = pos;
@@ -53,7 +52,6 @@ while cont { if scan >= n { cont = false;
                 // stage-0 uses span of call name end-ish — use last_span at RPAREN from examples:
                 // EXPR CALL name=add argc=2 prop=false @15:23 — col of RPAREN-ish
                 // We'll parse args first to get RPAREN span
-                let mut args_pos = pos;
                 // Print CALL header with temporary span, then args
                 // Get RPAREN location by scanning
                 let mut rp = pos;

@@ -78,9 +78,29 @@ fn ll_need_proto_list(sym: String) -> String {
     if sym == "oo_slist_push" { return "declare void @oo_slist_push(ptr noalias sret(%OoSList) align 8, ptr byval(%OoSList) align 8, { ptr, i64 }) nounwind"; }
     if sym == "oo_slist_get" { return "declare { ptr, i64 } @oo_slist_get(ptr byval(%OoSList) align 8, i64) nounwind"; }
     if sym == "oo_slist_slice" { return "declare void @oo_slist_slice(ptr noalias sret(%OoSList) align 8, ptr byval(%OoSList) align 8, i64, i64) nounwind"; }
+    if sym == "oo_slist_set" { return "declare void @oo_slist_set(ptr noalias sret(%OoSList) align 8, ptr byval(%OoSList) align 8, i64, { ptr, i64 }) nounwind"; }
     if sym == "oo_ilist_push" { return "declare void @oo_ilist_push(ptr noalias sret(%OoIList) align 8, ptr byval(%OoIList) align 8, i64) nounwind"; }
     if sym == "oo_ilist_get" { return "declare i64 @oo_ilist_get(ptr byval(%OoIList) align 8, i64) nounwind"; }
     if sym == "oo_ilist_slice" { return "declare void @oo_ilist_slice(ptr noalias sret(%OoIList) align 8, ptr byval(%OoIList) align 8, i64, i64) nounwind"; }
+    if sym == "oo_ilist_set" { return "declare void @oo_ilist_set(ptr noalias sret(%OoIList) align 8, ptr byval(%OoIList) align 8, i64, i64) nounwind"; }
+    if sym == "oo_flist_slice" { return "declare void @oo_flist_slice(ptr noalias sret(%OoFList) align 8, ptr byval(%OoFList) align 8, i64, i64) nounwind"; }
+    if sym == "oo_flist_set" { return "declare void @oo_flist_set(ptr noalias sret(%OoFList) align 8, ptr byval(%OoFList) align 8, i64, double) nounwind"; }
+    if sym == "oo_ll_I_set" { return "declare void @oo_ll_I_set(ptr noalias sret(%OoLL_I) align 8, ptr byval(%OoLL_I) align 8, i64, ptr byval(%OoIList) align 8) nounwind"; }
+    if sym == "oo_ll_I_new" { return "declare void @oo_ll_I_new(ptr noalias sret(%OoLL_I) align 8) nounwind"; }
+    if sym == "oo_ll_I_len" { return "declare i64 @oo_ll_I_len(ptr byval(%OoLL_I) align 8) nounwind"; }
+    if sym == "oo_ll_I_get" { return "declare void @oo_ll_I_get(ptr noalias sret(%OoIList) align 8, ptr byval(%OoLL_I) align 8, i64) nounwind"; }
+    if sym == "oo_ll_I_push" { return "declare void @oo_ll_I_push(ptr noalias sret(%OoLL_I) align 8, ptr byval(%OoLL_I) align 8, ptr byval(%OoIList) align 8) nounwind"; }
+    if sym == "oo_ll_S_set" { return "declare void @oo_ll_S_set(ptr noalias sret(%OoLL_S) align 8, ptr byval(%OoLL_S) align 8, i64, ptr byval(%OoSList) align 8) nounwind"; }
+    if sym == "oo_ll_S_new" { return "declare void @oo_ll_S_new(ptr noalias sret(%OoLL_S) align 8) nounwind"; }
+    if sym == "oo_ll_S_len" { return "declare i64 @oo_ll_S_len(ptr byval(%OoLL_S) align 8) nounwind"; }
+    if sym == "oo_ll_S_get" { return "declare void @oo_ll_S_get(ptr noalias sret(%OoSList) align 8, ptr byval(%OoLL_S) align 8, i64) nounwind"; }
+    if sym == "oo_ll_S_push" { return "declare void @oo_ll_S_push(ptr noalias sret(%OoLL_S) align 8, ptr byval(%OoLL_S) align 8, ptr byval(%OoSList) align 8) nounwind"; }
+    if sym == "oo_flist_retain" { return "declare void @oo_flist_retain(ptr byval(%OoFList) align 8) nounwind"; }
+    if sym == "oo_flist_release" { return "declare void @oo_flist_release(ptr byval(%OoFList) align 8) nounwind"; }
+    if sym == "oo_ll_I_retain" { return "declare void @oo_ll_I_retain(ptr byval(%OoLL_I) align 8) nounwind"; }
+    if sym == "oo_ll_I_release" { return "declare void @oo_ll_I_release(ptr byval(%OoLL_I) align 8) nounwind"; }
+    if sym == "oo_ll_S_retain" { return "declare void @oo_ll_S_retain(ptr byval(%OoLL_S) align 8) nounwind"; }
+    if sym == "oo_ll_S_release" { return "declare void @oo_ll_S_release(ptr byval(%OoLL_S) align 8) nounwind"; }
     if sym == "oo_bytes_new" { return "declare void @oo_bytes_new(ptr noalias sret(%OoIList) align 8) nounwind"; }
     if sym == "oo_bytes_push" { return "declare void @oo_bytes_push(ptr noalias sret(%OoIList) align 8, ptr byval(%OoIList) align 8, i64) nounwind"; }
     if sym == "oo_bytes_to_str" { return "declare { ptr, i64 } @oo_bytes_to_str(ptr byval(%OoIList) align 8) nounwind"; }

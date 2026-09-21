@@ -35,11 +35,9 @@ pub fn print_expr_bp(toks: List[String], pos0: Int, depth: Int, min_bp: Int) -> 
     let n = list_len(toks);
 let mut pos = pos0;
 let pad: String = indent(depth);
-let left_start = pos;
 let k0: String = field_at(list_get(toks, pos), 0);
 if k0 == "BANG" || k0 == "MINUS" { let ul: String = field_at(list_get(toks, pos), 1);
 let uc: String = field_at(list_get(toks, pos), 2);
-let opn = "Not";
 if k0 == "MINUS" { pos = pos + 1;
 println(pad + "EXPR UNARY op=Neg @" + ul + ":" + uc);
 pos = print_expr_bp(toks, pos, depth + 1, 100);

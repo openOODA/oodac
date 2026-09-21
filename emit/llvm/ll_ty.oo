@@ -49,13 +49,18 @@ pub fn ll_ty_at(toks: List[String], pos: Int, n: Int, stab: String) -> String {
             let e: String = ll_t(toks, p + 2);
             if e == "String" { return "slist"; }
             if e == "Int" { return "ilist"; }
+            if e == "Float" { return "flist"; }
+            if e == "List" && p + 4 < n {
+                if ll_t(toks, p + 4) == "Int" { return "ll_i"; }
+                if ll_t(toks, p + 4) == "String" { return "ll_s"; }
+            }
             return "olist_" + e;
         }
         println("ERR\tllvm\tlist kind");
         process_exit(1);
     }
     if t == "Result" {
-        if p + 2 < n && ll_k(toks, p + 1) == "LBRACKET" && ll_k(toks, p + 2) == "AMP" {
+        if p + 2 < n && (ll_k(toks, p + 1) == "LBRACKET" || ll_k(toks, p + 1) == "LT") && ll_k(toks, p + 2) == "AMP" {
             let mut q: Int = p + 3;
             if q < n && ll_k(toks, q) == "KW_MUT" { q = q + 1; }
             if q < n && ll_k(toks, q) == "IDENT" && ll_is_cap_ty(ll_t(toks, q)) { return "resi"; }
@@ -76,7 +81,7 @@ pub fn ll_ty_at(toks: List[String], pos: Int, n: Int, stab: String) -> String {
         process_exit(1);
     }
     if t == "Option" {
-        if p + 2 < n && ll_k(toks, p + 1) == "LBRACKET" {
+        if p + 2 < n && (ll_k(toks, p + 1) == "LBRACKET" || ll_k(toks, p + 1) == "LT") {
             if ll_k(toks, p + 2) == "AMP" {
                 let mut q: Int = p + 3;
                 if q < n && ll_k(toks, q) == "KW_MUT" { q = q + 1; }
@@ -157,6 +162,9 @@ pub fn ll_ir_alloc(kind: String) -> String {
     if ll_is_refk(k) || k == "optp" || k == "resp" { return "ptr"; }
     if k == "slist" { return "%OoSList"; }
     if k == "ilist" { return "%OoIList"; }
+    if k == "flist" { return "%OoFList"; }
+    if k == "ll_i" { return "%OoLL_I"; }
+    if k == "ll_s" { return "%OoLL_S"; }
     if k == "str" { return "%OoStr"; }
     if k == "opti" { return "%OoOptI"; }
     if k == "opts" { return "%OoOptS"; }
@@ -196,7 +204,7 @@ pub fn ll_ir_val(kind: String) -> String {
 
 pub fn ll_is_agg(kind: String) -> Bool {
     let k: String = ll_unp(kind);
-    if k == "slist" || k == "ilist" || k == "str" || k == "opti" || k == "opts" { return true; }
+    if k == "slist" || k == "ilist" || k == "flist" || k == "ll_i" || k == "ll_s" || k == "str" || k == "opti" || k == "opts" { return true; }
     if k == "ress" || k == "resi" || k == "resl" || k == "resil" { return true; }
     if chars_len(k) >= 3 && str_slice(k, 0, 3) == "St_" { return true; }
     if chars_len(k) >= 6 && (str_slice(k, 0, 6) == "olist_" || str_slice(k, 0, 6) == "resSt_" || str_slice(k, 0, 6) == "optSt_") { return true; }
@@ -204,7 +212,7 @@ pub fn ll_is_agg(kind: String) -> Bool {
 }
 pub fn ll_is_mem(kind: String) -> Bool {
     let k: String = ll_unp(kind);
-    if k == "slist" || k == "ilist" || k == "opti" || k == "opts" { return true; }
+    if k == "slist" || k == "ilist" || k == "flist" || k == "ll_i" || k == "ll_s" || k == "opti" || k == "opts" { return true; }
     if k == "ress" || k == "resi" || k == "resl" || k == "resil" { return true; }
     if chars_len(k) >= 3 && str_slice(k, 0, 3) == "St_" { return true; }
     if chars_len(k) >= 6 && (str_slice(k, 0, 6) == "olist_" || str_slice(k, 0, 6) == "resSt_" || str_slice(k, 0, 6) == "optSt_") { return true; }

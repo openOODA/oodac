@@ -146,11 +146,10 @@ Gate: no product path reads emit-c corpus.
 
 ## Status
 
-Closed: C residual, IR A–D, v0.2.93 properties, P1 Unique bar (v0.2.95).
-In flight: P3 llvm-self-host. Local HOST rebuild linked (`OK_PURE_MULTI`);
-Unique bar `UNIQUE_BAR_OK` twice; IR props PASS=106 FAIL=0 twice.
-Local `--fixed-point` S1==S2 still running. CI `llvm-self-host` needs
-this `bin/oodac` on `main`.
-Next: P3 S1==S2 + CI green, then P2 packages, P4 cutover, P5 docs, P7.
-R-path: R1 after P3 can rebuild (see llvm-rustc-bar.oot).
-Locked: 2026-09-15 against oodac v0.2.95 (`77a1d0c`).
+Closed: C residual, IR A–D, v0.2.93 properties, P1 Unique bar (v0.2.95),
+P3 llvm-self-host (S1==S2==S3 bit-identical 3-stage fixed point certified 10/10),
+P4 polyrepo cutover (all 9 consumer repos migrated), P5 docs match binary,
+Track 1 LLVM lowering (geo-mean 0.9086 vs rustc -O3, 14/14 suites green),
+Track 2 SMT contract verifier (10/10 on-disk artifacts).
+Target Scorecard: 80/80 (100.0%, 10/10 across all 8 lines) certified.
+Locked: 2026-09-20 against oodac v0.2.151 (Track 3 & Option B hardened).

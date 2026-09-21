@@ -65,32 +65,25 @@ fn ll_need_call(need: String, nm: String) -> String {
         return n;
     }
     if nm == "list_new" {
-        n = ll_need_add(n, "oo_slist_new");
-        n = ll_need_add(n, "oo_ilist_new");
-        return n;
+        return ll_need_add(ll_need_add(ll_need_add(ll_need_add(n, "oo_slist_new"), "oo_ilist_new"), "oo_ll_I_new"), "oo_ll_S_new");
     }
     if nm == "list_len" {
-        n = ll_need_add(n, "oo_slist_len");
-        n = ll_need_add(n, "oo_ilist_len");
-        return n;
+        return ll_need_add(ll_need_add(ll_need_add(ll_need_add(n, "oo_slist_len"), "oo_ilist_len"), "oo_ll_I_len"), "oo_ll_S_len");
     }
     if nm == "list_get" {
-        n = ll_need_add(n, "oo_slist_get");
-        n = ll_need_add(n, "oo_ilist_get");
-        return n;
+        return ll_need_add(ll_need_add(ll_need_add(ll_need_add(n, "oo_slist_get"), "oo_ilist_get"), "oo_ll_I_get"), "oo_ll_S_get");
     }
     if nm == "list_push" {
-        n = ll_need_add(n, "oo_slist_push");
-        n = ll_need_add(n, "oo_ilist_push");
-        return n;
+        return ll_need_add(ll_need_add(ll_need_add(ll_need_add(n, "oo_slist_push"), "oo_ilist_push"), "oo_ll_I_push"), "oo_ll_S_push");
     }
     if nm == "list_slice" {
-        n = ll_need_add(n, "oo_slist_slice");
-        n = ll_need_add(n, "oo_ilist_slice");
-        return n;
+        return ll_need_add(ll_need_add(ll_need_add(n, "oo_slist_slice"), "oo_ilist_slice"), "oo_flist_slice");
+    }
+    if nm == "list_set" {
+        return ll_need_add(ll_need_add(ll_need_add(ll_need_add(ll_need_add(n, "oo_slist_set"), "oo_ilist_set"), "oo_flist_set"), "oo_ll_I_set"), "oo_ll_S_set");
     }
     if nm == "len" || nm == "chars_len" {
-        return ll_need_add(ll_need_add(ll_need_add(n, "oo_chars_len"), "oo_slist_len"), "oo_ilist_len");
+        return ll_need_add(ll_need_add(ll_need_add(ll_need_add(ll_need_add(n, "oo_chars_len"), "oo_slist_len"), "oo_ilist_len"), "oo_ll_I_len"), "oo_ll_S_len");
     }
     if nm == "contains" || nm == "str_contains" { return ll_need_add(n, "oo_str_contains"); }
     if nm == "bytes_len" { return ll_need_add(n, "oo_bytes_len"); }
@@ -199,7 +192,7 @@ pub fn ll_need_scan(toks: List[String]) -> String {
             if nm == "args" { has_args = true; }
             if i + 1 < n && ll_k(toks, i + 1) == "LPAREN" {
                 need = ll_need_call(need, nm);
-                if nm == "list_new" || nm == "list_len" || nm == "list_get" || nm == "list_push" || nm == "list_slice" { has_list = true; }
+                if nm == "list_new" || nm == "list_len" || nm == "list_get" || nm == "list_push" || nm == "list_slice" || nm == "list_set" { has_list = true; }
             }
             if i > 0 && ll_k(toks, i - 1) == "DOT" && i + 1 < n && ll_k(toks, i + 1) == "LPAREN" {
                 need = ll_need_call(need, nm);
@@ -220,6 +213,12 @@ pub fn ll_need_scan(toks: List[String]) -> String {
         need = ll_need_add(need, "oo_slist_release");
         need = ll_need_add(need, "oo_ilist_retain");
         need = ll_need_add(need, "oo_ilist_release");
+        need = ll_need_add(need, "oo_flist_retain");
+        need = ll_need_add(need, "oo_flist_release");
+        need = ll_need_add(need, "oo_ll_I_retain");
+        need = ll_need_add(need, "oo_ll_I_release");
+        need = ll_need_add(need, "oo_ll_S_retain");
+        need = ll_need_add(need, "oo_ll_S_release");
         need = ll_need_add(ll_need_add(need, "oo_list_alloc_payload"), "oo_list_quota_release_bytes");
         need = ll_need_add(need, "oo_payload_free");
     }

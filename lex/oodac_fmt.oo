@@ -46,7 +46,6 @@ let mut in_match: Bool = false;
 let mut line_start: Int = 0;
 while i < n { let c: String = char_at(src, i);
 if c == "\n" { let line_len: Int = i - line_start;
-let mut k: Int = 0;
 let mut has_match: Bool = false;
 let mut arrow_col: Int = -1;
 let mut p: Int = line_start;

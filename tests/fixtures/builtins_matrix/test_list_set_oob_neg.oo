@@ -1,0 +1,21 @@
+// # List Set Negative Out-Of-Bounds Test
+//
+// Logline: Verifies negative index access exits code 1 with TSV error.
+//
+// Setup: Out-of-bounds access in list_set triggers stderr diagnostic and exit 1.
+//
+// Beats:
+//   1. Populate a 3-element List[Int].
+//   2. Call list_set at negative index -1.
+//   3. Execution must never reach normal termination.
+
+pub fn main() -> Int {
+    let mut xs: List[Int] = list_new();
+    xs = list_push(xs, 10);
+    xs = list_push(xs, 20);
+    xs = list_push(xs, 30);
+    // Negative index: must print "ERR\tlist_set OOB" and exit 1
+    xs = list_set(xs, 0 - 1, 99);
+    println("FAIL: OOB negative index did not terminate process");
+    return 0;
+}

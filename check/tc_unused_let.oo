@@ -14,8 +14,6 @@ import "tc_diag.oo";
 
 pub fn typecheck_unused_lets(toks: List[String]) {
     let n: Int = list_len(toks);
-    if n > 400 { return;
-    }
     let mut i: Int = 0;
     while i < n { let k: String = field_at(list_get(toks, i), 0);
     if k == "KW_LET" { let mut p: Int = i + 1;

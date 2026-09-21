@@ -15,8 +15,7 @@ pub fn typecheck_unary_bang_lit(toks: List[String]) {
     let mut ret_table: String = "";
     let mut i = 0;
     while i < n { let k: String = field_at(list_get(toks, i), 0);
-    if k == "BANG" { let line: String = field_at(list_get(toks, i), 1);
-    let col: String = field_at(list_get(toks, i), 2);
+    if k == "BANG" {
     if i + 1 < n { let oty: String = operand_type_with_env(toks, i + 1, lit_env);
     if oty != "" { if oty != "Bool" { tc_err_at( toks, i, "unary '!' requires Bool, found " + oty );
     }
