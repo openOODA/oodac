@@ -1,0 +1,84 @@
+// # Optimization Pass & Side Effect Invariant Harness
+//
+// Logline: Verify side effects and aggregate returns under -O0 to -O3.
+//
+// Setup: Compile with oodac check and emit-llvm, link under clang -O0..-O3.
+//
+// Beats:
+//   1. In-place list mutation side effect with discarded return value.
+//   2. Recursive accumulator returning Result[Point, String].
+//   3. Deeply nested helper chain returning Option[Point].
+
+pub type Point = struct {
+    x: Int,
+    y: Int
+};
+
+pub fn mutate_and_return_opt(l: List[Int], idx: Int, val: Int) -> Option[Point] {
+    let _ignored: List[Int] = list_set(l, idx, val);
+    let p: Point = Point { x: idx, y: val };
+    return Some(p);
+}
+
+pub fn nest_lvl3(p: Point) -> Option[Point] {
+    let next: Point = Point { x: p.x + 10, y: p.y + 20 };
+    return Some(next);
+}
+
+pub fn nest_lvl2(p: Point) -> Option[Point] {
+    let next: Point = Point { x: p.x + 1, y: p.y + 2 };
+    let r: Option[Point] = nest_lvl3(next);
+    match r {
+        Some(v) => { return Some(v); }
+        None => { return None; }
+    }
+}
+
+pub fn nest_lvl1(p: Point) -> Option[Point] {
+    return nest_lvl2(p);
+}
+
+pub fn recurse_acc(depth: Int, acc: Int) -> Result[Point, String] {
+    if depth <= 0 {
+        let res: Point = Point { x: acc, y: 42 };
+        return Ok(res);
+    }
+    return recurse_acc(depth - 1, acc + depth);
+}
+
+pub fn main() -> Int {
+    let mut nums: List[Int] = list_new();
+    nums = list_push(nums, 10);
+    nums = list_push(nums, 20);
+    nums = list_push(nums, 30);
+
+    let opt_res: Option[Point] = mutate_and_return_opt(nums, 1, 999);
+    match opt_res {
+        Some(pt) => {
+            if pt.x != 1 || pt.y != 999 { return 1; }
+        }
+        None => { return 2; }
+    }
+
+    let modified_elem: Int = list_get(nums, 1);
+    if modified_elem != 999 { return 3; }
+
+    let p0: Point = Point { x: 100, y: 200 };
+    let nested_res: Option[Point] = nest_lvl1(p0);
+    match nested_res {
+        Some(p_out) => {
+            if p_out.x != 111 || p_out.y != 222 { return 4; }
+        }
+        None => { return 5; }
+    }
+
+    let rec_res: Result[Point, String] = recurse_acc(100, 0);
+    match rec_res {
+        Ok(rp) => {
+            if rp.x != 5050 || rp.y != 42 { return 6; }
+        }
+        Err(_) => { return 7; }
+    }
+
+    return 0;
+}

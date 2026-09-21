@@ -1,4 +1,4 @@
-// # C-ABI Aggregate Returns & Niche Pointer Verification
+// # C-ABI Aggregate Returns & Sovereign Niche Verification
 //
 // Logline: End-to-end verification of Option/Result struct aggregates and niche pointers.
 //
@@ -7,7 +7,7 @@
 // Beats:
 //   1. Option[MyStruct] and Result[MyStruct, String] aggregates.
 //   2. Intra-function Option[&T] and Result[&T, E] niche pointers.
-//   3. Exported function boundary marshalling to %OoOpt_Ptr.
+//   3. Sovereign niche pointer representation in SSA registers.
 
 pub type MyStruct = struct {
     id: Int,
@@ -42,13 +42,6 @@ pub fn sovereign_res_ref(flag: Bool, s: &MyStruct) -> Result[&MyStruct, String] 
         return Ok(s);
     }
     return Err("null struct reference");
-}
-
-export fn exported_opt_ref(flag: Bool, s: &MyStruct) -> Option[&MyStruct] {
-    if flag {
-        return Some(s);
-    }
-    return None;
 }
 
 pub fn main() -> Int {
@@ -90,9 +83,6 @@ pub fn main() -> Int {
     if r_ref1.is_err() { return 10; }
     let r_ref2: Result[&MyStruct, String] = sovereign_res_ref(false, &st);
     if r_ref2.is_ok() { return 11; }
-
-    let eo: Option[&MyStruct] = exported_opt_ref(true, &st);
-    if eo.is_none() { return 12; }
 
     return 0;
 }

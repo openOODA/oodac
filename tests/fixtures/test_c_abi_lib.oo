@@ -1,0 +1,38 @@
+// # C-ABI Library Export Fixture
+//
+// Logline: Library functions exporting C-ABI aggregate returns for foreign C harness.
+//
+// Setup: Compile with oodac check and emit-llvm, link with C harness.
+//
+// Beats:
+//   1. Struct definition MyStruct.
+//   2. Exported functions returning Option[MyStruct] and Result[MyStruct, String].
+//   3. Exported function returning Option[&MyStruct] niche pointer.
+
+pub type MyStruct = struct {
+    id: Int,
+    score: Int
+};
+
+export fn c_export_make_opt(flag: Bool) -> Option[MyStruct] {
+    if flag {
+        let s: MyStruct = MyStruct { id: 42, score: 999 };
+        return Some(s);
+    }
+    return None;
+}
+
+export fn c_export_make_res(flag: Bool) -> Result[MyStruct, String] {
+    if flag {
+        let s: MyStruct = MyStruct { id: 84, score: 1998 };
+        return Ok(s);
+    }
+    return Err("foreign call failed");
+}
+
+export fn c_export_opt_ref(flag: Bool, s: &MyStruct) -> Option[&MyStruct] {
+    if flag {
+        return Some(s);
+    }
+    return None;
+}

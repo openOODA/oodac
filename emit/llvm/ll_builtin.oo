@@ -26,35 +26,13 @@ pub fn ll_arg(args: List[String], i: Int) -> String {
     return list_get(args, i);
 }
 
-pub fn ll_guess_list_kind(toks: List[String], pos: Int, n: Int) -> String {
-    let mut i: Int = pos;
-    let mut saw_i: Bool = false;
-    let mut saw_s: Bool = false;
-    while i + 3 < n {
-        let t: String = ll_t(toks, i);
-        if ll_k(toks, i) == "IDENT" && (t == "list_push" || t == "list_set") && ll_k(toks, i + 1) == "LPAREN" {
-            let mut d: Int = 1;
-            let mut j: Int = i + 2;
-            while j < n && d > 0 {
-                let kk: String = ll_k(toks, j);
-                if kk == "LPAREN" { d = d + 1; }
-                if kk == "RPAREN" { d = d - 1; }
-                if d == 1 && kk == "INT" { saw_i = true; }
-                if d == 1 && kk == "STRING" { saw_s = true; }
-                j = j + 1;
-            }
-        }
-        i = i + 1;
-    }
-    if saw_i && !saw_s { return "ilist"; }
-    return "slist";
-}
-
 pub fn ll_list_new(expect: String, ssa0: Int, ir: &mut IrBuf) -> String {
-    let k: String = if expect == "ilist" { "ilist" } else { "slist" };
+    let mut k: String = if expect == "ilist" { "ilist" } else { "slist" };
+    if expect == "flist" { k = "flist"; }
     let a: String = ll_tmpa(ssa0 + 1);
     ll_slot_ty(a, ll_ir_alloc(k), ir);
-    let fn_nm: String = if k == "ilist" { "@oo_ilist_new(ptr sret(%OoIList) align 8 " } else { "@oo_slist_new(ptr sret(%OoSList) align 8 " };
+    let mut fn_nm: String = if k == "ilist" { "@oo_ilist_new(ptr sret(%OoIList) align 8 " } else { "@oo_slist_new(ptr sret(%OoSList) align 8 " };
+    if k == "flist" { fn_nm = "@oo_flist_new(ptr sret(%OoFList) align 8 "; }
     ll_ir_inst(ir, "call", "void", "", fn_nm + a + ")", 1, 1);
     return ll_pack(0, ssa0 + 1, k, a);
 }
@@ -72,7 +50,8 @@ pub fn ll_builtin(name: String, args: List[String], ssa0: Int, expect: String, i
     if name == "list_len" && na >= 1 {
         let a0: String = ll_ensure_ptr(ll_arg(args, 0), ssa0, ir);
         let s: Int = ll_pssa(a0) + 1;
-        let fn_nm: String = if ll_pk(a0) == "ilist" { "@oo_ilist_len(ptr byval(%OoIList) align 8 " } else { "@oo_slist_len(ptr byval(%OoSList) align 8 " };
+        let mut fn_nm: String = if ll_pk(a0) == "ilist" { "@oo_ilist_len(ptr byval(%OoIList) align 8 " } else { "@oo_slist_len(ptr byval(%OoSList) align 8 " };
+        if ll_pk(a0) == "flist" { fn_nm = "@oo_flist_len(ptr byval(%OoFList) align 8 "; }
         ll_ir_inst(ir, "call", "i64", ll_ssa(s), fn_nm + ll_pptr(a0) + ")", 1, 1);
         return ll_pack(0, s, "i64", "");
     }
@@ -84,22 +63,32 @@ pub fn ll_builtin(name: String, args: List[String], ssa0: Int, expect: String, i
             ll_ir_inst(ir, "call", "i64", ll_ssa(s), "@oo_ilist_get(ptr byval(%OoIList) align 8 " + ll_pptr(a0) + ", i64 " + ll_opnd(ix) + ")", 1, 1);
             return ll_pack(0, s, "i64", "");
         }
+        if ll_pk(a0) == "flist" {
+            ll_ir_inst(ir, "call", "double", ll_ssa(s), "@oo_flist_get(ptr byval(%OoFList) align 8 " + ll_pptr(a0) + ", i64 " + ll_opnd(ix) + ")", 1, 1);
+            return ll_pack(0, s, "f64", "");
+        }
         ll_ir_inst(ir, "call", "{ ptr, i64 }", ll_ssa(s), "@oo_slist_get(ptr byval(%OoSList) align 8 " + ll_pptr(a0) + ", i64 " + ll_opnd(ix) + ")", 1, 1);
         return ll_pack(0, s, "str", "");
     }
     if name == "list_push" && na >= 2 {
         let a0: String = ll_ensure_ptr(ll_arg(args, 0), ssa0, ir);
         let a1r: String = ll_arg(args, 1);
-        let as_i: Bool = ll_pk(a0) == "ilist" || ll_is_int(ll_pk(a1r));
         let s0: Int = ll_pssa(a0);
         let out: String = ll_tmpa(s0 + 1);
         let mut s: Int = s0 + 1;
-        if as_i {
+        if ll_pk(a0) == "ilist" || ll_is_int(ll_pk(a1r)) {
             let pv: String = ll_i64arg(args, 1, s, ir);
             s = ll_hw(s, ll_pssa(pv)) + 1;
             ll_slot_ty(out, "%OoIList", ir);
             ll_ir_inst(ir, "call", "void", "", "@oo_ilist_push(ptr sret(%OoIList) align 8 " + out + ", ptr byval(%OoIList) align 8 " + ll_pptr(a0) + ", i64 " + ll_opnd(pv) + ")", 1, 1);
             return ll_pack(0, s, "ilist", out);
+        }
+        if ll_pk(a0) == "flist" || ll_pk(a1r) == "f64" {
+            let a1: String = ll_as_val(a1r, s, ir);
+            s = ll_pssa(a1);
+            ll_slot_ty(out, "%OoFList", ir);
+            ll_ir_inst(ir, "call", "void", "", "@oo_flist_push(ptr sret(%OoFList) align 8 " + out + ", ptr byval(%OoFList) align 8 " + ll_pptr(a0) + ", double " + ll_ssa(s) + ")", 1, 1);
+            return ll_pack(0, s, "flist", out);
         }
         let a1: String = ll_as_val(a1r, s, ir);
         s = ll_pssa(a1);
@@ -119,6 +108,10 @@ pub fn ll_builtin(name: String, args: List[String], ssa0: Int, expect: String, i
         let mut rk: String = "slist";
         if k == "ilist" { ty = "%OoIList"; fnm = "@oo_ilist_slice"; rk = "ilist"; }
         if k == "flist" { ty = "%OoFList"; fnm = "@oo_flist_slice"; rk = "flist"; }
+        if k != "slist" && k != "ilist" && k != "flist" {
+            println("ERR\tllvm\tunsupported list_slice kind " + k);
+            process_exit(1);
+        }
         ll_slot_ty(out, ty, ir);
         ll_ir_inst(ir, "call", "void", "", fnm + "(ptr sret(" + ty + ") align 8 " + out + ", ptr byval(" + ty + ") align 8 " + ll_pptr(a0) + ", i64 " + ll_opnd(c1) + ", i64 " + ll_opnd(c2) + ")", 1, 1);
         return ll_pack(0, s, rk, out);
@@ -144,20 +137,6 @@ pub fn ll_builtin(name: String, args: List[String], ssa0: Int, expect: String, i
             ll_slot_ty(out, "%OoFList", ir);
             ll_ir_inst(ir, "call", "void", "", "@oo_flist_set(ptr sret(%OoFList) align 8 " + out + ", ptr byval(%OoFList) align 8 " + ll_pptr(a0) + ", i64 " + ll_opnd(ix) + ", double " + ll_ssa(s) + ")", 1, 1);
             return ll_pack(0, s, "flist", out);
-        }
-        if k == "ll_i" || k == "OoLL_I" {
-            let pv: String = ll_ensure_ptr(a2r, s, ir);
-            s = ll_pssa(pv) + 1;
-            ll_slot_ty(out, "%OoLL_I", ir);
-            ll_ir_inst(ir, "call", "void", "", "@oo_ll_I_set(ptr sret(%OoLL_I) align 8 " + out + ", ptr byval(%OoLL_I) align 8 " + ll_pptr(a0) + ", i64 " + ll_opnd(ix) + ", ptr byval(%OoIList) align 8 " + ll_pptr(pv) + ")", 1, 1);
-            return ll_pack(0, s, "ll_i", out);
-        }
-        if k == "ll_s" || k == "OoLL_S" {
-            let pv: String = ll_ensure_ptr(a2r, s, ir);
-            s = ll_pssa(pv) + 1;
-            ll_slot_ty(out, "%OoLL_S", ir);
-            ll_ir_inst(ir, "call", "void", "", "@oo_ll_S_set(ptr sret(%OoLL_S) align 8 " + out + ", ptr byval(%OoLL_S) align 8 " + ll_pptr(a0) + ", i64 " + ll_opnd(ix) + ", ptr byval(%OoSList) align 8 " + ll_pptr(pv) + ")", 1, 1);
-            return ll_pack(0, s, "ll_s", out);
         }
         let a2: String = ll_as_val(a2r, s, ir);
         s = ll_pssa(a2);

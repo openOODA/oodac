@@ -1,0 +1,146 @@
+// # C-ABI Aggregate Return & Niche Optimization Stress Harness
+//
+// Logline: Stress-test recursion, niche pointers, and stack frame invariants.
+//
+// Setup: Compile with oodac check and emit-llvm, link under clang -O0..-O3.
+//
+// Beats:
+//   1. Recursive Option[MyStruct] and Result[MyStruct, String] to depth 1000.
+//   2. Recursive niche pointer Option[&MyStruct] to depth 1000.
+//   3. Stack frame canary integrity across aggregate calls.
+
+pub type MyStruct = struct {
+    id: Int,
+    score: Int
+};
+
+pub fn recurse_opt_some(depth: Int, s: MyStruct) -> Option[MyStruct] {
+    if depth <= 0 {
+        return Some(s);
+    }
+    let next: MyStruct = MyStruct { id: s.id + 1, score: s.score + 10 };
+    return recurse_opt_some(depth - 1, next);
+}
+
+pub fn recurse_opt_none(depth: Int, s: MyStruct) -> Option[MyStruct] {
+    if depth <= 0 {
+        return None;
+    }
+    let next: MyStruct = MyStruct { id: s.id + 1, score: s.score + 10 };
+    return recurse_opt_none(depth - 1, next);
+}
+
+pub fn recurse_res_ok(depth: Int, s: MyStruct) -> Result[MyStruct, String] {
+    if depth <= 0 {
+        return Ok(s);
+    }
+    let next: MyStruct = MyStruct { id: s.id + 1, score: s.score + 10 };
+    return recurse_res_ok(depth - 1, next);
+}
+
+pub fn recurse_res_err(depth: Int, s: MyStruct) -> Result[MyStruct, String] {
+    if depth <= 0 {
+        return Err("max depth reached");
+    }
+    let next: MyStruct = MyStruct { id: s.id + 1, score: s.score + 10 };
+    return recurse_res_err(depth - 1, next);
+}
+
+pub fn recurse_niche_opt(depth: Int, s: &MyStruct) -> Option[&MyStruct] {
+    if depth <= 0 {
+        return Some(s);
+    }
+    return recurse_niche_opt(depth - 1, s);
+}
+
+pub fn recurse_niche_none(depth: Int, s: &MyStruct) -> Option[&MyStruct] {
+    if depth <= 0 {
+        return None;
+    }
+    return recurse_niche_none(depth - 1, s);
+}
+
+pub fn recurse_niche_res(depth: Int, s: &MyStruct) -> Result[&MyStruct, String] {
+    if depth <= 0 {
+        return Ok(s);
+    }
+    return recurse_niche_res(depth - 1, s);
+}
+
+pub fn test_stack_canaries() -> Int {
+    let c1: Int = 11111111;
+    let c2: Int = 22222222;
+    let c3: Int = 33333333;
+    let c4: Int = 44444444;
+    let init: MyStruct = MyStruct { id: 0, score: 0 };
+    let r_opt: Option[MyStruct] = recurse_opt_some(1000, init);
+    match r_opt {
+        Some(s) => {
+            if s.id != 1000 || s.score != 10000 { return 101; }
+        }
+        None => { return 102; }
+    }
+    if c1 != 11111111 || c2 != 22222222 || c3 != 33333333 || c4 != 44444444 {
+        return 103;
+    }
+    let r_res: Result[MyStruct, String] = recurse_res_ok(1000, init);
+    match r_res {
+        Ok(s) => {
+            if s.id != 1000 || s.score != 10000 { return 104; }
+        }
+        Err(_) => { return 105; }
+    }
+    if c1 != 11111111 || c2 != 22222222 || c3 != 33333333 || c4 != 44444444 {
+        return 106;
+    }
+    return 0;
+}
+
+pub fn main() -> Int {
+    let init: MyStruct = MyStruct { id: 0, score: 0 };
+
+    let opt_some: Option[MyStruct] = recurse_opt_some(1000, init);
+    match opt_some {
+        Some(s) => {
+            if s.id != 1000 || s.score != 10000 { return 1; }
+        }
+        None => { return 2; }
+    }
+
+    let opt_none: Option[MyStruct] = recurse_opt_none(1000, init);
+    match opt_none {
+        Some(_) => { return 3; }
+        None => {}
+    }
+
+    let res_ok: Result[MyStruct, String] = recurse_res_ok(1000, init);
+    match res_ok {
+        Ok(s) => {
+            if s.id != 1000 || s.score != 10000 { return 4; }
+        }
+        Err(_) => { return 5; }
+    }
+
+    let res_err: Result[MyStruct, String] = recurse_res_err(1000, init);
+    match res_err {
+        Ok(_) => { return 6; }
+        Err(msg) => {
+            if msg != "max depth reached" { return 7; }
+        }
+    }
+
+    let st: MyStruct = MyStruct { id: 42, score: 999 };
+    let n_some: Option[&MyStruct] = recurse_niche_opt(1000, &st);
+    if n_some.is_none() { return 8; }
+
+    let n_none: Option[&MyStruct] = recurse_niche_none(1000, &st);
+    if n_none.is_some() { return 9; }
+
+    let n_res: Result[&MyStruct, String] = recurse_niche_res(1000, &st);
+    if n_res.is_err() { return 10; }
+
+    let canary_ret: Int = test_stack_canaries();
+    if canary_ret != 0 { return canary_ret; }
+
+    return 0;
+}

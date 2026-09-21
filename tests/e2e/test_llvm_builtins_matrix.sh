@@ -107,6 +107,20 @@ run_suite() {
     if "$d/phys_bin" >/dev/null 2>&1; then s_phys=0; fi
   fi
   record_test "T-PHYS-01" "C ABI bit-exact refcount, zero realloc, and quota invariant" "$s_phys"
+
+  # 8. T-FLOAT-01: List[Float] Complete Operations
+  local s_float=1
+  if compile_oo "$FIXTURES/test_list_float.oo" "$d/float_bin"; then
+    if "$d/float_bin" >/dev/null 2>&1; then s_float=0; fi
+  fi
+  record_test "T-FLOAT-01" "List[Float] new, len, push, get, set, and slice" "$s_float"
+
+  # 9. T-SLICE-02: 2D Matrix Slice & Inner Preservation
+  local s_matrix_slice=1
+  if compile_oo "$FIXTURES/test_matrix_slice.oo" "$d/matrix_slice_bin"; then
+    if "$d/matrix_slice_bin" >/dev/null 2>&1; then s_matrix_slice=0; fi
+  fi
+  record_test "T-SLICE-02" "2D matrix slice preserves inner list rows and bounds" "$s_matrix_slice"
 }
 
 # Governance checks: verify Academy line counts and header laws

@@ -122,8 +122,14 @@ fn ll_rt_emit_rest(need: String) {
     ll_d(need, "oo_ilist_get", "declare i64 @oo_ilist_get(ptr byval(%OoIList) align 8, i64)");
     ll_d(need, "oo_ilist_slice", "declare void @oo_ilist_slice(ptr sret(%OoIList) align 8, ptr byval(%OoIList) align 8, i64, i64)");
     ll_d(need, "oo_ilist_set", "declare void @oo_ilist_set(ptr sret(%OoIList) align 8, ptr byval(%OoIList) align 8, i64, i64)");
+    ll_d(need, "oo_flist_new", "declare void @oo_flist_new(ptr sret(%OoFList) align 8)");
+    ll_d(need, "oo_flist_len", "declare i64 @oo_flist_len(ptr byval(%OoFList) align 8)");
+    ll_d(need, "oo_flist_get", "declare double @oo_flist_get(ptr byval(%OoFList) align 8, i64)");
+    ll_d(need, "oo_flist_push", "declare void @oo_flist_push(ptr sret(%OoFList) align 8, ptr byval(%OoFList) align 8, double)");
     ll_d(need, "oo_flist_slice", "declare void @oo_flist_slice(ptr sret(%OoFList) align 8, ptr byval(%OoFList) align 8, i64, i64)");
     ll_d(need, "oo_flist_set", "declare void @oo_flist_set(ptr sret(%OoFList) align 8, ptr byval(%OoFList) align 8, i64, double)");
+    ll_d(need, "oo_ll_I_slice", "declare void @oo_ll_I_slice(ptr sret(%OoLL_I) align 8, ptr byval(%OoLL_I) align 8, i64, i64)");
+    ll_d(need, "oo_ll_S_slice", "declare void @oo_ll_S_slice(ptr sret(%OoLL_S) align 8, ptr byval(%OoLL_S) align 8, i64, i64)");
     ll_d(need, "oo_ll_I_set", "declare void @oo_ll_I_set(ptr sret(%OoLL_I) align 8, ptr byval(%OoLL_I) align 8, i64, ptr byval(%OoIList) align 8)");
     ll_d(need, "oo_ll_I_new", "declare void @oo_ll_I_new(ptr sret(%OoLL_I) align 8)");
     ll_d(need, "oo_ll_I_len", "declare i64 @oo_ll_I_len(ptr byval(%OoLL_I) align 8)");

@@ -65,19 +65,19 @@ fn ll_need_call(need: String, nm: String) -> String {
         return n;
     }
     if nm == "list_new" {
-        return ll_need_add(ll_need_add(ll_need_add(ll_need_add(n, "oo_slist_new"), "oo_ilist_new"), "oo_ll_I_new"), "oo_ll_S_new");
+        return ll_need_add(ll_need_add(ll_need_add(ll_need_add(ll_need_add(n, "oo_slist_new"), "oo_ilist_new"), "oo_flist_new"), "oo_ll_I_new"), "oo_ll_S_new");
     }
     if nm == "list_len" {
-        return ll_need_add(ll_need_add(ll_need_add(ll_need_add(n, "oo_slist_len"), "oo_ilist_len"), "oo_ll_I_len"), "oo_ll_S_len");
+        return ll_need_add(ll_need_add(ll_need_add(ll_need_add(ll_need_add(n, "oo_slist_len"), "oo_ilist_len"), "oo_flist_len"), "oo_ll_I_len"), "oo_ll_S_len");
     }
     if nm == "list_get" {
-        return ll_need_add(ll_need_add(ll_need_add(ll_need_add(n, "oo_slist_get"), "oo_ilist_get"), "oo_ll_I_get"), "oo_ll_S_get");
+        return ll_need_add(ll_need_add(ll_need_add(ll_need_add(ll_need_add(n, "oo_slist_get"), "oo_ilist_get"), "oo_flist_get"), "oo_ll_I_get"), "oo_ll_S_get");
     }
     if nm == "list_push" {
-        return ll_need_add(ll_need_add(ll_need_add(ll_need_add(n, "oo_slist_push"), "oo_ilist_push"), "oo_ll_I_push"), "oo_ll_S_push");
+        return ll_need_add(ll_need_add(ll_need_add(ll_need_add(ll_need_add(n, "oo_slist_push"), "oo_ilist_push"), "oo_flist_push"), "oo_ll_I_push"), "oo_ll_S_push");
     }
     if nm == "list_slice" {
-        return ll_need_add(ll_need_add(ll_need_add(n, "oo_slist_slice"), "oo_ilist_slice"), "oo_flist_slice");
+        return ll_need_add(ll_need_add(ll_need_add(ll_need_add(ll_need_add(n, "oo_slist_slice"), "oo_ilist_slice"), "oo_flist_slice"), "oo_ll_I_slice"), "oo_ll_S_slice");
     }
     if nm == "list_set" {
         return ll_need_add(ll_need_add(ll_need_add(ll_need_add(ll_need_add(n, "oo_slist_set"), "oo_ilist_set"), "oo_flist_set"), "oo_ll_I_set"), "oo_ll_S_set");

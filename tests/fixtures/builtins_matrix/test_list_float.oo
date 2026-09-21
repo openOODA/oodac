@@ -1,0 +1,139 @@
+// # List[Float] LLVM Lowering Verification
+//
+// Logline: Verifies list_new, list_len, list_push, list_get, list_set, and list_slice for Float lists.
+//
+// Setup: Native LLVM lowering for float lists.
+//
+// Beats:
+//   1. Verify list_new and list_len on empty float list.
+//   2. Verify list_push and list_get with float values.
+//   3. Verify list_set in-place mutation and copy-on-write.
+//   4. Verify list_slice with sub-slice and clamped boundaries.
+
+fn float_abs(x: Float) -> Float {
+    if x < 0.0 { return 0.0 - x; }
+    return x;
+}
+
+fn float_approx_eq(a: Float, b: Float) -> Bool {
+    return float_abs(a - b) < 0.0001;
+}
+
+pub fn test_float_new_and_len() -> Bool {
+    let empty: List[Float] = list_new();
+    if list_len(empty) != 0 {
+        println("FAIL: empty float list has non-zero len");
+        process_exit(1);
+    }
+    return true;
+}
+
+pub fn test_float_push_and_get() -> Bool {
+    let mut fl: List[Float] = list_new();
+    fl = list_push(fl, 1.25);
+    fl = list_push(fl, 2.5);
+    fl = list_push(fl, 0.0 - 3.75);
+    fl = list_push(fl, 42.125);
+
+    if list_len(fl) != 4 {
+        println("FAIL: float list len mismatch after push");
+        process_exit(1);
+    }
+    if !float_approx_eq(list_get(fl, 0), 1.25) {
+        println("FAIL: float list_get(0) mismatch");
+        process_exit(1);
+    }
+    if !float_approx_eq(list_get(fl, 1), 2.5) {
+        println("FAIL: float list_get(1) mismatch");
+        process_exit(1);
+    }
+    if !float_approx_eq(list_get(fl, 2), 0.0 - 3.75) {
+        println("FAIL: float list_get(2) mismatch");
+        process_exit(1);
+    }
+    if !float_approx_eq(list_get(fl, 3), 42.125) {
+        println("FAIL: float list_get(3) mismatch");
+        process_exit(1);
+    }
+    return true;
+}
+
+pub fn test_float_set_mutation() -> Bool {
+    let mut fl: List[Float] = list_new();
+    fl = list_push(fl, 10.5);
+    fl = list_push(fl, 20.5);
+    fl = list_push(fl, 30.5);
+
+    // In-place single-owner mutation
+    fl = list_set(fl, 1, 99.5);
+    if !float_approx_eq(list_get(fl, 1), 99.5) {
+        println("FAIL: float list_set in-place mismatch");
+        process_exit(1);
+    }
+
+    // COW mutation test (shared list)
+    let fl_shared: List[Float] = fl;
+    let fl_cow: List[Float] = list_set(fl, 0, 77.25);
+
+    // Original shared list unchanged at index 0
+    if !float_approx_eq(list_get(fl_shared, 0), 10.5) {
+        println("FAIL: float COW mutated shared original");
+        process_exit(1);
+    }
+    // New list has mutated value
+    if !float_approx_eq(list_get(fl_cow, 0), 77.25) {
+        println("FAIL: float COW new list mismatch");
+        process_exit(1);
+    }
+    return true;
+}
+
+pub fn test_float_slice() -> Bool {
+    let mut fl: List[Float] = list_new();
+    fl = list_push(fl, 1.1);
+    fl = list_push(fl, 2.2);
+    fl = list_push(fl, 3.3);
+    fl = list_push(fl, 4.4);
+
+    // Sub-slice [1, 3) -> [2.2, 3.3]
+    let sl: List[Float] = list_slice(fl, 1, 3);
+    if list_len(sl) != 2 {
+        println("FAIL: float list_slice sub len mismatch");
+        process_exit(1);
+    }
+    if !float_approx_eq(list_get(sl, 0), 2.2) || !float_approx_eq(list_get(sl, 1), 3.3) {
+        println("FAIL: float list_slice sub values mismatch");
+        process_exit(1);
+    }
+
+    // Clamped lo < 0
+    let sl_lo: List[Float] = list_slice(fl, 0 - 2, 2);
+    if list_len(sl_lo) != 2 || !float_approx_eq(list_get(sl_lo, 0), 1.1) {
+        println("FAIL: float list_slice lo clamp mismatch");
+        process_exit(1);
+    }
+
+    // Clamped hi > len
+    let sl_hi: List[Float] = list_slice(fl, 2, 99);
+    if list_len(sl_hi) != 2 || !float_approx_eq(list_get(sl_hi, 1), 4.4) {
+        println("FAIL: float list_slice hi clamp mismatch");
+        process_exit(1);
+    }
+
+    // lo >= hi -> empty
+    let sl_empty: List[Float] = list_slice(fl, 3, 2);
+    if list_len(sl_empty) != 0 {
+        println("FAIL: float list_slice lo>=hi not empty");
+        process_exit(1);
+    }
+    return true;
+}
+
+pub fn main() -> Int {
+    test_float_new_and_len();
+    test_float_push_and_get();
+    test_float_set_mutation();
+    test_float_slice();
+    println("OK float list builtins verified");
+    return 0;
+}

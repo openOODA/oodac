@@ -158,3 +158,30 @@ pub fn ll_call_at(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String, 
     let u: String = ll_user_call(gnm, sig, args, ssa, ir);
     return ll_pack(p, ll_pssa(u), ll_pk(u), ll_pptr(u));
 }
+
+pub fn ll_guess_list_kind(toks: List[String], pos: Int, n: Int) -> String {
+    let mut i: Int = pos;
+    let mut saw_i: Bool = false;
+    let mut saw_s: Bool = false;
+    let mut saw_f: Bool = false;
+    while i + 3 < n {
+        let t: String = ll_t(toks, i);
+        if ll_k(toks, i) == "IDENT" && (t == "list_push" || t == "list_set") && ll_k(toks, i + 1) == "LPAREN" {
+            let mut d: Int = 1;
+            let mut j: Int = i + 2;
+            while j < n && d > 0 {
+                let kk: String = ll_k(toks, j);
+                if kk == "LPAREN" { d = d + 1; }
+                if kk == "RPAREN" { d = d - 1; }
+                if d == 1 && kk == "INT" { saw_i = true; }
+                if d == 1 && kk == "STRING" { saw_s = true; }
+                if d == 1 && kk == "FLOAT" { saw_f = true; }
+                j = j + 1;
+            }
+        }
+        i = i + 1;
+    }
+    if saw_f && !saw_i && !saw_s { return "flist"; }
+    if saw_i && !saw_s && !saw_f { return "ilist"; }
+    return "slist";
+}

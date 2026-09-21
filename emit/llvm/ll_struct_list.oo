@@ -172,6 +172,18 @@ fn ll_ll_set(arg: String, idx: String, val: String, ssa0: Int, ir: &mut IrBuf) -
     return ll_pack(0, s, k, out);
 }
 
+fn ll_ll_slice(arg: String, lo: String, hi: String, ssa0: Int, ir: &mut IrBuf) -> String {
+    let k: String = ll_pk(arg);
+    let a0: String = ll_ensure_ptr(arg, ssa0, ir);
+    let s: Int = ll_pssa(a0) + 1;
+    let out: String = ll_tmpa(s);
+    let ty: String = if k == "ll_i" { "%OoLL_I" } else { "%OoLL_S" };
+    let fnm: String = if k == "ll_i" { "@oo_ll_I_slice" } else { "@oo_ll_S_slice" };
+    ll_slot_ty(out, ty, ir);
+    ll_ir_inst(ir, "call", "void", "", fnm + "(ptr sret(" + ty + ") align 8 " + out + ", ptr byval(" + ty + ") align 8 " + ll_pptr(a0) + ", i64 " + ll_opnd(lo) + ", i64 " + ll_opnd(hi) + ")", 1, 1);
+    return ll_pack(0, s, k, out);
+}
+
 pub fn ll_olist_builtin(name: String, args: List[String], ssa0: Int, expect: String, ir: &mut IrBuf) -> String {
     if name == "list_new" {
         if ll_is_olist(expect) { return ll_olist_new(expect, ssa0, ir); }
@@ -185,6 +197,7 @@ pub fn ll_olist_builtin(name: String, args: List[String], ssa0: Int, expect: Str
         if name == "list_get" && na >= 2 { return ll_ll_get(list_get(args, 0), list_get(args, 1), ssa0, ir); }
         if name == "list_push" && na >= 2 { return ll_ll_push(list_get(args, 0), list_get(args, 1), ssa0, ir); }
         if name == "list_set" && na >= 3 { return ll_ll_set(list_get(args, 0), list_get(args, 1), list_get(args, 2), ssa0, ir); }
+        if name == "list_slice" && na >= 3 { return ll_ll_slice(list_get(args, 0), list_get(args, 1), list_get(args, 2), ssa0, ir); }
         return "";
     }
     if !ll_is_olist(k0) { return ""; }
