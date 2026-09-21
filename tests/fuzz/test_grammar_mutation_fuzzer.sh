@@ -132,6 +132,21 @@ with open('$f257', 'w') as f: f.write('// line\n' * 256 + 'pub fn f() -> Int { r
     s_emit=1
   fi
   record_test "T-FUZZ-04" "Malformed emit-llvm fails closed cleanly without SIGSEGV/SIGABRT" "$s_emit"
+
+  # 5. T-FUZZ-05: Adversarial Injections (BOM, NUL, ESC, 500-nesting, 100k ID)
+  local s_adv=0
+  local adv_log="$d/adv_injections.log"
+  if ! python3 -c "
+import sys, os
+sys.path.insert(0, '$SCRIPT_DIR')
+from test_challenger_m2_stress import test_adversarial_grammar_seeds
+if not test_adversarial_grammar_seeds():
+    sys.exit(1)
+" > "$adv_log" 2>&1; then
+    s_adv=1
+    cat "$adv_log"
+  fi
+  record_test "T-FUZZ-05" "Adversarial inputs (BOM, NUL, 500-depth nesting, 100k ID) fail closed" "$s_adv"
 }
 
 # Double-run determinism

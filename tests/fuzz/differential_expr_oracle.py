@@ -75,7 +75,9 @@ class BoolNot(Node):
 class BoolBin(Node):
     def __init__(self, op, l, r): self.op, self.l, self.r = op, l, r
     def to_oo(self, p=False):
-        s = f"{self.l.to_oo(False)} {self.op} {self.r.to_oo(False)}"
+        l_str = self.l.to_oo(True) if isinstance(self.l, BoolBin) else self.l.to_oo(False)
+        r_str = self.r.to_oo(True) if isinstance(self.r, BoolBin) else self.r.to_oo(False)
+        s = f"{l_str} {self.op} {r_str}"
         return f"({s})" if p else s
     def eval(self):
         l = self.l.eval()
@@ -84,7 +86,8 @@ class BoolBin(Node):
 class CmpBin(Node):
     def __init__(self, op, l, r): self.op, self.l, self.r = op, l, r
     def to_oo(self, p=False):
-        return f"{self.l.to_oo(False)} {self.op} {self.r.to_oo(True)}"
+        s = f"{self.l.to_oo(True)} {self.op} {self.r.to_oo(True)}"
+        return f"({s})" if p else s
     def eval(self):
         l, r = self.l.eval(), self.r.eval()
         if self.op == '<': return l < r
@@ -122,9 +125,9 @@ def gen_bool(rng, d, max_d, is_cond_root=False):
     pick = rng.randint(0, 4)
     if pick == 0: return BoolLit(rng.choice([True, False]))
     if pick == 1: return BoolNot(gen_bool(rng, d + 1, max_d, False))
-    if pick == 2:
+    if pick == 2 and not is_cond_root:
         return BoolBin(rng.choice(['&&', '||']),
-                       gen_bool(rng, d + 1, max_d, is_cond_root),
+                       gen_bool(rng, d + 1, max_d, False),
                        gen_bool(rng, d + 1, max_d, False))
     op = rng.choice(['<', '<=', '>', '>=', '==', '!='])
     if is_cond_root:

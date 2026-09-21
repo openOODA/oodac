@@ -1,0 +1,17 @@
+// # Boundary Integers Adversarial Seed
+// Logline: INT64 extremes and bitwise shifts.
+// Setup: Pure compute.
+// Beats:
+//   1. Evaluate boundary integers.
+//   2. Shift and return.
+
+pub fn bounds_seed(x: Int) -> Int {
+    let max_val: Int = 9223372036854775807;
+    let min_val: Int = -9223372036854775808;
+    let s1 = (x & 63) << 62;
+    let s2 = min_val >> 63;
+    if max_val > min_val {
+        return s1 + s2;
+    }
+    return 0;
+}

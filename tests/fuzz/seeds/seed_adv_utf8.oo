@@ -1,0 +1,14 @@
+// # UTF-8 Adversarial Seed
+// Logline: Multi-byte UTF-8 in strings and comments.
+// Setup: Pure compute.
+// Beats:
+//   1. Process string literals.
+//   2. Return status.
+
+pub fn utf8_seed() -> Int {
+    let s: String = "Hello UTF-8 world";
+    if s.len() > 0 {
+        return 1;
+    }
+    return 0;
+}

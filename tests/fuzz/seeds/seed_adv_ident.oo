@@ -1,0 +1,11 @@
+// # Long Identifier Adversarial Seed
+// Logline: Long identifier handling.
+// Setup: Pure compute.
+// Beats:
+//   1. Declare long identifier.
+//   2. Return value.
+
+pub fn long_ident_seed() -> Int {
+    let long_var_name_adv_identifier_stress_test_1234567890: Int = 42;
+    return long_var_name_adv_identifier_stress_test_1234567890;
+}
