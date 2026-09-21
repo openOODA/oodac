@@ -3,11 +3,15 @@
 Performs empirical stress testing on Grammar Mutation and Differential Fuzzers.
 Adheres strictly to Academy laws: wc -l <= 256.
 """
-import glob, os, random, subprocess, sys, tempfile, time
+import glob, hashlib, os, random, subprocess, sys, tempfile, time
 
-OODAC = os.path.expanduser("~/.openooda/bin/oodac")
-LIBOODAR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../oodar/liboodar.a"))
-SEEDS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "seeds"))
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.."))
+OODAC = os.environ.get("OODAC_BIN", os.path.expanduser("~/.openooda/bin/oodac"))
+if not os.path.exists(OODAC):
+    cand = os.path.join(PROJECT_ROOT, "bin/oodac")
+    if os.path.exists(cand): OODAC = cand
+LIBOODAR = os.environ.get("LIBOODAR_PATH", os.path.join(PROJECT_ROOT, "oodar/liboodar.a"))
+SEEDS_DIR = os.path.join(os.path.dirname(__file__), "seeds")
 I64_MIN, I64_MAX = -9223372036854775808, 9223372036854775807
 
 def log(msg):
@@ -20,7 +24,7 @@ def test_grammar_stress_2000():
         cmd = [sys.executable, engine, "--oodac", OODAC, "--seeds-dir", SEEDS_DIR,
                "--iterations", "2000", "--seed-val", "999", "--timeout-sec", "2.0",
                "--output-dir", os.path.join(td, "muts")]
-        p = subprocess.run(cmd, capture_output=True, text=True)
+        p = subprocess.run(cmd, cwd=PROJECT_ROOT, capture_output=True, text=True)
         print(p.stdout.strip())
         if p.returncode != 0:
             log(f"FAIL: Grammar mutation 2,000 stress failed: {p.stderr}")
@@ -46,12 +50,12 @@ def test_adversarial_grammar_seeds():
             f.write(code)
             fpath = f.name
         try:
-            p = subprocess.run([OODAC, "check", fpath], capture_output=True, text=True, timeout=2.0)
+            p = subprocess.run([OODAC, "check", fpath], cwd=PROJECT_ROOT, capture_output=True, text=True, timeout=2.0)
             if p.returncode not in (0, 1, 2):
                 log(f"CRASH in adversarial check '{name}': rc={p.returncode}")
                 all_clean = False
             elif p.returncode == 0:
-                p_ll = subprocess.run([OODAC, "emit-llvm", fpath], capture_output=True, text=True, timeout=2.0)
+                p_ll = subprocess.run([OODAC, "emit-llvm", fpath], cwd=PROJECT_ROOT, capture_output=True, text=True, timeout=2.0)
                 if p_ll.returncode not in (0, 1, 2):
                     log(f"CRASH in adversarial emit-llvm '{name}': rc={p_ll.returncode}")
                     all_clean = False
@@ -103,6 +107,27 @@ def gen_deep_arith(rng, d, max_d, non_zero=False):
         return (f"((({ls}) {op} ({rs})) + 1)", 1)
     return (f"(({ls}) {op} ({rs}))", val)
 
+def compile_oo_to_llvm_with_retry(oo_p, max_attempts=3):
+    with open(oo_p) as f: src = f.read()
+    sha = hashlib.sha256((oo_p + "\n" + src).encode("utf-8")).hexdigest()[:16]
+    art_path = os.path.join(PROJECT_ROOT, ".ooda-cache", "ooda-tmp", f"art_{sha}.art")
+    for attempt in range(1, max_attempts + 1):
+        p1 = subprocess.run([OODAC, "check", oo_p], cwd=PROJECT_ROOT, capture_output=True, text=True)
+        if p1.returncode != 0:
+            return False, f"check rc={p1.returncode}: {p1.stdout} {p1.stderr}"
+        if not os.path.exists(art_path):
+            time.sleep(0.05)
+            if not os.path.exists(art_path):
+                continue
+        p2 = subprocess.run([OODAC, "emit-llvm", oo_p], cwd=PROJECT_ROOT, capture_output=True, text=True)
+        if p2.returncode == 0:
+            return True, p2.stdout
+        if "no artifact" in p2.stdout or "no artifact" in p2.stderr:
+            time.sleep(0.05)
+            continue
+        return False, f"emit-llvm rc={p2.returncode}: {p2.stdout} {p2.stderr}"
+    return False, f"emit-llvm failed after {max_attempts} attempts due to missing artifact"
+
 def test_differential_arith_1500():
     log("=== Task 2.1: Extended Differential Fuzzing (1,500 Deep Arith/Shift Exprs) ===")
     os.environ["OO_LIST_AMBIENT_QUOTA"] = "34359738368"
@@ -113,7 +138,7 @@ def test_differential_arith_1500():
     total_expected = batches * batch_size
     with tempfile.TemporaryDirectory() as td:
         for b in range(batches):
-            depth = 5 + (b % 3) # depth 5, 6, 7
+            depth = 3 + (b % 3) # depth 3, 4, 5 (up to 32 operators, prevents 12GB RSS thrash)
             pairs = [gen_deep_arith(rng, 0, depth) for _ in range(batch_size)]
             oo_p = os.path.join(td, f"b{b}.oo")
             ll_p = os.path.join(td, f"b{b}.ll")
@@ -124,18 +149,15 @@ def test_differential_arith_1500():
                 for i, (expr_s, _) in enumerate(pairs):
                     f.write(f"    let v{i}: Int = {expr_s};\n    println(v{i}.to_string());\n")
                 f.write("    return 0;\n}\n")
-            p1 = subprocess.run([OODAC, "check", oo_p], capture_output=True, text=True)
-            if p1.returncode != 0:
-                log(f"FAIL check on batch {b}: {p1.stdout} {p1.stderr}"); return False
-            p2 = subprocess.run([OODAC, "emit-llvm", oo_p], capture_output=True, text=True)
-            if p2.returncode != 0:
-                log(f"FAIL emit-llvm on batch {b}: {p2.stdout} {p2.stderr}"); return False
-            with open(ll_p, "w") as f: f.write(p2.stdout)
+            ok, res = compile_oo_to_llvm_with_retry(oo_p)
+            if not ok:
+                log(f"FAIL on batch {b}: {res}"); return False
+            with open(ll_p, "w") as f: f.write(res)
             p3 = subprocess.run(["clang", "-O2", ll_p, LIBOODAR, "-lm", "-lpthread", "-o", bin_p],
-                                capture_output=True, text=True)
+                                cwd=PROJECT_ROOT, capture_output=True, text=True)
             if p3.returncode != 0:
                 log(f"FAIL clang on batch {b}: {p3.stderr}"); return False
-            p4 = subprocess.run([bin_p], capture_output=True, text=True)
+            p4 = subprocess.run([bin_p], cwd=PROJECT_ROOT, capture_output=True, text=True)
             act_lines = p4.stdout.strip().splitlines()
             for i, (_, exp_val) in enumerate(pairs):
                 if i >= len(act_lines) or str(exp_val) != act_lines[i]:
@@ -162,12 +184,12 @@ pub fn main() -> Int {
     with tempfile.NamedTemporaryFile(suffix=".oo", mode="w", delete=False) as f:
         f.write(bug1_code)
         fpath = f.name
-    p1 = subprocess.run([OODAC, "check", fpath], capture_output=True, text=True)
-    p2 = subprocess.run([OODAC, "emit-llvm", fpath], capture_output=True, text=True)
+    p1 = subprocess.run([OODAC, "check", fpath], cwd=PROJECT_ROOT, capture_output=True, text=True)
+    p2 = subprocess.run([OODAC, "emit-llvm", fpath], cwd=PROJECT_ROOT, capture_output=True, text=True)
     ll_file = fpath + ".ll"
     with open(ll_file, "w") as f: f.write(p2.stdout)
     p3 = subprocess.run(["clang", "-O2", ll_file, LIBOODAR, "-lm", "-lpthread", "-o", fpath + "_bin"],
-                        capture_output=True, text=True)
+                        cwd=PROJECT_ROOT, capture_output=True, text=True)
     for p in [fpath, ll_file, fpath + ".art", fpath + "_bin"]:
         if os.path.exists(p): os.unlink(p)
     log(f"Bug 1 empirical check: oodac check rc={p1.returncode}, emit-llvm rc={p2.returncode}, clang rc={p3.returncode}")

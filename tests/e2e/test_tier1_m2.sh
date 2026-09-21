@@ -153,18 +153,16 @@ EOF
   if [[ -n "${OO_LIST_AMBIENT_QUOTA:-}" ]]; then f7_env=0; else f7_env=1; fi
   record_test "T1-F07-03" "Ambient quota configured in environment" "$f7_env"
 
-  local f7_quota_env=1
-  if OO_LIST_AMBIENT_QUOTA=8589934592 timeout 180s "$OODAC" check "$PROJECT_ROOT/bb/cli/main.oo" >/dev/null 2>&1; then
+  local f7_quota_env=1 f7_stress=1
+  local f7_out=""
+  if f7_out=$(OO_LIST_AMBIENT_QUOTA=8589934592 \
+     timeout 180s "$OODAC" check "$PROJECT_ROOT/bb/cli/main.oo" 2>&1); then
     f7_quota_env=0
+    if ! echo "$f7_out" | grep -q "ambient List memory quota exceeded"; then
+      f7_stress=0
+    fi
   fi
   record_test "T1-F07-04" "Compiler respects 8GB ambient list quota on bb/cli" "$f7_quota_env"
-
-  local f7_stress=1
-  local f7_out
-  f7_out=$(OO_LIST_AMBIENT_QUOTA=8589934592 timeout 180s "$OODAC" check "$PROJECT_ROOT/bb/cli/main.oo" 2>&1)
-  if [ $? -eq 0 ] && ! echo "$f7_out" | grep -q "ambient List memory quota exceeded"; then
-    f7_stress=0
-  fi
   record_test "T1-F07-05" "bb/cli/main verifies cleanly without quota overflow" "$f7_stress"
 
   # Feature 8: Symmetric Lifetime Bounds
