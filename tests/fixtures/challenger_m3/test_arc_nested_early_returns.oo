@@ -1,0 +1,167 @@
+// # Title: ARC 3-Level Nested Loops and Match Arms Challenge
+//
+// Logline: Verify ARC drops across 3-level while loops and match arms.
+//
+// Setup: Compile via oodac emit-llvm and execute under quota and ASan.
+//
+// Beats:
+//   1. Early return from depth-3 nested while loops with active heap locals.
+//   2. Bare void early return from depth-3 nested while loops.
+//   3. Early return from Option and Result match arms with local allocations.
+//   4. Assert correct computed results and zero memory leaks.
+
+type FrameItem = struct {
+    label: String,
+    val: Int
+};
+
+fn early_ret_nested_3(lim: Int, target: Int) -> Int {
+    let s_fn: String = str_repeat("fn_level_", 2);
+    let mut xs_fn: List[Int] = list_new();
+    xs_fn = list_push(xs_fn, lim);
+    let mut i: Int = 0;
+    while i < lim {
+        let s_out: String = str_repeat("outer_while_", 2);
+        let mut xs_out: List[Int] = list_new();
+        xs_out = list_push(xs_out, i);
+        let mut j: Int = 0;
+        while j < lim {
+            let s_mid: String = str_repeat("mid_while_", 2);
+            let mut xs_mid: List[Int] = list_new();
+            xs_mid = list_push(xs_mid, j);
+            let mut k: Int = 0;
+            while k < lim {
+                let s_inn: String = str_repeat("inn_while_", 2);
+                let mut xs_inn: List[Int] = list_new();
+                xs_inn = list_push(xs_inn, k);
+                let item: FrameItem = FrameItem {
+                    label: s_inn,
+                    val: i * 100 + j * 10 + k
+                };
+                if item.val == target {
+                    return chars_len(s_fn) + list_len(xs_fn) + chars_len(s_out) + list_len(xs_out) + chars_len(s_mid) + list_len(xs_mid) + chars_len(item.label) + list_len(xs_inn) + item.val;
+                }
+                k = k + 1;
+            }
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+    return 0;
+}
+
+fn early_void_nested_3(lim: Int, target: Int) {
+    let s_fn: String = str_repeat("void_fn_scope_", 2);
+    let mut i: Int = 0;
+    while i < lim {
+        let s_out: String = str_repeat("void_outer_", 2);
+        let mut xs_out: List[Int] = list_new();
+        xs_out = list_push(xs_out, i);
+        let mut j: Int = 0;
+        while j < lim {
+            let s_mid: String = str_repeat("void_mid_", 2);
+            let mut k: Int = 0;
+            while k < lim {
+                let mut xs_inn: List[Int] = list_new();
+                xs_inn = list_push(xs_inn, k);
+                let item: FrameItem = FrameItem {
+                    label: s_mid,
+                    val: i * 100 + j * 10 + k
+                };
+                if item.val == target {
+                    if chars_len(s_fn) > 0 && chars_len(s_out) > 0 && list_len(xs_out) > 0 && list_len(xs_inn) > 0 {
+                        return;
+                    }
+                }
+                k = k + 1;
+            }
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+}
+
+fn early_ret_match_opt(opt: Option[String]) -> Int {
+    let s_encl: String = str_repeat("enclosing_scope_opt_", 2);
+    let mut xs_encl: List[Int] = list_new();
+    xs_encl = list_push(xs_encl, 77);
+    match opt {
+        Some(msg) => {
+            let s_arm: String = str_repeat("some_arm_alloc_", 2);
+            let mut xs_arm: List[Int] = list_new();
+            xs_arm = list_push(xs_arm, chars_len(msg));
+            if chars_len(msg) > 0 {
+                return chars_len(s_encl) + list_len(xs_encl) + chars_len(s_arm) + list_len(xs_arm) + chars_len(msg);
+            }
+        },
+        None => {
+            let s_none: String = str_repeat("none_arm_alloc_", 2);
+            if chars_len(s_none) > 0 {
+                return chars_len(s_encl) + list_len(xs_encl) + chars_len(s_none);
+            }
+        }
+    }
+    return 0;
+}
+
+fn early_ret_match_res(res: Result[Int, String]) -> Int {
+    let s_encl: String = str_repeat("enclosing_scope_res_", 2);
+    let mut xs_encl: List[Int] = list_new();
+    xs_encl = list_push(xs_encl, 88);
+    match res {
+        Ok(code) => {
+            let s_ok: String = str_repeat("ok_arm_alloc_", 2);
+            let item: FrameItem = FrameItem {
+                label: s_ok,
+                val: code
+            };
+            if item.val >= 0 {
+                return chars_len(s_encl) + list_len(xs_encl) + chars_len(item.label) + item.val;
+            }
+        },
+        Err(err_msg) => {
+            let s_err: String = str_repeat("err_arm_alloc_", 2);
+            let mut xs_err: List[Int] = list_new();
+            xs_err = list_push(xs_err, chars_len(err_msg));
+            if chars_len(err_msg) > 0 {
+                return chars_len(s_encl) + list_len(xs_encl) + chars_len(s_err) + list_len(xs_err) + chars_len(err_msg);
+            }
+        }
+    }
+    return 0;
+}
+
+pub fn main() -> Int {
+    let mut iter: Int = 0;
+    while iter < 1000 {
+        let v1: Int = early_ret_nested_3(6, 234);
+        if v1 != 18 + 1 + 24 + 1 + 20 + 1 + 20 + 1 + 234 {
+            println("FAIL: early_ret_nested_3 mismatch");
+            return 1;
+        }
+        early_void_nested_3(6, 234);
+        let v2: Int = early_ret_match_opt(Some("valid_payload"));
+        if v2 != 40 + 1 + 30 + 1 + 13 {
+            println("FAIL: match Option Some mismatch");
+            return 2;
+        }
+        let v3: Int = early_ret_match_opt(None);
+        if v3 != 40 + 1 + 30 {
+            println("FAIL: match Option None mismatch");
+            return 3;
+        }
+        let v4: Int = early_ret_match_res(Ok(42));
+        if v4 != 40 + 1 + 26 + 42 {
+            println("FAIL: match Result Ok mismatch");
+            return 4;
+        }
+        let v5: Int = early_ret_match_res(Err("critical_failure"));
+        if v5 != 40 + 1 + 28 + 1 + 16 {
+            println("FAIL: match Result Err mismatch");
+            return 5;
+        }
+        iter = iter + 1;
+    }
+    println("PASS: 3-level nested returns and match arms verified");
+    return 0;
+}

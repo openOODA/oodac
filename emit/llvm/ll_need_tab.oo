@@ -158,8 +158,9 @@ fn ll_need_proto_sys(sym: String) -> String {
     if sym == "oo_read_stdin_chunk" { return "declare void @oo_read_stdin_chunk(ptr noalias sret(%OoResS) align 8, i64, i64) nounwind"; }
     if sym == "oo_arena_create" { return "declare void @oo_arena_create(ptr noalias sret(%OoResS) align 8, i64, i64) nounwind"; }
     if sym == "oo_arena_alloc" { return "declare void @oo_arena_alloc(ptr noalias sret(%OoResS) align 8, i64, i64, i64) nounwind"; }
+    if sym == "oo_arena_attach" { return "declare void @oo_arena_attach(ptr noalias sret(%OoResS) align 8, i64, i64) nounwind"; }
+    if sym == "oo_arena_detach" { return "declare void @oo_arena_detach(ptr noalias sret(%OoResS) align 8, i64) nounwind"; }
     if sym == "oo_arena_reset" { return "declare void @oo_arena_reset(ptr noalias sret(%OoResS) align 8, i64, i64) nounwind"; }
-    if sym == "oo_arena_pass_reset" { return "declare void @oo_arena_pass_reset(ptr noalias sret(%OoResS) align 8, i64, i64) nounwind"; }
     if sym == "oo_arena_destroy" { return "declare void @oo_arena_destroy(ptr noalias sret(%OoResS) align 8, i64, i64) nounwind"; }
     return "";
 }

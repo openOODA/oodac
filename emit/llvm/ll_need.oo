@@ -116,7 +116,7 @@ fn ll_need_call(need: String, nm: String) -> String {
     if chars_len(nm) >= 4 && str_slice(nm, 0, 4) == "tui_" { return ll_need_add(n, "oo_" + nm); }
     if chars_len(nm) >= 6 && str_slice(nm, 0, 6) == "bytes_" { return ll_need_add(n, "oo_" + nm); }
     if chars_len(nm) >= 7 && str_slice(nm, 0, 7) == "crypto_" { return ll_need_add(n, nm); }
-    if nm == "arena_reset" { return ll_need_add(n, "oo_arena_pass_reset"); }
+    if nm == "arena_reset" { return ll_need_add(n, "oo_arena_reset"); }
     if chars_len(nm) >= 6 && str_slice(nm, 0, 6) == "arena_" { return ll_need_add(n, "oo_" + nm); }
     return n;
 }

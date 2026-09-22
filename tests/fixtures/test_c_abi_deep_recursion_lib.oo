@@ -1,0 +1,58 @@
+// # C-ABI Deep Recursion Library Fixture
+//
+// Logline: Library functions exporting C-ABI deep recursion aggregate returns for foreign C harness.
+//
+// Setup: Compile with oodac check and emit-llvm, link with C harness under -O0..-O3.
+//
+// Beats:
+//   1. Struct definitions Point and MyStruct.
+//   2. Internal recursive functions to depth 1000+.
+//   3. Exported functions c_export_deep_opt and c_export_deep_res.
+
+pub type Point = struct {
+    x: Int,
+    y: Int
+};
+
+pub type MyStruct = struct {
+    id: Int,
+    score: Int
+};
+
+pub fn recurse_opt_point(depth: Int, p: Point) -> Option[Point] {
+    let canary_a: Int = depth * 10007 + 3;
+    let canary_b: Int = depth * 31337 + 7;
+    if depth <= 0 {
+        return Some(p);
+    }
+    let next: Point = Point { x: p.x + 2, y: p.y + 3 };
+    let res: Option[Point] = recurse_opt_point(depth - 1, next);
+    if canary_a != depth * 10007 + 3 || canary_b != depth * 31337 + 7 {
+        return None;
+    }
+    return res;
+}
+
+pub fn recurse_res_mystruct(depth: Int, s: MyStruct) -> Result[MyStruct, String] {
+    let canary_a: Int = depth * 20011 + 5;
+    let canary_b: Int = depth * 40009 + 9;
+    if depth <= 0 {
+        return Ok(s);
+    }
+    let next: MyStruct = MyStruct { id: s.id + 1, score: s.score + 10 };
+    let res: Result[MyStruct, String] = recurse_res_mystruct(depth - 1, next);
+    if canary_a != depth * 20011 + 5 || canary_b != depth * 40009 + 9 {
+        return Err("canary corruption");
+    }
+    return res;
+}
+
+export fn c_export_deep_opt(depth: Int) -> Option[Point] {
+    let init: Point = Point { x: 10, y: 20 };
+    return recurse_opt_point(depth, init);
+}
+
+export fn c_export_deep_res(depth: Int) -> Result[MyStruct, String] {
+    let init: MyStruct = MyStruct { id: 100, score: 500 };
+    return recurse_res_mystruct(depth, init);
+}

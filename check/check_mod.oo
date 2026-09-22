@@ -15,7 +15,10 @@
 
 import "check_cache.oo";
 import "check_artifact.oo";
+import "types/typed_artifact.oo";
 import "ast/load_import.oo";
+import "ast/load_import_parse.oo";
+import "lex/token_fmt.oo";
 import "lex/token_parse_int.oo";
 import "check_scan.oo";
 
@@ -110,14 +113,73 @@ fn count_lines(s: String) -> Int {
     return c;
 }
 
-fn check_one_module(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, pth2: String, is_last: Bool, binds: String, arity_all: String) {
+fn fold_toks(toks: List[String], l: Int, r: Int) -> String {
+    let mut out: String = "";
+    let mut i: Int = l;
+    while i < r {
+        out = out + list_get(toks, i) + "\n";
+        i = i + 1;
+    }
+    return out;
+}
+
+fn mod_artifact_write_toks(fs_w: &FsWriteCap, sys: &ProcessCap, path: String, src: String, toks: List[String]) -> String {
+    artifact_ensure_dir(sys);
+    let art: TypedArtifact = artifact_new(path, src, toks, artifact_typenv_of(toks), artifact_caps_of(toks), artifact_smt_of(toks));
+    let dest: String = artifact_cache_path(art.sha);
+    let mut out: String = "OODAART3\n" + art.path + "\n" + art.sha + "\ntypes:\n";
+    if art.typenv != "" { out = out + art.typenv + "\n"; }
+    out = out + "caps:\n";
+    if art.caps != "" { out = out + art.caps + "\n"; }
+    out = out + "smt:\n";
+    if art.smt != "" { out = out + art.smt + "\n"; }
+    out = out + "--\n" + fold_toks(art.toks, 0, list_len(art.toks));
+    let wr: Result[Void, String] = write_file(fs_w, dest, out);
+    if wr.is_err() {
+        println("ERR\tartifact\twrite failed");
+        process_exit(1);
+    }
+    return dest;
+}
+
+fn mod_strip_imports(src: String) -> String {
+    let mut lines: List[String] = list_new();
+    let n: Int = chars_len(src);
+    let mut i: Int = 0;
+    let mut start: Int = 0;
+    while i <= n {
+        let at_end: Bool = i == n;
+        let mut nl: Bool = at_end;
+        if !at_end { if char_at(src, i) == "\n" { nl = true; } }
+        if nl {
+            let line: String = str_slice(src, start, i);
+            if parse_import_line(line) == "" {
+                lines = list_push(lines, line);
+            } else {
+                lines = list_push(lines, "");
+            }
+            if at_end { i = n + 1; }
+            else { i = i + 1; start = i; }
+        } else { i = i + 1; }
+    }
+    return fold_toks(lines, 0, list_len(lines));
+}
+
+fn check_one_module(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, ar: &ArenaCap, ar_id: Int, pth2: String, is_last: Bool, binds: String, arity_all: String) {
+    if ar_id >= 0 {
+        let _: Result[String, String] = arena_attach(ar, ar_id);
+    }
     let rr2: Result[String, String] = read_file(fs_r, pth2);
     let raw2: String = match rr2 { Ok(s) => s, Err(_) => "" };
     let mut body: String = str_slice(raw2, 0, chars_len(raw2));
-    if !is_last { body = strip_import_lines(raw2); }
+    if !is_last { body = mod_strip_imports(raw2); }
     if chars_len(body) > 0 {
         let toks: List[String] = run_check_core_binds_at(sys, body, binds, pth2, arity_all);
-        let _: String = artifact_write_toks(fs_w, sys, pth2, raw2, toks);
+        let _: String = mod_artifact_write_toks(fs_w, sys, pth2, raw2, toks);
+    }
+    if ar_id >= 0 {
+        let _: Result[String, String] = arena_detach(ar);
+        let _: Result[String, String] = arena_reset(ar, ar_id);
     }
 }
 
@@ -145,15 +207,12 @@ fn check_modules(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, ar: &Are
         i = i + 1;
     }
     let binds: String = names_to_depth0_binds(names);
-    let ar_res: Result[String, String] = arena_create(ar, 65536);
+    let ar_res: Result[String, String] = arena_create(ar, 62914560);
     let ar_id: Int = parse_arena_id(ar_res);
     i = 0;
     while i < np {
         let pth2: String = list_get(paths, i);
-        check_one_module(fs_r, fs_w, sys, pth2, i + 1 == np, binds, arity_all);
-        if ar_id >= 0 {
-            let _: Result[String, String] = arena_reset(ar, ar_id);
-        }
+        check_one_module(fs_r, fs_w, sys, ar, ar_id, pth2, i + 1 == np, binds, arity_all);
         i = i + 1;
     }
     if ar_id >= 0 {
@@ -169,5 +228,13 @@ pub fn run_check_path(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, ar:
     check_modules(fs_r, fs_w, sys, ar, paths, extra);
     persist_graph(fs_r, fs_w, sys, path, roll);
     println("OK");
+}
+
+pub fn arena_attach(ar: &ArenaCap, id: Int) -> Result[String, String] {
+    return arena_alloc(ar, id, 0);
+}
+
+pub fn arena_detach(ar: &ArenaCap) -> Result[String, String] {
+    return arena_alloc(ar, 0, 0 - 1);
 }
 

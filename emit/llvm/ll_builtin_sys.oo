@@ -125,9 +125,16 @@ pub fn ll_builtin_sys(name: String, args: List[String], ssa0: Int, expect: Strin
         let bsz: String = ll_i64arg(args, 1, ssa0, ir);
         return ll_ty_ress("oo_arena_create", args, ll_pssa(bsz), ", i64 " + ll_opnd(bsz), ir);
     }
+    if (name == "arena_attach" || name == "oo_arena_attach") && na >= 2 {
+        let aid: String = ll_i64arg(args, 1, ssa0, ir);
+        return ll_ty_ress("oo_arena_attach", args, ll_pssa(aid), ", i64 " + ll_opnd(aid), ir);
+    }
+    if (name == "arena_detach" || name == "oo_arena_detach") && na >= 1 {
+        return ll_ty_ress("oo_arena_detach", args, ssa0, "", ir);
+    }
     if (name == "arena_reset" || name == "oo_arena_reset") && na >= 2 {
         let aid: String = ll_i64arg(args, 1, ssa0, ir);
-        return ll_ty_ress("oo_arena_pass_reset", args, ll_pssa(aid), ", i64 " + ll_opnd(aid), ir);
+        return ll_ty_ress("oo_arena_reset", args, ll_pssa(aid), ", i64 " + ll_opnd(aid), ir);
     }
     if (name == "arena_destroy" || name == "oo_arena_destroy") && na >= 2 {
         let aid: String = ll_i64arg(args, 1, ssa0, ir);

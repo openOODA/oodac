@@ -1,0 +1,164 @@
+// # Stress Test: Float List LLVM Lowering & Memory Physics
+//
+// Logline: Adversarial 10,000-iteration mutation, COW branching, and IEEE-754 precision preservation for List[Float].
+//
+// Setup: Native LLVM lowering for float lists.
+//
+// Beats:
+//   1. 10,000 in-place mutations on List[Float] single owner.
+//   2. Alternating COW buffer isolation when refcount > 1.
+//   3. High-precision 64-bit IEEE-754 mantissa and exponent preservation.
+//   4. Float list slicing with clamped, inverted, and empty bounds.
+
+fn float_abs(x: Float) -> Float {
+    if x < 0.0 { return 0.0 - x; }
+    return x;
+}
+
+fn alias_flist(l: List[Float]) -> List[Float] {
+    return l;
+}
+
+pub fn test_stress_float_inplace_10k() -> Bool {
+    let mut fl: List[Float] = list_new();
+    let mut i: Int = 0;
+    while i < 16 {
+        fl = list_push(fl, 100.0 + 0.5);
+        i = i + 1;
+    }
+    let mut k: Int = 0;
+    while k < 10000 {
+        let idx: Int = k % 16;
+        let expected: Float = 0.125 + 0.0625;
+        fl = list_set(fl, idx, expected);
+        let got: Float = list_get(fl, idx);
+        if float_abs(got - expected) > 0.000001 {
+            println("FAIL: float in-place mutation mismatch");
+            process_exit(1);
+        }
+        k = k + 1;
+    }
+    return true;
+}
+
+pub fn test_stress_float_cow_alternating() -> Bool {
+    let mut fl: List[Float] = list_new();
+    let mut i: Int = 0;
+    while i < 8 {
+        fl = list_push(fl, 10.0);
+        i = i + 1;
+    }
+    let mut k: Int = 0;
+    while k < 1000 {
+        let alias: List[Float] = alias_flist(fl);
+        let branched: List[Float] = list_set(alias, 0, 777.125);
+        if float_abs(list_get(fl, 0) - 10.0) > 0.000001 {
+            println("FAIL: fl corrupted by alias float mutation");
+            process_exit(1);
+        }
+        if float_abs(list_get(branched, 0) - 777.125) > 0.000001 {
+            println("FAIL: branched missing updated float value");
+            process_exit(1);
+        }
+        k = k + 1;
+    }
+    return true;
+}
+
+pub fn test_stress_float_precision_f64() -> Bool {
+    let mut fl: List[Float] = list_new();
+    let p1: Float = 1.0000000000000002;
+    let p2: Float = 9007199254740991.0;
+    let p3: Float = 3.141592653589793;
+    let p4: Float = 2.718281828459045;
+    let p5: Float = 0.0 - 987654.321012345;
+    let p6: Float = 0.000000000000001;
+
+    fl = list_push(fl, p1);
+    fl = list_push(fl, p2);
+    fl = list_push(fl, p3);
+    fl = list_push(fl, p4);
+    fl = list_push(fl, p5);
+    fl = list_push(fl, p6);
+
+    if list_get(fl, 0) - 1.0 <= 0.0 {
+        println("FAIL: sub-epsilon precision lost in float list");
+        process_exit(1);
+    }
+    if float_abs(list_get(fl, 1) - 9007199254740991.0) > 0.1 {
+        println("FAIL: 53-bit int precision lost in float list");
+        process_exit(1);
+    }
+    if float_abs(list_get(fl, 2) - 3.141592653589793) > 0.000000000001 {
+        println("FAIL: pi precision lost in float list");
+        process_exit(1);
+    }
+    if float_abs(list_get(fl, 3) - 2.718281828459045) > 0.000000000001 {
+        println("FAIL: e precision lost in float list");
+        process_exit(1);
+    }
+    if float_abs(list_get(fl, 4) - (0.0 - 987654.321012345)) > 0.000001 {
+        println("FAIL: negative float precision lost");
+        process_exit(1);
+    }
+    if list_get(fl, 5) <= 0.0 {
+        println("FAIL: tiny float precision lost");
+        process_exit(1);
+    }
+    return true;
+}
+
+pub fn test_stress_float_slice_bounds() -> Bool {
+    let mut fl: List[Float] = list_new();
+    let mut i: Int = 0;
+    while i < 100 {
+        fl = list_push(fl, 1.0 + 0.5);
+        i = i + 1;
+    }
+    // Clamped lo < 0
+    let s_lo: List[Float] = list_slice(fl, 0 - 50, 10);
+    if list_len(s_lo) != 10 {
+        println("FAIL: float slice negative lo length mismatch");
+        process_exit(1);
+    }
+    // Clamped hi > len
+    let s_hi: List[Float] = list_slice(fl, 90, 500);
+    if list_len(s_hi) != 10 {
+        println("FAIL: float slice huge hi length mismatch");
+        process_exit(1);
+    }
+    // Inverted bounds lo >= hi
+    let s_inv: List[Float] = list_slice(fl, 60, 40);
+    if list_len(s_inv) != 0 {
+        println("FAIL: float slice inverted not empty");
+        process_exit(1);
+    }
+    // Empty list slice
+    let empty: List[Float] = list_new();
+    let s_emp: List[Float] = list_slice(empty, 0, 10);
+    if list_len(s_emp) != 0 {
+        println("FAIL: float slice of empty not empty");
+        process_exit(1);
+    }
+    // Sub-slice isolation: mutate slice, original unchanged
+    let mut s_sub: List[Float] = list_slice(fl, 10, 20);
+    s_sub = list_set(s_sub, 0, 9999.5);
+    if float_abs(list_get(fl, 10) - 1.5) > 0.000001 {
+        println("FAIL: original fl corrupted by slice mutation");
+        process_exit(1);
+    }
+    if float_abs(list_get(s_sub, 0) - 9999.5) > 0.000001 {
+        println("FAIL: slice missing mutated value");
+        process_exit(1);
+    }
+    return true;
+}
+
+pub fn main() -> Int {
+    test_stress_float_inplace_10k();
+    test_stress_float_cow_alternating();
+    test_stress_float_precision_f64();
+    test_stress_float_slice_bounds();
+    println("PASS: stress float list 10k mutations and precision verified");
+    return 0;
+}

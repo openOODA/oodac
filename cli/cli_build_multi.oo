@@ -111,7 +111,7 @@ pub fn build_multi(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env: &
 
     let hr: String = write_host_rt(fs_w, tmp_dir);
 
-    let ar_res: Result[String, String] = arena_create(ar, 65536);
+    let ar_res: Result[String, String] = arena_create(ar, 33554432);
     let ar_id: Int = parse_arena_id(ar_res);
 
     let mut objs: List[String] = list_new();
@@ -121,6 +121,9 @@ pub fn build_multi(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env: &
     while i < npaths {
         let p: String = list_get(paths, i);
         if !is_anchor_module(p) {
+            if ar_id >= 0 {
+                let _: Result[String, String] = arena_attach(ar, ar_id);
+            }
             let sr: Result[String, String] = read_file(fs_r, p);
             let mut src_hash: String = "";
             if sr.is_ok() {
@@ -172,15 +175,12 @@ pub fn build_multi(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env: &
                 println(ctxt);
                 process_exit(1);
             }
-            objs = list_push(objs, mo);
             if ar_id >= 0 {
-                let _: Result[String, String] = arena_reset(ar, ar_id);
+                let _: Result[String, String] = arena_detach(ar);
             }
+            objs = list_push(objs, mo);
         }
         i = i + 1;
-    }
-    if ar_id >= 0 {
-        let _: Result[String, String] = arena_destroy(ar, ar_id);
     }
 
     let mut rsp_content: String = "";
@@ -221,6 +221,9 @@ pub fn build_multi(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env: &
     if ch.is_err() {
         println("ERR\tbuild\tchmod failed");
         process_exit(1);
+    }
+    if ar_id >= 0 {
+        let _: Result[String, String] = arena_destroy(ar, ar_id);
     }
     let _: Int = prune_emit_cache(fs_r, fs_w, ec);
     println("OK_PURE_NATIVE");

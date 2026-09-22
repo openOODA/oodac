@@ -1,0 +1,99 @@
+// # Title: ARC Bare Void Return Leak Challenge
+//
+// Logline: Verify bare void returns release active local strings, lists, and structs.
+//
+// Setup: Compile via oodac emit-llvm and execute in loop under tight quota.
+//
+// Beats:
+//   1. Define struct containing String and List[Int] fields.
+//   2. Call bare return functions in loop with active local heap bindings.
+//   3. Assert zero accumulated leaks and clean exit code 0.
+
+type Resource = struct {
+    tag: String,
+    items: List[Int]
+};
+
+fn void_early_top(flag: Bool, x: Int) {
+    let s: String = str_repeat("alpha_bare_void_", 3);
+    let mut xs: List[Int] = list_new();
+    xs = list_push(xs, x);
+    xs = list_push(xs, x + 1);
+    let r: Resource = Resource {
+        tag: s,
+        items: xs
+    };
+    if flag {
+        if r.tag != "" && list_len(r.items) > 0 {
+            return;
+        }
+    }
+    if r.tag == "" {
+        return;
+    }
+}
+
+fn void_nested_if(mode: Int, x: Int) {
+    let s_out: String = str_repeat("outer_scope_string_", 2);
+    let mut xs_out: List[Int] = list_new();
+    xs_out = list_push(xs_out, x);
+    let r_out: Resource = Resource {
+        tag: s_out,
+        items: xs_out
+    };
+    if mode == 1 {
+        let s_in1: String = str_repeat("inner_mode1_payload_", 2);
+        if chars_len(s_in1) > 0 && list_len(r_out.items) > 0 {
+            return;
+        }
+    }
+    if mode == 2 {
+        let mut xs_in2: List[Int] = list_new();
+        xs_in2 = list_push(xs_in2, mode);
+        if list_len(xs_in2) > 0 && chars_len(r_out.tag) > 0 {
+            return;
+        }
+    }
+    let r_end: Resource = Resource {
+        tag: "fallback_tag",
+        items: r_out.items
+    };
+    if list_len(r_end.items) >= 0 {
+        return;
+    }
+}
+
+fn void_multilevel_control(x: Int) {
+    let dyn_s: String = str_repeat("multi_void_string_", 4);
+    let mut l: List[Int] = list_new();
+    let mut i: Int = 0;
+    while i < 20 {
+        l = list_push(l, i + x);
+        i = i + 1;
+    }
+    let res: Resource = Resource {
+        tag: dyn_s,
+        items: l
+    };
+    if x % 2 == 0 {
+        if list_len(res.items) > 10 {
+            return;
+        }
+    } else {
+        if chars_len(res.tag) > 20 {
+            return;
+        }
+    }
+}
+
+pub fn main() -> Int {
+    let mut k: Int = 0;
+    while k < 3000 {
+        void_early_top(k % 2 == 0, k);
+        void_nested_if(k % 3, k);
+        void_multilevel_control(k);
+        k = k + 1;
+    }
+    println("PASS: bare void returns zero leaks");
+    return 0;
+}

@@ -1,0 +1,205 @@
+// # Stress Test: 2D Matrix Slice LLVM Lowering & ARC Isolation
+//
+// Logline: Adversarial 2D slice clamping, empty slices, sub-slice COW isolation, and slice-of-slice depth.
+//
+// Setup: Native LLVM lowering for 2D matrix slicing.
+//
+// Beats:
+//   1. 2D Integer matrix extreme slice bounds clamping and empty slices.
+//   2. Sub-slice mutation isolation and inner list COW preservation.
+//   3. Nested slices-of-slices and high-iteration matrix slice loop.
+//   4. 2D String matrix slicing with string ARC retention and isolation.
+
+pub fn test_stress_matrix_slice_int_bounds() -> Bool {
+    let mut m: List[List[Int]] = list_new();
+    let mut r0: List[Int] = list_new();
+    r0 = list_push(r0, 10);
+    r0 = list_push(r0, 11);
+    let mut r1: List[Int] = list_new();
+    r1 = list_push(r1, 20);
+    r1 = list_push(r1, 21);
+    let mut r2: List[Int] = list_new();
+    r2 = list_push(r2, 30);
+    r2 = list_push(r2, 31);
+    m = list_push(m, r0);
+    m = list_push(m, r1);
+    m = list_push(m, r2);
+
+    // Clamped lo < 0
+    let s_lo: List[List[Int]] = list_slice(m, 0 - 10, 2);
+    if list_len(s_lo) != 2 {
+        println("FAIL: 2D slice lo clamp length mismatch");
+        process_exit(1);
+    }
+
+    // Clamped hi > len
+    let s_hi: List[List[Int]] = list_slice(m, 1, 9999);
+    if list_len(s_hi) != 2 {
+        println("FAIL: 2D slice hi clamp length mismatch");
+        process_exit(1);
+    }
+
+    // Inverted lo >= hi
+    let s_inv: List[List[Int]] = list_slice(m, 2, 1);
+    if list_len(s_inv) != 0 {
+        println("FAIL: 2D slice inverted not empty");
+        process_exit(1);
+    }
+
+    // Empty matrix slice
+    let empty_m: List[List[Int]] = list_new();
+    let s_emp: List[List[Int]] = list_slice(empty_m, 0, 5);
+    if list_len(s_emp) != 0 {
+        println("FAIL: 2D slice empty matrix not empty");
+        process_exit(1);
+    }
+
+    return true;
+}
+
+pub fn test_stress_matrix_subslice_mutation_cow() -> Bool {
+    let mut m: List[List[Int]] = list_new();
+    let mut r0: List[Int] = list_new();
+    r0 = list_push(r0, 100);
+    r0 = list_push(r0, 101);
+    let mut r1: List[Int] = list_new();
+    r1 = list_push(r1, 200);
+    r1 = list_push(r1, 201);
+    let mut r2: List[Int] = list_new();
+    r2 = list_push(r2, 300);
+    r2 = list_push(r2, 301);
+    m = list_push(m, r0);
+    m = list_push(m, r1);
+    m = list_push(m, r2);
+
+    // Slice rows 1 and 2
+    let mut s: List[List[Int]] = list_slice(m, 1, 3);
+    if list_len(s) != 2 {
+        println("FAIL: 2D slice length mismatch");
+        process_exit(1);
+    }
+
+    // Mutate outer original matrix m at row 1
+    let mut rep_row: List[Int] = list_new();
+    rep_row = list_push(rep_row, 999);
+    m = list_set(m, 1, rep_row);
+
+    // Check slice row 0 is still the original r1 [200, 201]
+    let s_r0: List[Int] = list_get(s, 0);
+    if list_get(s_r0, 0) != 200 || list_get(s_r0, 1) != 201 {
+        println("FAIL: slice row corrupted by outer m mutation");
+        process_exit(1);
+    }
+
+    // Mutate slice s at row 0
+    let mut s_rep_row: List[Int] = list_new();
+    s_rep_row = list_push(s_rep_row, 777);
+    s = list_set(s, 0, s_rep_row);
+
+    // Check outer m is unaffected
+    let m_r2: List[Int] = list_get(m, 2);
+    if list_get(m_r2, 0) != 300 || list_get(m_r2, 1) != 301 {
+        println("FAIL: outer m row 2 corrupted by slice mutation");
+        process_exit(1);
+    }
+
+    // Inner list COW: s_r0 was shared with original r1, so mutating it triggers COW
+    let r_cow: List[Int] = list_set(s_r0, 0, 5555);
+    if list_get(r_cow, 0) != 5555 {
+        println("FAIL: r_cow missing mutated value");
+        process_exit(1);
+    }
+    if list_get(s_r0, 0) != 200 {
+        println("FAIL: s_r0 mutated in-place despite refcount > 1");
+        process_exit(1);
+    }
+
+    return true;
+}
+
+pub fn test_stress_matrix_nested_slices_loop() -> Bool {
+    let mut m: List[List[Int]] = list_new();
+    let mut i: Int = 0;
+    while i < 16 {
+        let mut row: List[Int] = list_new();
+        row = list_push(row, i * 10);
+        row = list_push(row, i * 10 + 1);
+        row = list_push(row, i * 10 + 2);
+        m = list_push(m, row);
+        i = i + 1;
+    }
+
+    // Slice-of-slice
+    let s1: List[List[Int]] = list_slice(m, 4, 12);
+    let s2: List[List[Int]] = list_slice(s1, 2, 6);
+    if list_len(s2) != 4 {
+        println("FAIL: slice-of-slice length mismatch");
+        process_exit(1);
+    }
+    let s2_r0: List[Int] = list_get(s2, 0);
+    if list_get(s2_r0, 0) != 60 {
+        println("FAIL: slice-of-slice element value mismatch");
+        process_exit(1);
+    }
+
+    // 1000-iteration slice loop asserting stability
+    let mut k: Int = 0;
+    while k < 1000 {
+        let lo: Int = k % 8;
+        let hi: Int = lo + 4;
+        let sl: List[List[Int]] = list_slice(m, lo, hi);
+        if list_len(sl) != 4 {
+            println("FAIL: loop 2D slice len mismatch");
+            process_exit(1);
+        }
+        let r: List[Int] = list_get(sl, 0);
+        if list_get(r, 0) != lo * 10 {
+            println("FAIL: loop 2D slice data mismatch");
+            process_exit(1);
+        }
+        k = k + 1;
+    }
+
+    return true;
+}
+
+pub fn test_stress_matrix_slice_string() -> Bool {
+    let mut ms: List[List[String]] = list_new();
+    let mut i: Int = 0;
+    while i < 8 {
+        let mut row: List[String] = list_new();
+        row = list_push(row, "tok_a");
+        row = list_push(row, "tok_b");
+        ms = list_push(ms, row);
+        i = i + 1;
+    }
+
+    let sl: List[List[String]] = list_slice(ms, 2, 6);
+    if list_len(sl) != 4 {
+        println("FAIL: 2D string slice len mismatch");
+        process_exit(1);
+    }
+    let r0: List[String] = list_get(sl, 0);
+    if list_get(r0, 0) != "tok_a" || list_get(r0, 1) != "tok_b" {
+        println("FAIL: 2D string slice row element mismatch");
+        process_exit(1);
+    }
+
+    // Inverted string slice
+    let sl_inv: List[List[String]] = list_slice(ms, 5, 2);
+    if list_len(sl_inv) != 0 {
+        println("FAIL: 2D string slice inverted not empty");
+        process_exit(1);
+    }
+
+    return true;
+}
+
+pub fn main() -> Int {
+    test_stress_matrix_slice_int_bounds();
+    test_stress_matrix_subslice_mutation_cow();
+    test_stress_matrix_nested_slices_loop();
+    test_stress_matrix_slice_string();
+    println("PASS: stress 2D matrix slice verified");
+    return 0;
+}

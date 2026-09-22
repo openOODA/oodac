@@ -116,12 +116,13 @@ pub fn run_emit_llvm(fs: &FsReadCap, fs_w: &FsWriteCap, env: &EnvCap, ar: &Arena
         let cx: Result[String, String] = env_get(env, "OODA_LLVM_EXTRA_CACHE");
         let cp: String = match cx { Ok(s) => s, Err(_) => "" };
         let mut extra: String = "";
+        let mut ar_id: Int = 0 - 1;
         if cp != "" && path_exists(fs, cp) {
             let er: Result[String, String] = read_file(fs, cp);
             extra = match er { Ok(s) => s, Err(_) => "" };
         } else {
-            let ar_res: Result[String, String] = arena_create(ar, 65536);
-            let ar_id: Int = parse_arena_id(ar_res);
+            let ar_res: Result[String, String] = arena_create(ar, 33554432);
+            ar_id = parse_arena_id(ar_res);
             let paths: List[String] = collect_module_paths(fs, root);
             let mut st_all: String = "";
             let mut i: Int = 0;
@@ -135,19 +136,19 @@ pub fn run_emit_llvm(fs: &FsReadCap, fs_w: &FsWriteCap, env: &EnvCap, ar: &Arena
                         let isrc: String = match ir { Ok(s) => s, Err(_) => "" };
                         let auto: String = artifact_cache_path(artifact_sha(ip, isrc));
                         if path_exists(fs, auto) {
+                            if ar_id >= 0 {
+                                let _: Result[String, String] = arena_attach(ar, ar_id);
+                            }
                             let itoks: List[String] = ll_toks_file(fs, ip, isrc);
                             st_all = ll_struct_declare(itoks, st_all);
                             extra = extra + ll_collect_pub_sigs(itoks, ll_struct_tab_of(st_all));
+                            if ar_id >= 0 {
+                                let _: Result[String, String] = arena_detach(ar);
+                            }
                         }
-                    }
-                    if ar_id >= 0 {
-                        let _: Result[String, String] = arena_reset(ar, ar_id);
                     }
                 }
                 i = i + 1;
-            }
-            if ar_id >= 0 {
-                let _: Result[String, String] = arena_destroy(ar, ar_id);
             }
             extra = st_all + extra;
             if cp != "" {
@@ -163,6 +164,9 @@ pub fn run_emit_llvm(fs: &FsReadCap, fs_w: &FsWriteCap, env: &EnvCap, ar: &Arena
         let mut triple: String = match tx { Ok(s) => s, Err(_) => "" };
         if triple == "" { triple = "x86_64-unknown-linux-gnu"; }
         ll_emit_stream_plus_t(toks, extra, triple);
+        if ar_id >= 0 {
+            let _: Result[String, String] = arena_destroy(ar, ar_id);
+        }
         return;
     }
     let paths: List[String] = collect_module_paths(fs, path);

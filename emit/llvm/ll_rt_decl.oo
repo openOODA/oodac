@@ -180,7 +180,8 @@ fn ll_rt_emit_fs(need: String) {
     ll_d(need, "oo_arena_create", "declare void @oo_arena_create(ptr sret(%OoResS) align 8, i64, i64)");
     ll_d(need, "oo_arena_alloc", "declare void @oo_arena_alloc(ptr sret(%OoResS) align 8, i64, i64, i64)");
     ll_d(need, "oo_arena_reset", "declare void @oo_arena_reset(ptr sret(%OoResS) align 8, i64, i64)");
-    ll_d(need, "oo_arena_pass_reset", "declare void @oo_arena_pass_reset(ptr sret(%OoResS) align 8, i64, i64)");
+    ll_d(need, "oo_arena_attach", "declare void @oo_arena_attach(ptr sret(%OoResS) align 8, i64, i64)");
+    ll_d(need, "oo_arena_detach", "declare void @oo_arena_detach(ptr sret(%OoResS) align 8, i64)");
     ll_d(need, "oo_arena_destroy", "declare void @oo_arena_destroy(ptr sret(%OoResS) align 8, i64, i64)");
     ll_rt_emit_tui(need);
 }

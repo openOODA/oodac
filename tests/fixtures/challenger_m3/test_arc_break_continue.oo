@@ -1,0 +1,81 @@
+// # Title: ARC Break and Continue in Nested Loops Challenge
+//
+// Logline: Verify multi-level break and continue release inner scope allocations.
+//
+// Setup: Compile via oodac emit-llvm and execute under quota and ASan.
+//
+// Beats:
+//   1. 3-level nested while loops with heap allocations at each level.
+//   2. Conditional continue statements at inner and mid levels.
+//   3. Conditional break statements at inner and mid levels.
+//   4. Assert deterministic accumulator result and zero memory leaks.
+
+type LoopItem = struct {
+    name: String,
+    val: Int
+};
+
+fn run_nested_break_continue(max_i: Int) -> Int {
+    let mut total_accum: Int = 0;
+    let mut i: Int = 0;
+    while i < max_i {
+        let s_out: String = str_repeat("loop_out_", 2);
+        let mut xs_out: List[Int] = list_new();
+        xs_out = list_push(xs_out, i);
+        let mut j: Int = 0;
+        while j < 8 {
+            let s_mid: String = str_repeat("loop_mid_", 2);
+            let mut xs_mid: List[Int] = list_new();
+            xs_mid = list_push(xs_mid, j);
+            if j == 1 {
+                j = j + 1;
+                continue;
+            }
+            if j == 6 {
+                break;
+            }
+            let mut k: Int = 0;
+            while k < 6 {
+                let s_inn: String = str_repeat("loop_inn_", 2);
+                let mut xs_inn: List[Int] = list_new();
+                xs_inn = list_push(xs_inn, k);
+                let item: LoopItem = LoopItem {
+                    name: s_inn,
+                    val: i * 100 + j * 10 + k
+                };
+                if k == 2 {
+                    k = k + 1;
+                    continue;
+                }
+                if k == 4 {
+                    break;
+                }
+                total_accum = total_accum + chars_len(s_out) + list_len(xs_out) + chars_len(s_mid) + list_len(xs_mid) + chars_len(item.name) + list_len(xs_inn) + item.val;
+                k = k + 1;
+            }
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+    return total_accum;
+}
+
+pub fn main() -> Int {
+    let mut run: Int = 0;
+    let mut prev_res: Int = 0;
+    while run < 200 {
+        let res: Int = run_nested_break_continue(10);
+        if prev_res != 0 && res != prev_res {
+            println("FAIL: non-deterministic break/continue accumulator");
+            return 1;
+        }
+        prev_res = res;
+        run = run + 1;
+    }
+    if prev_res <= 0 {
+        println("FAIL: break/continue total accumulator was zero");
+        return 2;
+    }
+    println("PASS: break and continue nested loops zero leaks");
+    return 0;
+}

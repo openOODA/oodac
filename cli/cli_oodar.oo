@@ -32,8 +32,8 @@ pub fn oodar_root(fs_r: &FsReadCap, host: String) -> String {
     let a: String = path_parent_oodar(host);
     let b: String = path_parent_oodar(a);
     let c: String = path_parent_oodar(b);
-    if path_exists(fs_r, c + "/oodar/oodar.c") { return c + "/oodar"; }
     if path_exists(fs_r, b + "/oodar/oodar.c") { return b + "/oodar"; }
+    if path_exists(fs_r, c + "/oodar/oodar.c") { return c + "/oodar"; }
     println("ERR\tbuild\toodar.c missing");
     process_exit(1);
     return "";
@@ -108,6 +108,10 @@ pub fn oodar_resolve_exts(fs_r: &FsReadCap, od: String, ir: String) -> List[Stri
     }
     if str_contains(ir, "@oo_audio_") {
         let p: String = ext_archive_path(fs_r, od, "liboodar-audio.a");
+        if path_exists(fs_r, p) { exts = list_push(exts, p); }
+    }
+    if str_contains(ir, "@oo_fetch") || str_contains(ir, "@oo_tls_") || str_contains(ir, "@oo_seal") || str_contains(ir, "@oo_open") || str_contains(ir, "@oo_ffi") || str_contains(ir, "@oo_xlang") || str_contains(ir, "@oo_import_c") || str_contains(ir, "@oo_lto_xlang") || str_contains(ir, "@oo_hot_reload") || str_contains(ir, "@oo_dlopen") || str_contains(ir, "@oo_dlsym") || str_contains(ir, "@oo_dlclose") || str_contains(ir, "@crypto_chacha") {
+        let p: String = ext_archive_path(fs_r, od, "liboodar-net.a");
         if path_exists(fs_r, p) { exts = list_push(exts, p); }
     }
     return exts;

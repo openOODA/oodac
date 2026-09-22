@@ -1,0 +1,211 @@
+// # SMT DBM Adversarial Stress Harness
+//
+// Logline: Stress-tests DBM Floyd-Warshall refutation solver on boundary graphs.
+//
+// Setup: Independent challenger verification of soundness, completeness, and cex.
+//
+// Beats:
+//   1. Sentinel collision boundary tests ($c \approx 5 \times 10^8$).
+//   2. Negative cycles of varying loop lengths ($N = 2, 3, 5, 10$).
+//   3. Multi-edge conflicting bounds and redundant tight zero-weight cycles.
+//   4. Refutation soundness and counterexample validity assertions.
+
+import "check/smt_contract_parse.oo";
+import "check/smt_wp_calc.oo";
+import "check/smt_prover_lia.oo";
+
+fn assert_true(cond: Bool, msg: String) {
+    if !cond {
+        println("ERR\t" + msg);
+        process_exit(1);
+    }
+}
+
+fn test_sentinel_collision() {
+    let n: Int = 4;
+    // 1.1: UNSAT 2-node cycle near 5*10^8
+    let mut d: List[Int] = dbm_init(n);
+    d = dbm_set(d, n, 1, 2, 500000000);
+    d = dbm_set(d, n, 2, 1, 0 - 500000001);
+    assert_true(dbm_solve_cycle(d, n), "missed 2-node 5*10^8 negative cycle");
+
+    // 1.2: SAT 2-node cycle sum 0
+    d = dbm_init(n);
+    d = dbm_set(d, n, 1, 2, 500000000);
+    d = dbm_set(d, n, 2, 1, 0 - 500000000);
+    assert_true(!dbm_solve_cycle(d, n), "false positive on 2-node sum 0");
+
+    // 1.3: SAT 2-node cycle sum +1
+    d = dbm_init(n);
+    d = dbm_set(d, n, 1, 2, 500000000);
+    d = dbm_set(d, n, 2, 1, 0 - 499999999);
+    assert_true(!dbm_solve_cycle(d, n), "false positive on 2-node sum +1");
+
+    // 1.4: UNSAT 3-node cycle sum -1
+    d = dbm_init(n);
+    d = dbm_set(d, n, 1, 2, 500000000);
+    d = dbm_set(d, n, 2, 3, 499999999);
+    d = dbm_set(d, n, 3, 1, 0 - 1000000000);
+    assert_true(dbm_solve_cycle(d, n), "missed 3-node 10^9 negative cycle");
+
+    // 1.5: SAT 3-node cycle sum +1
+    d = dbm_init(n);
+    d = dbm_set(d, n, 1, 2, 500000000);
+    d = dbm_set(d, n, 2, 3, 500000000);
+    d = dbm_set(d, n, 3, 1, 0 - 999999999);
+    assert_true(!dbm_solve_cycle(d, n), "false positive on 3-node sum +1");
+
+    // 1.6: Boundary near 10^9 - 1: UNSAT
+    d = dbm_init(n);
+    d = dbm_set(d, n, 1, 2, 999999999);
+    d = dbm_set(d, n, 2, 1, 0 - 1000000000);
+    assert_true(dbm_solve_cycle(d, n), "missed boundary 10^9 negative cycle");
+
+    // 1.7: Boundary near 10^9 - 1: SAT (sum 0)
+    d = dbm_init(n);
+    d = dbm_set(d, n, 1, 2, 999999999);
+    d = dbm_set(d, n, 2, 1, 0 - 999999999);
+    assert_true(!dbm_solve_cycle(d, n), "false positive on boundary 10^9 sum 0");
+}
+
+fn test_cycle_len(N: Int) {
+    let n: Int = N + 1;
+    let mut d: List[Int] = dbm_init(n);
+    let mut i: Int = 1;
+    while i < N {
+        d = dbm_set(d, n, i, i + 1, 10);
+        i = i + 1;
+    }
+    // Closing edge with sum = -1 -> UNSAT
+    let closing_neg: Int = 0 - ((N - 1) * 10) - 1;
+    d = dbm_set(d, n, N, 1, closing_neg);
+    assert_true(dbm_solve_cycle(d, n), "missed negative cycle len " + N.to_string());
+
+    // Closing edge with sum = 0 -> SAT (Soundness)
+    let mut d_sat: List[Int] = dbm_init(n);
+    i = 1;
+    while i < N {
+        d_sat = dbm_set(d_sat, n, i, i + 1, 10);
+        i = i + 1;
+    }
+    let closing_zero: Int = 0 - ((N - 1) * 10);
+    d_sat = dbm_set(d_sat, n, N, 1, closing_zero);
+    assert_true(!dbm_solve_cycle(d_sat, n), "false positive on cycle len " + N.to_string());
+}
+
+fn test_multiedge_conflicts() {
+    let n: Int = 3;
+    let mut d: List[Int] = dbm_init(n);
+    // Multiple redundant bounds: 20, 10, 5, 15 -> effective 5
+    d = dbm_set(d, n, 1, 2, 20);
+    d = dbm_set(d, n, 1, 2, 10);
+    d = dbm_set(d, n, 1, 2, 5);
+    d = dbm_set(d, n, 1, 2, 15);
+    assert_true(dbm_get(d, n, 1, 2) == 5, "dbm_set did not select min bound");
+
+    // Reverse bound -4 -> cycle sum 5 - 4 = 1 > 0 -> SAT
+    let mut d_sat: List[Int] = dbm_set(d, n, 2, 1, 0 - 4);
+    assert_true(!dbm_solve_cycle(d_sat, n), "false positive on multiedge SAT");
+
+    // Multiple reverse bounds: -2, -6, -4 -> effective -6
+    let mut d_unsat: List[Int] = dbm_set(d, n, 2, 1, 0 - 2);
+    d_unsat = dbm_set(d_unsat, n, 2, 1, 0 - 6);
+    d_unsat = dbm_set(d_unsat, n, 2, 1, 0 - 4);
+    assert_true(dbm_get(d_unsat, n, 2, 1) == 0 - 6, "dbm_set min failed on negative");
+    // Cycle sum 5 - 6 = -1 -> UNSAT
+    assert_true(dbm_solve_cycle(d_unsat, n), "missed multiedge conflicting UNSAT");
+}
+
+fn test_tight_zero_cycles() {
+    // N=3 tight cycle: 1->2 (10), 2->3 (20), 3->1 (-30). Sum = 0
+    let n: Int = 4;
+    let mut d: List[Int] = dbm_init(n);
+    d = dbm_set(d, n, 1, 2, 10);
+    d = dbm_set(d, n, 2, 3, 20);
+    d = dbm_set(d, n, 3, 1, 0 - 30);
+    // Reverse tight bounds making exact equality
+    d = dbm_set(d, n, 2, 1, 0 - 10);
+    d = dbm_set(d, n, 3, 2, 0 - 20);
+    d = dbm_set(d, n, 1, 3, 30);
+    assert_true(!dbm_solve_cycle(d, n), "false positive on tight equality 3-cycle");
+
+    // N=5 tight cycle sum 0
+    let n5: Int = 6;
+    let mut d5: List[Int] = dbm_init(n5);
+    d5 = dbm_set(d5, n5, 1, 2, 5);
+    d5 = dbm_set(d5, n5, 2, 3, 15);
+    d5 = dbm_set(d5, n5, 3, 4, 0 - 10);
+    d5 = dbm_set(d5, n5, 4, 5, 25);
+    d5 = dbm_set(d5, n5, 5, 1, 0 - 35);
+    assert_true(!dbm_solve_cycle(d5, n5), "false positive on tight zero 5-cycle");
+
+    // N=10 tight cycle sum 0
+    let n10: Int = 11;
+    let mut d10: List[Int] = dbm_init(n10);
+    let mut j: Int = 1;
+    while j < 10 {
+        d10 = dbm_set(d10, n10, j, j + 1, 7);
+        j = j + 1;
+    }
+    d10 = dbm_set(d10, n10, 10, 1, 0 - 63);
+    assert_true(!dbm_solve_cycle(d10, n10), "false positive on tight zero 10-cycle");
+}
+
+fn test_counterexamples() {
+    // System 1: requires x >= 10, ensures result >= 5 with result = x - 8
+    // WP: x - 8 >= 5 <=> x >= 13. Pre: x >= 10. Refuted! Cex must be 10, 11, or 12.
+    let pre1: String = smt_contract_parse_pack("requires", "x", 1, ">=", 10, "", 0, "1", "1", false, 0);
+    let mut assigns1: List[String] = list_new();
+    assigns1 = list_push(assigns1, smt_wp_calc_assign_pack("result", "x", 1, 0 - 8));
+    let post1: String = smt_contract_parse_pack("ensures", "result", 1, ">=", 5, "", 0, "2", "1", false, 0);
+    let res1: String = smt_prover_lia_prove_vc(pre1, assigns1, post1);
+    assert_true(!smt_prover_lia_is_valid(res1), "system 1 must be refuted");
+    let cex1: String = smt_prover_lia_counterexample(res1);
+    assert_true(cex1 == "x = 10", "system 1 cex must be x = 10, got: " + cex1);
+
+    // System 2: requires x >= 0, ensures result > x with result = x
+    // Pre: x >= 0. Post: x > x <=> 0 > 0 (false). Refuted! Cex: x = 0.
+    let pre2: String = smt_contract_parse_pack("requires", "x", 1, ">=", 0, "", 0, "1", "1", false, 0);
+    let mut assigns2: List[String] = list_new();
+    assigns2 = list_push(assigns2, smt_wp_calc_assign_pack("result", "x", 1, 0));
+    let post2: String = smt_contract_parse_pack("ensures", "result", 1, ">", 0, "x", 1, "2", "1", false, 0);
+    let res2: String = smt_prover_lia_prove_vc(pre2, assigns2, post2);
+    assert_true(!smt_prover_lia_is_valid(res2), "system 2 must be refuted");
+    let cex2: String = smt_prover_lia_counterexample(res2);
+    assert_true(str_index_of(cex2, "x = 0") >= 0, "system 2 cex must contain x = 0, got: " + cex2);
+
+    // System 3: requires x <= 5, ensures result < 0 with result = x
+    // Pre: x <= 5. Post: x < 0. Negation: x >= 0. Cex must be 0 in [0, 5].
+    let pre3: String = smt_contract_parse_pack("requires", "x", 1, "<=", 5, "", 0, "1", "1", false, 0);
+    let mut assigns3: List[String] = list_new();
+    assigns3 = list_push(assigns3, smt_wp_calc_assign_pack("result", "x", 1, 0));
+    let post3: String = smt_contract_parse_pack("ensures", "result", 1, "<", 0, "", 0, "2", "1", false, 0);
+    let res3: String = smt_prover_lia_prove_vc(pre3, assigns3, post3);
+    assert_true(!smt_prover_lia_is_valid(res3), "system 3 must be refuted");
+    let cex3: String = smt_prover_lia_counterexample(res3);
+    assert_true(cex3 == "x = 0", "system 3 cex must be x = 0, got: " + cex3);
+
+    // System 4: requires x <= -5, ensures result <= -10 with result = x + 2
+    // WP: x + 2 <= -10 <=> x <= -12. Negated: x >= -11. Range [-11, -5]. Cex = -5.
+    let pre4: String = smt_contract_parse_pack("requires", "x", 1, "<=", 0 - 5, "", 0, "1", "1", false, 0);
+    let mut assigns4: List[String] = list_new();
+    assigns4 = list_push(assigns4, smt_wp_calc_assign_pack("result", "x", 1, 2));
+    let post4: String = smt_contract_parse_pack("ensures", "result", 1, "<=", 0 - 10, "", 0, "2", "1", false, 0);
+    let res4: String = smt_prover_lia_prove_vc(pre4, assigns4, post4);
+    assert_true(!smt_prover_lia_is_valid(res4), "system 4 must be refuted");
+    let cex4: String = smt_prover_lia_counterexample(res4);
+    assert_true(cex4 == "x = -5", "system 4 cex must be x = -5, got: " + cex4);
+}
+
+pub fn main() {
+    test_sentinel_collision();
+    test_cycle_len(2);
+    test_cycle_len(3);
+    test_cycle_len(5);
+    test_cycle_len(10);
+    test_cycle_len(15);
+    test_multiedge_conflicts();
+    test_tight_zero_cycles();
+    test_counterexamples();
+    println("CHALLENGER_DBM_PASS");
+}

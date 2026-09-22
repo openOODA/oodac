@@ -1,0 +1,68 @@
+// # Title: ARC Deep Recursion Returning Heap Collections Challenge
+//
+// Logline: Verify deep recursion (depth >= 1000) returning List[Int] and List[String].
+//
+// Setup: Compile via oodac emit-llvm and execute under quota and ASan.
+//
+// Beats:
+//   1. Recursive function building and returning List[Int] across 1,200 frames.
+//   2. Recursive function building and returning List[String] across 1,000 frames.
+//   3. Validate boundary and internal collection values.
+//   4. Assert zero memory leaks and clean exit code 0.
+
+fn rec_build_ilist(n: Int, max_n: Int) -> List[Int] {
+    if n >= max_n {
+        return list_new();
+    }
+    let tag: String = str_repeat("depth_tag_", 2);
+    let tail: List[Int] = rec_build_ilist(n + 1, max_n);
+    let result: List[Int] = list_push(tail, n + chars_len(tag));
+    return result;
+}
+
+fn rec_build_slist(n: Int, max_n: Int) -> List[String] {
+    if n >= max_n {
+        return list_new();
+    }
+    let item_str: String = str_repeat("entry_", 2);
+    let tail: List[String] = rec_build_slist(n + 1, max_n);
+    let result: List[String] = list_push(tail, item_str);
+    return result;
+}
+
+pub fn main() -> Int {
+    let mut round: Int = 0;
+    while round < 5 {
+        let nums: List[Int] = rec_build_ilist(0, 1200);
+        if list_len(nums) != 1200 {
+            println("FAIL: rec_build_ilist length mismatch");
+            return 1;
+        }
+        let first_val: Int = list_get(nums, 0);
+        let last_val: Int = list_get(nums, 1199);
+        if first_val != 1199 + 20 {
+            println("FAIL: rec_build_ilist first element mismatch");
+            return 2;
+        }
+        if last_val != 0 + 20 {
+            println("FAIL: rec_build_ilist last element mismatch");
+            return 3;
+        }
+
+        let words: List[String] = rec_build_slist(0, 1000);
+        if list_len(words) != 1000 {
+            println("FAIL: rec_build_slist length mismatch");
+            return 4;
+        }
+        let first_word: String = list_get(words, 0);
+        let last_word: String = list_get(words, 999);
+        if chars_len(first_word) != 12 || chars_len(last_word) != 12 {
+            println("FAIL: rec_build_slist string contents mismatch");
+            return 5;
+        }
+
+        round = round + 1;
+    }
+    println("PASS: deep recursion heap collections verified");
+    return 0;
+}

@@ -1,0 +1,24 @@
+// # Title: Ambient List Memory Quota Challenge
+//
+// Logline: Verify fail-closed quota enforcement and clean pass within quota.
+//
+// Setup: Compile via oodac emit-llvm and execute under variable OO_LIST_AMBIENT_QUOTA.
+//
+// Beats:
+//   1. Allocate and push elements into List[Int].
+//   2. Output success message when execution completes.
+
+pub fn main() -> Int {
+    let mut xs: List[Int] = list_new();
+    let mut i: Int = 0;
+    while i < 5000 {
+        xs = list_push(xs, i * 3);
+        i = i + 1;
+    }
+    if list_len(xs) != 5000 {
+        println("FAIL: length mismatch");
+        return 2;
+    }
+    println("PASS: quota within bounds");
+    return 0;
+}
