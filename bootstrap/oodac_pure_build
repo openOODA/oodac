@@ -277,6 +277,14 @@ if [[ "$LLVM_MODE" == "1" ]]; then
   fi
   host_fp="$(sha256sum -- "$OODAC_BIN" | awk '{print $1}')"
   host_fp="${host_fp:0:16}"
+  # Seed-capability gate (Unit 4): a seed-fallback object poisons fixed-point
+  # provenance (v20 seed cannot fresh-emit lex_scan.oo in-context: ERR llvm
+  # unknown type MacroTable). Retry via seed only when the host IS the seed
+  # (cold-start); otherwise fail closed instead of silently linking stale .o.
+  host_sha_full="$(sha256sum -- "$OODAC_BIN" | awk '{print $1}')"
+  seed_bin="$ROOT/bootstrap/seed/oodac"
+  seed_sha_full=""
+  if [[ -x "$seed_bin" ]]; then seed_sha_full="$(sha256sum -- "$seed_bin" | awk '{print $1}')"; fi
   emit_skip=0
   nmod=0
   for src in "${MODS[@]}"; do
@@ -314,9 +322,13 @@ if [[ "$LLVM_MODE" == "1" ]]; then
       fi
     fi
     if [[ ! -s "$ml" ]] || ! grep -q 'target triple' "$ml" || grep -qE $'^ERR\t' "$ml"; then
-      if [[ -x "$ROOT/bootstrap/seed/oodac" ]]; then
+      if [[ -n "$seed_sha_full" && "$host_sha_full" == "$seed_sha_full" ]]; then
         rel="${src#"$ROOT"/}"
-        (cd "$ROOT" && timeout 1800 "$ROOT/bootstrap/seed/oodac" emit-llvm "$rel") >"$ml" 2>"$ml.err" || true
+        (cd "$ROOT" && timeout 1800 "$seed_bin" emit-llvm "$rel") >"$ml" 2>"$ml.err" || true
+      else
+        echo "ERR_SEED_CAPABILITY $src ($nmod/${#MODS[@]}) host cannot fresh-emit; seed-fallback object refused (fixed-point provenance)" >&2
+        grep -E $'^ERR\t' "$ml" "$ml.err" 2>/dev/null | head -n 5 >&2 || true
+        exit 1
       fi
     fi
     if [[ ! -s "$ml" ]] || ! grep -q 'target triple' "$ml" || grep -qE $'^ERR\t' "$ml"; then
@@ -327,10 +339,13 @@ if [[ "$LLVM_MODE" == "1" ]]; then
     fi
     echo "pure_build: llvm $nmod/${#MODS[@]} ${src#"$ROOT"/}"
     if ! clang --no-default-config -c -O2 -g0 -fno-ident -Wno-override-module -frandom-seed=0 "$ml" -o "$mo" 2>/dev/null; then
-      if [[ -x "$ROOT/bootstrap/seed/oodac" ]]; then
+      if [[ -n "$seed_sha_full" && "$host_sha_full" == "$seed_sha_full" ]]; then
         rel="${src#"$ROOT"/}"
-        (cd "$ROOT" && timeout 1800 "$ROOT/bootstrap/seed/oodac" emit-llvm "$rel") >"$ml" 2>/dev/null || true
+        (cd "$ROOT" && timeout 1800 "$seed_bin" emit-llvm "$rel") >"$ml" 2>/dev/null || true
         clang --no-default-config -c -O2 -g0 -fno-ident -Wno-override-module -frandom-seed=0 "$ml" -o "$mo"
+      else
+        echo "ERR_SEED_CAPABILITY $src ($nmod/${#MODS[@]}): clang rejected fresh object; seed-fallback object refused (fixed-point provenance)" >&2
+        exit 1
       fi
     fi
     LLVM_OBJS+=("$mo")

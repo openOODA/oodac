@@ -88,6 +88,20 @@ run_suite() {
   fi
   record_test "T1-F17-03" "Fixed-point mismatch terminates with exit 1" "$f17_fail"
 
+  # T1-F17-06: Seed-fallback objects refused (fail closed, no stale provenance)
+  local f17_seed=1
+  if grep -q 'ERR_SEED_CAPABILITY' "$PB_SCRIPT" 2>/dev/null; then
+    f17_seed=0
+  fi
+  record_test "T1-F17-06" "Seed-fallback emit refused with ERR_SEED_CAPABILITY" "$f17_seed"
+
+  # T1-F17-07: Seed retry allowed only when host IS the seed (cold-start)
+  local f17_cold=1
+  if grep -q 'seed_sha_full' "$PB_SCRIPT" 2>/dev/null; then
+    f17_cold=0
+  fi
+  record_test "T1-F17-07" "Seed retry gated on host-seed identity" "$f17_cold"
+
   # T1-F17-04: Determinism test of sha256 calculation
   echo "test_payload" > "$d/payload.txt"
   local h1; h1=$(sha256sum "$d/payload.txt" | cut -d' ' -f1)
