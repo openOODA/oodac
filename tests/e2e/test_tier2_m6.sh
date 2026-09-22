@@ -168,7 +168,7 @@ EOF
   if run_bin "$d/b22_fib.oo" "$d/b22_fib.ll" "$d/b22_fib.bin"; then b22_fib=0; fi
   record_test "T2-F22-05" "Rebuild pipeline lowers multi-variable state loop and executes at -O2" "$b22_fib"
 
-  # Feature 23 Boundaries: Formal Scorecard & IR Verification
+  # Feature 23 Boundaries: Rustc bar & IR Verification
   local bar_file="$PROJECT_ROOT/oodac/docs/llvm-rustc-bar.oot"
   local b23_bar=1
   if [[ -f "$bar_file" ]]; then b23_bar=0; fi
@@ -179,10 +179,12 @@ EOF
      grep -q "R1" "$bar_file" 2>/dev/null; then b23_items=0; fi
   record_test "T2-F23-02" "Rustc bar documents criteria list" "$b23_items"
 
-  local card_file="$PROJECT_ROOT/openOODA/scripts/target_scorecard.oot"
   local b23_card=1
-  if [[ -f "$card_file" ]]; then b23_card=0; fi
-  record_test "T2-F23-03" "target_scorecard.oot exists" "$b23_card"
+  if [[ "$b23_bar" -eq 0 ]]; then
+    local bl; bl=$(wc -l < "$bar_file")
+    if [[ "$bl" -le 256 ]]; then b23_card=0; fi
+  fi
+  record_test "T2-F23-03" "llvm-rustc-bar.oot satisfies wc -l <= 256" "$b23_card"
 
   cat << 'EOF' > "$d/b23_cert.oo"
 // # Certified Spec

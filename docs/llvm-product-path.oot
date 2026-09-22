@@ -100,7 +100,7 @@ residual-exit tests and history docs.
 - `openOODA/roadmap.oot`: LLVM lowering DONE
 - `openOODA/requirements.oot`: backends are LLVM + residual ELF/WASM;
   C99 is oodar, not oodac emit
-- `openOODA/scripts/target_scorecard.oot`: no `emit/c/` as default
+- Product default is LLVM: no `emit/c/` as default (Unique-bar execute tests)
 - `mcp/docs`, `std/readme.oot`, `lsp` docs: LLVM
 
 Gate: those files say LLVM is product. No file in those repos tells a
@@ -151,5 +151,8 @@ P3 llvm-self-host (S1==S2==S3 bit-identical 3-stage fixed point certified 10/10)
 P4 polyrepo cutover (all 9 consumer repos migrated), P5 docs match binary,
 Track 1 LLVM lowering (geo-mean 0.9086 vs rustc -O3, 14/14 suites green),
 Track 2 SMT contract verifier (10/10 on-disk artifacts).
-Target Scorecard: 80/80 (100.0%, 10/10 across all 8 lines) certified.
+Release gates: P1 Unique bar green (v0.2.95), P3 llvm-self-host green
+(S1==S2 local fixed point), P4 polyrepo cutover done, P5 docs match binary,
+Track 1 LLVM lowering bar green (14/14 suites), Track 2 contract verifier
+green (10/10 on-disk artifacts).
 Locked: 2026-09-20 against oodac v0.2.151 (Track 3 & Option B hardened).

@@ -136,7 +136,7 @@ already true of oodac.
 
 ### R7 — Declare 10/10
 
-Only after R6. Update this status line and `target_scorecard.oot`
+Only after R6. Update this status line with the R6 tag and log path as
 compiler/LLVM evidence. Do not declare from greps without the suite.
 
 Gate: this file's status says DONE with the R6 tag and log path.

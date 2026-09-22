@@ -56,7 +56,6 @@ run_selfhost_suite() {
     "oodac/cli/cli_build.oo"
     "oodac/cli/cli_build_multi.oo"
     "oodac/check/check_collect.oo"
-    "openOODA/scripts/proof_of_today.oo"
     "oodac/docs/selfhost-3stage.oot"
     "oodac/tests/test_selfhost_3stage.sh"
   )
@@ -160,7 +159,7 @@ if [[ "$r1_fails" -ne 0 || "$r2_fails" -ne 0 || -z "$h_run1" || "$h_run1" != "$h
 fi
 
 echo "======================================================================"
-echo "=== openOODA Track 3 Sovereign Self-Host Scorecard                 ==="
+echo "=== openOODA Track 3 Sovereign Self-Host Summary                   ==="
 echo "======================================================================"
 echo "  Total Assertions Checked : $PASS_COUNT"
 echo "  Failed Assertions        : $FAIL_COUNT"

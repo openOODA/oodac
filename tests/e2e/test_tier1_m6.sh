@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tier 1 M6: Features 20-24 (Benchmarks, Runner, Rebuild, Scorecard, Git)
+# Tier 1 M6: Features 20-24 (Benchmarks, Runner, Rebuild, Bar, Git)
 # Compliance: wc -l <= 256, Double-Run (Run_1 == Run_2 = 0), Zero-Trust.
 set -euo pipefail
 
@@ -117,7 +117,7 @@ run_suite() {
   fi
   record_test "T1-F22-05" "Fixed point mismatch fails closed" "$f22_fail"
 
-  # Feature 23: Formal 10/10 Scorecard & Bar
+  # Feature 23: LLVM bar evidence (pass/fail)
   local f23_bar=1
   if [[ -f "$OODAC_ROOT/docs/llvm-rustc-bar.oot" ]]; then f23_bar=0; fi
   record_test "T1-F23-01" "llvm-rustc-bar.oot exists" "$f23_bar"
@@ -129,27 +129,29 @@ run_suite() {
   fi
   record_test "T1-F23-02" "llvm-rustc-bar.oot satisfies wc -l <= 256" "$f23_bar_loc"
 
-  local f23_score=1
-  if [[ -f "$PROJECT_ROOT/openOODA/scripts/target_scorecard.oot" ]]; then
-    f23_score=0
+  local f23_check=1
+  if [[ "$f23_bar" -eq 0 ]]; then
+    if grep -q "Frozen 10/10 checklist" "$OODAC_ROOT/docs/llvm-rustc-bar.oot" 2>/dev/null; then
+      f23_check=0
+    fi
   fi
-  record_test "T1-F23-03" "target_scorecard.oot exists" "$f23_score"
+  record_test "T1-F23-03" "llvm-rustc-bar.oot defines frozen 10-item checklist" "$f23_check"
 
-  local f23_score_loc=1
-  if [[ "$f23_score" -eq 0 ]]; then
-    local l4; l4=$(wc -l < "$PROJECT_ROOT/openOODA/scripts/target_scorecard.oot")
-    if [[ "$l4" -le 256 ]]; then f23_score_loc=0; fi
+  local f23_gate=1
+  if [[ "$f23_bar" -eq 0 ]]; then
+    if grep -q "Gate:" "$OODAC_ROOT/docs/llvm-rustc-bar.oot" 2>/dev/null; then
+      f23_gate=0
+    fi
   fi
-  record_test "T1-F23-04" "target_scorecard.oot satisfies wc -l <= 256" "$f23_score_loc"
+  record_test "T1-F23-04" "llvm-rustc-bar.oot records per-phase gates" "$f23_gate"
 
   local f23_ref=1
-  if [[ "$f23_score" -eq 0 ]]; then
-    if grep -q "Track 1" "$PROJECT_ROOT/openOODA/scripts/target_scorecard.oot" 2>/dev/null || \
-       grep -q "LLVM" "$PROJECT_ROOT/openOODA/scripts/target_scorecard.oot" 2>/dev/null; then
+  if [[ "$f23_bar" -eq 0 ]]; then
+    if grep -q "## Status" "$OODAC_ROOT/docs/llvm-rustc-bar.oot" 2>/dev/null; then
       f23_ref=0
     fi
   fi
-  record_test "T1-F23-05" "Scorecard references Track 1 LLVM lowering" "$f23_ref"
+  record_test "T1-F23-05" "llvm-rustc-bar.oot records release status" "$f23_ref"
 
   # Feature 24: Git Release Tag & Commit
   local f24_ver=1

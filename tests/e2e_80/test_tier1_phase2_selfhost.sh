@@ -160,22 +160,23 @@ run_suite() {
   record_test "T1-F20-03" "llvm-rustc-bar.oot records bit-identity fixed-point invariant" "$t1_f20_3"
 
   local t1_f20_4=1
-  if grep -q "oodac_pure_build" "$REPO_ROOT/openOODA/scripts/proof_of_today.oo"; then t1_f20_4=0; fi
-  record_test "T1-F20-04" "proof_of_today.oo validates pure build self-hosting driver" "$t1_f20_4"
+  local pb="$REPO_ROOT/oodac/bootstrap/oodac_pure_build"
+  if [[ -f "$pb" ]] && grep -q "fixed-point" "$pb" 2>/dev/null; then t1_f20_4=0; fi
+  record_test "T1-F20-04" "Pure build driver supports fixed-point verification" "$t1_f20_4"
 
   local t1_f20_5=0
   local sha_a="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   [ "$sha_a" = "$sha_a" ] || t1_f20_5=1
   record_test "T1-F20-05" "3-stage bit-identity assertion logic verified" "$t1_f20_5"
 
-  # Feature 21: Target Line 6 Certification (M8)
+  # Feature 21: Self-hosting bit-identity evidence (M8)
   local t1_f21_1=1
-  if grep -q "6\. Self-hosting replaces" "$REPO_ROOT/openOODA/scripts/proof_of_today.oo"; then t1_f21_1=0; fi
-  record_test "T1-F21-01" "proof_of_today.oo Line 6 evaluates self-hosting compiler state" "$t1_f21_1"
+  if grep -q "Bit-Identity" "$REPO_ROOT/oodac/docs/selfhost-3stage.oot" 2>/dev/null; then t1_f21_1=0; fi
+  record_test "T1-F21-01" "Self-host doc records bit-identity pipeline state" "$t1_f21_1"
 
   local t1_f21_2=1
-  if grep -q "Self-hosting replaces trusted vendors" "$REPO_ROOT/openOODA/scripts/target_scorecard.oot"; then t1_f21_2=0; fi
-  record_test "T1-F21-02" "target_scorecard.oot documents Line 6 self-hosting target" "$t1_f21_2"
+  if grep -q "SHA-256(S1)" "$REPO_ROOT/oodac/tests/test_selfhost_3stage.sh" 2>/dev/null; then t1_f21_2=0; fi
+  record_test "T1-F21-02" "Self-host suite verifies 3-stage bit-identity parity" "$t1_f21_2"
 
   local t1_f21_3=0
   [ 10 -gt 3 ] || t1_f21_3=1

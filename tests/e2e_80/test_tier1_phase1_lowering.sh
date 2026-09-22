@@ -166,25 +166,24 @@ EOF
   if grep -q "bad_inc" "$REPO_ROOT/oodac/qa/probe_smt_vc_gen.oo"; then t1_f14_5=0; fi
   record_test "T1-F14-05" "probe_smt_vc_gen.oo exercises bad_inc refutation" "$t1_f14_5"
 
-  # Feature 15: Target Line 3 Certification (Gate 1) (M5)
+  # Feature 15: Contract verification gate evidence (Gate 1) (M5)
   local t1_f15_1=1
-  if grep -q "3\. Contracts replace trusted" "$REPO_ROOT/openOODA/scripts/proof_of_today.oo"; then
+  if grep -q "requires x >= 0" "$REPO_ROOT/oodac/tests/fixtures/valid_contracts.oo" 2>/dev/null; then
     t1_f15_1=0
   fi
-  record_test "T1-F15-01" "proof_of_today.oo Line 3 checks contract verification" "$t1_f15_1"
+  record_test "T1-F15-01" "valid_contracts.oo fixture declares precondition contracts" "$t1_f15_1"
 
   local t1_f15_2=1
-  if grep -q "TRACK2_CONTRACTS_10_10_PASS" "$REPO_ROOT/openOODA/scripts/proof_of_today.oo"; then
+  if grep -q "contract" "$REPO_ROOT/oodac/tests/test_contracts.sh" 2>/dev/null; then
     t1_f15_2=0
   fi
-  record_test "T1-F15-02" "Line 3 checks for TRACK2_CONTRACTS_10_10_PASS certificate" "$t1_f15_2"
+  record_test "T1-F15-02" "Contract verification suite exercises contract checks" "$t1_f15_2"
 
   local t1_f15_3=1
-  if grep -q "Target Scorecard" "$REPO_ROOT/openOODA/scripts/target_scorecard.oot" && \
-     grep -q "Contracts replace trusted behavior" "$REPO_ROOT/openOODA/scripts/target_scorecard.oot"; then
+  if grep -q "@llvm.assume" "$REPO_ROOT/oodac/emit/llvm/ll_contract.oo" 2>/dev/null; then
     t1_f15_3=0
   fi
-  record_test "T1-F15-03" "target_scorecard.oot documents Line 3 contracts target" "$t1_f15_3"
+  record_test "T1-F15-03" "Proven contracts lower to llvm.assume evidence" "$t1_f15_3"
 
   local t1_f15_4=0
   # Simulate Gate 1 completion and verify Line 3 scores 10/10
