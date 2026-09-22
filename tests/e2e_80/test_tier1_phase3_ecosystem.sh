@@ -136,13 +136,8 @@ EOF
   bash "$d/mock_redteam_green.sh" || t1_f24_5=1
   record_test "T1-F24-05" "Red team CI green requires 9/9 repos across 8 dimensions" "$t1_f24_5"
 
-  # Feature 25: Daily Trend Pipeline (M10)
-  local t1_f25_1=1
-  if [[ -f "$REPO_ROOT/openOODA/scripts/publish_daily_audit.oo" ]]; then
-    t1_f25_1=0
-  fi
-  record_test "T1-F25-01" "publish_daily_audit.oo daily audit script present" "$t1_f25_1"
-
+  # Feature 25: Daily Trend Pipeline (M10) retired with the scorecard instrument;
+  # audit-history remains as the historical record (T1-F25-02/03 below).
   local t1_f25_2=1
   if [[ -d "$REPO_ROOT/openOODA/docs/audit-history" ]]; then
     t1_f25_2=0
