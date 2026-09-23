@@ -12,6 +12,7 @@
 import "lex/token_fmt.oo";
 import "lex/token_parse_int.oo";
 import "check/check_collect.oo";
+import "ast/load_import.oo";
 import "cli_oodar.oo";
 import "cli_build_multi.oo";
 import "emit/elf/elf_emit.oo";
@@ -149,7 +150,7 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
     let mut b: String = backend;
     if b == "wasm" {
         let mut blob: String = "";
-        blob = wasm_emit_program(src);
+        blob = wasm_emit_program(load_source_with_imports(fs_r, path));
         let wr: Result[Void, String] = write_file(fs_w, out, blob);
         if wr.is_err() {
             println("ERR\tbuild\twrite " + b + " failed");
@@ -179,7 +180,7 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
             println("ERR\tbuild\trocm shared unsupported");
             process_exit(2);
         }
-        let hip: String = rocm_emit_program(src);
+        let hip: String = rocm_emit_program(load_source_with_imports(fs_r, path));
         let tmp_hip: String = tmp_dir + "/rocm_" + str_slice(tmp_h, 0, 16) + ".hip";
         let tmp_o: String = tmp_dir + "/rocm_" + str_slice(tmp_h, 0, 16) + ".o";
         let wr: Result[Void, String] = write_file(fs_w, tmp_hip, hip);

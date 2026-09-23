@@ -1,0 +1,41 @@
+// # WASM short-circuit logic proof
+//
+// Logline: AND OR and NOT lower with lazy right sides under wasmtime.
+//
+// Setup: boom traps on zero division; skipped right sides must not evaluate.
+//   Default wasm build. No emit/c import.
+//
+// Beats:
+//   1. true && (false || true) prints 1 through nested logic.
+//   2. Skipped boom(0) sides print 0 and 1 with no trap.
+//   3. NOT and chained comparisons print 1 0 7.
+
+pub fn boom(x: Int) -> Int {
+    return 10 / x;
+}
+
+pub fn main() {
+    let a: Bool = true;
+    let b: Bool = false;
+    let c: Bool = true;
+    if a && (b || c) {
+        println(1);
+    } else {
+        println(0);
+    }
+    if b && boom(0) == 1 {
+        println(1);
+    } else {
+        println(0);
+    }
+    if a || boom(0) == 1 {
+        println(1);
+    } else {
+        println(0);
+    }
+    println(!b);
+    println(!a);
+    if 1 < 2 && 3 < 4 {
+        println(7);
+    }
+}

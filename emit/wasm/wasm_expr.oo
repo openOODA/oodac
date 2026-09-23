@@ -16,14 +16,12 @@ import "wasm_tok.oo";
 import "wasm_data.oo";
 import "wasm_fn.oo";
 import "wasm_bop.oo";
+import "wasm_ctor.oo";
+import "wasm_slice.oo";
+import "wasm_match.oo";
 import "lex/token_parse_int.oo";
 
-pub type WsCx = struct { depth: Int };
-pub type WsG = struct { env: String, fns: String, structs: String, order: String, arity: Int, scratch: Int };
-pub fn ws_cx_new() -> WsCx { return WsCx { depth: 0 }; }
-pub fn ws_g_new(env: String, fns: String, structs: String, order: String, arity: Int, scratch: Int) -> WsG {
-    return WsG { env: env, fns: fns, structs: structs, order: order, arity: arity, scratch: scratch };
-}
+
 pub fn ws_local_idx(order: String, arity: Int, name: String) -> Int {
     let mut rest: String = order;
     let mut c: Int = 0;
@@ -55,9 +53,15 @@ pub fn ws_climb(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &WsG, 
             break;
         }
         let k: String = ws_k(toks, p);
-        let r: String = ws_climb(b, toks, p + 1, n, g, lits, cx, pr + 1);
-        ty = ws_bin(b, toks, p, k, ty, ws_un_ty(r));
-        p = ws_un_pos(r);
+        if k == "ANDAND" || k == "OROR" {
+            let r2: String = ws_logic(b, toks, p, n, g, lits, cx, k, ty, pr);
+            ty = ws_un_ty(r2);
+            p = ws_un_pos(r2);
+        } else {
+            let r: String = ws_climb(b, toks, p + 1, n, g, lits, cx, pr + 1);
+            ty = ws_bin(b, toks, p, k, ty, ws_un_ty(r));
+            p = ws_un_pos(r);
+        }
     }
     return ws_pack(p, ty);
 }
@@ -70,6 +74,14 @@ pub fn ws_unary(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &WsG, 
         }
         ws_sub(b);
         return ws_pack(ws_un_pos(r), "i");
+    }
+    if pos < n && ws_k(toks, pos) == "BANG" {
+        let r2: String = ws_unary(b, toks, pos + 1, n, g, lits, cx);
+        if ws_un_ty(r2) != "i" {
+            ws_fail(ws_line(toks, pos), "not type");
+        }
+        ws_eqz(b);
+        return ws_pack(ws_un_pos(r2), "i");
     }
     return ws_postfix(b, toks, pos, n, g, lits, cx);
 }
@@ -86,7 +98,7 @@ pub fn ws_postfix(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &WsG
             if p + 3 >= n || ws_k(toks, p + 3) != "RPAREN" {
                 ws_fail(ws_line(toks, p), "method args");
             }
-            ty = ws_method(b, toks, p, ty, m);
+            ty = ws_method(b, toks, p, ty, m, g.scratch + cx.depth * 2);
             p = p + 4;
         } else {
             ty = ws_field(b, toks, p, g.structs, ty, m);
@@ -116,6 +128,9 @@ pub fn ws_primary(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &WsG
     if k == "IDENT" {
         return ws_ident(b, toks, pos, n, g, lits, cx);
     }
+    if k == "KW_MATCH" {
+        return ws_match_expr(b, toks, pos, n, g, lits, cx);
+    }
     ws_fail(ws_line(toks, pos), "expr " + k);
     return ws_pack(pos + 1, "?");
 }
@@ -141,11 +156,13 @@ pub fn ws_call_global(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: 
     let mut nargs: Int = 0;
     let mut c0: String = "?";
     let mut c1: String = "?";
+    let mut c2: String = "?";
     while p < n && ws_k(toks, p) != "RPAREN" {
         let r: String = ws_expr(b, toks, p, n, g, lits, cx);
         p = ws_un_pos(r);
         if nargs == 0 { c0 = ws_un_ty(r); }
         if nargs == 1 { c1 = ws_un_ty(r); }
+        if nargs == 2 { c2 = ws_un_ty(r); }
         nargs = nargs + 1;
         if p < n && ws_k(toks, p) == "COMMA" { p = p + 1; }
     }
@@ -153,6 +170,36 @@ pub fn ws_call_global(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: 
         ws_fail(ws_line(toks, pos), "close call");
     }
     let end: Int = p + 1;
+    if name == "str_slice" {
+        if nargs != 3 {
+            ws_fail(ws_line(toks, pos), "slice arity");
+        }
+        if c0 != "s" || c1 != "i" || c2 != "i" {
+            ws_fail(ws_line(toks, pos), "slice type");
+        }
+        ws_slice_emit(b, g.scratch + cx.depth * 2, cx.depth, toks, pos);
+        return ws_pack(end, "s");
+    }
+    if name == "char_at" {
+        if nargs != 2 {
+            ws_fail(ws_line(toks, pos), "char arity");
+        }
+        if c0 != "s" || c1 != "i" {
+            ws_fail(ws_line(toks, pos), "char type");
+        }
+        ws_char_emit(b, g.scratch + cx.depth * 2, cx.depth, toks, pos);
+        return ws_pack(end, "s");
+    }
+    if name == "println" {
+        if nargs != 1 {
+            ws_fail(ws_line(toks, pos), "println arity");
+        }
+        if c0 != "i" && c0 != "s" {
+            ws_fail(ws_line(toks, pos), "println type");
+        }
+        if c0 == "i" { ws_call(b, 4); } else { ws_call(b, 3); }
+        return ws_pack(end, "v");
+    }
     if name == "list_new" {
         ws_call(b, 7);
         return ws_pack(end, "l[?]");
@@ -166,11 +213,13 @@ pub fn ws_call_global(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: 
         return ws_pack(end, "l[" + e + "]");
     }
     if name == "list_get" {
-        ws_set(b, g.scratch + 1);
-        ws_set(b, g.scratch);
-        ws_get(b, g.scratch);
+        let s0: Int = g.scratch + cx.depth * 2;
+        let s1: Int = s0 + 1;
+        ws_set(b, s1);
+        ws_set(b, s0);
+        ws_get(b, s0);
         ws_load(b, 0);
-        ws_get(b, g.scratch + 1);
+        ws_get(b, s1);
         ws_const(b, 4);
         ws_mul(b);
         ws_add(b);
@@ -195,61 +244,4 @@ pub fn ws_call_global(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: 
     ws_call(b, parse_int(field_at(row, 3)));
     return ws_pack(end, field_at(row, 2));
 }
-pub fn ws_result_new(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &WsG, lits: &mut WsLits, cx: &mut WsCx, tag: Int) -> String {
-    if cx.depth > 0 {
-        ws_fail(ws_line(toks, pos), "nested construct");
-    }
-    cx.depth = cx.depth + 1;
-    let r: String = ws_expr(b, toks, pos + 2, n, g, lits, cx);
-    let p: Int = ws_un_pos(r);
-    if p >= n || ws_k(toks, p) != "RPAREN" {
-        ws_fail(ws_line(toks, pos), "close result");
-    }
-    let pay: String = ws_un_ty(r);
-    ws_set(b, g.scratch + 1);
-    ws_const(b, 8);
-    ws_call(b, 2);
-    ws_set(b, g.scratch);
-    ws_get(b, g.scratch);
-    ws_const(b, tag);
-    ws_store(b, 0);
-    ws_get(b, g.scratch);
-    ws_get(b, g.scratch + 1);
-    ws_store(b, 4);
-    ws_get(b, g.scratch);
-    cx.depth = cx.depth - 1;
-    if tag == 0 {
-        return ws_pack(p + 1, "r[" + pay + ",?]");
-    }
-    return ws_pack(p + 1, "r[?," + pay + "]");
-}
-pub fn ws_struct_new(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &WsG, lits: &mut WsLits, cx: &mut WsCx, sname: String) -> String {
-    if cx.depth > 0 {
-        ws_fail(ws_line(toks, pos), "nested construct");
-    }
-    cx.depth = cx.depth + 1;
-    ws_const(b, ws_struct_size(g.structs, sname));
-    ws_call(b, 2);
-    ws_set(b, g.scratch);
-    let mut p: Int = pos + 2;
-    while p < n && ws_k(toks, p) != "RBRACE" {
-        if ws_k(toks, p) != "IDENT" || ws_k(toks, p + 1) != "COLON" {
-            ws_fail(ws_line(toks, p), "struct field");
-        }
-        let row: String = ws_struct_field(g.structs, sname, ws_t(toks, p));
-        if row == "" {
-            ws_fail(ws_line(toks, p), "unknown field");
-        }
-        ws_get(b, g.scratch);
-        let r: String = ws_expr(b, toks, p + 2, n, g, lits, cx);
-        ws_store(b, parse_int(field_at(row, 2)));
-        p = ws_un_pos(r);
-        if p < n && ws_k(toks, p) == "COMMA" { p = p + 1; }
-    }
-    if p >= n {
-        ws_fail(ws_line(toks, pos), "close struct");
-    }
-    ws_get(b, g.scratch);
-    cx.depth = cx.depth - 1;
-    return ws_pack(p + 1, "t:" + sname);
-}
+

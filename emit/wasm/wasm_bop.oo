@@ -13,10 +13,17 @@ import "lex/token_fmt.oo";
 import "wasm_buf.oo";
 import "wasm_op.oo";
 import "wasm_tok.oo";
+import "wasm_data.oo";
 import "wasm_fn.oo";
 import "lex/token_parse_int.oo";
 
 pub fn ws_prec(k: String) -> Int {
+    if k == "OROR" {
+        return 1;
+    }
+    if k == "ANDAND" {
+        return 2;
+    }
     if k == "EQEQ" || k == "NEQ" {
         return 3;
     }
@@ -83,7 +90,7 @@ pub fn ws_bin(b: &mut WasmBuf, toks: List[String], at: Int, k: String, ty: Strin
     }
     return "i";
 }
-pub fn ws_method(b: &mut WasmBuf, toks: List[String], at: Int, ty: String, m: String) -> String {
+pub fn ws_method(b: &mut WasmBuf, toks: List[String], at: Int, ty: String, m: String, s0: Int) -> String {
     if m == "is_ok" && chars_len(ty) > 0 && char_at(ty, 0) == "r" {
         ws_load(b, 0);
         ws_eqz(b);
@@ -95,8 +102,49 @@ pub fn ws_method(b: &mut WasmBuf, toks: List[String], at: Int, ty: String, m: St
         ws_ne(b);
         return "i";
     }
+    if m == "unwrap" && chars_len(ty) > 0 && char_at(ty, 0) == "r" {
+        ws_set(b, s0);
+        ws_get(b, s0);
+        ws_load(b, 0);
+        ws_if(b);
+        ws_const(b, 1);
+        ws_call(b, 1);
+        ws_end(b);
+        ws_get(b, s0);
+        ws_load(b, 4);
+        return ws_res_ok(ty);
+    }
+    if m == "unwrap" {
+        ws_fail(ws_line(toks, at), "unwrap needs Result or Option");
+    }
     ws_fail(ws_line(toks, at), "method " + m);
     return "?";
+}
+
+pub fn ws_logic(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &WsG, lits: &mut WsLits, cx: &mut WsCx, op: String, lhs: String, pr: Int) -> String {
+    if lhs != "i" {
+        ws_fail(ws_line(toks, pos), "logic type");
+    }
+    if op == "ANDAND" {
+        ws_if_v(b);
+        let r: String = ws_climb(b, toks, pos + 1, n, g, lits, cx, pr + 1);
+        if ws_un_ty(r) != "i" {
+            ws_fail(ws_line(toks, pos), "logic type");
+        }
+        ws_else(b);
+        ws_const(b, 0);
+        ws_end(b);
+        return ws_pack(ws_un_pos(r), "i");
+    }
+    ws_if_v(b);
+    ws_const(b, 1);
+    ws_else(b);
+    let r2: String = ws_climb(b, toks, pos + 1, n, g, lits, cx, pr + 1);
+    if ws_un_ty(r2) != "i" {
+        ws_fail(ws_line(toks, pos), "logic type");
+    }
+    ws_end(b);
+    return ws_pack(ws_un_pos(r2), "i");
 }
 pub fn ws_field(b: &mut WasmBuf, toks: List[String], at: Int, structs: String, ty: String, m: String) -> String {
     if chars_len(ty) > 0 && char_at(ty, 0) == "r" {

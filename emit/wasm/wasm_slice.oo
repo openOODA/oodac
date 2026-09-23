@@ -1,0 +1,138 @@
+// # WASM string slice and char access
+//
+// Logline: str_slice and char_at lower inline through owned scratch slots.
+//
+// Setup: Args arrive on the stack as record plus ints. Byte addressing matches
+//   the ASCII fast path; bad ranges yield empty and OOB chars exit non-zero.
+//
+// Beats:
+//   1. Slice guards mirror the host runtime: empty unless 0<=st<=en<=len.
+//   2. Char loads one byte and wraps it in a fresh one-byte string record.
+//   3. Four owned slots keep the copy loop clear of outer temporaries.
+
+import "wasm_buf.oo";
+import "wasm_op.oo";
+import "wasm_tok.oo";
+import "wasm_rt.oo";
+
+pub fn ws_slice_emit(b: &mut WasmBuf, base: Int, depth: Int, toks: List[String], pos: Int) {
+    if depth > 6 {
+        ws_fail(ws_line(toks, pos), "nested too deep");
+    }
+    let t0: Int = base;
+    let t1: Int = base + 1;
+    let t2: Int = base + 2;
+    let t3: Int = base + 3;
+    ws_set(b, t2);
+    ws_set(b, t1);
+    ws_set(b, t0);
+    ws_get(b, t0);
+    ws_load(b, 4);
+    ws_set(b, t3);
+    ws_get(b, t1);
+    ws_const(b, 0);
+    ws_lt_s(b);
+    ws_get(b, t2);
+    ws_get(b, t1);
+    ws_lt_s(b);
+    ws_or(b);
+    ws_get(b, t1);
+    ws_get(b, t3);
+    ws_gt_s(b);
+    ws_or(b);
+    ws_get(b, t2);
+    ws_get(b, t3);
+    ws_gt_s(b);
+    ws_or(b);
+    ws_if_v(b);
+    ws_const(b, 0);
+    ws_call(b, 2);
+    ws_set(b, t0);
+    ws_const(b, 8);
+    ws_call(b, 2);
+    ws_set(b, t3);
+    ws_get(b, t3);
+    ws_get(b, t0);
+    ws_store(b, 0);
+    ws_get(b, t3);
+    ws_const(b, 4);
+    ws_add(b);
+    ws_const(b, 0);
+    ws_store(b, 0);
+    ws_get(b, t3);
+    ws_else(b);
+    ws_get(b, t0);
+    ws_load(b, 0);
+    ws_set(b, t0);
+    ws_get(b, t0);
+    ws_get(b, t1);
+    ws_add(b);
+    ws_set(b, t0);
+    ws_get(b, t2);
+    ws_get(b, t1);
+    ws_sub(b);
+    ws_set(b, t1);
+    ws_get(b, t1);
+    ws_call(b, 2);
+    ws_set(b, t2);
+    ws_copy(b, t2, t0, t3, t1);
+    ws_const(b, 8);
+    ws_call(b, 2);
+    ws_set(b, t3);
+    ws_get(b, t3);
+    ws_get(b, t2);
+    ws_store(b, 0);
+    ws_get(b, t3);
+    ws_const(b, 4);
+    ws_add(b);
+    ws_get(b, t1);
+    ws_store(b, 0);
+    ws_get(b, t3);
+    ws_end(b);
+}
+
+pub fn ws_char_emit(b: &mut WasmBuf, base: Int, depth: Int, toks: List[String], pos: Int) {
+    if depth > 7 {
+        ws_fail(ws_line(toks, pos), "nested too deep");
+    }
+    let t0: Int = base;
+    let t1: Int = base + 1;
+    ws_set(b, t1);
+    ws_set(b, t0);
+    ws_get(b, t1);
+    ws_const(b, 0);
+    ws_lt_s(b);
+    ws_get(b, t1);
+    ws_get(b, t0);
+    ws_load(b, 4);
+    ws_ge_s(b);
+    ws_or(b);
+    ws_if(b);
+    ws_const(b, 1);
+    ws_call(b, 1);
+    ws_end(b);
+    ws_get(b, t0);
+    ws_load(b, 0);
+    ws_get(b, t1);
+    ws_add(b);
+    ws_load8(b, 0);
+    ws_set(b, t1);
+    ws_const(b, 1);
+    ws_call(b, 2);
+    ws_set(b, t0);
+    ws_get(b, t0);
+    ws_get(b, t1);
+    ws_store8(b, 0);
+    ws_const(b, 8);
+    ws_call(b, 2);
+    ws_set(b, t1);
+    ws_get(b, t1);
+    ws_get(b, t0);
+    ws_store(b, 0);
+    ws_get(b, t1);
+    ws_const(b, 4);
+    ws_add(b);
+    ws_const(b, 1);
+    ws_store(b, 0);
+    ws_get(b, t1);
+}

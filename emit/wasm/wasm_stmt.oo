@@ -16,6 +16,7 @@ import "wasm_data.oo";
 import "wasm_fn.oo";
 import "wasm_expr.oo";
 import "wasm_store.oo";
+import "wasm_match.oo";
 
 pub fn ws_order_count(order: String) -> Int {
     let mut rest: String = order;
@@ -54,6 +55,10 @@ pub fn ws_stmt_block(b: &mut WasmBuf, toks: List[String], pos: Int, end: Int, n:
             let r: String = ws_stmt_while(b, toks, p, n, g, env, lits, cx, ret);
             p = ws_un_pos(r);
             env = ws_un_ty(r);
+        } else if k == "KW_MATCH" {
+            let r2: String = ws_match_stmt(b, toks, p, n, g, env, lits, cx, ret);
+            p = ws_un_pos(r2);
+            env = ws_un_ty(r2);
         } else if k == "KW_RETURN" {
             p = ws_stmt_return(b, toks, p, n, g, env, lits, cx, ret);
         } else if k == "LBRACE" {

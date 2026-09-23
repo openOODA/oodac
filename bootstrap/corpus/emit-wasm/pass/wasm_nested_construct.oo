@@ -1,0 +1,31 @@
+// # WASM nested construction proof
+//
+// Logline: Struct-in-struct and Result-of-struct lower and run under wasmtime.
+//
+// Setup: Rec holds a nested Inner. Default wasm build. No emit/c import.
+//
+// Beats:
+//   1. Nested struct literal reads through chained fields.
+//   2. Ok of a nested struct literal unwraps through val chains.
+
+// pass: nested struct and result construction execute
+pub type Inner = struct {
+    val: Int
+};
+
+pub type Rec = struct {
+    count: Int,
+    name: String,
+    inner: Inner
+};
+
+pub fn main() {
+    let tab = Rec { count: 41, name: "mdef", inner: Inner { val: 7 } };
+    println(tab.count);
+    println(tab.inner.val);
+    let r: Result[Rec, String] = Ok(Rec { count: 1, name: "x", inner: Inner { val: 2 } });
+    if r.is_ok() {
+        println(r.val.count);
+        println(r.val.inner.val);
+    }
+}

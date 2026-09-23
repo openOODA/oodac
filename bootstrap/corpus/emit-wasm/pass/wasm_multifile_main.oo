@@ -1,0 +1,16 @@
+// # WASM multi-file proof
+//
+// Logline: Imported helper resolves and runs under wasmtime.
+//
+// Setup: Imports add42.oo from the same dir. Default wasm build.
+//
+// Beats:
+//   1. Import resolves through source expansion.
+//   2. Cross-file call prints 42.
+
+// pass: multi-file import executes
+import "add42.oo";
+
+pub fn main() {
+    println(add42(0));
+}

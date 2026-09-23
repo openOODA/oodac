@@ -1,0 +1,83 @@
+// # WASM nested value construction
+//
+// Logline: Result and struct literals lower with depth-indexed scratch slots.
+//
+// Setup: Each nesting depth owns two scratch locals out of sixteen reserved.
+//   Depth past seven fails closed instead of clobbering an outer build.
+//
+// Beats:
+//   1. Scratch slots index by depth so inner builds keep outer pointers live.
+//   2. Result records carry tag plus payload through the owned slot pair.
+//   3. Struct fields store through the owned base pointer with field offsets.
+
+import "lex/token_fmt.oo";
+import "wasm_buf.oo";
+import "wasm_op.oo";
+import "wasm_tok.oo";
+import "wasm_data.oo";
+import "wasm_fn.oo";
+import "lex/token_parse_int.oo";
+
+pub fn ws_scratch2(g: &WsG, cx: &mut WsCx, toks: List[String], pos: Int) -> Int {
+    if cx.depth > 7 {
+        ws_fail(ws_line(toks, pos), "nested too deep");
+    }
+    return g.scratch + cx.depth * 2;
+}
+
+pub fn ws_result_new(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &WsG, lits: &mut WsLits, cx: &mut WsCx, tag: Int) -> String {
+    let s0: Int = ws_scratch2(g, cx, toks, pos);
+    let s1: Int = s0 + 1;
+    cx.depth = cx.depth + 1;
+    let r: String = ws_expr(b, toks, pos + 2, n, g, lits, cx);
+    let p: Int = ws_un_pos(r);
+    if p >= n || ws_k(toks, p) != "RPAREN" {
+        ws_fail(ws_line(toks, pos), "close result");
+    }
+    let pay: String = ws_un_ty(r);
+    ws_set(b, s1);
+    ws_const(b, 8);
+    ws_call(b, 2);
+    ws_set(b, s0);
+    ws_get(b, s0);
+    ws_const(b, tag);
+    ws_store(b, 0);
+    ws_get(b, s0);
+    ws_get(b, s1);
+    ws_store(b, 4);
+    ws_get(b, s0);
+    cx.depth = cx.depth - 1;
+    if tag == 0 {
+        return ws_pack(p + 1, "r[" + pay + ",?]");
+    }
+    return ws_pack(p + 1, "r[?," + pay + "]");
+}
+
+pub fn ws_struct_new(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &WsG, lits: &mut WsLits, cx: &mut WsCx, sname: String) -> String {
+    let s0: Int = ws_scratch2(g, cx, toks, pos);
+    cx.depth = cx.depth + 1;
+    ws_const(b, ws_struct_size(g.structs, sname));
+    ws_call(b, 2);
+    ws_set(b, s0);
+    let mut p: Int = pos + 2;
+    while p < n && ws_k(toks, p) != "RBRACE" {
+        if ws_k(toks, p) != "IDENT" || ws_k(toks, p + 1) != "COLON" {
+            ws_fail(ws_line(toks, p), "struct field");
+        }
+        let row: String = ws_struct_field(g.structs, sname, ws_t(toks, p));
+        if row == "" {
+            ws_fail(ws_line(toks, p), "unknown field");
+        }
+        ws_get(b, s0);
+        let r: String = ws_expr(b, toks, p + 2, n, g, lits, cx);
+        ws_store(b, parse_int(field_at(row, 2)));
+        p = ws_un_pos(r);
+        if p < n && ws_k(toks, p) == "COMMA" { p = p + 1; }
+    }
+    if p >= n {
+        ws_fail(ws_line(toks, pos), "close struct");
+    }
+    ws_get(b, s0);
+    cx.depth = cx.depth - 1;
+    return ws_pack(p + 1, "t:" + sname);
+}

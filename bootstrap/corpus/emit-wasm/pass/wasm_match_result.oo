@@ -1,0 +1,33 @@
+// # WASM result match proof
+//
+// Logline: Match expressions and statements lower and run under wasmtime.
+//
+// Setup: Ok and Err results crossed with expr, block, and order variants.
+//   Default wasm build. No emit/c import.
+//
+// Beats:
+//   1. Expr match binds payloads and prints hello.
+//   2. Block-arm match prints hello through both branches.
+//   3. Err-first single-call arms print boom then B.
+
+// pass: match expr and stmt execute
+pub fn main() {
+    let r: Result[String, String] = Ok("hello");
+    let m: String = match r { Ok(v) => v, Err(e) => e };
+    println(m);
+    match r {
+        Ok(v) => {
+            println(v);
+        },
+        Err(e) => {
+            println(e);
+        },
+    }
+    let e2: Result[String, String] = Err("boom");
+    match e2 {
+        Err(x) => println(x),
+        Ok(y) => println(y),
+    }
+    let s: String = match e2 { Ok(a) => "A", Err(b) => "B" };
+    println(s);
+}

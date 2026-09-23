@@ -1,0 +1,13 @@
+// # WASM multi-file callee proof
+//
+// Logline: Imported helper backing the multi-file main.
+//
+// Setup: Imported by wasm_multifile_main.oo. Name matches its fn stem.
+//
+// Beats:
+//   1. add42 adds its constant.
+//   2. One copy serves the diamond-free import.
+
+pub fn add42(x: Int) -> Int {
+    return x + 42;
+}

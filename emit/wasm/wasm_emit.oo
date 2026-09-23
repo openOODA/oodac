@@ -150,7 +150,7 @@ pub fn ws_fn_body(b: &mut WasmBuf, toks: List[String], n: Int, row: String, para
         ws_unreachable(b);
     }
     ws_end(b);
-    return nloc + 2;
+    return nloc + 16;
 }
 
 pub fn ws_params_env(params: String, fnm: String) -> String {

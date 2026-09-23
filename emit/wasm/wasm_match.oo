@@ -1,0 +1,212 @@
+// # WASM result match lowering
+//
+// Logline: Match expressions and statements over two-arm Ok/Err results.
+//
+// Setup: Arms arrive Ok-first or Err-first with expr or block bodies. One
+//   scratch slot holds the scrutinee record while arms lower one depth deeper.
+//   Arm packs join on pipes so tab field reads stay aligned.
+//
+// Beats:
+//   1. Lexical arm split finds bodies without emitting out of order.
+//   2. Tag select routes Err arms to the taken branch and Ok arms to else.
+//   3. Expr arms must agree on one type; stmt arms drop value bodies.
+
+import "lex/token_fmt.oo";
+import "wasm_buf.oo";
+import "wasm_op.oo";
+import "wasm_tok.oo";
+import "wasm_data.oo";
+import "wasm_fn.oo";
+import "lex/token_parse_int.oo";
+
+pub fn ws_arm_field(arm: String, idx: Int) -> String {
+    let mut rest: String = arm;
+    let mut i: Int = 0;
+    while i < idx {
+        let c: Int = str_index_of(rest, "|");
+        if c < 0 {
+            return "";
+        }
+        rest = str_slice(rest, c + 1, chars_len(rest));
+        i = i + 1;
+    }
+    let c2: Int = str_index_of(rest, "|");
+    if c2 < 0 {
+        return rest;
+    }
+    return str_slice(rest, 0, c2);
+}
+
+pub fn ws_match_arm(toks: List[String], q0: Int, mend: Int, n: Int) -> String {
+    if q0 >= mend || ws_k(toks, q0) != "IDENT" {
+        ws_fail(ws_line(toks, q0), "match arm");
+    }
+    let ctor: String = ws_t(toks, q0);
+    let mut q: Int = q0 + 1;
+    let mut binder: String = "-";
+    if q < mend && ws_k(toks, q) == "LPAREN" {
+        if q + 1 >= mend || ws_k(toks, q + 1) != "IDENT" {
+            ws_fail(ws_line(toks, q), "match binder");
+        }
+        binder = ws_t(toks, q + 1);
+        if q + 2 >= mend || ws_k(toks, q + 2) != "RPAREN" {
+            ws_fail(ws_line(toks, q), "match binder");
+        }
+        q = q + 3;
+    }
+    if q >= mend || ws_k(toks, q) != "FATARROW" {
+        ws_fail(ws_line(toks, q), "match arrow");
+    }
+    q = q + 1;
+    if q < mend && ws_k(toks, q) == "LBRACE" {
+        let bend: Int = ws_skip_balanced(toks, q);
+        return bend.to_string() + "|" + ctor + "|" + binder + "|B|" + (q + 1).to_string();
+    }
+    let mut r: Int = q;
+    let mut dp: Int = 0;
+    let mut db: Int = 0;
+    let mut dk: Int = 0;
+    while r < mend {
+        let k: String = ws_k(toks, r);
+        if dp == 0 && db == 0 && dk == 0 && (k == "COMMA" || k == "RBRACE") {
+            return r.to_string() + "|" + ctor + "|" + binder + "|E|" + q.to_string();
+        }
+        if k == "LPAREN" { dp = dp + 1; }
+        if k == "RPAREN" { dp = dp - 1; }
+        if k == "LBRACE" { db = db + 1; }
+        if k == "RBRACE" { db = db - 1; }
+        if k == "LBRACKET" { dk = dk + 1; }
+        if k == "RBRACKET" { dk = dk - 1; }
+        r = r + 1;
+    }
+    ws_fail(ws_line(toks, q), "match arm end");
+    return q.to_string() + "|-|-|E|" + q.to_string();
+}
+
+pub fn ws_match_parse(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &WsG, lits: &mut WsLits, cx: &mut WsCx) -> String {
+    let r: String = ws_expr(b, toks, pos + 1, n, g, lits, cx);
+    let p: Int = ws_un_pos(r);
+    let sty: String = ws_un_ty(r);
+    if chars_len(sty) < 4 || char_at(sty, 0) != "r" || str_index_of(sty, ",") < 0 {
+        ws_fail(ws_line(toks, pos), "match scrutinee type");
+    }
+    if p >= n || ws_k(toks, p) != "LBRACE" {
+        ws_fail(ws_line(toks, pos), "match brace");
+    }
+    let mend: Int = ws_skip_balanced(toks, p);
+    let a1: String = ws_match_arm(toks, p + 1, mend, n);
+    let mut q: Int = parse_int(ws_arm_field(a1, 0));
+    if ws_k(toks, q) != "COMMA" {
+        ws_fail(ws_line(toks, q), "match arms");
+    }
+    let a2: String = ws_match_arm(toks, q + 1, mend, n);
+    q = parse_int(ws_arm_field(a2, 0));
+    if ws_k(toks, q) == "COMMA" { q = q + 1; }
+    if q != mend - 1 {
+        ws_fail(ws_line(toks, q), "match arms");
+    }
+    let c1: String = ws_arm_field(a1, 1);
+    let c2: String = ws_arm_field(a2, 1);
+    let ok_pair: Bool = (c1 == "Ok" && c2 == "Err") || (c1 == "Err" && c2 == "Ok");
+    if !ok_pair {
+        ws_fail(ws_line(toks, pos), "match arms");
+    }
+    if cx.depth + 1 > 7 {
+        ws_fail(ws_line(toks, pos), "nested too deep");
+    }
+    let s0: Int = g.scratch + cx.depth * 2;
+    ws_set(b, s0);
+    return mend.to_string() + "\t" + sty + "\t" + s0.to_string() + "\t" + a1 + "\t" + a2;
+}
+
+fn ws_match_bind(b: &mut WasmBuf, toks: List[String], pos: Int, g: &WsG, env: String, sty: String, ctor: String, binder: String, s0: Int) -> String {
+    if binder == "-" {
+        return env;
+    }
+    let idx: Int = ws_local_idx(g.order, g.arity, binder);
+    if idx < 0 {
+        ws_fail(ws_line(toks, pos), "match binder");
+    }
+    let pty: String = if ctor == "Ok" { ws_res_ok(sty) } else { ws_res_err(sty) };
+    ws_get(b, s0);
+    ws_load(b, 4);
+    ws_set(b, idx);
+    return ws_env_put(env, binder, idx, pty);
+}
+
+fn ws_match_arm_expr(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &WsG, lits: &mut WsLits, cx: &mut WsCx, arm: String) -> String {
+    if ws_arm_field(arm, 3) != "E" {
+        ws_fail(ws_line(toks, pos), "match arm needs a value");
+    }
+    return ws_expr(b, toks, parse_int(ws_arm_field(arm, 4)), n, g, lits, cx);
+}
+
+pub fn ws_match_expr(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &WsG, lits: &mut WsLits, cx: &mut WsCx) -> String {
+    let h: String = ws_match_parse(b, toks, pos, n, g, lits, cx);
+    let end: Int = parse_int(field_at(h, 0));
+    let sty: String = field_at(h, 1);
+    let s0: Int = parse_int(field_at(h, 2));
+    let a1: String = field_at(h, 3);
+    let a2: String = field_at(h, 4);
+    let err_arm: String = if ws_arm_field(a1, 1) == "Err" { a1 } else { a2 };
+    let ok_arm: String = if ws_arm_field(a1, 1) == "Ok" { a1 } else { a2 };
+    ws_get(b, s0);
+    ws_load(b, 0);
+    ws_if_v(b);
+    cx.depth = cx.depth + 1;
+    let ge: WsG = ws_g_new(ws_match_bind(b, toks, pos, g, g.env, sty, "Err", ws_arm_field(err_arm, 2), s0), g.fns, g.structs, g.order, g.arity, g.scratch);
+    let ee: String = ws_match_arm_expr(b, toks, pos, n, ge, lits, cx, err_arm);
+    let t1: String = ws_un_ty(ee);
+    cx.depth = cx.depth - 1;
+    ws_else(b);
+    cx.depth = cx.depth + 1;
+    let go: WsG = ws_g_new(ws_match_bind(b, toks, pos, g, g.env, sty, "Ok", ws_arm_field(ok_arm, 2), s0), g.fns, g.structs, g.order, g.arity, g.scratch);
+    let eo: String = ws_match_arm_expr(b, toks, pos, n, go, lits, cx, ok_arm);
+    let t2: String = ws_un_ty(eo);
+    cx.depth = cx.depth - 1;
+    ws_end(b);
+    if t1 != t2 && t1 != "?" && t2 != "?" && str_index_of(t1, "?") < 0 && str_index_of(t2, "?") < 0 {
+        ws_fail(ws_line(toks, pos), "match arm type");
+    }
+    let ty: String = if t1 == t2 { t1 } else { if t1 == "?" || str_index_of(t1, "?") >= 0 { t2 } else { t1 } };
+    return ws_pack(end, ty);
+}
+
+pub fn ws_match_stmt(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &WsG, env: String, lits: &mut WsLits, cx: &mut WsCx, ret: String) -> String {
+    let gg: WsG = ws_g_new(env, g.fns, g.structs, g.order, g.arity, g.scratch);
+    let h: String = ws_match_parse(b, toks, pos, n, gg, lits, cx);
+    let end: Int = parse_int(field_at(h, 0));
+    let sty: String = field_at(h, 1);
+    let s0: Int = parse_int(field_at(h, 2));
+    let a1: String = field_at(h, 3);
+    let a2: String = field_at(h, 4);
+    let err_arm: String = if ws_arm_field(a1, 1) == "Err" { a1 } else { a2 };
+    let ok_arm: String = if ws_arm_field(a1, 1) == "Ok" { a1 } else { a2 };
+    ws_get(b, s0);
+    ws_load(b, 0);
+    ws_if(b);
+    cx.depth = cx.depth + 1;
+    let ge: WsG = ws_g_new(ws_match_bind(b, toks, pos, gg, env, sty, "Err", ws_arm_field(err_arm, 2), s0), g.fns, g.structs, g.order, g.arity, g.scratch);
+    ws_match_arm_stmt(b, toks, pos, n, ge, lits, cx, ret, err_arm);
+    cx.depth = cx.depth - 1;
+    ws_else(b);
+    cx.depth = cx.depth + 1;
+    let go: WsG = ws_g_new(ws_match_bind(b, toks, pos, gg, env, sty, "Ok", ws_arm_field(ok_arm, 2), s0), g.fns, g.structs, g.order, g.arity, g.scratch);
+    ws_match_arm_stmt(b, toks, pos, n, go, lits, cx, ret, ok_arm);
+    cx.depth = cx.depth - 1;
+    ws_end(b);
+    return ws_block_pack(end, env);
+}
+
+fn ws_match_arm_stmt(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &WsG, lits: &mut WsLits, cx: &mut WsCx, ret: String, arm: String) {
+    if ws_arm_field(arm, 3) == "B" {
+        let _: String = ws_stmt_block(b, toks, parse_int(ws_arm_field(arm, 4)), n, n, g, lits, cx, ret);
+        return;
+    }
+    let r: String = ws_expr(b, toks, parse_int(ws_arm_field(arm, 4)), n, g, lits, cx);
+    let mut q: Int = ws_un_pos(r);
+    if q < n && ws_k(toks, q) == "SEMI" { q = q + 1; }
+    if ws_un_ty(r) != "v" {
+        ws_drop(b);
+    }
+}

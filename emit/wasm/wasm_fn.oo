@@ -219,9 +219,28 @@ pub fn ws_scan_locals(toks: List[String], pos: Int, end: Int, acc: String) -> St
             } else {
                 i = i + 1;
             }
+        } else if k == "KW_MATCH" {
+            out = ws_scan_match_binders(toks, i, end, out);
+            i = i + 1;
         } else {
             i = i + 1;
         }
+    }
+    return out;
+}
+
+pub fn ws_scan_match_binders(toks: List[String], i: Int, end: Int, acc: String) -> String {
+    let mut out: String = acc;
+    let mut q: Int = i + 1;
+    while q < end && ws_k(toks, q) != "LBRACE" { q = q + 1; }
+    let mend: Int = ws_skip_balanced(toks, q);
+    let mut r: Int = q + 1;
+    while r < mend - 1 && r < end {
+        if ws_k(toks, r) == "IDENT" && ws_k(toks, r + 1) == "LPAREN" && ws_k(toks, r + 2) == "IDENT" && ws_k(toks, r + 3) == "RPAREN" {
+            let nm: String = ws_t(toks, r);
+            if nm == "Ok" || nm == "Err" || nm == "Some" { out = ws_acc_add(out, ws_t(toks, r + 2)); }
+        }
+        r = r + 1;
     }
     return out;
 }

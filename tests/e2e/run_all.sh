@@ -27,6 +27,7 @@ SUITE_LIST=(
   "test_tier1_r1_anchor.sh"
   "test_tier1_r2_migrate.sh"
   "test_tier1_r4_llvm.sh"
+  "test_wasm_proving.sh"
   "test_llvm_ir_props.sh"
   "test_llvm_cap_require.sh"
   "test_llvm_rpath.sh"

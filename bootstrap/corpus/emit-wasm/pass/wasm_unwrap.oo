@@ -1,0 +1,28 @@
+// # WASM result unwrap proof
+//
+// Logline: unwrap, is_ok, is_err, val, and err lower and run under wasmtime.
+//
+// Setup: make_ok returns Ok("hi"). Default wasm build. No emit/c import.
+//
+// Beats:
+//   1. Unwrap of Ok("hi") prints hi.
+//   2. Err payload reads through is_err and err.
+//   3. Int payload reads through val, unwrap, and is_ok.
+
+// pass: unwrap/is_ok/is_err/val/err execute
+pub fn make_ok() -> Result[String, String] {
+    return Ok("hi");
+}
+
+pub fn main() {
+    let r: Result[String, String] = make_ok();
+    println(r.unwrap());
+    let e: Result[Int, String] = Err("boom");
+    if e.is_err() {
+        println(e.err);
+    }
+    let o: Result[Int, String] = Ok(42);
+    println(o.val);
+    println(o.unwrap());
+    println(o.is_ok());
+}
