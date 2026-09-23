@@ -1,15 +1,23 @@
 // # LLVM Capability Token Lowers
 //
-// Logline: Capability token predicates, grant mapping, and scalar invariants.
+// Logline: Capability token predicates, grant mapping, and explicit require lowering.
 //
 // Setup: Capability tokens are strictly lowered as scalar i64 noundef registers.
+// Every gated call site emits its oo_cap_require_* gate explicitly instead of
+// passing a bare i64 through to runtime-only checks. Gate semantics are the
+// runtime's own: bitmask fail exits 1, OCap disagreement exits 2 (dual-check
+// gates); single-check gates exit 1. monotonic_us takes no cap at runtime so
+// it maps to no gate; C-ABI calls keep callee-side checks.
 //
 // Beats:
 //   1. Grant name mapping for runtime capabilities.
 //   2. Capability type detection and token classification.
 //   3. Extract capability names from token streams.
+//   4. Single op-to-require table mirroring check sealed kinds and runtime gates.
+//   5. Fail-closed require emission: unknown gated op aborts the build.
 
 import "ll_tok.oo";
+import "ll_ir.oo";
 
 pub fn ll_is_cap_ty(t: String) -> Bool {
     return str_index_of(t, "Cap") >= 0;
@@ -50,4 +58,71 @@ pub fn ll_peek_cap_name(toks: List[String], pos: Int, n: Int) -> String {
     if p < n && ll_k(toks, p) == "AMP" { p = p + 1; }
     if p < n && ll_k(toks, p) == "IDENT" { return ll_t(toks, p); }
     return "";
+}
+
+fn ll_cap_norm(op: String) -> String {
+    if chars_len(op) >= 3 && str_slice(op, 0, 3) == "oo_" { return str_slice(op, 3, chars_len(op)); }
+    return op;
+}
+
+fn ll_cap_in(bag: String, name: String) -> Bool {
+    return str_index_of(bag, "|" + name + "|") >= 0;
+}
+
+// Sealed op (either foo or oo_foo form) to its runtime require gate.
+// Mirrors check check_cap_util sealed_kind_of plus the oo_cap_require_*
+// each oodar callee actually enforces. Returns "" when not sealed.
+pub fn ll_cap_require_sym(op: String) -> String {
+    let c: String = ll_cap_norm(op);
+    if ll_cap_in("|read_file|fs_read|path_exists|file_size|file_stamp|read_stdin|read_stdin_chunk|fs_is_dir|fs_read_dir|", c) { return "oo_cap_require_fsread"; }
+    if ll_cap_in("|write_file|fs_write|file_append_sync|fs_mkdir|fs_rmdir|fs_remove_file|fs_hardlink|fs_symlink|", c) { return "oo_cap_require_fswrite"; }
+    if ll_cap_in("|sys_exec|process_exec|sys_exec_wait|exec|spawn_process|sys_spawn|sys_wait|sys_kill|lto_xlang_link|sys_args|", c) { return "oo_cap_require_process"; }
+    if ll_cap_in("|proc_mem_read|python_embed|python_embed_internal|sys_epoll_create|sys_inotify_init|sys_prctl|rlimit_set_mem_mb|rlimit_set_nofile|rlimit_set_cpu_sec|landlock_restrict|cap_kernel_seal|enclave_enter|", c) { return "oo_cap_require_sys"; }
+    if ll_cap_in("|env_get|env_set|getenv|", c) { return "oo_cap_require_env"; }
+    if ll_cap_in("|now_ms|sleep_ms|", c) { return "oo_cap_require_time"; }
+    if ll_cap_in("|random|seed|", c) { return "oo_cap_require_rand"; }
+    if ll_cap_in("|arena_create|arena_alloc|arena_reset|arena_destroy|arena_attach|arena_detach|", c) { return "oo_cap_require_arena"; }
+    if ll_cap_in("|alloc_bytes|free_bytes|malloc|free|realloc|f32x8_load_aligned|f32x8_store_aligned|f64x4_load_aligned|f64x4_store_aligned|", c) { return "oo_cap_require_alloc"; }
+    if ll_cap_in("|dlopen|dlsym|dlclose|chs_build|host_ast_dump|host_check|host_token_dump|host_free|ooda_host_ast_dump|ooda_host_check|ooda_host_token_dump|ooda_host_chs_build|ooda_host_free|import_c|ffi_gen|ffi_call|tui_enable_raw|tui_disable_raw|tui_get_size|tui_alt_screen_enter|tui_alt_screen_leave|tui_show_cursor|tui_clear|tui_write|tui_read_byte|tui_read_byte_timeout|tui_signal_winch_install|tui_signal_winch_poll|", c) { return "oo_cap_require_ffi"; }
+    if ll_cap_in("|mutex_lock|mutex_unlock|thread_spawn|thread_join|channel_new|channel_send|channel_recv|channel_destroy|actor_spawn|actor_send|actor_recv|actor_destroy|actor_restart|otp_supervise|", c) { return "oo_cap_require_thread"; }
+    if ll_cap_in("|gpu_init|gpu_probe_device|gpu_launch|gpu_launch_kernel|gpu_sync|gpu_copy_h2d|gpu_copy_d2h|gpu_copy_h2d_async|gpu_copy_d2h_async|gpu_stream_create|gpu_stream_destroy|gpu_stream_sync|gpu_event_create|gpu_event_destroy|gpu_event_record|gpu_event_sync|gpu_event_elapsed_ms|gpu_buffer_alloc|gpu_buffer_free|gpu_buffer_get_ptr|gpu_buffer_get_size|gpu_pool_purge|gpu_hip_vec_add|gpu_hip_sgemm|gpu_hip_rmsnorm|gpu_hip_attention|gpu_hip_reduce_sum|gpu_hip_rope|gpu_hip_stencil_3d|gpu_hip_try_launch|gpu_rocm_hello|gpu_rocm_int_add|", c) { return "oo_cap_require_gpu"; }
+    if ll_cap_in("|fetch|http_get|net_get|downloadData|query_remote_api|net_connect|tcp_connect|tcp_write|tcp_read|tcp_close|tcp_accept|tls_connect|", c) { return "oo_cap_require_tcp"; }
+    if ll_cap_in("|bind_udp|udp_recv|udp_send|", c) { return "oo_cap_require_udp"; }
+    if ll_cap_in("|tcp_bind|", c) { return "oo_cap_require_bind"; }
+    if ll_cap_in("|sock_raw|raw_socket|dns_resolve|dns_resolve_ipv4|", c) { return "oo_cap_require_net"; }
+    if ll_cap_in("|audio_init|audio_capture_init|audio_capture|audio_capture_read|audio_release|", c) { return "oo_cap_require_audio"; }
+    if ll_cap_in("|cap_rpc_send|cap_rpc_recv|seal|open|cg_sign|cg_verify|", c) { return "oo_cap_require_sign"; }
+    return "";
+}
+
+// Need-set hook for ll_need_scan: registers the require gate for a call
+// name so its declare is always emitted. Missing decls are impossible:
+// the same table drives both need registration and call emission.
+pub fn ll_cap_need_require(need: String, nm: String) -> String {
+    let rs: String = ll_cap_require_sym(nm);
+    if rs == "" { return need; }
+    if str_index_of(need, "\t" + rs + "\t") >= 0 { return need; }
+    return need + rs + "\t";
+}
+
+// Explicit require lowering. Every gated builtin calls this before its
+// runtime call, so a missing check is impossible by construction: an
+// op with no table entry aborts the build instead of passing a bare
+// number through. Null op keeps exact exit codes (1 bitmask, 2 OCap).
+pub fn ll_cap_emit_require(op: String, cap_opnd: String, ir: &mut IrBuf) {
+    let rs: String = ll_cap_require_sym(op);
+    if rs == "" {
+        println("ERR\tllvm\tmissing capability requirement for " + op);
+        process_exit(1);
+    }
+    ll_ir_inst(ir, "call", "void", "", "@" + rs + "(i64 " + cap_opnd + ", ptr null)", 1, 1);
+}
+
+// Guarded require for the generic call path: emits the gate only when
+// the callee resolves to a sealed runtime op. User functions pass
+// through untouched; C-ABI callers are excluded by the call site.
+pub fn ll_cap_emit_require_guarded(op: String, cap_opnd: String, ir: &mut IrBuf) {
+    let rs: String = ll_cap_require_sym(op);
+    if rs == "" { return; }
+    ll_ir_inst(ir, "call", "void", "", "@" + rs + "(i64 " + cap_opnd + ", ptr null)", 1, 1);
 }

@@ -13,6 +13,7 @@
 import "ll_tok.oo";
 import "ll_ty.oo";
 import "ll_int.oo";
+import "ll_cap.oo";
 import "ll_builtin_fs.oo";
 import "ll_builtin_sys.oo";
 import "ll_builtin_tui.oo";
@@ -142,6 +143,7 @@ pub fn ll_builtin_host(name: String, args: List[String], ssa0: Int, expect: Stri
         let a: String = ll_tmpa(ll_pssa(a1) + 1);
         let s: Int = ll_pssa(a1) + 1;
         ll_slot_ty(a, "%OoResS", ir);
+        ll_cap_emit_require(name, ll_ssa(ll_pssa(list_get(args, 0))), ir);
         ll_ir_inst(ir, "call", "void", "", "@oo_read_file(ptr sret(%OoResS) align 8 " + a + ", i64 " + ll_ssa(ll_pssa(list_get(args, 0))) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ")", 1, 1);
         return ll_pack(0, s, "ress", a);
     }
@@ -151,16 +153,19 @@ pub fn ll_builtin_host(name: String, args: List[String], ssa0: Int, expect: Stri
         let a: String = ll_tmpa(ll_pssa(a2) + 1);
         let s: Int = ll_pssa(a2) + 1;
         ll_slot_ty(a, "%OoResV", ir);
+        ll_cap_emit_require(name, ll_ssa(ll_pssa(list_get(args, 0))), ir);
         ll_ir_inst(ir, "call", "void", "", "@oo_write_file(ptr sret(%OoResV) align 8 " + a + ", i64 " + ll_ssa(ll_pssa(list_get(args, 0))) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a2)) + ")", 1, 1);
         return ll_pack(0, s, "ress", a);
     }
     if (name == "sleep_ms" || name == "oo_sleep_ms") && na >= 2 {
         let ms: String = ll_i64arg(args, 1, ll_pssa(list_get(args, 0)), ir);
+        ll_cap_emit_require(name, ll_opnd(list_get(args, 0)), ir);
         ll_ir_inst(ir, "call", "void", "", "@oo_sleep_ms(i64 " + ll_opnd(list_get(args, 0)) + ", i64 " + ll_opnd(ms) + ")", 1, 1);
         return ll_pack(0, ll_pssa(ms), "void", "");
     }
     if (name == "now_ms" || name == "oo_now_ms") && na >= 1 {
         let s: Int = ll_pssa(list_get(args, 0)) + 1;
+        ll_cap_emit_require(name, ll_ssa(ll_pssa(list_get(args, 0))), ir);
         ll_ir_inst(ir, "call", "i64", ll_ssa(s), "@oo_now_ms(i64 " + ll_ssa(ll_pssa(list_get(args, 0))) + ")", 1, 1);
         return ll_pack(0, s, "i64", "");
     }
@@ -172,6 +177,7 @@ pub fn ll_builtin_host(name: String, args: List[String], ssa0: Int, expect: Stri
     if name == "oo_file_stamp" && na >= 2 {
         let a1: String = ll_as_val(list_get(args, 1), ssa0, ir);
         let s: Int = ll_pssa(a1) + 1;
+        ll_cap_emit_require(name, ll_ssa(ll_pssa(list_get(args, 0))), ir);
         ll_ir_inst(ir, "call", "{ ptr, i64 }", ll_ssa(s), "@oo_file_stamp(i64 " + ll_ssa(ll_pssa(list_get(args, 0))) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ")", 1, 1);
         return ll_pack(0, s, "str", "");
     }
@@ -183,6 +189,7 @@ pub fn ll_builtin_host(name: String, args: List[String], ssa0: Int, expect: Stri
     }
     if (name == "alloc_bytes" || name == "oo_alloc_bytes") && na >= 2 {
         let s: Int = ll_hw(ll_pssa(list_get(args, 0)), ll_pssa(list_get(args, 1))) + 1;
+        ll_cap_emit_require(name, ll_opnd(list_get(args, 0)), ir);
         ll_ir_inst(ir, "call", "i64", ll_ssa(s), "@oo_alloc_bytes(i64 " + ll_opnd(list_get(args, 0)) + ", i64 " + ll_opnd(list_get(args, 1)) + ")", 1, 1);
         return ll_pack(0, s, "i64", "");
     }

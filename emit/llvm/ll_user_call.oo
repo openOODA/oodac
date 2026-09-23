@@ -12,6 +12,7 @@ import "ll_tok.oo";
 import "ll_ty.oo";
 import "ll_int.oo";
 import "ll_slot.oo";
+import "ll_cap.oo";
 import "ll_builtin.oo";
 import "ll_expr.oo";
 import "types/types_core.oo";
@@ -160,6 +161,9 @@ pub fn ll_call_at(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String, 
     let mut gnm: String = type_env_get(env, "__sym__" + nm);
     if gnm == "" { gnm = ll_builtin_ext_sym(nm); }
     if gnm == "" { gnm = nm; }
+    if type_env_get(env, "__fn__" + nm) == "" && type_env_get(env, "__sym__" + nm) == "" && !ll_is_c_abi_call(nm) && list_len(args) >= 1 && ll_sig_param(sig, 0) == "i64" {
+        ll_cap_emit_require_guarded(nm, ll_opnd(list_get(args, 0)), ir);
+    }
     let u: String = ll_user_call(gnm, sig, args, ssa, ir);
     return ll_pack(p, ll_pssa(u), ll_pk(u), ll_pptr(u));
 }

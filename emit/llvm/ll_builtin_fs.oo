@@ -12,6 +12,7 @@
 import "ll_tok.oo";
 import "ll_ty.oo";
 import "ll_int.oo";
+import "ll_cap.oo";
 import "ll_slot.oo";
 import "ll_ir.oo";
 
@@ -28,6 +29,7 @@ fn ll_ty_bool(s: Int, ir: &mut IrBuf) -> String {
 fn ll_int_bool2(callee: String, args: List[String], ssa0: Int, ir: &mut IrBuf) -> String {
     let a1: String = ll_as_val(list_get(args, 1), ssa0, ir);
     let s: Int = ll_pssa(a1) + 1;
+    ll_cap_emit_require(callee, ll_tok_cap(args), ir);
     ll_ir_inst(ir, "call", "i32", ll_ssa(s), "@" + callee + "(i64 " + ll_tok_cap(args) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ")", 1, 1);
     return ll_ty_bool(s, ir);
 }
@@ -37,6 +39,7 @@ fn ll_int_slist2(callee: String, args: List[String], ssa0: Int, ir: &mut IrBuf) 
     let s: Int = ll_pssa(a1) + 1;
     let out: String = ll_tmpa(s);
     ll_slot_ty(out, "%OoSList", ir);
+    ll_cap_emit_require(callee, ll_tok_cap(args), ir);
     ll_ir_inst(ir, "call", "void", "", "@" + callee + "(ptr sret(%OoSList) align 8 " + out + ", i64 " + ll_tok_cap(args) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ")", 1, 1);
     return ll_pack(0, s, "slist", out);
 }
@@ -46,6 +49,7 @@ fn ll_int_resv2(callee: String, args: List[String], ssa0: Int, ir: &mut IrBuf) -
     let s: Int = ll_pssa(a1) + 1;
     let out: String = ll_tmpa(s);
     ll_slot_ty(out, "%OoResV", ir);
+    ll_cap_emit_require(callee, ll_tok_cap(args), ir);
     ll_ir_inst(ir, "call", "void", "", "@" + callee + "(ptr sret(%OoResV) align 8 " + out + ", i64 " + ll_tok_cap(args) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ")", 1, 1);
     return ll_pack(0, s, "ress", out);
 }
@@ -56,6 +60,7 @@ fn ll_int_resv3(callee: String, args: List[String], ssa0: Int, ir: &mut IrBuf) -
     let s: Int = ll_pssa(a2) + 1;
     let out: String = ll_tmpa(s);
     ll_slot_ty(out, "%OoResV", ir);
+    ll_cap_emit_require(callee, ll_tok_cap(args), ir);
     ll_ir_inst(ir, "call", "void", "", "@" + callee + "(ptr sret(%OoResV) align 8 " + out + ", i64 " + ll_tok_cap(args) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a2)) + ")", 1, 1);
     return ll_pack(0, s, "ress", out);
 }

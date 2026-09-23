@@ -12,6 +12,7 @@
 import "ll_tok.oo";
 import "ll_ty.oo";
 import "ll_int.oo";
+import "ll_cap.oo";
 import "ll_call.oo";
 import "ll_ctor.oo";
 import "ll_struct_list.oo";
@@ -185,6 +186,7 @@ pub fn ll_builtin(name: String, args: List[String], ssa0: Int, expect: String, i
     if (name == "path_exists" || name == "oo_path_exists") && na >= 2 {
         let a1: String = ll_as_val(ll_arg(args, 1), ssa0, ir);
         let s: Int = ll_pssa(a1) + 1;
+        ll_cap_emit_require(name, ll_ssa(ll_pssa(ll_arg(args, 0))), ir);
         ll_ir_inst(ir, "call", "i32", ll_ssa(s), "@oo_path_exists(i64 " + ll_ssa(ll_pssa(ll_arg(args, 0))) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ")", 1, 1);
         ll_ir_inst(ir, "icmp ne", "i32", ll_ssa(s + 1), ll_ssa(s) + ", 0", 1, 1);
         return ll_pack(0, s + 1, "i1", "");
@@ -192,6 +194,7 @@ pub fn ll_builtin(name: String, args: List[String], ssa0: Int, expect: String, i
     if (name == "file_size" || name == "oo_file_size") && na >= 2 {
         let a1: String = ll_as_val(ll_arg(args, 1), ssa0, ir);
         let s: Int = ll_pssa(a1) + 1;
+        ll_cap_emit_require(name, ll_ssa(ll_pssa(ll_arg(args, 0))), ir);
         ll_ir_inst(ir, "call", "i64", ll_ssa(s), "@oo_file_size(i64 " + ll_ssa(ll_pssa(ll_arg(args, 0))) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ")", 1, 1);
         return ll_pack(0, s, "i64", "");
     }
@@ -206,6 +209,7 @@ pub fn ll_builtin(name: String, args: List[String], ssa0: Int, expect: String, i
         let a: String = ll_tmpa(ll_pssa(a1) + 1);
         let s: Int = ll_pssa(a1) + 1;
         ll_slot_ty(a, "%OoResS", ir);
+        ll_cap_emit_require(name, ll_ssa(ll_pssa(ll_arg(args, 0))), ir);
         ll_ir_inst(ir, "call", "void", "", "@oo_env_get(ptr sret(%OoResS) align 8 " + a + ", i64 " + ll_ssa(ll_pssa(ll_arg(args, 0))) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ")", 1, 1);
         return ll_pack(0, s, "ress", a);
     }

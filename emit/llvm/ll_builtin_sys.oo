@@ -12,6 +12,7 @@
 import "ll_tok.oo";
 import "ll_ty.oo";
 import "ll_int.oo";
+import "ll_cap.oo";
 import "ll_slot.oo";
 import "ll_ir.oo";
 
@@ -23,6 +24,7 @@ fn ll_ty_ress(callee: String, args: List[String], ssa0: Int, extra: String, ir: 
     let s: Int = ssa0 + 1;
     let out: String = ll_tmpa(s);
     ll_slot_ty(out, "%OoResS", ir);
+    ll_cap_emit_require(callee, ll_tok_sys_cap(args), ir);
     ll_ir_inst(ir, "call", "void", "", "@" + callee + "(ptr sret(%OoResS) align 8 " + out + ", i64 " + ll_tok_sys_cap(args) + extra + ")", 1, 1);
     return ll_pack(0, s, "ress", out);
 }
@@ -51,6 +53,7 @@ fn ll_sys_exec(args: List[String], ssa0: Int, ir: &mut IrBuf) -> String {
     ll_slot_ty(res, "%OoResS", ir);
     let base: Int = s + 1;
     ll_ir_inst(ir, "getelementptr inbounds", "[" + argc.to_string() + " x %OoStr]", ll_ssa(base), "ptr " + av + ", i64 0, i64 0", 1, 1);
+    ll_cap_emit_require("sys_exec", ll_ssa(ll_pssa(list_get(args, 0))), ir);
     ll_ir_inst(ir, "call", "void", "", "@oo_sys_exec(ptr sret(%OoResS) align 8 " + res + ", i64 " + ll_ssa(ll_pssa(list_get(args, 0))) + ", i32 " + argc.to_string() + ", ptr " + ll_ssa(base) + ")", 1, 1);
     return ll_pack(0, base, "ress", res);
 }
@@ -65,6 +68,7 @@ pub fn ll_builtin_sys(name: String, args: List[String], ssa0: Int, expect: Strin
         let s: Int = ll_pssa(list_get(args, 0)) + 1;
         let out: String = ll_tmpa(s);
         ll_slot_ty(out, "%OoSList", ir);
+        ll_cap_emit_require(name, ll_tok_sys_cap(args), ir);
         ll_ir_inst(ir, "call", "void", "", "@oo_sys_args(ptr sret(%OoSList) align 8 " + out + ", i64 " + ll_tok_sys_cap(args) + ")", 1, 1);
         return ll_pack(0, s, "slist", out);
     }
@@ -74,6 +78,7 @@ pub fn ll_builtin_sys(name: String, args: List[String], ssa0: Int, expect: Strin
         let s: Int = ll_hw(ll_pssa(a1), ll_pssa(a2)) + 1;
         let out: String = ll_tmpa(s);
         ll_slot_ty(out, "%OoResI", ir);
+        ll_cap_emit_require(name, ll_tok_sys_cap(args), ir);
         ll_ir_inst(ir, "call", "void", "", "@oo_sys_exec_wait(ptr sret(%OoResI) align 8 " + out + ", i64 " + ll_tok_sys_cap(args) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ", ptr byval(%OoSList) align 8 " + ll_pptr(a2) + ")", 1, 1);
         return ll_pack(0, s, "resi", out);
     }
@@ -110,6 +115,7 @@ pub fn ll_builtin_sys(name: String, args: List[String], ssa0: Int, expect: Strin
     }
     if (name == "oo_read_stdin" || name == "read_stdin") && na >= 1 {
         let s: Int = ll_pssa(list_get(args, 0)) + 1;
+        ll_cap_emit_require(name, ll_tok_sys_cap(args), ir);
         ll_ir_inst(ir, "call", "{ ptr, i64 }", ll_ssa(s), "@oo_read_stdin(i64 " + ll_tok_sys_cap(args) + ")", 1, 1);
         return ll_pack(0, s, "str", "");
     }
@@ -118,6 +124,7 @@ pub fn ll_builtin_sys(name: String, args: List[String], ssa0: Int, expect: Strin
         let s: Int = ll_pssa(ms) + 1;
         let out: String = ll_tmpa(s);
         ll_slot_ty(out, "%OoResS", ir);
+        ll_cap_emit_require(name, ll_tok_sys_cap(args), ir);
         ll_ir_inst(ir, "call", "void", "", "@oo_read_stdin_chunk(ptr sret(%OoResS) align 8 " + out + ", i64 " + ll_tok_sys_cap(args) + ", i64 " + ll_opnd(ms) + ")", 1, 1);
         return ll_pack(0, s, "ress", out);
     }

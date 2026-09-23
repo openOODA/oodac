@@ -169,6 +169,9 @@ fn ll_need_proto_cap(sym: String) -> String {
     if chars_len(sym) >= 13 && str_slice(sym, 0, 13) == "oo_cap_grant_" {
         return "declare i64 @" + sym + "() nounwind";
     }
+    if chars_len(sym) >= 15 && str_slice(sym, 0, 15) == "oo_cap_require_" {
+        return "declare void @" + sym + "(i64, ptr) nounwind";
+    }
     return "";
 }
 

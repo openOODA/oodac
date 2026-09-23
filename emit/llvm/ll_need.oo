@@ -12,6 +12,7 @@
 import "ll_tok.oo";
 import "ll_need_list.oo";
 import "ll_need_tab.oo";
+import "ll_cap.oo";
 
 pub fn ll_need_add(need: String, name: String) -> String {
     if name == "" || str_index_of(need, "\t" + name + "\t") >= 0 { return need; }
@@ -200,10 +201,12 @@ pub fn ll_need_scan(toks: List[String]) -> String {
             if nm == "args" { has_args = true; }
             if i + 1 < n && ll_k(toks, i + 1) == "LPAREN" {
                 need = ll_need_call(need, nm);
+                need = ll_cap_need_require(need, nm);
                 if nm == "list_new" || nm == "list_len" || nm == "list_get" || nm == "list_push" || nm == "list_slice" || nm == "list_set" { has_list = true; }
             }
             if i > 0 && ll_k(toks, i - 1) == "DOT" && i + 1 < n && ll_k(toks, i + 1) == "LPAREN" {
                 need = ll_need_call(need, nm);
+                need = ll_cap_need_require(need, nm);
             }
         }
         i = i + 1;
