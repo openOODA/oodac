@@ -1,0 +1,244 @@
+// # ROCm typed expression lowering
+//
+// Logline: Climb parser from tokens to typed C++ expressions with packs.
+//
+// Setup: Packs carry end pos, type code, and C++ text. No logic ops in v1.
+//
+// Beats:
+//   1. Compare, add, mul, unary, and primary levels dispatch on kinds.
+//   2. rc_call routes list, gpu, constructor, and user calls with hints.
+//   3. Int division guards zero and fails closed at run time.
+
+import "rocm_tok.oo";
+import "rocm_ty.oo";
+import "rocm_buf.oo";
+import "rocm_call.oo";
+import "rocm_kernel.oo";
+import "rocm_device.oo";
+import "lex/token_parse_int.oo";
+
+pub fn rc_expr(toks: List[String], pos: Int, n: Int, env: String, fns: String, hint: String, capv: String) -> String {
+    return rc_expr_cmp(toks, pos, n, env, fns, hint, capv);
+}
+
+pub fn rc_expr_cmp(toks: List[String], pos: Int, n: Int, env: String, fns: String, hint: String, capv: String) -> String {
+    let l: String = rc_expr_add(toks, pos, n, env, fns, hint, capv);
+    let mut p: Int = rc_e_pos(l);
+    let k: String = rc_k(toks, p);
+    if k != "EQEQ" && k != "NEQ" && k != "LT" && k != "GT" && k != "LTE" && k != "GTE" { return l; }
+    let q: String = rc_expr_add(toks, p + 1, n, env, fns, hint, capv);
+    p = rc_e_pos(q);
+    let lt: String = rc_e_ty(l);
+    let rt: String = rc_e_ty(q);
+    let sym: String = rc_cmp_sym(k);
+    if k == "EQEQ" || k == "NEQ" {
+        if lt == "s" && rt == "s" { return rc_e_pack(p, "b", "((" + rc_e_code(l) + ") " + sym + " (" + rc_e_code(q) + "))"); }
+        if lt == "b" && rt == "b" { return rc_e_pack(p, "b", "((" + rc_e_code(l) + ") " + sym + " (" + rc_e_code(q) + "))"); }
+    }
+    let want: String = rc_num2(lt, rt);
+    if want == "" {
+        rc_fail(rc_line(toks, p), "compare type mismatch");
+        return "0\t?\t";
+    }
+    if rc_k(toks, p) == "EQEQ" || rc_k(toks, p) == "NEQ" || rc_k(toks, p) == "LT" || rc_k(toks, p) == "GT" || rc_k(toks, p) == "LTE" || rc_k(toks, p) == "GTE" {
+        rc_fail(rc_line(toks, p), "chained compare");
+        return "0\t?\t";
+    }
+    return rc_e_pack(p, "b", "((" + rc_prom(rc_e_code(l), lt, want) + ") " + sym + " (" + rc_prom(rc_e_code(q), rt, want) + "))");
+}
+
+fn rc_cmp_sym(k: String) -> String {
+    if k == "EQEQ" { return "=="; }
+    if k == "NEQ" { return "!="; }
+    if k == "LT" { return "<"; }
+    if k == "GT" { return ">"; }
+    if k == "LTE" { return "<="; }
+    return ">=";
+}
+
+pub fn rc_expr_add(toks: List[String], pos: Int, n: Int, env: String, fns: String, hint: String, capv: String) -> String {
+    let mut r: String = rc_expr_mul(toks, pos, n, env, fns, hint, capv);
+    let mut p: Int = rc_e_pos(r);
+    let mut lt: String = rc_e_ty(r);
+    let mut lc: String = rc_e_code(r);
+    while p < n {
+        let k: String = rc_k(toks, p);
+        if k != "PLUS" && k != "MINUS" { return r; }
+        let sym: String = if k == "PLUS" { "+" } else { "-" };
+        let q: String = rc_expr_mul(toks, p + 1, n, env, fns, hint, capv);
+        p = rc_e_pos(q);
+        let want: String = rc_num2(lt, rc_e_ty(q));
+        if want == "" {
+            rc_fail(rc_line(toks, p), "arith type mismatch");
+            return "0\t?\t";
+        }
+        lc = "((" + rc_prom(lc, lt, want) + ") " + sym + " (" + rc_prom(rc_e_code(q), rc_e_ty(q), want) + "))";
+        lt = want;
+        r = rc_e_pack(p, lt, lc);
+    }
+    return r;
+}
+
+pub fn rc_expr_mul(toks: List[String], pos: Int, n: Int, env: String, fns: String, hint: String, capv: String) -> String {
+    let mut r: String = rc_expr_unary(toks, pos, n, env, fns, hint, capv);
+    let mut p: Int = rc_e_pos(r);
+    let mut lt: String = rc_e_ty(r);
+    let mut lc: String = rc_e_code(r);
+    while p < n {
+        let k: String = rc_k(toks, p);
+        if k != "STAR" && k != "SLASH" && k != "PERCENT" { return r; }
+        let q: String = rc_expr_unary(toks, p + 1, n, env, fns, hint, capv);
+        p = rc_e_pos(q);
+        let want: String = rc_num2(lt, rc_e_ty(q));
+        if want == "" {
+            rc_fail(rc_line(toks, p), "arith type mismatch");
+            return "0\t?\t";
+        }
+        let lz: String = "(" + rc_prom(lc, lt, want) + ")";
+        let rz: String = "(" + rc_prom(rc_e_code(q), rc_e_ty(q), want) + ")";
+        if k == "STAR" { lc = "(" + lz + " * " + rz + ")"; }
+        if k == "SLASH" { lc = rc_div_code(lz, rz, want, rc_line(toks, p)); }
+        if k == "PERCENT" {
+            if want != "i" {
+                rc_fail(rc_line(toks, p), "percent needs ints");
+                return "0\t?\t";
+            }
+            lc = rc_mod_code(lz, rz, rc_line(toks, p));
+        }
+        lt = want;
+        r = rc_e_pack(p, lt, lc);
+    }
+    return r;
+}
+
+fn rc_div_code(lz: String, rz: String, want: String, line: Int) -> String {
+    if want == "f" { return "(" + lz + " / " + rz + ")"; }
+    let bad: String = "(fprintf(stderr, \"ERR\\trocm\\tdiv zero at line " + line.to_string() + "\\n\"), exit(1), (long long)0)";
+    return "((" + rz + " == 0) ? " + bad + " : (" + lz + " / " + rz + "))";
+}
+
+fn rc_mod_code(lz: String, rz: String, line: Int) -> String {
+    let bad: String = "(fprintf(stderr, \"ERR\\trocm\\tdiv zero at line " + line.to_string() + "\\n\"), exit(1), (long long)0)";
+    return "((" + rz + " == 0) ? " + bad + " : (" + lz + " % " + rz + "))";
+}
+
+pub fn rc_expr_unary(toks: List[String], pos: Int, n: Int, env: String, fns: String, hint: String, capv: String) -> String {
+    if pos < n && rc_k(toks, pos) == "MINUS" {
+        let r: String = rc_expr_unary(toks, pos + 1, n, env, fns, hint, capv);
+        if rc_e_ty(r) != "i" && rc_e_ty(r) != "f" {
+            rc_fail(rc_line(toks, pos), "negate needs a number");
+            return "0\t?\t";
+        }
+        return rc_e_pack(rc_e_pos(r), rc_e_ty(r), "(-(" + rc_e_code(r) + "))");
+    }
+    return rc_expr_postfix(toks, pos, n, env, fns, hint, capv);
+}
+
+pub fn rc_expr_postfix(toks: List[String], pos: Int, n: Int, env: String, fns: String, hint: String, capv: String) -> String {
+    let r: String = rc_expr_primary(toks, pos, n, env, fns, hint, capv);
+    if rc_k(toks, rc_e_pos(r)) == "DOT" {
+        rc_fail(rc_line(toks, pos), "field access unsupported");
+        return "0\t?\t";
+    }
+    return r;
+}
+
+pub fn rc_expr_primary(toks: List[String], pos: Int, n: Int, env: String, fns: String, hint: String, capv: String) -> String {
+    let k: String = rc_k(toks, pos);
+    if k == "INT" { return rc_e_pack(pos + 1, "i", "((long long)" + rc_t(toks, pos) + ")"); }
+    if k == "FLOAT" { return rc_e_pack(pos + 1, "f", "((double)" + rc_t(toks, pos) + ")"); }
+    if k == "STRING" { return rc_e_pack(pos + 1, "s", "std::string(\"" + rc_c_esc(rc_t(toks, pos)) + "\")"); }
+    if k == "KW_TRUE" { return rc_e_pack(pos + 1, "b", "true"); }
+    if k == "KW_FALSE" { return rc_e_pack(pos + 1, "b", "false"); }
+    if k == "LPAREN" {
+        let r: String = rc_expr(toks, pos + 1, n, env, fns, hint, capv);
+        if rc_k(toks, rc_e_pos(r)) != "RPAREN" {
+            rc_fail(rc_line(toks, pos), "missing rparen");
+            return "0\t?\t";
+        }
+        return rc_e_pack(rc_e_pos(r) + 1, rc_e_ty(r), "(" + rc_e_code(r) + ")");
+    }
+    if k == "IDENT" {
+        if rc_k(toks, pos + 1) == "LPAREN" { return rc_call(toks, pos, n, env, fns, hint, capv); }
+        let got: String = rc_env_get(env, rc_t(toks, pos));
+        if got == "" {
+            rc_fail(rc_line(toks, pos), "unknown var " + rc_t(toks, pos));
+            return "0\t?\t";
+        }
+        return rc_e_pack(pos + 1, got, rc_var(rc_t(toks, pos)));
+    }
+    rc_fail(rc_line(toks, pos), "bad expression");
+    return "0\t?\t";
+}
+
+pub fn rc_println(toks: List[String], pos: Int, n: Int, env: String, fns: String, capv: String, ind: String) -> String {
+    let info: String = rc_arg_spans(toks, pos, n);
+    if rc_span_nargs(info) != 1 {
+        rc_fail(rc_line(toks, pos), "println takes one arg");
+        return rc_s_pack(pos + 1, env, "");
+    }
+    let a: String = rc_expr(toks, rc_span_start(info, 0), n, env, fns, "", capv);
+    let q: Int = rc_span_end(info) + 1;
+    let qq: Int = if q < n && rc_k(toks, q) == "SEMI" { q + 1 } else { q };
+    let at: String = rc_e_ty(a);
+    let ac: String = rc_e_code(a);
+    if at == "i" { return rc_s_pack(qq, env, ind + "printf(\"%lld\\n\", (long long)(" + ac + "));\n"); }
+    if at == "f" { return rc_s_pack(qq, env, ind + "printf(\"%g\\n\", (double)(" + ac + "));\n"); }
+    if at == "s" { return rc_s_pack(qq, env, ind + "{ std::string oo_t = (" + ac + "); fwrite(oo_t.data(), 1, oo_t.size(), stdout); putchar(10); }\n"); }
+    if at == "b" { return rc_s_pack(qq, env, ind + "printf(\"%s\\n\", (" + ac + ") ? \"true\" : \"false\");\n"); }
+    rc_fail(rc_line(toks, pos), "println type unsupported");
+    return rc_s_pack(qq, env, "");
+}
+
+pub fn rc_call(toks: List[String], pos: Int, n: Int, env: String, fns: String, hint: String, capv: String) -> String {
+    let name: String = rc_t(toks, pos);
+    let line: Int = rc_line(toks, pos);
+    let info: String = rc_arg_spans(toks, pos, n);
+    let endp: Int = rc_span_end(info);
+    let nargs: Int = rc_span_nargs(info);
+    let kind: Int = rc_call_kind(name);
+    if kind == 1 {
+        if nargs == 0 && hint == "li" { return rc_e_pack(endp + 1, "li", "std::vector<long long>()"); }
+        if nargs == 0 && hint == "lf" { return rc_e_pack(endp + 1, "lf", "std::vector<double>()"); }
+        rc_fail(line, "list_new needs a typed let");
+        return "0\t?\t";
+    }
+    if kind == 2 {
+        rc_fail(line, "push is a statement");
+        return "0\t?\t";
+    }
+    let mut argstr: String = "";
+    let mut i: Int = 0;
+    while i < nargs {
+        let a: String = rc_expr(toks, rc_span_start(info, i), n, env, fns, rc_arg_hint(name, i, fns), capv);
+        if i > 0 { argstr = argstr + "\t"; }
+        argstr = argstr + rc_e_pos(a).to_string() + "\t" + rc_e_ty(a) + "\t" + rc_e_code(a);
+        i = i + 1;
+    }
+    if kind == 3 {
+        let r: String = rc_apply_list(name, argstr, nargs, line);
+        return rc_e_pack(endp + 1, rc_e_ty(r), rc_e_code(r));
+    }
+    if kind == 4 {
+        let r: String = rc_apply_ctor(name, argstr, nargs, hint, line);
+        return rc_e_pack(endp + 1, rc_e_ty(r), rc_e_code(r));
+    }
+    if kind == 5 {
+        if name == "gpu_hip_vec_add" && rc_k(toks, rc_span_start(info, 3)) != "IDENT" {
+            rc_fail(line, "vec_add output needs a variable");
+            return "0\t?\t";
+        }
+        if name == "gpu_copy_d2h" && rc_k(toks, rc_span_start(info, 1)) != "IDENT" {
+            rc_fail(line, "copy_d2h output needs a variable");
+            return "0\t?\t";
+        }
+        let r: String = rc_gpu_call(name, argstr, nargs, capv, line);
+        return rc_e_pack(endp + 1, rc_e_ty(r), rc_e_code(r));
+    }
+    if kind == 6 {
+        let r: String = rc_dev_call(name, argstr, nargs, capv, line);
+        return rc_e_pack(endp + 1, rc_e_ty(r), rc_e_code(r));
+    }
+    let r: String = rc_apply_user(name, argstr, nargs, fns, line);
+    return rc_e_pack(endp + 1, rc_e_ty(r), rc_e_code(r));
+}

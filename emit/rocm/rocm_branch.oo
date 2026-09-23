@@ -1,0 +1,49 @@
+// # ROCm return and condition lowering
+//
+// Logline: Value returns with type checks plus bool condition reads.
+//
+// Setup: Main returns int codes. User fns return declared types.
+//
+// Beats:
+//   1. rc_return checks values against the declared return code.
+//   2. rc_cond requires a bool expression for branches and loops.
+
+import "rocm_tok.oo";
+import "rocm_ty.oo";
+import "rocm_expr.oo";
+
+pub fn rc_return(toks: List[String], pos: Int, n: Int, env: String, fns: String, capv: String, in_main: Bool, ret: String, ind: String) -> String {
+    let mut p: Int = pos + 1;
+    if p < n && rc_k(toks, p) == "SEMI" {
+        if in_main { return rc_s_pack(p + 1, env, ind + "return 0;\n"); }
+        if ret != "v" {
+            rc_fail(rc_line(toks, pos), "empty return needs void");
+            return rc_s_pack(p + 1, env, "");
+        }
+        return rc_s_pack(p + 1, env, ind + "return;\n");
+    }
+    let e: String = rc_expr(toks, p, n, env, fns, ret, capv);
+    let q: Int = rc_e_pos(e);
+    let qq: Int = if q < n && rc_k(toks, q) == "SEMI" { q + 1 } else { q };
+    if in_main {
+        if ret != "i" {
+            rc_fail(rc_line(toks, pos), "main value return needs int");
+            return rc_s_pack(qq, env, "");
+        }
+        return rc_s_pack(qq, env, ind + "return (int)(" + rc_e_code(e) + ");\n");
+    }
+    if rc_e_ty(e) != ret {
+        rc_fail(rc_line(toks, pos), "return type mismatch");
+        return rc_s_pack(qq, env, "");
+    }
+    return rc_s_pack(qq, env, ind + "return " + rc_e_code(e) + ";\n");
+}
+
+pub fn rc_cond(toks: List[String], pos: Int, n: Int, env: String, fns: String, capv: String) -> String {
+    let c: String = rc_expr(toks, pos, n, env, fns, "b", capv);
+    if rc_e_ty(c) != "b" {
+        rc_fail(rc_line(toks, pos), "condition needs bool");
+        return "0\t?\t";
+    }
+    return c;
+}

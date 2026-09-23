@@ -1,0 +1,153 @@
+// # ROCm typed function table scans
+//
+// Logline: Scan fn names, return codes, params, and body ranges from tokens.
+//
+// Setup: Table rows are name, return code, and params. No source text search.
+//
+// Beats:
+//   1. rc_scan_fns walks KW_FN rows with typed param reads.
+//   2. rc_fn_row finds one row by exact name match.
+//   3. rc_fn_body brackets one body range for the statement walker.
+
+import "rocm_tok.oo";
+import "lex/token_parse_int.oo";
+
+pub fn rc_scan_fns(toks: List[String]) -> String {
+    let n: Int = list_len(toks);
+    let mut o: String = "";
+    let mut pos: Int = 0;
+    while pos < n {
+        let k: String = rc_k(toks, pos);
+        if k == "KW_FN" || k == "KW_PUB" {
+            o = o + rc_scan_one_fn(toks, pos, n);
+            pos = rc_skip_fn(toks, pos, n);
+        } else {
+            pos = pos + 1;
+        }
+    }
+    return o;
+}
+
+fn rc_scan_one_fn(toks: List[String], pos: Int, n: Int) -> String {
+    let mut p: Int = pos;
+    while p < n && rc_k(toks, p) == "KW_PUB" { p = p + 1; }
+    p = p + 1;
+    let name: String = rc_t(toks, p);
+    p = p + 2;
+    let mut params: String = "";
+    let mut first: Bool = true;
+    while p < n && rc_k(toks, p) != "RPAREN" {
+        if rc_k(toks, p) == "COMMA" {
+            p = p + 1;
+        } else {
+            let pn: String = rc_t(toks, p);
+            let tr: String = rc_read_ty(toks, p + 2, n);
+            p = rc_ty_pos(tr);
+            if !first { params = params + ","; }
+            first = false;
+            params = params + pn + ":" + rc_ty_code(tr);
+        }
+    }
+    if p < n && rc_k(toks, p) == "RPAREN" { p = p + 1; }
+    let mut ret: String = "v";
+    if p < n && rc_k(toks, p) == "ARROW" {
+        let rr: String = rc_read_ty(toks, p + 1, n);
+        p = rc_ty_pos(rr);
+        ret = rc_ty_code(rr);
+    }
+    return name + "\t" + ret + "\t" + params + "\n";
+}
+
+pub fn rc_fn_row(fns: String, name: String) -> String {
+    let mut rest: String = fns;
+    while rest != "" {
+        let nl: Int = str_index_of(rest, "\n");
+        let row: String = if nl < 0 { rest } else { str_slice(rest, 0, nl) };
+        let t: Int = str_index_of(row, "\t");
+        if t > 0 && str_slice(row, 0, t) == name {
+            return str_slice(row, t + 1, chars_len(row));
+        }
+        if nl < 0 {
+            rest = "";
+        } else {
+            rest = str_slice(rest, nl + 1, chars_len(rest));
+        }
+    }
+    return "";
+}
+
+pub fn rc_row_ret(row: String) -> String {
+    let t: Int = str_index_of(row, "\t");
+    return str_slice(row, 0, t);
+}
+
+pub fn rc_row_params(row: String) -> String {
+    let t: Int = str_index_of(row, "\t");
+    return str_slice(row, t + 1, chars_len(row));
+}
+
+pub fn rc_fn_pos(toks: List[String], n: Int, name: String) -> Int {
+    let mut pos: Int = 0;
+    while pos < n {
+        let k: String = rc_k(toks, pos);
+        if k == "KW_FN" || k == "KW_PUB" {
+            if rc_fn_name_at(toks, pos, n) == name { return pos; }
+            pos = rc_skip_fn(toks, pos, n);
+        } else {
+            pos = pos + 1;
+        }
+    }
+    return 0 - 1;
+}
+
+pub fn rc_fn_body(toks: List[String], pos: Int, n: Int) -> String {
+    let mut p: Int = pos;
+    while p < n && rc_k(toks, p) != "LBRACE" {
+        if rc_k(toks, p) == "SEMI" {
+            rc_fail(rc_line(toks, pos), "fn without body");
+            return "0\t0";
+        }
+        p = p + 1;
+    }
+    if p >= n {
+        rc_fail(rc_line(toks, pos), "fn without body");
+        return "0\t0";
+    }
+    let end: Int = rc_skip_balanced(toks, p) - 1;
+    return (p + 1).to_string() + "\t" + end.to_string();
+}
+
+pub fn rc_range_start(r: String) -> Int {
+    let t: Int = str_index_of(r, "\t");
+    return parse_int(str_slice(r, 0, t));
+}
+
+pub fn rc_range_end(r: String) -> Int {
+    let t: Int = str_index_of(r, "\t");
+    return parse_int(str_slice(r, t + 1, chars_len(r)));
+}
+
+pub fn rc_param_count(params: String) -> Int {
+    if params == "" { return 0; }
+    let mut c: Int = 1;
+    let mut i: Int = 0;
+    while i < chars_len(params) {
+        if char_at(params, i) == "," { c = c + 1; }
+        i = i + 1;
+    }
+    return c;
+}
+
+pub fn rc_param_at(params: String, i: Int) -> String {
+    let mut rest: String = params;
+    let mut k: Int = 0;
+    while k < i {
+        let c: Int = str_index_of(rest, ",");
+        rest = str_slice(rest, c + 1, chars_len(rest));
+        k = k + 1;
+    }
+    let c2: Int = str_index_of(rest, ",");
+    let item: String = if c2 < 0 { rest } else { str_slice(rest, 0, c2) };
+    let c3: Int = str_index_of(item, ":");
+    return str_slice(item, c3 + 1, chars_len(item));
+}

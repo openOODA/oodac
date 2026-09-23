@@ -1,0 +1,56 @@
+// # ROCm text buffer and C string escapes
+//
+// Logline: Line list push and join plus byte-exact C string escaping.
+//
+// Setup: Lines ride List[String]. Code packs keep code last so tabs stay safe.
+//
+// Beats:
+//   1. rc_push appends one line to the list.
+//   2. rc_join stitches lines with newline separators.
+//   3. rc_c_esc escapes quotes, backslash, and control bytes for C++.
+
+pub fn rc_push(lines: List[String], s: String) -> List[String] {
+    return list_push(lines, s);
+}
+
+pub fn rc_join(lines: List[String]) -> String {
+    let mut o: String = "";
+    let n: Int = list_len(lines);
+    let mut i: Int = 0;
+    while i < n {
+        if i > 0 { o = o + "\n"; }
+        o = o + list_get(lines, i);
+        i = i + 1;
+    }
+    return o + "\n";
+}
+
+pub fn rc_c_esc(s: String) -> String {
+    let n: Int = chars_len(s);
+    let mut o: String = "";
+    let mut i: Int = 0;
+    while i < n {
+        let c: String = char_at(s, i);
+        if c == "\\" {
+            o = o + "\\\\";
+        } else if c == "\"" {
+            o = o + "\\\"";
+        } else if c == "\n" {
+            o = o + "\\n";
+        } else if c == "\t" {
+            o = o + "\\t";
+        } else {
+            let b: Int = byte_at(c, 0);
+            if b < 32 || b >= 127 {
+                let h: Int = b / 64;
+                let m: Int = (b - h * 64) / 8;
+                let l: Int = b - h * 64 - m * 8;
+                o = o + "\\" + h.to_string() + m.to_string() + l.to_string();
+            } else {
+                o = o + c;
+            }
+        }
+        i = i + 1;
+    }
+    return o;
+}

@@ -1,0 +1,190 @@
+// # ROCm statement dispatch and blocks
+//
+// Logline: Block walk with branch, loop, and match drivers.
+//
+// Setup: Leaf statements live in rocm_let. Branch and match text assemble apart.
+//
+// Beats:
+//   1. rc_stmts walks one block and returns end, env, and text.
+//   2. rc_if and rc_while lower conditions with bool checks.
+//   3. rc_match validates arm pairs and binds payloads into scopes.
+
+import "rocm_tok.oo";
+import "rocm_ty.oo";
+import "rocm_expr.oo";
+import "rocm_scan.oo";
+import "rocm_let.oo";
+import "rocm_branch.oo";
+import "rocm_match.oo";
+
+pub fn rc_stmts(toks: List[String], pos: Int, end: Int, n: Int, env: String, fns: String, capv: String, in_main: Bool, ret: String, ind: String) -> String {
+    let mut p: Int = pos;
+    let mut cur: String = env;
+    let mut text: String = "";
+    while p < end && p < n {
+        let k: String = rc_k(toks, p);
+        if k == "SEMI" {
+            p = p + 1;
+        } else if k == "KW_LET" {
+            let r: String = rc_let(toks, p, n, cur, fns, capv, ind);
+            p = rc_s_pos(r);
+            cur = rc_s_env(r);
+            text = text + rc_s_text(r);
+        } else if k == "IDENT" {
+            let r: String = rc_ident_stmt(toks, p, n, cur, fns, capv, ind);
+            p = rc_s_pos(r);
+            cur = rc_s_env(r);
+            text = text + rc_s_text(r);
+        } else if k == "KW_RETURN" {
+            let r: String = rc_return(toks, p, n, cur, fns, capv, in_main, ret, ind);
+            p = rc_s_pos(r);
+            text = text + rc_s_text(r);
+        } else if k == "KW_IF" {
+            let r: String = rc_if(toks, p, n, cur, fns, capv, in_main, ret, ind);
+            p = rc_s_pos(r);
+            text = text + rc_s_text(r);
+        } else if k == "KW_WHILE" {
+            let r: String = rc_while(toks, p, n, cur, fns, capv, in_main, ret, ind);
+            p = rc_s_pos(r);
+            text = text + rc_s_text(r);
+        } else if k == "KW_MATCH" {
+            let r: String = rc_match(toks, p, n, cur, fns, capv, in_main, ret, ind);
+            p = rc_s_pos(r);
+            text = text + rc_s_text(r);
+        } else {
+            rc_fail(rc_line(toks, p), "unsupported statement");
+            return rc_s_pack(p + 1, cur, text);
+        }
+    }
+    return rc_s_pack(p, cur, text);
+}
+
+fn rc_if(toks: List[String], pos: Int, n: Int, env: String, fns: String, capv: String, in_main: Bool, ret: String, ind: String) -> String {
+    let c: String = rc_cond(toks, pos + 1, n, env, fns, capv);
+    let mut p: Int = rc_e_pos(c);
+    if p >= n || rc_k(toks, p) != "LBRACE" {
+        rc_fail(rc_line(toks, pos), "if needs a block");
+        return rc_s_pack(p, env, "");
+    }
+    let a: String = rc_stmts(toks, p + 1, rc_skip_balanced(toks, p) - 1, n, env, fns, capv, in_main, ret, ind + "  ");
+    p = rc_skip_balanced(toks, p);
+    let mut o: String = ind + "if (" + rc_e_code(c) + ") {\n" + rc_s_text(a) + ind + "}";
+    if p < n && rc_k(toks, p) == "KW_ELSE" {
+        p = p + 1;
+        if p >= n || rc_k(toks, p) != "LBRACE" {
+            rc_fail(rc_line(toks, pos), "else needs a block");
+            return rc_s_pack(p, env, "");
+        }
+        let b2: String = rc_stmts(toks, p + 1, rc_skip_balanced(toks, p) - 1, n, env, fns, capv, in_main, ret, ind + "  ");
+        p = rc_skip_balanced(toks, p);
+        o = o + " else {\n" + rc_s_text(b2) + ind + "}";
+    }
+    return rc_s_pack(p, env, o + "\n");
+}
+
+fn rc_while(toks: List[String], pos: Int, n: Int, env: String, fns: String, capv: String, in_main: Bool, ret: String, ind: String) -> String {
+    let c: String = rc_cond(toks, pos + 1, n, env, fns, capv);
+    let mut p: Int = rc_e_pos(c);
+    if p >= n || rc_k(toks, p) != "LBRACE" {
+        rc_fail(rc_line(toks, pos), "while needs a block");
+        return rc_s_pack(p, env, "");
+    }
+    let a: String = rc_stmts(toks, p + 1, rc_skip_balanced(toks, p) - 1, n, env, fns, capv, in_main, ret, ind + "  ");
+    p = rc_skip_balanced(toks, p);
+    return rc_s_pack(p, env, ind + "while (" + rc_e_code(c) + ") {\n" + rc_s_text(a) + ind + "}\n");
+}
+
+fn rc_match(toks: List[String], pos: Int, n: Int, env: String, fns: String, capv: String, in_main: Bool, ret: String, ind: String) -> String {
+    if pos + 2 >= n || rc_k(toks, pos + 1) != "IDENT" {
+        rc_fail(rc_line(toks, pos), "match needs a variable");
+        return rc_s_pack(pos + 1, env, "");
+    }
+    let sc: String = rc_t(toks, pos + 1);
+    let sty: String = rc_env_get(env, sc);
+    if sty != "rss" && sty != "rli" && sty != "oi" && sty != "os" {
+        rc_fail(rc_line(toks, pos), "match needs a result or option");
+        return rc_s_pack(pos + 1, env, "");
+    }
+    let mut p: Int = pos + 2;
+    if p >= n || rc_k(toks, p) != "LBRACE" {
+        rc_fail(rc_line(toks, pos), "match needs arms");
+        return rc_s_pack(p, env, "");
+    }
+    let mend: Int = rc_skip_balanced(toks, p) - 1;
+    p = p + 1;
+    let a1: String = rc_arm(toks, p, mend, n, env, fns, capv, in_main, ret, ind + "  ", sc, sty);
+    p = rc_s_pos(a1);
+    let a2: String = rc_arm(toks, p, mend, n, env, fns, capv, in_main, ret, ind + "  ", sc, sty);
+    p = rc_s_pos(a2);
+    if p != mend {
+        rc_fail(rc_line(toks, pos), "match needs two arms");
+        return rc_s_pack(mend + 1, env, "");
+    }
+    let t1: String = rc_s_text(a1);
+    let t2: String = rc_s_text(a2);
+    let top: String = rc_tab_field(t1, 0);
+    let bot: String = rc_tab_field(t2, 0);
+    let head: String = rc_match_head(sty, top, sc, ind);
+    if head == "" {
+        rc_fail(rc_line(toks, pos), "match arms out of order");
+        return rc_s_pack(mend + 1, env, "");
+    }
+    if top == "Ok" && bot != "Err" {
+        rc_fail(rc_line(toks, pos), "match needs an Err arm");
+        return rc_s_pack(mend + 1, env, "");
+    }
+    if top == "Some" && bot != "None" {
+        rc_fail(rc_line(toks, pos), "match needs a None arm");
+        return rc_s_pack(mend + 1, env, "");
+    }
+    let o: String = head + rc_tab_field(t1, 1) + rc_s_text(t1) + ind + "} else {\n" + rc_tab_field(t2, 1) + rc_s_text(t2) + ind + "}\n";
+    return rc_s_pack(mend + 1, env, o);
+}
+
+fn rc_arm(toks: List[String], pos: Int, mend: Int, n: Int, env: String, fns: String, capv: String, in_main: Bool, ret: String, ind: String, sc: String, sty: String) -> String {
+    let ctor: String = rc_t(toks, pos);
+    if rc_k(toks, pos) != "IDENT" {
+        rc_fail(rc_line(toks, pos), "bad match arm");
+        return rc_s_pack(pos + 1, env, "");
+    }
+    let mut p: Int = pos + 1;
+    let mut binder: String = "";
+    if p < mend && rc_k(toks, p) == "LPAREN" {
+        if p + 1 >= mend || rc_k(toks, p + 1) != "IDENT" {
+            rc_fail(rc_line(toks, pos), "arm needs a binder");
+            return rc_s_pack(p + 1, env, "");
+        }
+        binder = rc_t(toks, p + 1);
+        p = p + 2;
+        if p >= mend || rc_k(toks, p) != "RPAREN" {
+            rc_fail(rc_line(toks, pos), "arm binder unbalanced");
+            return rc_s_pack(p, env, "");
+        }
+        p = p + 1;
+    }
+    if p >= mend || rc_k(toks, p) != "FATARROW" {
+        rc_fail(rc_line(toks, pos), "arm needs =>");
+        return rc_s_pack(p, env, "");
+    }
+    p = p + 1;
+    if p >= mend || rc_k(toks, p) != "LBRACE" {
+        rc_fail(rc_line(toks, pos), "arm needs a block");
+        return rc_s_pack(p, env, "");
+    }
+    let decl: String = rc_binder_decl(sty, ctor, binder, sc, ind, toks, pos);
+    let aenv: String = rc_binder_env(env, sty, ctor, binder, toks, pos);
+    let body: String = rc_stmts(toks, p + 1, rc_skip_balanced(toks, p) - 1, n, aenv, fns, capv, in_main, ret, ind);
+    p = rc_skip_balanced(toks, p);
+    return rc_s_pack(p, env, ctor + "\t" + decl + "\t" + rc_s_text(body));
+}
+
+fn rc_binder_env(env: String, sty: String, ctor: String, binder: String, toks: List[String], pos: Int) -> String {
+    if binder == "" { return env; }
+    if sty == "rss" { return rc_env_put(env, binder, "s"); }
+    if sty == "rli" && ctor == "Ok" { return rc_env_put(env, binder, "li"); }
+    if sty == "rli" { return rc_env_put(env, binder, "s"); }
+    if sty == "oi" { return rc_env_put(env, binder, "i"); }
+    if sty == "os" { return rc_env_put(env, binder, "s"); }
+    rc_fail(rc_line(toks, pos), "arm mismatch");
+    return env;
+}

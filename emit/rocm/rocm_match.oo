@@ -1,0 +1,44 @@
+// # ROCm match arm text assembly
+//
+// Logline: If else heads and payload declarations for match arms.
+//
+// Setup: The driver validates arm order. Decls copy payloads by value.
+//
+// Beats:
+//   1. rc_match_head selects the taken branch on the ok flag.
+//   2. rc_binder_decl copies the payload into a fresh arm variable.
+
+import "rocm_tok.oo";
+import "rocm_ty.oo";
+
+pub fn rc_match_head(sty: String, top: String, sc: String, ind: String) -> String {
+    let v: String = rc_var(sc);
+    if sty == "rss" && top == "Ok" { return ind + "if ((" + v + ").ok != 0) {\n"; }
+    if sty == "rli" && top == "Ok" { return ind + "if ((" + v + ").ok != 0) {\n"; }
+    if sty == "oi" && top == "Some" { return ind + "if ((" + v + ").ok != 0) {\n"; }
+    if sty == "os" && top == "Some" { return ind + "if ((" + v + ").ok != 0) {\n"; }
+    return "";
+}
+
+pub fn rc_binder_decl(sty: String, ctor: String, binder: String, sc: String, ind: String, toks: List[String], pos: Int) -> String {
+    let v: String = rc_var(sc);
+    if ctor == "None" {
+        if binder != "" {
+            rc_fail(rc_line(toks, pos), "none takes no binder");
+            return "";
+        }
+        return "";
+    }
+    if binder == "" {
+        rc_fail(rc_line(toks, pos), "arm needs a binder");
+        return "";
+    }
+    let b: String = rc_var(binder);
+    if sty == "rss" && (ctor == "Ok" || ctor == "Err") { return ind + "std::string " + b + " = (" + v + ").val;\n"; }
+    if sty == "rli" && ctor == "Ok" { return ind + "std::vector<long long> " + b + " = (" + v + ").vec;\n"; }
+    if sty == "rli" && ctor == "Err" { return ind + "std::string " + b + " = (" + v + ").err;\n"; }
+    if sty == "oi" && ctor == "Some" { return ind + "long long " + b + " = (" + v + ").val;\n"; }
+    if sty == "os" && ctor == "Some" { return ind + "std::string " + b + " = (" + v + ").val;\n"; }
+    rc_fail(rc_line(toks, pos), "arm mismatch");
+    return "";
+}

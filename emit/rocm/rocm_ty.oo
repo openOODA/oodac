@@ -1,0 +1,144 @@
+// # ROCm type codes and pack helpers
+//
+// Logline: Type codes, expr packs, env rows, and C++ type mapping.
+//
+// Setup: Packs keep code last so embedded tabs never split fields.
+//
+// Beats:
+//   1. rc_e pack trio carries end pos, type code, and C++ text.
+//   2. rc_env rows map variable names to type codes with shadowing.
+//   3. rc_ctype and rc_default map codes to C++ types and fallbacks.
+
+import "lex/token_parse_int.oo";
+
+pub fn rc_e_pack(pos: Int, ty: String, code: String) -> String {
+    return pos.to_string() + "\t" + ty + "\t" + code;
+}
+
+pub fn rc_e_pos(pack: String) -> Int {
+    let t: Int = str_index_of(pack, "\t");
+    return parse_int(str_slice(pack, 0, t));
+}
+
+pub fn rc_e_ty(pack: String) -> String {
+    let t1: Int = str_index_of(pack, "\t");
+    let rest: String = str_slice(pack, t1 + 1, chars_len(pack));
+    let t2: Int = str_index_of(rest, "\t");
+    return str_slice(rest, 0, t2);
+}
+
+pub fn rc_e_code(pack: String) -> String {
+    let t1: Int = str_index_of(pack, "\t");
+    let rest: String = str_slice(pack, t1 + 1, chars_len(pack));
+    let t2: Int = str_index_of(rest, "\t");
+    return str_slice(rest, t2 + 1, chars_len(rest));
+}
+
+pub fn rc_env_get(env: String, name: String) -> String {
+    let mut rest: String = env;
+    let mut found: String = "";
+    while rest != "" {
+        let sc: Int = str_index_of(rest, ";");
+        let row: String = if sc < 0 { rest } else { str_slice(rest, 0, sc) };
+        let c: Int = str_index_of(row, ":");
+        if c > 0 && str_slice(row, 0, c) == name {
+            found = str_slice(row, c + 1, chars_len(row));
+        }
+        if sc < 0 {
+            rest = "";
+        } else {
+            rest = str_slice(rest, sc + 1, chars_len(rest));
+        }
+    }
+    return found;
+}
+
+pub fn rc_env_put(env: String, name: String, ty: String) -> String {
+    return env + name + ":" + ty + ";";
+}
+
+pub fn rc_var(name: String) -> String {
+    return "oo_v_" + name;
+}
+
+pub fn rc_ctype(ty: String) -> String {
+    if ty == "i" { return "long long"; }
+    if ty == "f" { return "double"; }
+    if ty == "s" { return "std::string"; }
+    if ty == "b" { return "bool"; }
+    if ty == "li" { return "std::vector<long long>"; }
+    if ty == "lf" { return "std::vector<double>"; }
+    if ty == "rss" { return "oo_rocm_ResS"; }
+    if ty == "rli" { return "oo_rocm_ResLi"; }
+    if ty == "oi" { return "oo_rocm_OptI"; }
+    if ty == "os" { return "oo_rocm_OptS"; }
+    if ty == "cap" { return "long long"; }
+    return "";
+}
+
+pub fn rc_tab_field(s: String, idx: Int) -> String {
+    let mut rest: String = s;
+    let mut i: Int = 0;
+    while i <= idx {
+        let t: Int = str_index_of(rest, "\t");
+        if t < 0 {
+            if i == idx { return rest; }
+            return "";
+        }
+        if i == idx { return str_slice(rest, 0, t); }
+        rest = str_slice(rest, t + 1, chars_len(rest));
+        i = i + 1;
+    }
+    return "";
+}
+
+pub fn rc_num2(lt: String, rt: String) -> String {
+    if lt == "i" && rt == "i" { return "i"; }
+    if lt == "f" && rt == "f" { return "f"; }
+    if lt == "i" && rt == "f" { return "f"; }
+    if lt == "f" && rt == "i" { return "f"; }
+    return "";
+}
+
+pub fn rc_prom(code: String, from: String, want: String) -> String {
+    if from == want { return code; }
+    return "((double)(" + code + "))";
+}
+
+pub fn rc_s_pos(pack: String) -> Int {
+    let t: Int = str_index_of(pack, "\t");
+    return parse_int(str_slice(pack, 0, t));
+}
+
+pub fn rc_s_env(pack: String) -> String {
+    let t1: Int = str_index_of(pack, "\t");
+    let rest: String = str_slice(pack, t1 + 1, chars_len(pack));
+    let t2: Int = str_index_of(rest, "\t");
+    return str_slice(rest, 0, t2);
+}
+
+pub fn rc_s_text(pack: String) -> String {
+    let t1: Int = str_index_of(pack, "\t");
+    let rest: String = str_slice(pack, t1 + 1, chars_len(pack));
+    let t2: Int = str_index_of(rest, "\t");
+    return str_slice(rest, t2 + 1, chars_len(rest));
+}
+
+pub fn rc_s_pack(pos: Int, env: String, text: String) -> String {
+    return pos.to_string() + "\t" + env + "\t" + text;
+}
+
+pub fn rc_default(ty: String) -> String {
+    if ty == "i" { return "0"; }
+    if ty == "f" { return "0.0"; }
+    if ty == "s" { return "std::string()"; }
+    if ty == "b" { return "false"; }
+    if ty == "li" { return "std::vector<long long>()"; }
+    if ty == "lf" { return "std::vector<double>()"; }
+    if ty == "rss" { return "oo_rocm_ResS{0, {}}"; }
+    if ty == "rli" { return "oo_rocm_ResLi{0, {}, {}}"; }
+    if ty == "oi" { return "oo_rocm_OptI{0, 0}"; }
+    if ty == "os" { return "oo_rocm_OptS{0, {}}"; }
+    if ty == "cap" { return "0"; }
+    return "";
+}

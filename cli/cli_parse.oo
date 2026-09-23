@@ -5,7 +5,7 @@
 // Setup: path_exists and file_size on FsReadCap. Usage matches dispatched commands.
 //
 // Beats:
-//   1. Accept --backend llvm|c, --shared, --json-errors, --plain, --concat, --artifact, -o. Reject residual flags.
+//   1. Accept --backend llvm|rocm|elf|wasm, --shared, --json-errors, --plain, --concat, --artifact, -o. Reject residual flags.
 //   2. Require a readable path under 64KiB.
 //   3. Pack cmd, path, out, backend, json-errors, plain, concat, artifact, shared.
 
@@ -34,7 +34,7 @@ pub fn parse_cli_argv(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, arg
                 process_exit(2);
             }
             let bv: String = list_get(args, i + 1);
-            if bv != "c" && bv != "llvm" && bv != "elf" && bv != "wasm" {
+            if bv != "c" && bv != "llvm" && bv != "elf" && bv != "wasm" && bv != "rocm" {
                 println("ERR\tbackend\tresidual: " + bv);
                 process_exit(2);
             }

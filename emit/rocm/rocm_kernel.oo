@@ -1,0 +1,194 @@
+// # ROCm GPU op dispatch and host glue
+//
+// Logline: Lower gpu calls to typed C++ with reuse of oo_gpu Hip runtime.
+//
+// Setup: Args arrive pre-lowered as tab packs. Cap var name threads through.
+//
+// Beats:
+//   1. rc_kernel_needs prescans token idents for helper selection.
+//   2. rc_gpu_call validates arity and types per op with fail closed.
+//   3. rc_help emits only the helper bodies the program uses.
+
+import "rocm_tok.oo";
+import "rocm_ty.oo";
+
+pub fn rc_kernel_needs(toks: List[String], n: Int) -> String {
+    let mut t: String = "0";
+    let mut v: String = "0";
+    let mut k: String = "0";
+    let mut h: String = "0";
+    let mut c: String = "0";
+    let mut i: Int = 0;
+    while i < n {
+        if rc_k(toks, i) == "IDENT" {
+            let nm: String = rc_t(toks, i);
+            if nm == "gpu_hip_try_launch" { t = "1"; }
+            if nm == "gpu_hip_vec_add" { v = "1"; }
+            if nm == "gpu_rocm_int_add" { k = "1"; }
+            if nm == "gpu_rocm_hello" { h = "1"; }
+            if nm == "gpu_copy_h2d" || nm == "gpu_copy_d2h" { c = "1"; }
+        }
+        i = i + 1;
+    }
+    return t + v + k + h + c;
+}
+
+fn rc_arg_ty(argstr: String, i: Int) -> String {
+    return rc_tab_field(argstr, i * 3 + 1);
+}
+
+fn rc_arg_code(argstr: String, i: Int) -> String {
+    return rc_tab_field(argstr, i * 3 + 2);
+}
+
+pub fn rc_gpu_call(name: String, argstr: String, nargs: Int, capv: String, line: Int) -> String {
+    if capv == "" {
+        rc_fail(line, "gpu call without a cap var");
+        return "0\t?\t";
+    }
+    if nargs < 1 || rc_arg_code(argstr, 0) != capv {
+        rc_fail(line, "gpu call needs the cap first");
+        return "0\t?\t";
+    }
+    if name == "gpu_hip_try_launch" { return rc_op_try(argstr, nargs, capv, line); }
+    if name == "gpu_hip_vec_add" { return rc_op_vec(argstr, nargs, capv, line); }
+    if name == "gpu_buffer_alloc" { return rc_op_alloc(argstr, nargs, capv, line); }
+    if name == "gpu_buffer_free" { return rc_op_free(argstr, nargs, capv, line); }
+    if name == "gpu_copy_h2d" { return rc_op_cpy(argstr, nargs, capv, line, true); }
+    if name == "gpu_copy_d2h" { return rc_op_cpy(argstr, nargs, capv, line, false); }
+    if name == "gpu_sync" { return rc_op_sync(argstr, nargs, capv, line); }
+    if name == "gpu_init" { return rc_op_init(argstr, nargs, capv, line); }
+    rc_fail(line, "unsupported gpu op " + name);
+    return "0\t?\t";
+}
+
+fn rc_op_try(argstr: String, nargs: Int, capv: String, line: Int) -> String {
+    if nargs != 2 || rc_arg_ty(argstr, 1) != "s" {
+        rc_fail(line, "try_launch needs one string");
+        return "0\t?\t";
+    }
+    return rc_e_pack(0, "rss", "oo_rocm_try_launch(" + capv + ", " + rc_arg_code(argstr, 1) + ")");
+}
+
+fn rc_op_vec(argstr: String, nargs: Int, capv: String, line: Int) -> String {
+    if nargs != 5 {
+        rc_fail(line, "vec_add needs four operands and a count");
+        return "0\t?\t";
+    }
+    if rc_arg_ty(argstr, 1) != "lf" || rc_arg_ty(argstr, 2) != "lf" || rc_arg_ty(argstr, 3) != "lf" || rc_arg_ty(argstr, 4) != "i" {
+        rc_fail(line, "vec_add needs float lists and an int count");
+        return "0\t?\t";
+    }
+    let code: String = "oo_rocm_vec_add(" + capv + ", " + rc_arg_code(argstr, 1) + ", " + rc_arg_code(argstr, 2) + ", " + rc_arg_code(argstr, 3) + ", " + rc_arg_code(argstr, 4) + ")";
+    return rc_e_pack(0, "rss", code);
+}
+
+fn rc_op_alloc(argstr: String, nargs: Int, capv: String, line: Int) -> String {
+    if nargs != 3 || rc_arg_ty(argstr, 1) != "i" || rc_arg_ty(argstr, 2) != "i" {
+        rc_fail(line, "buffer_alloc needs byte and flag ints");
+        return "0\t?\t";
+    }
+    return rc_e_pack(0, "i", "oo_gpu_buffer_alloc(" + capv + ", " + rc_arg_code(argstr, 1) + ", (int)(" + rc_arg_code(argstr, 2) + "))");
+}
+
+fn rc_op_free(argstr: String, nargs: Int, capv: String, line: Int) -> String {
+    if nargs != 2 || rc_arg_ty(argstr, 1) != "i" {
+        rc_fail(line, "buffer_free needs a handle");
+        return "0\t?\t";
+    }
+    return rc_e_pack(0, "i", "((long long)oo_gpu_buffer_free(" + capv + ", " + rc_arg_code(argstr, 1) + "))");
+}
+
+fn rc_op_cpy(argstr: String, nargs: Int, capv: String, line: Int, is_h2d: Bool) -> String {
+    if nargs != 4 || rc_arg_ty(argstr, 3) != "i" {
+        rc_fail(line, "copy needs a byte count");
+        return "0\t?\t";
+    }
+    if is_h2d {
+        if rc_arg_ty(argstr, 1) != "i" {
+            rc_fail(line, "copy_h2d needs a handle first");
+            return "0\t?\t";
+        }
+        let xt: String = rc_arg_ty(argstr, 2);
+        if xt != "li" && xt != "lf" {
+            rc_fail(line, "copy_h2d needs an int or float list");
+            return "0\t?\t";
+        }
+        let x: String = rc_arg_code(argstr, 2);
+        let lim: String = "((long long)((" + x + ").size()) * 8)";
+        return rc_e_pack(0, "i", "((long long)oo_rocm_copy_h2d(" + capv + ", " + rc_arg_code(argstr, 1) + ", (const void*)((" + x + ").data()), " + rc_arg_code(argstr, 3) + ", " + lim + "))");
+    }
+    let yt: String = rc_arg_ty(argstr, 1);
+    if yt != "li" && yt != "lf" {
+        rc_fail(line, "copy_d2h needs an int or float list");
+        return "0\t?\t";
+    }
+    if rc_arg_ty(argstr, 2) != "i" {
+        rc_fail(line, "copy_d2h needs a handle second");
+        return "0\t?\t";
+    }
+    let y: String = rc_arg_code(argstr, 1);
+    let ylim: String = "((long long)((" + y + ").size()) * 8)";
+    return rc_e_pack(0, "i", "((long long)oo_rocm_copy_d2h(" + capv + ", (void*)((" + y + ").data()), " + rc_arg_code(argstr, 2) + ", " + rc_arg_code(argstr, 3) + ", " + ylim + "))");
+}
+
+fn rc_op_sync(argstr: String, nargs: Int, capv: String, line: Int) -> String {
+    if nargs != 1 {
+        rc_fail(line, "sync takes only the cap");
+        return "0\t?\t";
+    }
+    return rc_e_pack(0, "rss", "oo_rocm_ress(oo_gpu_sync(" + capv + "))");
+}
+
+fn rc_op_init(argstr: String, nargs: Int, capv: String, line: Int) -> String {
+    if nargs != 1 {
+        rc_fail(line, "init takes only the cap");
+        return "0\t?\t";
+    }
+    return rc_e_pack(0, "i", "((long long)oo_gpu_init(" + capv + "))");
+}
+
+pub fn rc_help_try() -> String {
+    let mut s: String = "static oo_rocm_ResS oo_rocm_try_launch(long long cap, const std::string& s) {\n";
+    s = s + "  OoStr o;\n";
+    s = s + "  o.data = (char*)s.c_str();\n";
+    s = s + "  o.len = (long long)s.size();\n";
+    s = s + "  OoResS r = oo_gpu_hip_try_launch(cap, o);\n";
+    s = s + "  return oo_rocm_ress(r);\n";
+    s = s + "}\n";
+    return s;
+}
+
+pub fn rc_help_vec() -> String {
+    let mut s: String = "static oo_rocm_ResS oo_rocm_vec_add(long long cap, const std::vector<double>& a, const std::vector<double>& b, std::vector<double>& c, long long n) {\n";
+    s = s + "  oo_rocm_ResS o;\n";
+    s = s + "  o.ok = 0;\n";
+    s = s + "  if (n <= 0 || n > 2147483647 || (long long)a.size() < n || (long long)b.size() < n || (long long)c.size() < n) {\n";
+    s = s + "    o.val = \"ERR\\trocm\\tvec_add length\";\n";
+    s = s + "    return o;\n";
+    s = s + "  }\n";
+    s = s + "  std::vector<float> fa((size_t)n);\n";
+    s = s + "  std::vector<float> fb((size_t)n);\n";
+    s = s + "  std::vector<float> fc((size_t)n);\n";
+    s = s + "  for (long long i = 0; i < n; i++) { fa[(size_t)i] = (float)a[(size_t)i]; fb[(size_t)i] = (float)b[(size_t)i]; }\n";
+    s = s + "  OoResS r = oo_gpu_hip_vec_add(cap, fa.data(), fb.data(), fc.data(), (int)n);\n";
+    s = s + "  o = oo_rocm_ress(r);\n";
+    s = s + "  if (o.ok != 0) {\n";
+    s = s + "    for (long long i = 0; i < n; i++) { c[(size_t)i] = (double)fc[(size_t)i]; }\n";
+    s = s + "  }\n";
+    s = s + "  return o;\n";
+    s = s + "}\n";
+    return s;
+}
+
+pub fn rc_help_copy() -> String {
+    let mut s: String = "static int oo_rocm_copy_h2d(long long cap, long long h, const void* p, long long nbytes, long long maxbytes) {\n";
+    s = s + "  if (nbytes < 0 || nbytes > maxbytes) { return 0; }\n";
+    s = s + "  return oo_gpu_copy_h2d(cap, h, p, nbytes);\n";
+    s = s + "}\n";
+    s = s + "static int oo_rocm_copy_d2h(long long cap, void* p, long long h, long long nbytes, long long maxbytes) {\n";
+    s = s + "  if (nbytes < 0 || nbytes > maxbytes) { return 0; }\n";
+    s = s + "  return oo_gpu_copy_d2h(cap, p, h, nbytes);\n";
+    s = s + "}\n";
+    return s;
+}

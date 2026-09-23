@@ -1,0 +1,119 @@
+// # ROCm device kernels and launch glue
+//
+// Logline: Emitter-owned int and hello kernels plus their fail-closed host glue.
+//
+// Setup: Kernels compile into each binary with hipcc. No hiprtc at run time.
+//
+// Beats:
+//   1. rc_kern_hello emits the flag kernel and its host launcher.
+//   2. rc_kern_int emits the int32 add kernel with range-checked staging.
+//   3. rc_dev_call lowers the two rocm builtins to typed call packs.
+
+import "rocm_tok.oo";
+import "rocm_ty.oo";
+
+pub fn rc_dev_call(name: String, argstr: String, nargs: Int, capv: String, line: Int) -> String {
+    if capv == "" {
+        rc_fail(line, "gpu call without a cap var");
+        return "0\t?\t";
+    }
+    if name == "gpu_rocm_hello" {
+        if nargs != 1 {
+            rc_fail(line, "hello takes only the cap");
+            return "0\t?\t";
+        }
+        return rc_e_pack(0, "i", "oo_rocm_hello(" + capv + ")");
+    }
+    if name == "gpu_rocm_int_add" {
+        if nargs != 3 {
+            rc_fail(line, "int_add needs two lists");
+            return "0\t?\t";
+        }
+        if rc_dev_ty(argstr, 1) != "li" || rc_dev_ty(argstr, 2) != "li" {
+            rc_fail(line, "int_add needs int lists");
+            return "0\t?\t";
+        }
+        let code: String = "oo_rocm_int_add(" + capv + ", " + rc_dev_code(argstr, 1) + ", " + rc_dev_code(argstr, 2) + ")";
+        return rc_e_pack(0, "rli", code);
+    }
+    rc_fail(line, "unsupported device op " + name);
+    return "0\t?\t";
+}
+
+fn rc_dev_ty(argstr: String, i: Int) -> String {
+    return rc_tab_field(argstr, i * 3 + 1);
+}
+
+fn rc_dev_code(argstr: String, i: Int) -> String {
+    return rc_tab_field(argstr, i * 3 + 2);
+}
+
+pub fn rc_kern_hello() -> String {
+    let mut s: String = "__global__ void oo_rocm_hello(int* flag) {\n";
+    s = s + "  int i = (int)(blockIdx.x * blockDim.x + threadIdx.x);\n";
+    s = s + "  if (i == 0) { *flag = 7; }\n";
+    s = s + "}\n";
+    s = s + "static int oo_rocm_hello(long long cap) {\n";
+    s = s + "  (void)cap;\n";
+    s = s + "  int* dflag = nullptr;\n";
+    s = s + "  if (hipMalloc((void**)&dflag, sizeof(int)) != hipSuccess) { return -1; }\n";
+    s = s + "  int zero = 0;\n";
+    s = s + "  if (hipMemcpy(dflag, &zero, sizeof(int), hipMemcpyHostToDevice) != hipSuccess) { (void)hipFree(dflag); return -2; }\n";
+    s = s + "  hipLaunchKernelGGL(oo_rocm_hello, dim3(1, 1, 1), dim3(64, 1, 1), 0, 0, dflag);\n";
+    s = s + "  if (hipGetLastError() != hipSuccess || hipDeviceSynchronize() != hipSuccess) { (void)hipFree(dflag); return -3; }\n";
+    s = s + "  int flag = 0;\n";
+    s = s + "  if (hipMemcpy(&flag, dflag, sizeof(int), hipMemcpyDeviceToHost) != hipSuccess) { (void)hipFree(dflag); return -4; }\n";
+    s = s + "  (void)hipFree(dflag);\n";
+    s = s + "  return flag;\n";
+    s = s + "}\n";
+    return s;
+}
+
+pub fn rc_kern_int() -> String {
+    let mut s: String = "__global__ void oo_rocm_int_add(const int* a, const int* b, int* c, int n) {\n";
+    s = s + "  int i = (int)(blockIdx.x * blockDim.x + threadIdx.x);\n";
+    s = s + "  if (i < n) { c[i] = a[i] + b[i]; }\n";
+    s = s + "}\n";
+    s = s + "static oo_rocm_ResLi oo_rocm_int_add(long long cap, const std::vector<long long>& a, const std::vector<long long>& b) {\n";
+    s = s + "  (void)cap;\n";
+    s = s + "  oo_rocm_ResLi r;\n";
+    s = s + "  r.ok = 0;\n";
+    s = s + "  if (a.size() != b.size()) { r.err = \"ERR\\trocm\\tint_add length mismatch\"; return r; }\n";
+    s = s + "  long long n = (long long)a.size();\n";
+    s = s + "  if (n <= 0 || n > 2147483647) { r.err = \"ERR\\trocm\\tint_add bad count\"; return r; }\n";
+    s = s + "  std::vector<int> ha((size_t)n);\n";
+    s = s + "  std::vector<int> hb((size_t)n);\n";
+    s = s + "  for (long long i = 0; i < n; i++) {\n";
+    s = s + "    if (a[(size_t)i] > 2147483647LL || a[(size_t)i] < -2147483648LL) { r.err = \"ERR\\trocm\\tint_add range\"; return r; }\n";
+    s = s + "    if (b[(size_t)i] > 2147483647LL || b[(size_t)i] < -2147483648LL) { r.err = \"ERR\\trocm\\tint_add range\"; return r; }\n";
+    s = s + "    ha[(size_t)i] = (int)a[(size_t)i];\n";
+    s = s + "    hb[(size_t)i] = (int)b[(size_t)i];\n";
+    s = s + "  }\n";
+    s = s + "  int* da = nullptr;\n";
+    s = s + "  int* db = nullptr;\n";
+    s = s + "  int* dc = nullptr;\n";
+    s = s + "  size_t bytes = (size_t)n * sizeof(int);\n";
+    s = s + "  if (hipMalloc((void**)&da, bytes) != hipSuccess) { r.err = \"ERR\\trocm\\tint_add alloc\"; return r; }\n";
+    s = s + "  if (hipMalloc((void**)&db, bytes) != hipSuccess) { (void)hipFree(da); r.err = \"ERR\\trocm\\tint_add alloc\"; return r; }\n";
+    s = s + "  if (hipMalloc((void**)&dc, bytes) != hipSuccess) { (void)hipFree(da); (void)hipFree(db); r.err = \"ERR\\trocm\\tint_add alloc\"; return r; }\n";
+    s = s + "  if (hipMemcpy(da, ha.data(), bytes, hipMemcpyHostToDevice) != hipSuccess) { (void)hipFree(da); (void)hipFree(db); (void)hipFree(dc); r.err = \"ERR\\trocm\\tint_add h2d\"; return r; }\n";
+    s = s + "  if (hipMemcpy(db, hb.data(), bytes, hipMemcpyHostToDevice) != hipSuccess) { (void)hipFree(da); (void)hipFree(db); (void)hipFree(dc); r.err = \"ERR\\trocm\\tint_add h2d\"; return r; }\n";
+    s = s + "  int ni = (int)n;\n";
+    s = s + "  int blocks = (ni + 255) / 256;\n";
+    s = s + "  hipLaunchKernelGGL(oo_rocm_int_add, dim3((unsigned)blocks, 1, 1), dim3(256, 1, 1), 0, 0, da, db, dc, ni);\n";
+    s = s + "  if (hipGetLastError() != hipSuccess || hipDeviceSynchronize() != hipSuccess) { (void)hipFree(da); (void)hipFree(db); (void)hipFree(dc); r.err = \"ERR\\trocm\\tint_add launch\"; return r; }\n";
+    s = s + "  std::vector<int> hc((size_t)n);\n";
+    s = s + "  if (hipMemcpy(hc.data(), dc, bytes, hipMemcpyDeviceToHost) != hipSuccess) { (void)hipFree(da); (void)hipFree(db); (void)hipFree(dc); r.err = \"ERR\\trocm\\tint_add d2h\"; return r; }\n";
+    s = s + "  (void)hipFree(da);\n";
+    s = s + "  (void)hipFree(db);\n";
+    s = s + "  (void)hipFree(dc);\n";
+    s = s + "  for (long long i = 0; i < n; i++) {\n";
+    s = s + "    if (hc[(size_t)i] != ha[(size_t)i] + hb[(size_t)i]) { r.err = \"ERR\\trocm\\tint_add mismatch\"; return r; }\n";
+    s = s + "  }\n";
+    s = s + "  r.vec.resize((size_t)n);\n";
+    s = s + "  for (long long i = 0; i < n; i++) { r.vec[(size_t)i] = (long long)hc[(size_t)i]; }\n";
+    s = s + "  r.ok = 1;\n";
+    s = s + "  return r;\n";
+    s = s + "}\n";
+    return s;
+}

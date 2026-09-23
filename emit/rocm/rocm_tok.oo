@@ -1,0 +1,160 @@
+// # ROCm token row walkers
+//
+// Logline: Kind and text reads plus brace, type, and fn skips for ROCm lowering.
+//
+// Setup: Rows are TSV from tokenize_lines. field_at decodes text escapes.
+//
+// Beats:
+//   1. rc_k and rc_t read kind and text with a bounds guard.
+//   2. rc_skip_balanced walks brace pairs for fn and block skips.
+//   3. rc_skip_type and rc_read_ty walk one annotated type per scan.
+
+import "lex/token_fmt.oo";
+import "lex/token_parse_int.oo";
+
+pub fn rc_k(toks: List[String], i: Int) -> String {
+    if i < 0 || i >= list_len(toks) { return ""; }
+    return field_at(list_get(toks, i), 0);
+}
+
+pub fn rc_t(toks: List[String], i: Int) -> String {
+    if i < 0 || i >= list_len(toks) { return ""; }
+    return field_at(list_get(toks, i), 3);
+}
+
+pub fn rc_line(toks: List[String], i: Int) -> Int {
+    if i < 0 || i >= list_len(toks) { return 1; }
+    let v: Int = parse_int(field_at(list_get(toks, i), 1));
+    return if v < 1 { 1 } else { v };
+}
+
+pub fn rc_fail(line: Int, msg: String) {
+    println("ERR\trocm\t" + msg + " at line " + line.to_string());
+    process_exit(1);
+}
+
+pub fn rc_skip_balanced(toks: List[String], pos0: Int) -> Int {
+    let n: Int = list_len(toks);
+    let mut pos: Int = pos0 + 1;
+    let mut depth: Int = 1;
+    while pos < n {
+        if depth == 0 { return pos; }
+        let k: String = rc_k(toks, pos);
+        if k == "LBRACE" { depth = depth + 1; }
+        if k == "RBRACE" { depth = depth - 1; }
+        pos = pos + 1;
+    }
+    return pos;
+}
+
+pub fn rc_skip_type(toks: List[String], pos: Int, n: Int) -> Int {
+    let mut p: Int = pos;
+    if p < n && rc_k(toks, p) == "AMP" { p = p + 1; }
+    if p >= n || rc_k(toks, p) != "IDENT" { return p; }
+    p = p + 1;
+    if p < n && rc_k(toks, p) == "LBRACKET" {
+        let mut d: Int = 1;
+        p = p + 1;
+        while p < n && d > 0 {
+            let k: String = rc_k(toks, p);
+            if k == "LBRACKET" || k == "LPAREN" || k == "LBRACE" { d = d + 1; }
+            if k == "RBRACKET" || k == "RPAREN" || k == "RBRACE" { d = d - 1; }
+            p = p + 1;
+        }
+    }
+    return p;
+}
+
+pub fn rc_skip_fn(toks: List[String], pos: Int, n: Int) -> Int {
+    let mut p: Int = pos;
+    while p < n && rc_k(toks, p) == "KW_PUB" { p = p + 1; }
+    if p >= n || rc_k(toks, p) != "KW_FN" { return p + 1; }
+    while p < n && rc_k(toks, p) != "LBRACE" {
+        if rc_k(toks, p) == "SEMI" { return p + 1; }
+        p = p + 1;
+    }
+    if p < n && rc_k(toks, p) == "LBRACE" { return rc_skip_balanced(toks, p); }
+    return p;
+}
+
+pub fn rc_fn_name_at(toks: List[String], pos: Int, n: Int) -> String {
+    let mut p: Int = pos;
+    while p < n && rc_k(toks, p) == "KW_PUB" { p = p + 1; }
+    if p < n && rc_k(toks, p) == "KW_FN" { p = p + 1; }
+    if p < n && rc_k(toks, p) == "IDENT" { return rc_t(toks, p); }
+    return "";
+}
+
+pub fn rc_ty_pos(pack: String) -> Int {
+    let t: Int = str_index_of(pack, "\t");
+    return parse_int(str_slice(pack, 0, t));
+}
+
+pub fn rc_ty_code(pack: String) -> String {
+    let t: Int = str_index_of(pack, "\t");
+    return str_slice(pack, t + 1, chars_len(pack));
+}
+
+pub fn rc_read_ty(toks: List[String], pos: Int, n: Int) -> String {
+    let mut p: Int = pos;
+    if p < n && rc_k(toks, p) == "AMP" {
+        p = p + 1;
+        if p < n && rc_k(toks, p) == "IDENT" {
+            p = p + 1;
+            return p.to_string() + "\tcap";
+        }
+        rc_fail(rc_line(toks, pos), "bad cap type");
+        return "0\t?";
+    }
+    if p >= n || rc_k(toks, p) != "IDENT" {
+        rc_fail(rc_line(toks, pos), "bad type");
+        return "0\t?";
+    }
+    let base: String = rc_t(toks, p);
+    p = p + 1;
+    if base == "Int" { return p.to_string() + "\ti"; }
+    if base == "Float" { return p.to_string() + "\tf"; }
+    if base == "String" { return p.to_string() + "\ts"; }
+    if base == "Bool" { return p.to_string() + "\tb"; }
+    if base == "Void" { return p.to_string() + "\tv"; }
+    if base == "List" || base == "Result" || base == "Option" {
+        return rc_read_generic(toks, pos, n, p, base);
+    }
+    rc_fail(rc_line(toks, pos), "unsupported type " + base);
+    return "0\t?";
+}
+
+fn rc_read_generic(toks: List[String], pos: Int, n: Int, p0: Int, base: String) -> String {
+    let mut p: Int = p0;
+    if p >= n || rc_k(toks, p) != "LBRACKET" {
+        rc_fail(rc_line(toks, pos), "generic without args");
+        return "0\t?";
+    }
+    p = p + 1;
+    let a1: String = rc_read_ty(toks, p, n);
+    p = rc_ty_pos(a1);
+    let c1: String = rc_ty_code(a1);
+    if base == "List" {
+        if p < n && rc_k(toks, p) == "RBRACKET" { p = p + 1; }
+        if c1 == "i" { return p.to_string() + "\tli"; }
+        if c1 == "f" { return p.to_string() + "\tlf"; }
+        rc_fail(rc_line(toks, pos), "unsupported list element");
+        return "0\t?";
+    }
+    if base == "Option" {
+        if p < n && rc_k(toks, p) == "RBRACKET" { p = p + 1; }
+        if c1 == "i" { return p.to_string() + "\toi"; }
+        if c1 == "s" { return p.to_string() + "\tos"; }
+        rc_fail(rc_line(toks, pos), "unsupported option payload");
+        return "0\t?";
+    }
+    if p < n && rc_k(toks, p) == "COMMA" { p = p + 1; }
+    let a2: String = rc_read_ty(toks, p, n);
+    p = rc_ty_pos(a2);
+    let c2: String = rc_ty_code(a2);
+    if p < n && rc_k(toks, p) == "RBRACKET" { p = p + 1; }
+    if c1 == "s" && c2 == "s" { return p.to_string() + "\trss"; }
+    if c1 == "li" && c2 == "s" { return p.to_string() + "\trli"; }
+    rc_fail(rc_line(toks, pos), "unsupported result shape");
+    return "0\t?";
+}

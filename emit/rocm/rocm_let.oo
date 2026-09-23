@@ -1,0 +1,113 @@
+// # ROCm let, assign, and call statements
+//
+// Logline: Binding, push, plain assign, and expression statements.
+//
+// Setup: Env threads through packs. Push targets must name a list variable.
+//
+// Beats:
+//   1. rc_let binds annotated or inferred types with strict checks.
+//   2. rc_push_stmt lowers list_push to push_back on the same variable.
+//   3. rc_ident_stmt routes assign, println, and value calls.
+
+import "rocm_tok.oo";
+import "rocm_ty.oo";
+import "rocm_expr.oo";
+import "rocm_call.oo";
+
+pub fn rc_let(toks: List[String], pos: Int, n: Int, env: String, fns: String, capv: String, ind: String) -> String {
+    let mut p: Int = pos + 1;
+    if p < n && rc_k(toks, p) == "KW_MUT" { p = p + 1; }
+    let name: String = rc_t(toks, p);
+    p = p + 1;
+    let mut ann: String = "";
+    if p < n && rc_k(toks, p) == "COLON" {
+        let tr: String = rc_read_ty(toks, p + 1, n);
+        p = rc_ty_pos(tr);
+        ann = rc_ty_code(tr);
+    }
+    if p >= n || rc_k(toks, p) != "EQ" {
+        rc_fail(rc_line(toks, pos), "let needs a value");
+        return rc_s_pack(p, env, "");
+    }
+    if rc_is_push_of(toks, p + 1, n, name) {
+        return rc_push_stmt(toks, pos, p + 1, n, env, fns, capv, ind, name);
+    }
+    let e: String = rc_expr(toks, p + 1, n, env, fns, ann, capv);
+    let q: Int = rc_e_pos(e);
+    let qq: Int = if q < n && rc_k(toks, q) == "SEMI" { q + 1 } else { q };
+    let got: String = rc_e_ty(e);
+    let ty: String = if ann != "" { ann } else { got };
+    if ann != "" && ann != got {
+        rc_fail(rc_line(toks, pos), "let type mismatch");
+        return rc_s_pack(qq, env, "");
+    }
+    if rc_ctype(ty) == "" {
+        rc_fail(rc_line(toks, pos), "let type unsupported");
+        return rc_s_pack(qq, env, "");
+    }
+    let line: String = ind + rc_ctype(ty) + " " + rc_var(name) + " = " + rc_e_code(e) + ";";
+    return rc_s_pack(qq, rc_env_put(env, name, ty), line + "\n");
+}
+
+pub fn rc_is_push_of(toks: List[String], pos: Int, n: Int, name: String) -> Bool {
+    if pos + 3 >= n { return false; }
+    if rc_k(toks, pos) != "IDENT" || rc_t(toks, pos) != "list_push" { return false; }
+    if rc_k(toks, pos + 1) != "LPAREN" { return false; }
+    if rc_k(toks, pos + 2) != "IDENT" || rc_t(toks, pos + 2) != name { return false; }
+    return true;
+}
+
+pub fn rc_push_stmt(toks: List[String], pos: Int, epos: Int, n: Int, env: String, fns: String, capv: String, ind: String, name: String) -> String {
+    let xt: String = rc_env_get(env, name);
+    if xt != "li" && xt != "lf" {
+        rc_fail(rc_line(toks, pos), "push needs a list");
+        return rc_s_pack(epos, env, "");
+    }
+    let info: String = rc_arg_spans(toks, epos, n);
+    let nargs: Int = rc_span_nargs(info);
+    if nargs != 2 {
+        rc_fail(rc_line(toks, pos), "push takes a list and a value");
+        return rc_s_pack(epos, env, "");
+    }
+    let want: String = if xt == "li" { "i" } else { "f" };
+    let v: String = rc_expr(toks, rc_span_start(info, 1), n, env, fns, want, capv);
+    if rc_e_ty(v) != want {
+        rc_fail(rc_line(toks, pos), "push value mismatch");
+        return rc_s_pack(epos, env, "");
+    }
+    let q: Int = rc_span_end(info) + 1;
+    let qq: Int = if q < n && rc_k(toks, q) == "SEMI" { q + 1 } else { q };
+    return rc_s_pack(qq, env, ind + rc_var(name) + ".push_back(" + rc_e_code(v) + ");\n");
+}
+
+pub fn rc_ident_stmt(toks: List[String], pos: Int, n: Int, env: String, fns: String, capv: String, ind: String) -> String {
+    let name: String = rc_t(toks, pos);
+    if pos + 1 < n && rc_k(toks, pos + 1) == "EQ" {
+        if rc_env_get(env, name) == "" {
+            rc_fail(rc_line(toks, pos), "assign to unknown " + name);
+            return rc_s_pack(pos + 1, env, "");
+        }
+        if rc_is_push_of(toks, pos + 2, n, name) {
+            return rc_push_stmt(toks, pos, pos + 2, n, env, fns, capv, ind, name);
+        }
+        let e: String = rc_expr(toks, pos + 2, n, env, fns, rc_env_get(env, name), capv);
+        let q: Int = rc_e_pos(e);
+        let qq: Int = if q < n && rc_k(toks, q) == "SEMI" { q + 1 } else { q };
+        if rc_e_ty(e) != rc_env_get(env, name) {
+            rc_fail(rc_line(toks, pos), "assign type mismatch");
+            return rc_s_pack(qq, env, "");
+        }
+        return rc_s_pack(qq, env, ind + rc_var(name) + " = " + rc_e_code(e) + ";\n");
+    }
+    if pos + 1 < n && rc_k(toks, pos + 1) == "LPAREN" {
+        if name == "println" {
+            return rc_println(toks, pos, n, env, fns, capv, ind);
+        }
+        let e: String = rc_call(toks, pos, n, env, fns, "", capv);
+        let q: Int = rc_e_pos(e);
+        let qq: Int = if q < n && rc_k(toks, q) == "SEMI" { q + 1 } else { q };
+        return rc_s_pack(qq, env, ind + rc_e_code(e) + ";\n");
+    }
+    rc_fail(rc_line(toks, pos), "bad statement");
+    return rc_s_pack(pos + 1, env, "");
+}

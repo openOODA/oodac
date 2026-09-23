@@ -117,6 +117,13 @@ pub fn oodar_resolve_exts(fs_r: &FsReadCap, od: String, ir: String) -> List[Stri
     return exts;
 }
 
+pub fn oodar_gpu_ext(fs_r: &FsReadCap, od: String) -> List[String] {
+    let mut exts: List[String] = list_new();
+    let p: String = ext_archive_path(fs_r, od, "liboodar-gpu.a");
+    if path_exists(fs_r, p) { exts = list_push(exts, p); }
+    return exts;
+}
+
 pub fn oodar_merge_exts(cur: List[String], newly: List[String]) -> List[String] {
     let mut out: List[String] = cur;
     let n: Int = list_len(newly);

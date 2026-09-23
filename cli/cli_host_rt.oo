@@ -88,7 +88,7 @@ pub fn host_rt_c() -> String {
     s = s + "    fprintf(stderr, \"ERR\\tlandlock\\trequired when jail env set\\n\"); _exit(1);\n";
     s = s + "  }\n";
     s = s + "  static char rbuf[PATH_MAX * 2]; static char wbuf[PATH_MAX * 2];\n";
-    s = s + "  size_t n = 0; const char *pre = \"/usr:/bin:/lib:/lib64:\";\n";
+    s = s + "  size_t n = 0; const char *pre = \"/usr:/bin:/lib:/lib64:/dev/null:\";\n";
     s = s + "  while (pre[n] && n + 1 < sizeof rbuf) { rbuf[n] = pre[n]; n++; }\n";
     s = s + "  static char toolhome[PATH_MAX]; toolhome[0] = 0;\n";
     s = s + "  { static char exebuf[PATH_MAX]; ssize_t el = readlink(\"/proc/self/exe\", exebuf, sizeof exebuf - 1);\n";

@@ -1,0 +1,224 @@
+// # ROCm call applicators over lowered args
+//
+// Logline: Arg span walk plus list, constructor, and user applicators.
+//
+// Setup: Args arrive as tab packs. No expression import keeps layers acyclic.
+//
+// Beats:
+//   1. rc_arg_spans records each argument start with a depth walk.
+//   2. rc_apply_list lowers len and get with fail-closed bounds.
+//   3. rc_apply_ctor and rc_apply_user check payloads and signatures.
+
+import "rocm_tok.oo";
+import "rocm_ty.oo";
+import "rocm_scan.oo";
+import "lex/token_parse_int.oo";
+
+pub fn rc_arg_spans(toks: List[String], pos: Int, n: Int) -> String {
+    let mut p: Int = pos + 2;
+    let mut starts: String = "";
+    let mut first: Bool = true;
+    if p < n && rc_k(toks, p) == "RPAREN" { return p.to_string() + "\t"; }
+    let mut depth: Int = 0;
+    let mut need_start: Bool = true;
+    while p < n {
+        let k: String = rc_k(toks, p);
+        if depth == 0 && need_start {
+            if !first { starts = starts + ","; }
+            first = false;
+            starts = starts + p.to_string();
+            need_start = false;
+        }
+        if k == "LPAREN" || k == "LBRACKET" || k == "LBRACE" {
+            depth = depth + 1;
+        } else if k == "RPAREN" || k == "RBRACKET" || k == "RBRACE" {
+            if depth == 0 {
+                if k == "RPAREN" { return p.to_string() + "\t" + starts; }
+                rc_fail(rc_line(toks, p), "unbalanced call");
+                return "0\t";
+            }
+            depth = depth - 1;
+        } else if k == "COMMA" && depth == 0 {
+            need_start = true;
+        }
+        p = p + 1;
+    }
+    rc_fail(rc_line(toks, pos), "unterminated call");
+    return "0\t";
+}
+
+pub fn rc_span_end(info: String) -> Int {
+    let t: Int = str_index_of(info, "\t");
+    return parse_int(str_slice(info, 0, t));
+}
+
+pub fn rc_span_nargs(info: String) -> Int {
+    let t: Int = str_index_of(info, "\t");
+    let s: String = str_slice(info, t + 1, chars_len(info));
+    if s == "" { return 0; }
+    let mut c: Int = 1;
+    let mut i: Int = 0;
+    while i < chars_len(s) {
+        if char_at(s, i) == "," { c = c + 1; }
+        i = i + 1;
+    }
+    return c;
+}
+
+pub fn rc_span_start(info: String, i: Int) -> Int {
+    let t: Int = str_index_of(info, "\t");
+    let mut rest: String = str_slice(info, t + 1, chars_len(info));
+    let mut k: Int = 0;
+    while k < i {
+        let c: Int = str_index_of(rest, ",");
+        rest = str_slice(rest, c + 1, chars_len(rest));
+        k = k + 1;
+    }
+    let c2: Int = str_index_of(rest, ",");
+    let num: String = if c2 < 0 { rest } else { str_slice(rest, 0, c2) };
+    return parse_int(num);
+}
+
+pub fn rc_call_kind(name: String) -> Int {
+    if name == "list_new" { return 1; }
+    if name == "list_push" { return 2; }
+    if name == "list_len" || name == "list_get" { return 3; }
+    if name == "Some" || name == "None" || name == "Ok" || name == "Err" { return 4; }
+    if name == "gpu_hip_try_launch" || name == "gpu_hip_vec_add" || name == "gpu_buffer_alloc" || name == "gpu_buffer_free" || name == "gpu_copy_h2d" || name == "gpu_copy_d2h" || name == "gpu_sync" || name == "gpu_init" { return 5; }
+    if name == "gpu_rocm_hello" || name == "gpu_rocm_int_add" { return 6; }
+    return 7;
+}
+
+pub fn rc_arg_hint(name: String, i: Int, fns: String) -> String {
+    if name == "list_get" && i == 1 { return "i"; }
+    if name == "gpu_hip_try_launch" && i == 1 { return "s"; }
+    if name == "gpu_hip_vec_add" && i >= 1 && i <= 3 { return "lf"; }
+    if name == "gpu_hip_vec_add" && i == 4 { return "i"; }
+    if name == "gpu_rocm_int_add" && (i == 1 || i == 2) { return "li"; }
+    if name == "gpu_buffer_alloc" && (i == 1 || i == 2) { return "i"; }
+    if name == "gpu_buffer_free" && i == 1 { return "i"; }
+    if name == "gpu_copy_h2d" && (i == 1 || i == 3) { return "i"; }
+    if name == "gpu_copy_d2h" && (i == 2 || i == 3) { return "i"; }
+    let row: String = rc_fn_row(fns, name);
+    if row == "" { return ""; }
+    let params: String = rc_row_params(row);
+    if rc_param_count(params) <= i { return ""; }
+    return rc_param_at(params, i);
+}
+
+pub fn rc_apply_list(name: String, argstr: String, nargs: Int, line: Int) -> String {
+    if name == "list_len" {
+        if nargs != 1 {
+            rc_fail(line, "list_len takes one list");
+            return "0\t?\t";
+        }
+        let t0: String = rc_tab_field(argstr, 1);
+        if t0 != "li" && t0 != "lf" {
+            rc_fail(line, "list_len needs a list");
+            return "0\t?\t";
+        }
+        return rc_e_pack(0, "i", "((long long)((" + rc_tab_field(argstr, 2) + ").size()))");
+    }
+    if name == "list_get" {
+        if nargs != 2 {
+            rc_fail(line, "list_get takes a list and an index");
+            return "0\t?\t";
+        }
+        let t0: String = rc_tab_field(argstr, 1);
+        if t0 != "li" && t0 != "lf" {
+            rc_fail(line, "list_get needs a list");
+            return "0\t?\t";
+        }
+        if rc_tab_field(argstr, 4) != "i" {
+            rc_fail(line, "list_get needs an int index");
+            return "0\t?\t";
+        }
+        let x: String = rc_tab_field(argstr, 2);
+        let idx: String = rc_tab_field(argstr, 5);
+        let guard: String = "((long long)(" + idx + ") < 0 || (long long)(" + idx + ") >= (long long)((" + x + ").size()))";
+        let bad: String = "(fprintf(stderr, \"ERR\\trocm\\tlist_get OOB\\n\"), exit(1), (" + x + ")[0])";
+        return rc_e_pack(0, if t0 == "li" { "i" } else { "f" }, "(" + guard + " ? " + bad + " : (" + x + ")[(size_t)(" + idx + ")])");
+    }
+    rc_fail(line, "unsupported list op " + name);
+    return "0\t?\t";
+}
+
+pub fn rc_apply_ctor(name: String, argstr: String, nargs: Int, hint: String, line: Int) -> String {
+    if name == "Some" {
+        if nargs != 1 {
+            rc_fail(line, "Some takes one value");
+            return "0\t?\t";
+        }
+        let vt: String = rc_tab_field(argstr, 1);
+        let vc: String = rc_tab_field(argstr, 2);
+        if hint == "oi" && vt == "i" { return rc_e_pack(0, "oi", "oo_rocm_OptI{1, (" + vc + ")}"); }
+        if hint == "os" && vt == "s" { return rc_e_pack(0, "os", "oo_rocm_OptS{1, (" + vc + ")}"); }
+        rc_fail(line, "Some needs an option hint");
+        return "0\t?\t";
+    }
+    if name == "None" {
+        if nargs != 0 {
+            rc_fail(line, "None takes no value");
+            return "0\t?\t";
+        }
+        if hint == "oi" { return rc_e_pack(0, "oi", "oo_rocm_OptI{0, 0}"); }
+        if hint == "os" { return rc_e_pack(0, "os", "oo_rocm_OptS{0, {}}"); }
+        rc_fail(line, "None needs an option hint");
+        return "0\t?\t";
+    }
+    if name == "Ok" {
+        if nargs != 1 {
+            rc_fail(line, "Ok takes one value");
+            return "0\t?\t";
+        }
+        let vt: String = rc_tab_field(argstr, 1);
+        let vc: String = rc_tab_field(argstr, 2);
+        if hint == "rss" && vt == "s" { return rc_e_pack(0, "rss", "oo_rocm_ResS{1, (" + vc + ")}"); }
+        if hint == "rli" && vt == "li" { return rc_e_pack(0, "rli", "oo_rocm_ResLi{1, (" + vc + "), {}}"); }
+        rc_fail(line, "Ok needs a result hint");
+        return "0\t?\t";
+    }
+    if name == "Err" {
+        if nargs != 1 {
+            rc_fail(line, "Err takes one value");
+            return "0\t?\t";
+        }
+        let vt: String = rc_tab_field(argstr, 1);
+        let vc: String = rc_tab_field(argstr, 2);
+        if vt == "s" && hint == "rss" { return rc_e_pack(0, "rss", "oo_rocm_ResS{0, (" + vc + ")}"); }
+        if vt == "s" && hint == "rli" { return rc_e_pack(0, "rli", "oo_rocm_ResLi{0, {}, (" + vc + ")}"); }
+        rc_fail(line, "Err needs a string and a result hint");
+        return "0\t?\t";
+    }
+    rc_fail(line, "unsupported constructor " + name);
+    return "0\t?\t";
+}
+
+pub fn rc_apply_user(name: String, argstr: String, nargs: Int, fns: String, line: Int) -> String {
+    let row: String = rc_fn_row(fns, name);
+    if row == "" {
+        rc_fail(line, "unknown call " + name);
+        return "0\t?\t";
+    }
+    let params: String = rc_row_params(row);
+    let want: Int = rc_param_count(params);
+    if want != nargs {
+        rc_fail(line, "arity mismatch for " + name);
+        return "0\t?\t";
+    }
+    let mut code: String = "oo_u_" + name + "(";
+    let mut i: Int = 0;
+    while i < nargs {
+        let pc: String = rc_param_at(params, i);
+        let at: String = rc_tab_field(argstr, i * 3 + 1);
+        if at != pc {
+            rc_fail(line, "arg type mismatch for " + name);
+            return "0\t?\t";
+        }
+        if i > 0 { code = code + ", "; }
+        code = code + rc_tab_field(argstr, i * 3 + 2);
+        i = i + 1;
+    }
+    code = code + ")";
+    return rc_e_pack(0, rc_row_ret(row), code);
+}

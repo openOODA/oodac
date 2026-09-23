@@ -1,13 +1,13 @@
 // # Build a source file to a native C binary or shared library
 //
-// Logline: check then emit-llvm+clang, or --backend elf with no clang.
+// Logline: check then emit-llvm+clang, rocm hipcc, or --backend elf with no clang.
 //
 // Setup: Host is OODA_COMPILER, OODAC_BIN, or OODA_TOOLCHAIN layout. Links oodar.c or liboodar.a.
 //
 // Beats:
 //   1. Refuse residual backends, compiler-main concat, -o directory, and no main (unless --shared).
 //   2. sys_exec host check; on ERR do not emit or link.
-//   3. mkdir; emit-llvm (clang -O2) or native ELF. --backend c is residual.
+//   3. mkdir; emit-llvm (clang -O2), rocm HIP (hipcc gfx1100), or native ELF. --backend c is residual.
 
 import "lex/token_fmt.oo";
 import "lex/token_parse_int.oo";
@@ -16,6 +16,7 @@ import "cli_oodar.oo";
 import "cli_build_multi.oo";
 import "emit/elf/elf_emit.oo";
 import "emit/wasm/anchor.oo";
+import "emit/rocm/anchor.oo";
 
 // Probe mirrors the link invocation: --no-default-config keeps distro
 // /etc configs (unreadable under the jail) from failing the version check.
@@ -103,7 +104,7 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
     let mut out: String = path + ".bin";
     if is_shared { out = path + ".so"; }
     if out_arg != "" { out = out_arg; }
-    if backend != "" && backend != "llvm" && backend != "elf" && backend != "wasm" {
+    if backend != "" && backend != "llvm" && backend != "elf" && backend != "wasm" && backend != "rocm" {
         println("ERR\tbuild\tbackend residual: " + backend);
         process_exit(2);
     }
@@ -170,6 +171,41 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
             println("ERR\tbuild\tchmod ELF failed");
             process_exit(1);
         }
+        println("OK\tbuild\t" + out);
+        return;
+    }
+    if b == "rocm" {
+        if is_shared {
+            println("ERR\tbuild\trocm shared unsupported");
+            process_exit(2);
+        }
+        let hip: String = rocm_emit_program(src);
+        let tmp_hip: String = tmp_dir + "/rocm_" + str_slice(tmp_h, 0, 16) + ".hip";
+        let tmp_o: String = tmp_dir + "/rocm_" + str_slice(tmp_h, 0, 16) + ".o";
+        let wr: Result[Void, String] = write_file(fs_w, tmp_hip, hip);
+        if wr.is_err() {
+            println("ERR\tbuild\twrite rocm hip failed");
+            process_exit(1);
+        }
+        let hc: Result[String, String] = sys_exec(sys, "hipcc", "-O2", "--offload-arch=gfx1100", "-I" + od, "-c", tmp_hip, "-o", tmp_o);
+        if !hc.is_ok() {
+            println("ERR\tbuild\thipcc rocm failed");
+            let hmsg: String = match hc { Ok(s) => s, Err(e) => e };
+            println(hmsg);
+            process_exit(1);
+        }
+        let lib_a: String = oodar_lib_core(fs_r, od);
+        let gexts: List[String] = oodar_gpu_ext(fs_r, od);
+        let rsp_path: String = oodar_link_rsp(fs_w, tmp_dir, tmp_o, gexts);
+        let r: Result[String, String] = sys_exec(sys, "clang++", "--no-default-config", "-O2", "@" + rsp_path, lib_a, "-L/opt/rocm/lib", "-lamdhip64", "-lm", "-ldl", "-lpthread", "-o", out);
+        let _: Result[String, String] = sys_exec(sys, "/usr/bin/rm", "-f", rsp_path);
+        if !r.is_ok() {
+            println("ERR\tbuild\tclang++ rocm failed");
+            let gtxt: String = match r { Ok(s) => s, Err(e) => e };
+            println(gtxt);
+            process_exit(1);
+        }
+        println("OK_PURE_NATIVE");
         println("OK\tbuild\t" + out);
         return;
     }

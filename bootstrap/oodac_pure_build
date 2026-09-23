@@ -726,7 +726,7 @@ __attribute__((constructor)) void oo_jail_landlock_ctor(void) {
     fprintf(stderr, "ERR\tlandlock\trequired when jail env set\n"); _exit(1);
   }
   static char rbuf[PATH_MAX * 2]; static char wbuf[PATH_MAX * 2];
-  size_t n = 0; const char *pre = "/usr:/bin:/lib:/lib64:";
+  size_t n = 0; const char *pre = "/usr:/bin:/lib:/lib64:/dev/null:";
   while (pre[n] && n + 1 < sizeof rbuf) { rbuf[n] = pre[n]; n++; }
   static char toolhome[PATH_MAX]; toolhome[0] = 0;
   { static char exebuf[PATH_MAX]; ssize_t el = readlink("/proc/self/exe", exebuf, sizeof exebuf - 1);
