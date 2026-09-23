@@ -1,0 +1,123 @@
+// # WASM assignment and field store lowering
+//
+// Logline: Plain, field-chain, and expression statements with slot updates.
+//
+// Setup: Env maps names to slots. Field chains walk struct offsets.
+//
+// Beats:
+//   1. Plain assign evaluates then sets the slot and refreshes its type.
+//   2. Field chains load intermediate pointers and store the last slot.
+//   3. Value expression statements drop their result.
+
+import "lex/token_fmt.oo";
+import "wasm_buf.oo";
+import "wasm_op.oo";
+import "wasm_tok.oo";
+import "wasm_data.oo";
+import "wasm_fn.oo";
+import "wasm_expr.oo";
+import "lex/token_parse_int.oo";
+
+pub fn ws_block_pack(end: Int, env: String) -> String {
+    return end.to_string() + "\t" + env;
+}
+
+pub fn ws_g_env(g: &WsG, env: String) -> WsG {
+    return ws_g_new(env, g.fns, g.structs, g.order, g.arity, g.scratch);
+}
+
+pub fn ws_semi(toks: List[String], pos: Int, n: Int) -> Int {
+    if pos < n && ws_k(toks, pos) == "SEMI" {
+        return pos + 1;
+    }
+    return pos;
+}
+
+pub fn ws_assign(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &WsG, env: String, lits: &mut WsLits, cx: &mut WsCx) -> String {
+    let base: String = ws_t(toks, pos);
+    let mut p: Int = pos + 1;
+    let mut fields: String = "";
+    while p < n && ws_k(toks, p) == "DOT" {
+        if p + 1 >= n || ws_k(toks, p + 1) != "IDENT" {
+            ws_fail(ws_line(toks, p), "assign field");
+        }
+        fields = fields + ws_t(toks, p + 1) + "\n";
+        p = p + 2;
+    }
+    if p < n && ws_k(toks, p) == "EQ" {
+        let gg: WsG = ws_g_new(env, g.fns, g.structs, g.order, g.arity, g.scratch);
+        if fields == "" {
+            let r: String = ws_expr(b, toks, p + 1, n, gg, lits, cx);
+            let q: Int = ws_semi(toks, ws_un_pos(r), n);
+            let got: String = ws_env_get(env, base);
+            if got == "" {
+                ws_fail(ws_line(toks, pos), "assign " + base);
+            }
+            ws_set(b, parse_int(field_at(got, 0)));
+            return ws_block_pack(q, ws_env_put(env, base, parse_int(field_at(got, 0)), ws_un_ty(r)));
+        }
+        let got: String = ws_env_get(env, base);
+        if got == "" {
+            ws_fail(ws_line(toks, pos), "assign " + base);
+        }
+        let offs: Int = ws_field_offs(g.structs, field_at(got, 1), fields, toks, pos);
+        ws_get(b, parse_int(field_at(got, 0)));
+        ws_field_loads(b, g.structs, field_at(got, 1), fields);
+        let r: String = ws_expr(b, toks, p + 1, n, gg, lits, cx);
+        let q: Int = ws_semi(toks, ws_un_pos(r), n);
+        ws_store(b, offs);
+        return ws_block_pack(q, env);
+    }
+    let gg: WsG = ws_g_new(env, g.fns, g.structs, g.order, g.arity, g.scratch);
+    let r: String = ws_expr(b, toks, pos, n, gg, lits, cx);
+    let q: Int = ws_semi(toks, ws_un_pos(r), n);
+    if ws_un_ty(r) != "v" {
+        ws_drop(b);
+    }
+    return ws_block_pack(q, env);
+}
+
+pub fn ws_field_offs(structs: String, ty: String, fields: String, toks: List[String], at: Int) -> Int {
+    let mut cur: String = ty;
+    let mut rest: String = fields;
+    let mut off: Int = 0;
+    while rest != "" {
+        let nl: Int = str_index_of(rest, "\n");
+        let fnm: String = if nl < 0 { rest } else { str_slice(rest, 0, nl) };
+        if chars_len(cur) < 3 || char_at(cur, 0) != "t" || char_at(cur, 1) != ":" {
+            ws_fail(ws_line(toks, at), "store field");
+        }
+        let row: String = ws_struct_field(structs, str_slice(cur, 2, chars_len(cur)), fnm);
+        if row == "" {
+            ws_fail(ws_line(toks, at), "store " + fnm);
+        }
+        off = parse_int(field_at(row, 2));
+        cur = field_at(row, 3);
+        if nl < 0 {
+            rest = "";
+        } else {
+            rest = str_slice(rest, nl + 1, chars_len(rest));
+        }
+    }
+    return off;
+}
+
+pub fn ws_field_loads(b: &mut WasmBuf, structs: String, ty: String, fields: String) {
+    let mut cur: String = ty;
+    let mut rest: String = fields;
+    while rest != "" {
+        let nl: Int = str_index_of(rest, "\n");
+        if nl < 0 {
+            return;
+        }
+        let after: String = str_slice(rest, nl + 1, chars_len(rest));
+        if after == "" {
+            return;
+        }
+        let fnm: String = str_slice(rest, 0, nl);
+        let row: String = ws_struct_field(structs, str_slice(cur, 2, chars_len(cur)), fnm);
+        ws_load(b, parse_int(field_at(row, 2)));
+        cur = field_at(row, 3);
+        rest = after;
+    }
+}

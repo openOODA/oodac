@@ -15,6 +15,7 @@ import "check/check_collect.oo";
 import "cli_oodar.oo";
 import "cli_build_multi.oo";
 import "emit/elf/elf_emit.oo";
+import "emit/wasm/anchor.oo";
 
 // Probe mirrors the link invocation: --no-default-config keeps distro
 // /etc configs (unreadable under the jail) from failing the version check.
@@ -102,7 +103,7 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
     let mut out: String = path + ".bin";
     if is_shared { out = path + ".so"; }
     if out_arg != "" { out = out_arg; }
-    if backend != "" && backend != "llvm" && backend != "elf" {
+    if backend != "" && backend != "llvm" && backend != "elf" && backend != "wasm" {
         println("ERR\tbuild\tbackend residual: " + backend);
         process_exit(2);
     }
@@ -145,6 +146,17 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
         process_exit(1);
     }
     let mut b: String = backend;
+    if b == "wasm" {
+        let mut blob: String = "";
+        blob = wasm_emit_program(src);
+        let wr: Result[Void, String] = write_file(fs_w, out, blob);
+        if wr.is_err() {
+            println("ERR\tbuild\twrite " + b + " failed");
+            process_exit(1);
+        }
+        println("OK\tbuild\t" + out);
+        return;
+    }
     if b == "elf" {
         let mut blob: String = "";
         blob = elf_emit_program(src);

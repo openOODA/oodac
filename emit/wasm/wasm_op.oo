@@ -1,0 +1,183 @@
+// # WASM instruction encoder
+//
+// Logline: One typed emitter per opcode family over the shared byte buffer.
+//
+// Setup: Operands ride LEB128. Loads carry align and offset immediates.
+//
+// Beats:
+//   1. Const, locals, globals, and calls push their operand bytes.
+//   2. Loads and stores share one memarg helper.
+//   3. Control and numeric ops cover the subset the emitter lowers.
+
+import "wasm_buf.oo";
+
+pub fn ws_const(b: &mut WasmBuf, n: Int) {
+    ws_u8(b, 65);
+    ws_sleb(b, n);
+}
+
+pub fn ws_get(b: &mut WasmBuf, idx: Int) {
+    ws_u8(b, 32);
+    ws_uleb(b, idx);
+}
+
+pub fn ws_set(b: &mut WasmBuf, idx: Int) {
+    ws_u8(b, 33);
+    ws_uleb(b, idx);
+}
+
+pub fn ws_tee(b: &mut WasmBuf, idx: Int) {
+    ws_u8(b, 34);
+    ws_uleb(b, idx);
+}
+
+pub fn ws_gget(b: &mut WasmBuf, idx: Int) {
+    ws_u8(b, 35);
+    ws_uleb(b, idx);
+}
+
+pub fn ws_gset(b: &mut WasmBuf, idx: Int) {
+    ws_u8(b, 36);
+    ws_uleb(b, idx);
+}
+
+pub fn ws_mem(b: &mut WasmBuf, op: Int, align: Int, off: Int) {
+    ws_u8(b, op);
+    ws_uleb(b, align);
+    ws_uleb(b, off);
+}
+
+pub fn ws_load(b: &mut WasmBuf, off: Int) {
+    ws_mem(b, 40, 2, off);
+}
+
+pub fn ws_load8(b: &mut WasmBuf, off: Int) {
+    ws_mem(b, 45, 0, off);
+}
+
+pub fn ws_store(b: &mut WasmBuf, off: Int) {
+    ws_mem(b, 54, 2, off);
+}
+
+pub fn ws_store8(b: &mut WasmBuf, off: Int) {
+    ws_mem(b, 58, 0, off);
+}
+
+pub fn ws_call(b: &mut WasmBuf, idx: Int) {
+    ws_u8(b, 16);
+    ws_uleb(b, idx);
+}
+
+pub fn ws_drop(b: &mut WasmBuf) {
+    ws_u8(b, 26);
+}
+
+pub fn ws_end(b: &mut WasmBuf) {
+    ws_u8(b, 11);
+}
+
+pub fn ws_block(b: &mut WasmBuf) {
+    ws_u8(b, 2);
+    ws_u8(b, 64);
+}
+
+pub fn ws_loop(b: &mut WasmBuf) {
+    ws_u8(b, 3);
+    ws_u8(b, 64);
+}
+
+pub fn ws_if(b: &mut WasmBuf) {
+    ws_u8(b, 4);
+    ws_u8(b, 64);
+}
+
+pub fn ws_if_v(b: &mut WasmBuf) {
+    ws_u8(b, 4);
+    ws_u8(b, 127);
+}
+
+pub fn ws_else(b: &mut WasmBuf) {
+    ws_u8(b, 5);
+}
+
+pub fn ws_br(b: &mut WasmBuf, depth: Int) {
+    ws_u8(b, 12);
+    ws_uleb(b, depth);
+}
+
+pub fn ws_br_if(b: &mut WasmBuf, depth: Int) {
+    ws_u8(b, 13);
+    ws_uleb(b, depth);
+}
+
+pub fn ws_return(b: &mut WasmBuf) {
+    ws_u8(b, 15);
+}
+
+pub fn ws_unreachable(b: &mut WasmBuf) {
+    ws_u8(b, 0);
+}
+
+pub fn ws_add(b: &mut WasmBuf) {
+    ws_u8(b, 106);
+}
+
+pub fn ws_sub(b: &mut WasmBuf) {
+    ws_u8(b, 107);
+}
+
+pub fn ws_mul(b: &mut WasmBuf) {
+    ws_u8(b, 108);
+}
+
+pub fn ws_div_s(b: &mut WasmBuf) {
+    ws_u8(b, 109);
+}
+
+pub fn ws_rem_s(b: &mut WasmBuf) {
+    ws_u8(b, 111);
+}
+
+pub fn ws_div_u(b: &mut WasmBuf) {
+    ws_u8(b, 110);
+}
+
+pub fn ws_rem_u(b: &mut WasmBuf) {
+    ws_u8(b, 112);
+}
+
+pub fn ws_eq(b: &mut WasmBuf) {
+    ws_u8(b, 70);
+}
+
+pub fn ws_ne(b: &mut WasmBuf) {
+    ws_u8(b, 71);
+}
+
+pub fn ws_lt_s(b: &mut WasmBuf) {
+    ws_u8(b, 72);
+}
+
+pub fn ws_gt_s(b: &mut WasmBuf) {
+    ws_u8(b, 74);
+}
+
+pub fn ws_le_s(b: &mut WasmBuf) {
+    ws_u8(b, 76);
+}
+
+pub fn ws_ge_s(b: &mut WasmBuf) {
+    ws_u8(b, 78);
+}
+
+pub fn ws_eqz(b: &mut WasmBuf) {
+    ws_u8(b, 69);
+}
+
+pub fn ws_and(b: &mut WasmBuf) {
+    ws_u8(b, 113);
+}
+
+pub fn ws_or(b: &mut WasmBuf) {
+    ws_u8(b, 114);
+}

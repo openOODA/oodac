@@ -1,0 +1,122 @@
+// # WASM binary op and suffix emission
+//
+// Logline: Emit one operator or dot suffix for operands already on the stack.
+//
+// Setup: Operands ride the stack. Codes decide int ops versus string helpers.
+//
+// Beats:
+//   1. ws_prec ranks compare, add, and mul tiers for the climb loop.
+//   2. ws_bin emits int ops inline and string ops through helpers.
+//   3. ws_method and ws_field lower is_ok, val, and struct slots.
+
+import "lex/token_fmt.oo";
+import "wasm_buf.oo";
+import "wasm_op.oo";
+import "wasm_tok.oo";
+import "wasm_fn.oo";
+import "lex/token_parse_int.oo";
+
+pub fn ws_prec(k: String) -> Int {
+    if k == "EQEQ" || k == "NEQ" {
+        return 3;
+    }
+    if k == "LT" || k == "LTE" || k == "GT" || k == "GTE" {
+        return 4;
+    }
+    if k == "PLUS" || k == "MINUS" {
+        return 5;
+    }
+    if k == "STAR" || k == "SLASH" || k == "PERCENT" {
+        return 6;
+    }
+    return 0 - 1;
+}
+pub fn ws_bin(b: &mut WasmBuf, toks: List[String], at: Int, k: String, ty: String, rt: String) -> String {
+    if k == "PLUS" && ty == "s" && rt == "s" {
+        ws_call(b, 5);
+        return "s";
+    }
+    if k == "EQEQ" && ty == "s" && rt == "s" {
+        ws_call(b, 6);
+        return "i";
+    }
+    if k == "NEQ" && ty == "s" && rt == "s" {
+        ws_call(b, 6);
+        ws_eqz(b);
+        return "i";
+    }
+    if ty != "i" || rt != "i" {
+        ws_fail(ws_line(toks, at), "arith type");
+    }
+    if k == "PLUS" {
+        ws_add(b);
+    }
+    if k == "MINUS" {
+        ws_sub(b);
+    }
+    if k == "STAR" {
+        ws_mul(b);
+    }
+    if k == "SLASH" {
+        ws_div_s(b);
+    }
+    if k == "PERCENT" {
+        ws_rem_s(b);
+    }
+    if k == "EQEQ" {
+        ws_eq(b);
+    }
+    if k == "NEQ" {
+        ws_ne(b);
+    }
+    if k == "LT" {
+        ws_lt_s(b);
+    }
+    if k == "LTE" {
+        ws_le_s(b);
+    }
+    if k == "GT" {
+        ws_gt_s(b);
+    }
+    if k == "GTE" {
+        ws_ge_s(b);
+    }
+    return "i";
+}
+pub fn ws_method(b: &mut WasmBuf, toks: List[String], at: Int, ty: String, m: String) -> String {
+    if m == "is_ok" && chars_len(ty) > 0 && char_at(ty, 0) == "r" {
+        ws_load(b, 0);
+        ws_eqz(b);
+        return "i";
+    }
+    if m == "is_err" && chars_len(ty) > 0 && char_at(ty, 0) == "r" {
+        ws_load(b, 0);
+        ws_const(b, 0);
+        ws_ne(b);
+        return "i";
+    }
+    ws_fail(ws_line(toks, at), "method " + m);
+    return "?";
+}
+pub fn ws_field(b: &mut WasmBuf, toks: List[String], at: Int, structs: String, ty: String, m: String) -> String {
+    if chars_len(ty) > 0 && char_at(ty, 0) == "r" {
+        if m == "val" {
+            ws_load(b, 4);
+            return ws_res_ok(ty);
+        }
+        if m == "err" {
+            ws_load(b, 4);
+            return ws_res_err(ty);
+        }
+    }
+    if chars_len(ty) > 1 && char_at(ty, 0) == "t" && char_at(ty, 1) == ":" {
+        let row: String = ws_struct_field(structs, str_slice(ty, 2, chars_len(ty)), m);
+        if row == "" {
+            ws_fail(ws_line(toks, at), "field " + m);
+        }
+        ws_load(b, parse_int(field_at(row, 2)));
+        return field_at(row, 3);
+    }
+    ws_fail(ws_line(toks, at), "field " + m);
+    return "?";
+}

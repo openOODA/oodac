@@ -1,25 +1,232 @@
-// # Native WASM emit
+// # WASM direct emitter entry and module stitch
 //
-// Logline: Const-interp main then emit a WASI module that prints the result.
+// Logline: Typed token walk per fn, then sections into one WASI binary.
 //
-// Setup: Shares elf_eval_main. No clang. Magic is \\0asm.
+// Setup: Literals pre-scan before bodies so addresses stay fixed. Check first.
 //
 // Beats:
-//   1. Evaluate main. Format decimal plus newline.
-//   2. wasm_wasi_print. bytes_to_str.
+//   1. Prescan structs, sigs, bodies, and literals in kind order.
+//   2. Each fn body lowers through the typed climb parser into bytes.
+//   3. Imports, funcs, memory, export, code, and data stitch the module.
 
-import "emit/elf/elf_stmt.oo";
+import "wasm_buf.oo";
+import "wasm_op.oo";
+import "wasm_tok.oo";
+import "wasm_data.oo";
+import "wasm_fn.oo";
+import "wasm_expr.oo";
+import "wasm_stmt.oo";
 import "wasm_mod.oo";
+import "wasm_rt.oo";
+import "wasm_rt_str.oo";
+import "wasm_rt_list.oo";
+import "lex/token_fmt.oo";
+import "lex/token_parse_int.oo";
 
 pub fn wasm_emit_program(src: String) -> String {
-    let n: Int = elf_eval_main(src);
-    let msg: String = n.to_string() + "\n";
-    let body: List[Int] = wasm_wasi_print(msg);
+    return bytes_to_str(wasm_emit_toks(tokenize_lines(src)));
+}
+
+pub fn wasm_emit_toks(toks: List[String]) -> List[Int] {
+    let n: Int = list_len(toks);
+    if n < 1 {
+        ws_fail(1, "empty artifact");
+    }
+    let structs: String = ws_scan_structs(toks);
+    let fns: String = ws_scan_fns(toks);
+    let params: String = ws_scan_params(toks);
+    let bodies: String = ws_scan_bodies(toks);
+    let dyn: String = ws_dyn_types(fns);
+    if ws_fn_row(fns, "main") == "" {
+        ws_fail(1, "no main");
+    }
+    let mrow: String = ws_fn_row(fns, "main");
+    if field_at(mrow, 1) != "0" || field_at(mrow, 2) != "v" {
+        ws_fail(1, "main shape");
+    }
+    let mut lits: WsLits = ws_lits_new();
+    ws_prescan_lits(toks, bodies, lits);
+    let keep: Int = lits.count;
+    let mut m: WasmBuf = ws_buf_new();
+    ws_magic(m);
+    ws_type_sec(m, dyn);
+    ws_import_sec(m);
+    ws_func_sec(m, fns, dyn);
+    ws_mem_sec(m);
+    ws_global_sec(m, ws_heap_base(lits));
+    ws_export_sec(m, 9 + ws_dyn_count(fns));
+    let cp: WasmBuf = ws_code_pay(toks, n, fns, params, bodies, structs, dyn, lits);
+    ws_section(m, 10, cp.bytes);
+    ws_data_sec(m, lits);
+    if lits.count != keep {
+        ws_fail(1, "late literal");
+    }
+    return m.bytes;
+}
+
+
+pub fn ws_code_pay(toks: List[String], n: Int, fns: String, params: String, bodies: String, structs: String, dyn: String, lits: &mut WsLits) -> WasmBuf {
+    let mut pay: WasmBuf = ws_buf_new();
+    ws_uleb(pay, 7 + ws_dyn_count(fns) + 1);
+    ws_rt_into(pay, 0);
+    ws_rt_into(pay, 1);
+    ws_rt_into(pay, 2);
+    ws_rt_into(pay, 3);
+    ws_rt_into(pay, 4);
+    ws_rt_into(pay, 5);
+    ws_rt_into(pay, 6);
+    let mut rest: String = fns;
+    while rest != "" {
+        let at: Int = str_index_of(rest, "\n");
+        let row: String = if at < 0 { rest } else { str_slice(rest, 0, at) };
+        let mut fb: WasmBuf = ws_buf_new();
+        let nl: Int = ws_fn_body(fb, toks, n, row, params, bodies, structs, fns, lits);
+        ws_wrap(pay, nl, fb.bytes);
+        if at < 0 {
+            rest = "";
+        } else {
+            rest = str_slice(rest, at + 1, chars_len(rest));
+        }
+    }
+    let main: Int = ws_fn_idx(fns, "main");
+    let mut sb: WasmBuf = ws_buf_new();
+    ws_call(sb, main);
+    ws_const(sb, 0);
+    ws_call(sb, 1);
+    ws_end(sb);
+    ws_wrap(pay, 0, sb.bytes);
+    return pay;
+}
+
+pub fn ws_rt_into(pay: &mut WasmBuf, which: Int) {
+    let mut hb: WasmBuf = ws_buf_new();
+    if which == 0 {
+        ws_rt_alloc(hb);
+        ws_wrap(pay, 1, hb.bytes);
+    }
+    if which == 1 {
+        ws_rt_print_str(hb);
+        ws_wrap(pay, 2, hb.bytes);
+    }
+    if which == 2 {
+        ws_rt_print_int(hb);
+        ws_wrap(pay, 4, hb.bytes);
+    }
+    if which == 3 {
+        ws_rt_str_cat(hb);
+        ws_wrap(pay, 8, hb.bytes);
+    }
+    if which == 4 {
+        ws_rt_str_eq(hb);
+        ws_wrap(pay, 5, hb.bytes);
+    }
+    if which == 5 {
+        ws_rt_list_new(hb);
+        ws_wrap(pay, 1, hb.bytes);
+    }
+    if which == 6 {
+        ws_rt_list_push(hb);
+        ws_wrap(pay, 6, hb.bytes);
+    }
+}
+
+pub fn ws_fn_body(b: &mut WasmBuf, toks: List[String], n: Int, row: String, params: String, bodies: String, structs: String, fns: String, lits: &mut WsLits) -> Int {
+    let nm: String = field_at(row, 0);
+    let arity: Int = parse_int(field_at(row, 1));
+    let ret: String = field_at(row, 2);
+    let span: String = ws_body_span(bodies, nm);
+    let bs: Int = parse_int(field_at(span, 1));
+    let be: Int = parse_int(field_at(span, 2));
+    let order: String = ws_scan_locals(toks, bs, be, "\n");
+    let nloc: Int = ws_order_count(order);
+    let env: String = ws_params_env(params, nm);
+    let g: WsG = ws_g_new(env, fns, structs, order, arity, arity + nloc);
+    let mut cx: WsCx = ws_cx_new();
+    let r: String = ws_stmt_block(b, toks, bs, be, n, g, lits, cx, ret);
+    if ws_un_pos(r) != be && ws_un_pos(r) != be + 1 {
+        ws_fail(ws_line(toks, be), "fn end " + nm);
+    }
+    if ret != "v" {
+        ws_unreachable(b);
+    }
+    ws_end(b);
+    return nloc + 2;
+}
+
+pub fn ws_params_env(params: String, fnm: String) -> String {
+    let mut env: String = "";
+    let mut rest: String = params;
+    while rest != "" {
+        let at: Int = str_index_of(rest, "\n");
+        let row: String = if at < 0 { rest } else { str_slice(rest, 0, at) };
+        if field_at(row, 0) == fnm {
+            env = ws_env_put(env, field_at(row, 1), parse_int(field_at(row, 2)), field_at(row, 3));
+        }
+        if at < 0 {
+            rest = "";
+        } else {
+            rest = str_slice(rest, at + 1, chars_len(rest));
+        }
+    }
+    return env;
+}
+
+pub fn ws_data_sec(m: &mut WasmBuf, lits: &mut WsLits) {
+    if lits.count == 0 {
+        return;
+    }
+    let mut pay: WasmBuf = ws_buf_new();
+    ws_uleb(pay, 2);
+    ws_u8(pay, 0);
+    ws_const(pay, ws_data_base());
+    ws_end(pay);
+    ws_uleb(pay, list_len(lits.bytes));
+    ws_raw(pay, lits.bytes);
+    let mut rec: WasmBuf = ws_buf_new();
     let mut i: Int = 0;
-    let mut all: List[Int] = bytes_new();
-    while i < list_len(body) {
-        all = bytes_push(all, list_get(body, i));
+    while i < lits.count {
+        ws_u32le(rec, ws_lit_raw_addr(lits, i));
+        ws_u32le(rec, ws_lit_len(lits, i));
         i = i + 1;
     }
-    return bytes_to_str(all);
+    ws_u8(pay, 0);
+    ws_const(pay, ws_rec_base(lits));
+    ws_end(pay);
+    ws_uleb(pay, list_len(rec.bytes));
+    ws_raw(pay, rec.bytes);
+    ws_section(m, 11, pay.bytes);
 }
+
+pub fn ws_u32le(b: &mut WasmBuf, v: Int) {
+    let mut x: Int = v;
+    let mut i: Int = 0;
+    while i < 4 {
+        let lo: Int = x - (x / 256) * 256;
+        ws_u8(b, lo);
+        x = x / 256;
+        i = i + 1;
+    }
+}
+
+pub fn ws_prescan_lits(toks: List[String], bodies: String, lits: &mut WsLits) {
+    let mut rest: String = bodies;
+    while rest != "" {
+        let at: Int = str_index_of(rest, "\n");
+        let row: String = if at < 0 { rest } else { str_slice(rest, 0, at) };
+        let bs: Int = parse_int(field_at(row, 1));
+        let be: Int = parse_int(field_at(row, 2));
+        let mut i: Int = bs;
+        while i < be {
+            if ws_k(toks, i) == "STRING" {
+                let _: Int = ws_lit_add(lits, ws_t(toks, i));
+            }
+            i = i + 1;
+        }
+        if at < 0 {
+            rest = "";
+        } else {
+            rest = str_slice(rest, at + 1, chars_len(rest));
+        }
+    }
+}
+

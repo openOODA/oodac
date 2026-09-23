@@ -1,0 +1,73 @@
+// # WASM byte buffer and section framing
+//
+// Logline: Append-only byte buffer with LEB128 ints and sized section wrap.
+//
+// Setup: Bytes ride List[Int]. All pushed values stay in 0 to 255.
+//
+// Beats:
+//   1. ws_u8 pushes one masked byte onto the buffer.
+//   2. ws_uleb and ws_sleb encode unsigned and signed LEB128.
+//   3. ws_section wraps a payload with id and length prefix.
+
+import "emit/elf/elf_u.oo";
+
+pub type WasmBuf = struct { bytes: List[Int] };
+
+pub fn ws_buf_new() -> WasmBuf {
+    return WasmBuf { bytes: bytes_new() };
+}
+
+pub fn ws_u8(b: &mut WasmBuf, n: Int) {
+    b.bytes = elf_u8(b.bytes, n);
+}
+
+pub fn ws_raw(b: &mut WasmBuf, payload: List[Int]) {
+    let mut i: Int = 0;
+    let n: Int = list_len(payload);
+    while i < n {
+        b.bytes = elf_u8(b.bytes, list_get(payload, i));
+        i = i + 1;
+    }
+}
+
+pub fn ws_uleb(b: &mut WasmBuf, n0: Int) {
+    let mut n: Int = n0;
+    while n >= 128 {
+        let lo: Int = n - (n / 128) * 128;
+        b.bytes = elf_u8(b.bytes, lo + 128);
+        n = n / 128;
+    }
+    b.bytes = elf_u8(b.bytes, n);
+}
+
+pub fn ws_sleb(b: &mut WasmBuf, n0: Int) {
+    let mut u: Int = n0;
+    if n0 < 0 { u = 4294967296 + n0; }
+    let mut i: Int = 0;
+    while i < 4 {
+        let lo: Int = u - (u / 128) * 128;
+        b.bytes = elf_u8(b.bytes, lo + 128);
+        u = u / 128;
+        i = i + 1;
+    }
+    if n0 < 0 {
+        b.bytes = elf_u8(b.bytes, u + 112);
+    } else {
+        b.bytes = elf_u8(b.bytes, u);
+    }
+}
+
+pub fn ws_name(b: &mut WasmBuf, s: String) {
+    ws_uleb(b, chars_len(s));
+    let mut i: Int = 0;
+    while i < chars_len(s) {
+        b.bytes = elf_u8(b.bytes, byte_at(s, i));
+        i = i + 1;
+    }
+}
+
+pub fn ws_section(b: &mut WasmBuf, id: Int, payload: List[Int]) {
+    b.bytes = elf_u8(b.bytes, id);
+    ws_uleb(b, list_len(payload));
+    ws_raw(b, payload);
+}

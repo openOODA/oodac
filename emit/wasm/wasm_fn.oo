@@ -1,0 +1,232 @@
+// # WASM pre-scan tables for structs and fns
+//
+// Logline: Collect struct layouts, fn sigs, bodies, and local names in one walk.
+//
+// Setup: Tables are newline rows. Local order is the single source of indices.
+//
+// Beats:
+//   1. ws_scan_structs records field offsets with four-byte slots.
+//   2. ws_scan_fns and ws_scan_params record sigs plus body spans.
+//   3. ws_scan_locals orders let names and match arm binds for indices.
+
+import "lex/token_fmt.oo";
+import "wasm_tok.oo";
+import "lex/token_parse_int.oo";
+
+pub fn ws_scan_structs(toks: List[String]) -> String {
+    let n: Int = list_len(toks);
+    let mut out: String = "";
+    let mut i: Int = 0;
+    while i < n {
+        if ws_k(toks, i) == "KW_TYPE" {
+            let mut p: Int = i + 1;
+            if p < n && ws_k(toks, p) == "IDENT" {
+                let sname: String = ws_t(toks, p);
+                p = p + 1;
+                if p < n && ws_k(toks, p) == "EQ" { p = p + 1; }
+                if p < n && ws_k(toks, p) == "IDENT" && ws_t(toks, p) == "struct" { p = p + 1; }
+                if p < n && ws_k(toks, p) == "LBRACE" {
+                    p = p + 1;
+                    let mut off: Int = 0;
+                    while p < n && ws_k(toks, p) != "RBRACE" {
+                        if ws_k(toks, p) == "IDENT" && p + 2 < n && ws_k(toks, p + 1) == "COLON" {
+                            let pk: String = ws_read_ty(toks, p + 2, n);
+                            out = out + sname + "\t" + ws_t(toks, p) + "\t" + off.to_string() + "\t" + ws_un_ty(pk) + "\n";
+                            off = off + 4;
+                            p = ws_un_pos(pk);
+                        } else {
+                            p = p + 1;
+                        }
+                    }
+                    i = p;
+                }
+            }
+        }
+        i = i + 1;
+    }
+    return out;
+}
+
+pub fn ws_scan_fns(toks: List[String]) -> String {
+    let n: Int = list_len(toks);
+    let mut out: String = "";
+    let mut idx: Int = 9;
+    let mut i: Int = 0;
+    while i < n {
+        if ws_k(toks, i) == "KW_FN" {
+            let nm: String = ws_fn_name_at(toks, i, n);
+            let sig: String = ws_sig_at(toks, i, n);
+            out = out + nm + "\t" + sig + "\t" + idx.to_string() + "\n";
+            idx = idx + 1;
+            i = ws_skip_fn(toks, i, n);
+        } else {
+            i = i + 1;
+        }
+    }
+    return out;
+}
+
+pub fn ws_sig_at(toks: List[String], pos: Int, n: Int) -> String {
+    let mut p: Int = pos;
+    while p < n && ws_k(toks, p) != "LPAREN" { p = p + 1; }
+    p = p + 1;
+    let mut arity: Int = 0;
+    while p < n && ws_k(toks, p) != "RPAREN" {
+        if ws_k(toks, p) == "IDENT" && p + 1 < n && ws_k(toks, p + 1) == "COLON" { arity = arity + 1; }
+        p = p + 1;
+    }
+    let mut ret: String = "v";
+    let mut q: Int = p + 1;
+    if q < n && ws_k(toks, q) == "ARROW" {
+        let pk: String = ws_read_ty(toks, q + 1, n);
+        ret = ws_un_ty(pk);
+    }
+    return arity.to_string() + "\t" + ret;
+}
+
+pub fn ws_scan_params(toks: List[String]) -> String {
+    let n: Int = list_len(toks);
+    let mut out: String = "";
+    let mut i: Int = 0;
+    while i < n {
+        if ws_k(toks, i) == "KW_FN" {
+            let nm: String = ws_fn_name_at(toks, i, n);
+            let mut p: Int = i;
+            while p < n && ws_k(toks, p) != "LPAREN" { p = p + 1; }
+            p = p + 1;
+            let mut pi: Int = 0;
+            while p < n && ws_k(toks, p) != "RPAREN" {
+                if ws_k(toks, p) == "IDENT" && p + 2 < n && ws_k(toks, p + 1) == "COLON" {
+                    let pk: String = ws_read_ty(toks, p + 2, n);
+                    out = out + nm + "\t" + ws_t(toks, p) + "\t" + pi.to_string() + "\t" + ws_un_ty(pk) + "\n";
+                    pi = pi + 1;
+                    p = ws_un_pos(pk);
+                } else {
+                    p = p + 1;
+                }
+            }
+            i = ws_skip_fn(toks, i, n);
+        } else {
+            i = i + 1;
+        }
+    }
+    return out;
+}
+
+pub fn ws_scan_bodies(toks: List[String]) -> String {
+    let n: Int = list_len(toks);
+    let mut out: String = "";
+    let mut i: Int = 0;
+    while i < n {
+        if ws_k(toks, i) == "KW_FN" {
+            let nm: String = ws_fn_name_at(toks, i, n);
+            let mut p: Int = i;
+            while p < n && ws_k(toks, p) != "LBRACE" { p = p + 1; }
+            let end: Int = ws_skip_balanced(toks, p);
+            out = out + nm + "\t" + (p + 1).to_string() + "\t" + (end - 1).to_string() + "\n";
+            i = end;
+        } else {
+            i = i + 1;
+        }
+    }
+    return out;
+}
+
+pub fn ws_fn_row(fns: String, name: String) -> String {
+    let mut rest: String = fns;
+    while rest != "" {
+        let at: Int = str_index_of(rest, "\n");
+        let row: String = if at < 0 { rest } else { str_slice(rest, 0, at) };
+        if field_at(row, 0) == name { return row; }
+        if at < 0 { return ""; }
+        rest = str_slice(rest, at + 1, chars_len(rest));
+    }
+    return "";
+}
+
+pub fn ws_fn_idx(fns: String, name: String) -> Int {
+    return parse_int(field_at(ws_fn_row(fns, name), 3));
+}
+
+pub fn ws_fn_ret(fns: String, name: String) -> String {
+    return field_at(ws_fn_row(fns, name), 2);
+}
+
+pub fn ws_body_span(bodies: String, name: String) -> String {
+    let mut rest: String = bodies;
+    while rest != "" {
+        let at: Int = str_index_of(rest, "\n");
+        let row: String = if at < 0 { rest } else { str_slice(rest, 0, at) };
+        if field_at(row, 0) == name { return row; }
+        if at < 0 { return ""; }
+        rest = str_slice(rest, at + 1, chars_len(rest));
+    }
+    return "";
+}
+
+pub fn ws_struct_field(structs: String, sname: String, fname: String) -> String {
+    let mut rest: String = structs;
+    while rest != "" {
+        let at: Int = str_index_of(rest, "\n");
+        let row: String = if at < 0 { rest } else { str_slice(rest, 0, at) };
+        if field_at(row, 0) == sname && field_at(row, 1) == fname { return row; }
+        if at < 0 { return ""; }
+        rest = str_slice(rest, at + 1, chars_len(rest));
+    }
+    return "";
+}
+
+pub fn ws_struct_size(structs: String, sname: String) -> Int {
+    let mut rest: String = structs;
+    let mut max: Int = 0;
+    while rest != "" {
+        let at: Int = str_index_of(rest, "\n");
+        let row: String = if at < 0 { rest } else { str_slice(rest, 0, at) };
+        if field_at(row, 0) == sname { max = max + 4; }
+        if at < 0 { rest = ""; } else { rest = str_slice(rest, at + 1, chars_len(rest)); }
+    }
+    return max;
+}
+
+pub fn ws_env_get(env: String, name: String) -> String {
+    let mut rest: String = env;
+    let mut got: String = "";
+    while rest != "" {
+        let at: Int = str_index_of(rest, "\n");
+        let row: String = if at < 0 { rest } else { str_slice(rest, 0, at) };
+        if field_at(row, 0) == name { got = field_at(row, 1) + "\t" + field_at(row, 2); }
+        if at < 0 { return got; }
+        rest = str_slice(rest, at + 1, chars_len(rest));
+    }
+    return got;
+}
+
+pub fn ws_env_put(env: String, name: String, idx: Int, code: String) -> String {
+    return env + name + "\t" + idx.to_string() + "\t" + code + "\n";
+}
+
+pub fn ws_scan_locals(toks: List[String], pos: Int, end: Int, acc: String) -> String {
+    let mut out: String = acc;
+    let mut i: Int = pos;
+    while i < end {
+        let k: String = ws_k(toks, i);
+        if k == "KW_LET" {
+            let mut j: Int = i + 1;
+            if ws_k(toks, j) == "KW_MUT" { j = j + 1; }
+            if ws_k(toks, j) == "IDENT" {
+                out = ws_acc_add(out, ws_t(toks, j));
+                i = j + 1;
+            } else {
+                i = i + 1;
+            }
+        } else {
+            i = i + 1;
+        }
+    }
+    return out;
+}
+
+pub fn ws_acc_add(acc: String, name: String) -> String {
+    if str_index_of(acc, "\n" + name + "\n") >= 0 { return acc; }
+    return acc + name + "\n";
+}

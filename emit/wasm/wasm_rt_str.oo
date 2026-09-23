@@ -1,0 +1,106 @@
+// # WASM string runtime helpers
+//
+// Logline: Concat allocates and copies; equal compares lengths then bytes.
+//
+// Setup: Strings are fatptr records with ptr and len. Copy uses byte loops.
+//
+// Beats:
+//   1. ws_rt_str_cat joins two strings into one fresh record.
+//   2. ws_rt_str_eq returns one on full byte equality else zero.
+
+import "wasm_buf.oo";
+import "wasm_op.oo";
+
+pub fn ws_rt_str_cat(b: &mut WasmBuf) {
+    ws_get(b, 0);
+    ws_load(b, 4);
+    ws_set(b, 2);
+    ws_get(b, 1);
+    ws_load(b, 4);
+    ws_set(b, 3);
+    ws_get(b, 2);
+    ws_get(b, 3);
+    ws_add(b);
+    ws_set(b, 4);
+    ws_get(b, 4);
+    ws_call(b, 2);
+    ws_set(b, 5);
+    ws_get(b, 0);
+    ws_load(b, 0);
+    ws_set(b, 8);
+    ws_copy(b, 5, 8, 7, 2);
+    ws_get(b, 5);
+    ws_get(b, 2);
+    ws_add(b);
+    ws_set(b, 9);
+    ws_get(b, 1);
+    ws_load(b, 0);
+    ws_set(b, 8);
+    ws_copy(b, 9, 8, 7, 3);
+    ws_const(b, 8);
+    ws_call(b, 2);
+    ws_set(b, 6);
+    ws_get(b, 6);
+    ws_get(b, 5);
+    ws_store(b, 0);
+    ws_get(b, 6);
+    ws_const(b, 4);
+    ws_add(b);
+    ws_get(b, 4);
+    ws_store(b, 0);
+    ws_get(b, 6);
+    ws_end(b);
+}
+
+pub fn ws_rt_str_eq(b: &mut WasmBuf) {
+    ws_get(b, 0);
+    ws_load(b, 4);
+    ws_set(b, 2);
+    ws_get(b, 1);
+    ws_load(b, 4);
+    ws_set(b, 3);
+    ws_get(b, 2);
+    ws_get(b, 3);
+    ws_ne(b);
+    ws_if(b);
+    ws_const(b, 0);
+    ws_return(b);
+    ws_end(b);
+    ws_get(b, 0);
+    ws_load(b, 0);
+    ws_set(b, 4);
+    ws_get(b, 1);
+    ws_load(b, 0);
+    ws_set(b, 5);
+    ws_const(b, 0);
+    ws_set(b, 6);
+    ws_block(b);
+    ws_loop(b);
+    ws_get(b, 6);
+    ws_get(b, 2);
+    ws_ge_s(b);
+    ws_br_if(b, 1);
+    ws_get(b, 4);
+    ws_get(b, 6);
+    ws_add(b);
+    ws_load8(b, 0);
+    ws_get(b, 5);
+    ws_get(b, 6);
+    ws_add(b);
+    ws_load8(b, 0);
+    ws_ne(b);
+    ws_if(b);
+    ws_const(b, 0);
+    ws_return(b);
+    ws_end(b);
+    ws_get(b, 6);
+    ws_const(b, 1);
+    ws_add(b);
+    ws_set(b, 6);
+    ws_br(b, 0);
+    ws_end(b);
+    ws_end(b);
+    ws_const(b, 1);
+    ws_end(b);
+}
+

@@ -1,0 +1,255 @@
+// # WASM typed expression lowering
+//
+// Logline: Climbing parser over token kinds emits stack code with a type code.
+//
+// Setup: Values are one i32. Codes are i, s, l, r, t, v. Fail closed.
+//
+// Beats:
+//   1. One climb loop covers compare, add, and mul tiers by precedence.
+//   2. Plus and equals overload on strings through runtime helpers.
+//   3. Calls, methods, fields, structs, and results lower by kind dispatch.
+
+import "lex/token_fmt.oo";
+import "wasm_buf.oo";
+import "wasm_op.oo";
+import "wasm_tok.oo";
+import "wasm_data.oo";
+import "wasm_fn.oo";
+import "wasm_bop.oo";
+import "lex/token_parse_int.oo";
+
+pub type WsCx = struct { depth: Int };
+pub type WsG = struct { env: String, fns: String, structs: String, order: String, arity: Int, scratch: Int };
+pub fn ws_cx_new() -> WsCx { return WsCx { depth: 0 }; }
+pub fn ws_g_new(env: String, fns: String, structs: String, order: String, arity: Int, scratch: Int) -> WsG {
+    return WsG { env: env, fns: fns, structs: structs, order: order, arity: arity, scratch: scratch };
+}
+pub fn ws_local_idx(order: String, arity: Int, name: String) -> Int {
+    let mut rest: String = order;
+    let mut c: Int = 0;
+    while rest != "" {
+        if str_slice(rest, 0, 1) == "\n" {
+            rest = str_slice(rest, 1, chars_len(rest));
+            continue;
+        }
+        let at: Int = str_index_of(rest, "\n");
+        let nm: String = if at < 0 { rest } else { str_slice(rest, 0, at) };
+        if nm == name { return arity + c; }
+        c = c + 1;
+        if at < 0 { return 0 - 1; }
+        rest = str_slice(rest, at + 1, chars_len(rest));
+    }
+    return 0 - 1;
+}
+pub fn ws_pack(end: Int, code: String) -> String {
+    return end.to_string() + "\t" + code;
+}
+pub fn ws_expr(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &WsG, lits: &mut WsLits, cx: &mut WsCx) -> String { return ws_climb(b, toks, pos, n, g, lits, cx, 0); }
+pub fn ws_climb(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &WsG, lits: &mut WsLits, cx: &mut WsCx, minp: Int) -> String {
+    let a: String = ws_unary(b, toks, pos, n, g, lits, cx);
+    let mut p: Int = ws_un_pos(a);
+    let mut ty: String = ws_un_ty(a);
+    while p < n {
+        let pr: Int = ws_prec(ws_k(toks, p));
+        if pr < 0 || pr < minp {
+            break;
+        }
+        let k: String = ws_k(toks, p);
+        let r: String = ws_climb(b, toks, p + 1, n, g, lits, cx, pr + 1);
+        ty = ws_bin(b, toks, p, k, ty, ws_un_ty(r));
+        p = ws_un_pos(r);
+    }
+    return ws_pack(p, ty);
+}
+pub fn ws_unary(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &WsG, lits: &mut WsLits, cx: &mut WsCx) -> String {
+    if pos < n && ws_k(toks, pos) == "MINUS" {
+        ws_const(b, 0);
+        let r: String = ws_unary(b, toks, pos + 1, n, g, lits, cx);
+        if ws_un_ty(r) != "i" {
+            ws_fail(ws_line(toks, pos), "neg type");
+        }
+        ws_sub(b);
+        return ws_pack(ws_un_pos(r), "i");
+    }
+    return ws_postfix(b, toks, pos, n, g, lits, cx);
+}
+pub fn ws_postfix(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &WsG, lits: &mut WsLits, cx: &mut WsCx) -> String {
+    let a: String = ws_primary(b, toks, pos, n, g, lits, cx);
+    let mut p: Int = ws_un_pos(a);
+    let mut ty: String = ws_un_ty(a);
+    while p < n && ws_k(toks, p) == "DOT" {
+        if p + 1 >= n || ws_k(toks, p + 1) != "IDENT" {
+            ws_fail(ws_line(toks, p), "dot name");
+        }
+        let m: String = ws_t(toks, p + 1);
+        if p + 2 < n && ws_k(toks, p + 2) == "LPAREN" {
+            if p + 3 >= n || ws_k(toks, p + 3) != "RPAREN" {
+                ws_fail(ws_line(toks, p), "method args");
+            }
+            ty = ws_method(b, toks, p, ty, m);
+            p = p + 4;
+        } else {
+            ty = ws_field(b, toks, p, g.structs, ty, m);
+            p = p + 2;
+        }
+    }
+    return ws_pack(p, ty);
+}
+pub fn ws_primary(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &WsG, lits: &mut WsLits, cx: &mut WsCx) -> String {
+    let k: String = ws_k(toks, pos);
+    if k == "INT" { ws_const(b, parse_int(ws_t(toks, pos))); return ws_pack(pos + 1, "i"); }
+    if k == "KW_TRUE" { ws_const(b, 1); return ws_pack(pos + 1, "i"); }
+    if k == "KW_FALSE" { ws_const(b, 0); return ws_pack(pos + 1, "i"); }
+    if k == "STRING" {
+        let idx: Int = ws_lit_add(lits, ws_t(toks, pos));
+        ws_const(b, ws_lit_rec_addr(lits, idx));
+        return ws_pack(pos + 1, "s");
+    }
+    if k == "LPAREN" {
+        let r: String = ws_expr(b, toks, pos + 1, n, g, lits, cx);
+        let p: Int = ws_un_pos(r);
+        if p >= n || ws_k(toks, p) != "RPAREN" {
+            ws_fail(ws_line(toks, pos), "close paren");
+        }
+        return ws_pack(p + 1, ws_un_ty(r));
+    }
+    if k == "IDENT" {
+        return ws_ident(b, toks, pos, n, g, lits, cx);
+    }
+    ws_fail(ws_line(toks, pos), "expr " + k);
+    return ws_pack(pos + 1, "?");
+}
+pub fn ws_ident(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &WsG, lits: &mut WsLits, cx: &mut WsCx) -> String {
+    let t: String = ws_t(toks, pos);
+    if pos + 1 < n && ws_k(toks, pos + 1) == "LPAREN" {
+        if t == "Ok" { return ws_result_new(b, toks, pos, n, g, lits, cx, 0); }
+        if t == "Err" { return ws_result_new(b, toks, pos, n, g, lits, cx, 1); }
+        return ws_call_global(b, toks, pos, n, g, lits, cx, t);
+    }
+    if pos + 1 < n && ws_k(toks, pos + 1) == "LBRACE" && ws_struct_size(g.structs, t) > 0 {
+        return ws_struct_new(b, toks, pos, n, g, lits, cx, t);
+    }
+    let got: String = ws_env_get(g.env, t);
+    if got == "" {
+        ws_fail(ws_line(toks, pos), "unknown " + t);
+    }
+    ws_get(b, parse_int(field_at(got, 0)));
+    return ws_pack(pos + 1, field_at(got, 1));
+}
+pub fn ws_call_global(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &WsG, lits: &mut WsLits, cx: &mut WsCx, name: String) -> String {
+    let mut p: Int = pos + 2;
+    let mut nargs: Int = 0;
+    let mut c0: String = "?";
+    let mut c1: String = "?";
+    while p < n && ws_k(toks, p) != "RPAREN" {
+        let r: String = ws_expr(b, toks, p, n, g, lits, cx);
+        p = ws_un_pos(r);
+        if nargs == 0 { c0 = ws_un_ty(r); }
+        if nargs == 1 { c1 = ws_un_ty(r); }
+        nargs = nargs + 1;
+        if p < n && ws_k(toks, p) == "COMMA" { p = p + 1; }
+    }
+    if p >= n {
+        ws_fail(ws_line(toks, pos), "close call");
+    }
+    let end: Int = p + 1;
+    if name == "list_new" {
+        ws_call(b, 7);
+        return ws_pack(end, "l[?]");
+    }
+    if name == "list_push" {
+        ws_call(b, 8);
+        let mut e: String = ws_elem(c0);
+        if e == "?" {
+            e = c1;
+        }
+        return ws_pack(end, "l[" + e + "]");
+    }
+    if name == "list_get" {
+        ws_set(b, g.scratch + 1);
+        ws_set(b, g.scratch);
+        ws_get(b, g.scratch);
+        ws_load(b, 0);
+        ws_get(b, g.scratch + 1);
+        ws_const(b, 4);
+        ws_mul(b);
+        ws_add(b);
+        ws_load(b, 0);
+        return ws_pack(end, ws_elem(c0));
+    }
+    if name == "list_len" {
+        ws_load(b, 4);
+        return ws_pack(end, "i");
+    }
+    if name == "chars_len" {
+        ws_load(b, 4);
+        return ws_pack(end, "i");
+    }
+    let row: String = ws_fn_row(g.fns, name);
+    if row == "" {
+        ws_fail(ws_line(toks, pos), "call " + name);
+    }
+    if parse_int(field_at(row, 1)) != nargs {
+        ws_fail(ws_line(toks, pos), "arity " + name);
+    }
+    ws_call(b, parse_int(field_at(row, 3)));
+    return ws_pack(end, field_at(row, 2));
+}
+pub fn ws_result_new(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &WsG, lits: &mut WsLits, cx: &mut WsCx, tag: Int) -> String {
+    if cx.depth > 0 {
+        ws_fail(ws_line(toks, pos), "nested construct");
+    }
+    cx.depth = cx.depth + 1;
+    let r: String = ws_expr(b, toks, pos + 2, n, g, lits, cx);
+    let p: Int = ws_un_pos(r);
+    if p >= n || ws_k(toks, p) != "RPAREN" {
+        ws_fail(ws_line(toks, pos), "close result");
+    }
+    let pay: String = ws_un_ty(r);
+    ws_set(b, g.scratch + 1);
+    ws_const(b, 8);
+    ws_call(b, 2);
+    ws_set(b, g.scratch);
+    ws_get(b, g.scratch);
+    ws_const(b, tag);
+    ws_store(b, 0);
+    ws_get(b, g.scratch);
+    ws_get(b, g.scratch + 1);
+    ws_store(b, 4);
+    ws_get(b, g.scratch);
+    cx.depth = cx.depth - 1;
+    if tag == 0 {
+        return ws_pack(p + 1, "r[" + pay + ",?]");
+    }
+    return ws_pack(p + 1, "r[?," + pay + "]");
+}
+pub fn ws_struct_new(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &WsG, lits: &mut WsLits, cx: &mut WsCx, sname: String) -> String {
+    if cx.depth > 0 {
+        ws_fail(ws_line(toks, pos), "nested construct");
+    }
+    cx.depth = cx.depth + 1;
+    ws_const(b, ws_struct_size(g.structs, sname));
+    ws_call(b, 2);
+    ws_set(b, g.scratch);
+    let mut p: Int = pos + 2;
+    while p < n && ws_k(toks, p) != "RBRACE" {
+        if ws_k(toks, p) != "IDENT" || ws_k(toks, p + 1) != "COLON" {
+            ws_fail(ws_line(toks, p), "struct field");
+        }
+        let row: String = ws_struct_field(g.structs, sname, ws_t(toks, p));
+        if row == "" {
+            ws_fail(ws_line(toks, p), "unknown field");
+        }
+        ws_get(b, g.scratch);
+        let r: String = ws_expr(b, toks, p + 2, n, g, lits, cx);
+        ws_store(b, parse_int(field_at(row, 2)));
+        p = ws_un_pos(r);
+        if p < n && ws_k(toks, p) == "COMMA" { p = p + 1; }
+    }
+    if p >= n {
+        ws_fail(ws_line(toks, pos), "close struct");
+    }
+    ws_get(b, g.scratch);
+    cx.depth = cx.depth - 1;
+    return ws_pack(p + 1, "t:" + sname);
+}

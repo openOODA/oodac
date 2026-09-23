@@ -1,0 +1,97 @@
+// # WASM string literal table and static data
+//
+// Logline: Dedup string literals once, then lay raw bytes plus fatptr records.
+//
+// Setup: Literals are raw bytes in one buffer. Rows hold start and length.
+//
+// Beats:
+//   1. ws_lit_add dedups by byte compare and returns the literal index.
+//   2. ws_lit_raw_addr and ws_lit_rec_addr map an index to addresses.
+//   3. ws_heap_base aligns the first free heap address past statics.
+
+import "wasm_tok.oo";
+import "lex/token_parse_int.oo";
+
+pub type WsLits = struct { bytes: List[Int], rows: String, count: Int };
+
+pub fn ws_lits_new() -> WsLits {
+    return WsLits { bytes: bytes_new(), rows: "", count: 0 };
+}
+
+pub fn ws_line_at(rows: String, idx: Int) -> String {
+    let mut rest: String = rows;
+    let mut i: Int = 0;
+    while i < idx {
+        let at: Int = str_index_of(rest, "\n");
+        if at < 0 { return ""; }
+        rest = str_slice(rest, at + 1, chars_len(rest));
+        i = i + 1;
+    }
+    let at: Int = str_index_of(rest, "\n");
+    if at < 0 { return rest; }
+    return str_slice(rest, 0, at);
+}
+
+pub fn ws_lit_start(lits: &mut WsLits, idx: Int) -> Int {
+    return ws_un_pos(ws_line_at(lits.rows, idx));
+}
+
+pub fn ws_lit_len(lits: &mut WsLits, idx: Int) -> Int {
+    let row: String = ws_line_at(lits.rows, idx);
+    let t: Int = str_index_of(row, "\t");
+    return parse_int(str_slice(row, t + 1, chars_len(row)));
+}
+
+pub fn ws_lit_add(lits: &mut WsLits, s: String) -> Int {
+    let nb: Int = bytes_len(s);
+    let mut i: Int = 0;
+    while i < lits.count {
+        let st: Int = ws_lit_start(lits, i);
+        if ws_lit_len(lits, i) == nb {
+            let mut same: Bool = true;
+            let mut j: Int = 0;
+            while j < nb {
+                if list_get(lits.bytes, st + j) != byte_at(s, j) { same = false; }
+                j = j + 1;
+            }
+            if same { return i; }
+        }
+        i = i + 1;
+    }
+    let st: Int = list_len(lits.bytes);
+    let mut j: Int = 0;
+    while j < nb {
+        lits.bytes = bytes_push(lits.bytes, byte_at(s, j));
+        j = j + 1;
+    }
+    let sts: String = st.to_string();
+    let nbs: String = nb.to_string();
+    lits.rows = lits.rows + sts + "\t" + nbs + "\n";
+    lits.count = lits.count + 1;
+    return lits.count - 1;
+}
+
+pub fn ws_data_base() -> Int {
+    return 64;
+}
+
+pub fn ws_align4(x: Int) -> Int {
+    let r: Int = x - (x / 4) * 4;
+    return if r == 0 { x } else { x + 4 - r };
+}
+
+pub fn ws_rec_base(lits: &mut WsLits) -> Int {
+    return ws_align4(ws_data_base() + list_len(lits.bytes));
+}
+
+pub fn ws_heap_base(lits: &mut WsLits) -> Int {
+    return ws_rec_base(lits) + 8 * lits.count;
+}
+
+pub fn ws_lit_raw_addr(lits: &mut WsLits, idx: Int) -> Int {
+    return ws_data_base() + ws_lit_start(lits, idx);
+}
+
+pub fn ws_lit_rec_addr(lits: &mut WsLits, idx: Int) -> Int {
+    return ws_rec_base(lits) + 8 * idx;
+}

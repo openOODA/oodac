@@ -1,0 +1,206 @@
+// # WASM statement lowering over blocks
+//
+// Logline: Walk one fn body by statement kind into stack code with flat locals.
+//
+// Setup: Local indices come from the pre-scan order. Env maps names to slots.
+//
+// Beats:
+//   1. Let binds a slot and records its type code for later use.
+//   2. If, else-if, and while lower to structured control ops.
+//   3. Println dispatches on type; unknown statements fail closed.
+
+import "wasm_buf.oo";
+import "wasm_op.oo";
+import "wasm_tok.oo";
+import "wasm_data.oo";
+import "wasm_fn.oo";
+import "wasm_expr.oo";
+import "wasm_store.oo";
+
+pub fn ws_order_count(order: String) -> Int {
+    let mut rest: String = order;
+    let mut c: Int = 0;
+    while rest != "" {
+        if str_slice(rest, 0, 1) == "\n" {
+            rest = str_slice(rest, 1, chars_len(rest));
+            continue;
+        }
+        let at: Int = str_index_of(rest, "\n");
+        c = c + 1;
+        if at < 0 { return c; }
+        rest = str_slice(rest, at + 1, chars_len(rest));
+    }
+    return c;
+}
+
+pub fn ws_stmt_block(b: &mut WasmBuf, toks: List[String], pos: Int, end: Int, n: Int, g: &WsG, lits: &mut WsLits, cx: &mut WsCx, ret: String) -> String {
+    let mut p: Int = pos;
+    let mut env: String = g.env;
+    while p < end {
+        let k: String = ws_k(toks, p);
+        if k == "SEMI" {
+            p = p + 1;
+        } else if k == "RBRACE" || k == "EOF" {
+            return ws_block_pack(p, env);
+        } else if k == "KW_LET" {
+            let r: String = ws_let(b, toks, p, n, g, env, lits, cx);
+            p = ws_un_pos(r);
+            env = ws_un_ty(r);
+        } else if k == "KW_IF" {
+            let r: String = ws_stmt_if(b, toks, p, n, g, env, lits, cx, ret);
+            p = ws_un_pos(r);
+            env = ws_un_ty(r);
+        } else if k == "KW_WHILE" {
+            let r: String = ws_stmt_while(b, toks, p, n, g, env, lits, cx, ret);
+            p = ws_un_pos(r);
+            env = ws_un_ty(r);
+        } else if k == "KW_RETURN" {
+            p = ws_stmt_return(b, toks, p, n, g, env, lits, cx, ret);
+        } else if k == "LBRACE" {
+            let r: String = ws_stmt_block(b, toks, p + 1, n, n, ws_g_env(g, env), lits, cx, ret);
+            p = ws_un_pos(r) + 1;
+            env = ws_un_ty(r);
+        } else if k == "IDENT" && ws_t(toks, p) == "println" {
+            p = ws_println(b, toks, p, n, g, env, lits, cx);
+        } else if k == "IDENT" {
+            let r: String = ws_assign(b, toks, p, n, g, env, lits, cx);
+            p = ws_un_pos(r);
+            env = ws_un_ty(r);
+        } else {
+            ws_fail(ws_line(toks, p), "stmt " + k);
+            p = p + 1;
+        }
+    }
+    return ws_block_pack(p, env);
+}
+
+pub fn ws_let(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &WsG, env: String, lits: &mut WsLits, cx: &mut WsCx) -> String {
+    let mut p: Int = pos + 1;
+    if p < n && ws_k(toks, p) == "KW_MUT" { p = p + 1; }
+    if p >= n || ws_k(toks, p) != "IDENT" {
+        ws_fail(ws_line(toks, pos), "let name");
+    }
+    let nm: String = ws_t(toks, p);
+    p = p + 1;
+    let mut ann: String = "?";
+    if p < n && ws_k(toks, p) == "COLON" {
+        let t: String = ws_read_ty(toks, p + 1, n);
+        ann = ws_un_ty(t);
+        p = ws_un_pos(t);
+    }
+    if p >= n || ws_k(toks, p) != "EQ" {
+        ws_fail(ws_line(toks, pos), "let eq");
+    }
+    let gg: WsG = ws_g_new(env, g.fns, g.structs, g.order, g.arity, g.scratch);
+    let r: String = ws_expr(b, toks, p + 1, n, gg, lits, cx);
+    p = ws_un_pos(r);
+    if p < n && ws_k(toks, p) == "SEMI" { p = p + 1; }
+    let mut code: String = ws_un_ty(r);
+    if ann != "?" && ann != code && str_index_of(ann, "?") < 0 && str_index_of(code, "?") < 0 {
+        ws_fail(ws_line(toks, pos), "let type");
+    }
+    if ann != "?" && str_index_of(ann, "?") < 0 { code = ann; }
+    let idx: Int = ws_local_idx(g.order, g.arity, nm);
+    if idx < 0 {
+        ws_fail(ws_line(toks, pos), "let slot " + nm);
+    }
+    ws_set(b, idx);
+    return ws_block_pack(p, ws_env_put(env, nm, idx, code));
+}
+
+pub fn ws_stmt_if(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &WsG, env: String, lits: &mut WsLits, cx: &mut WsCx, ret: String) -> String {
+    let gg: WsG = ws_g_new(env, g.fns, g.structs, g.order, g.arity, g.scratch);
+    let c: String = ws_expr(b, toks, pos + 1, n, gg, lits, cx);
+    if ws_un_ty(c) != "i" {
+        ws_fail(ws_line(toks, pos), "if cond");
+    }
+    let then: Int = ws_un_pos(c);
+    if then >= n || ws_k(toks, then) != "LBRACE" {
+        ws_fail(ws_line(toks, pos), "if brace");
+    }
+    ws_if(b);
+    let t: String = ws_stmt_block(b, toks, then + 1, n, n, ws_g_new(env, g.fns, g.structs, g.order, g.arity, g.scratch), lits, cx, ret);
+    let mut p: Int = ws_un_pos(t) + 1;
+    let mut env2: String = env + "";
+    if p < n && ws_k(toks, p) == "KW_ELSE" {
+        ws_else(b);
+        if p + 1 < n && ws_k(toks, p + 1) == "KW_IF" {
+            let r: String = ws_stmt_if(b, toks, p + 1, n, g, env, lits, cx, ret);
+            p = ws_un_pos(r);
+            env2 = ws_un_ty(r);
+        } else {
+            if p + 1 >= n || ws_k(toks, p + 1) != "LBRACE" {
+                ws_fail(ws_line(toks, p), "else brace");
+            }
+            let e: String = ws_stmt_block(b, toks, p + 2, n, n, ws_g_new(env, g.fns, g.structs, g.order, g.arity, g.scratch), lits, cx, ret);
+            p = ws_un_pos(e) + 1;
+            env2 = env;
+        }
+    }
+    ws_end(b);
+    return ws_block_pack(p, env2);
+}
+
+pub fn ws_stmt_while(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &WsG, env: String, lits: &mut WsLits, cx: &mut WsCx, ret: String) -> String {
+    let gg: WsG = ws_g_new(env, g.fns, g.structs, g.order, g.arity, g.scratch);
+    ws_block(b);
+    ws_loop(b);
+    let c: String = ws_expr(b, toks, pos + 1, n, gg, lits, cx);
+    if ws_un_ty(c) != "i" {
+        ws_fail(ws_line(toks, pos), "while cond");
+    }
+    let top: Int = ws_un_pos(c);
+    if top >= n || ws_k(toks, top) != "LBRACE" {
+        ws_fail(ws_line(toks, pos), "while brace");
+    }
+    ws_eqz(b);
+    ws_br_if(b, 1);
+    let t: String = ws_stmt_block(b, toks, top + 1, n, n, ws_g_new(env, g.fns, g.structs, g.order, g.arity, g.scratch), lits, cx, ret);
+    let p: Int = ws_un_pos(t) + 1;
+    ws_br(b, 0);
+    ws_end(b);
+    ws_end(b);
+    return ws_block_pack(p, env);
+}
+
+pub fn ws_stmt_return(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &WsG, env: String, lits: &mut WsLits, cx: &mut WsCx, ret: String) -> Int {
+    let mut p: Int = pos + 1;
+    if p < n && ws_k(toks, p) == "SEMI" {
+        if ret != "v" {
+            ws_fail(ws_line(toks, pos), "return value");
+        }
+        ws_return(b);
+        return p + 1;
+    }
+    if ret == "v" {
+        ws_fail(ws_line(toks, pos), "void value");
+    }
+    let gg: WsG = ws_g_new(env, g.fns, g.structs, g.order, g.arity, g.scratch);
+    let r: String = ws_expr(b, toks, p, n, gg, lits, cx);
+    p = ws_un_pos(r);
+    if p < n && ws_k(toks, p) == "SEMI" { p = p + 1; }
+    ws_return(b);
+    return p;
+}
+
+pub fn ws_println(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &WsG, env: String, lits: &mut WsLits, cx: &mut WsCx) -> Int {
+    let gg: WsG = ws_g_new(env, g.fns, g.structs, g.order, g.arity, g.scratch);
+    let r: String = ws_expr(b, toks, pos + 2, n, gg, lits, cx);
+    let p: Int = ws_un_pos(r);
+    if p >= n || ws_k(toks, p) != "RPAREN" {
+        ws_fail(ws_line(toks, pos), "println close");
+    }
+    let mut q: Int = p + 1;
+    if q < n && ws_k(toks, q) == "SEMI" { q = q + 1; }
+    let code: String = ws_un_ty(r);
+    if code == "i" {
+        ws_call(b, 4);
+        return q;
+    }
+    if code == "s" {
+        ws_call(b, 3);
+        return q;
+    }
+    ws_fail(ws_line(toks, pos), "println type");
+    return q;
+}

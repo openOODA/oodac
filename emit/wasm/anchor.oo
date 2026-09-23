@@ -2,9 +2,9 @@
 //
 // Logline: Re-export wasm_emit_program. Concat skips *anchor.oo.
 //
-// Setup: Bodies live in wasm_emit.oo.
+// Setup: Bodies live in wasm_emit.oo plus typed walkers.
 //
 // Beats:
-//   1. Import wasm_emit.oo.
+//   1. Import the direct emitter surface.
 
 import "wasm_emit.oo";

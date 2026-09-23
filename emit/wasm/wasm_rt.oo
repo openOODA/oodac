@@ -1,0 +1,169 @@
+// # WASM runtime helpers for strings and lists
+//
+// Logline: Bump alloc, print, concat, compare, and list growth as fixed bodies.
+//
+// Setup: Statics live below 64. iovec is at 0, int digits grow down from 48.
+//
+// Beats:
+//   1. ws_rt_alloc bumps the heap global with four-byte alignment.
+//   2. Print helpers write through fd_write plus a newline tail.
+//   3. Concat, equal, and push copy bytes through one shared loop shape.
+
+import "wasm_buf.oo";
+import "wasm_op.oo";
+
+pub fn ws_nl(b: &mut WasmBuf) {
+    ws_const(b, 16);
+    ws_const(b, 10);
+    ws_store8(b, 0);
+    ws_const(b, 0);
+    ws_const(b, 16);
+    ws_store(b, 0);
+    ws_const(b, 4);
+    ws_const(b, 1);
+    ws_store(b, 0);
+    ws_const(b, 1);
+    ws_const(b, 0);
+    ws_const(b, 1);
+    ws_const(b, 8);
+    ws_call(b, 0);
+    ws_drop(b);
+}
+
+pub fn ws_copy(b: &mut WasmBuf, dst: Int, src: Int, idx: Int, len: Int) {
+    ws_const(b, 0);
+    ws_set(b, idx);
+    ws_block(b);
+    ws_loop(b);
+    ws_get(b, idx);
+    ws_get(b, len);
+    ws_ge_s(b);
+    ws_br_if(b, 1);
+    ws_get(b, dst);
+    ws_get(b, idx);
+    ws_add(b);
+    ws_get(b, src);
+    ws_get(b, idx);
+    ws_add(b);
+    ws_load8(b, 0);
+    ws_store8(b, 0);
+    ws_get(b, idx);
+    ws_const(b, 1);
+    ws_add(b);
+    ws_set(b, idx);
+    ws_br(b, 0);
+    ws_end(b);
+    ws_end(b);
+}
+
+pub fn ws_rt_alloc(b: &mut WasmBuf) {
+    ws_gget(b, 0);
+    ws_set(b, 1);
+    ws_gget(b, 0);
+    ws_get(b, 0);
+    ws_const(b, 3);
+    ws_add(b);
+    ws_const(b, 0 - 4);
+    ws_and(b);
+    ws_add(b);
+    ws_gset(b, 0);
+    ws_get(b, 1);
+    ws_end(b);
+}
+
+pub fn ws_rt_print_str(b: &mut WasmBuf) {
+    ws_get(b, 0);
+    ws_load(b, 0);
+    ws_set(b, 1);
+    ws_get(b, 0);
+    ws_load(b, 4);
+    ws_set(b, 2);
+    ws_const(b, 0);
+    ws_get(b, 1);
+    ws_store(b, 0);
+    ws_const(b, 4);
+    ws_get(b, 2);
+    ws_store(b, 0);
+    ws_const(b, 1);
+    ws_const(b, 0);
+    ws_const(b, 1);
+    ws_const(b, 8);
+    ws_call(b, 0);
+    ws_drop(b);
+    ws_nl(b);
+    ws_end(b);
+}
+
+pub fn ws_rt_print_int(b: &mut WasmBuf) {
+    ws_const(b, 48);
+    ws_set(b, 1);
+    ws_get(b, 0);
+    ws_eqz(b);
+    ws_if(b);
+    ws_const(b, 47);
+    ws_const(b, 48);
+    ws_store8(b, 0);
+    ws_const(b, 47);
+    ws_set(b, 1);
+    ws_else(b);
+    ws_get(b, 0);
+    ws_const(b, 0);
+    ws_lt_s(b);
+    ws_if(b);
+    ws_const(b, 1);
+    ws_set(b, 3);
+    ws_const(b, 0);
+    ws_get(b, 0);
+    ws_sub(b);
+    ws_set(b, 2);
+    ws_else(b);
+    ws_get(b, 0);
+    ws_set(b, 2);
+    ws_end(b);
+    ws_loop(b);
+    ws_get(b, 1);
+    ws_const(b, 1);
+    ws_sub(b);
+    ws_tee(b, 1);
+    ws_get(b, 2);
+    ws_const(b, 10);
+    ws_rem_u(b);
+    ws_const(b, 48);
+    ws_add(b);
+    ws_store8(b, 0);
+    ws_get(b, 2);
+    ws_const(b, 10);
+    ws_div_u(b);
+    ws_tee(b, 2);
+    ws_br_if(b, 0);
+    ws_end(b);
+    ws_get(b, 3);
+    ws_if(b);
+    ws_get(b, 1);
+    ws_const(b, 1);
+    ws_sub(b);
+    ws_tee(b, 1);
+    ws_const(b, 45);
+    ws_store8(b, 0);
+    ws_end(b);
+    ws_end(b);
+    ws_const(b, 48);
+    ws_get(b, 1);
+    ws_sub(b);
+    ws_set(b, 4);
+    ws_const(b, 0);
+    ws_get(b, 1);
+    ws_store(b, 0);
+    ws_const(b, 4);
+    ws_get(b, 4);
+    ws_store(b, 0);
+    ws_const(b, 1);
+    ws_const(b, 0);
+    ws_const(b, 1);
+    ws_const(b, 8);
+    ws_call(b, 0);
+    ws_drop(b);
+    ws_nl(b);
+    ws_end(b);
+}
+
