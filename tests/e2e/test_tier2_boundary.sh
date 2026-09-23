@@ -153,6 +153,18 @@ run_suite() {
     fi
   fi
   record_test "T2-B15" "Valid ADT match fixture passes check" "$b15"
+
+  # T2-B16: Smallest-program text size regression (budget lock)
+  # Canonical smallest program: bootstrap/corpus/emit-llvm/pass/fn_ret_int.oo.
+  # Metric: `size` text column of the `oodac build` ELF. Budget 22016 bytes
+  # re-baselined 2026-09-23 on oodac v0.5.0 + oodar v4.0.41 (measured 21000;
+  # the prior 19456 figure is recorded nowhere in this tree).
+  local b16=1 t16=0
+  if timeout 60s "$OODAC" build "$PROJECT_ROOT/bootstrap/corpus/emit-llvm/pass/fn_ret_int.oo" -o "$d/small.bin" >/dev/null 2>&1; then
+    t16=$(size "$d/small.bin" | awk 'NR==2 {print $1}')
+    if [[ "$t16" -le 22016 ]]; then b16=0; fi
+  fi
+  record_test "T2-B16" "Smallest-program text $t16 <= 22016 bytes" "$b16"
 }
 
 run_suite 1

@@ -166,9 +166,17 @@ Gate: this file's status says DONE with the R6 tag and log path.
 ## Status
 
 R0–R5: DONE (MIR lowering, typed allocas, checker facts, DWARF, niche opt).
-R6 (vs-rustc suite): DONE. Geometric mean ratio <= 1.00 verified on host.
-R7 (Declare 10/10): DONE. All ten checklist items PASS on Unique-bar TUs.
-Release Tag: v0.2.138
-Verification Log: tests/e2e/test_track1_runner.log
+R6 (vs-rustc suite): DONE. Geometric mean ratio 0.9034 <= 1.00 verified on
+host 2026-09-23 (6/6 stdout parity, median-of-5 Pass 1; rustc 1.96.1,
+clang 22.1.8, oodac v0.5.0).
+R7 (Declare 10/10): DONE (carried). Re-verified on v0.5.0 2026-09-23:
+tests/e2e/test_llvm_ir_props.sh PASS=106 FAIL=0.
+Release Tag: v0.5.0
+Verification Log: tests/e2e/test_size_memory_budgets.sh (8/8, Run 1 == Run 2),
+tests/e2e/test_tier2_boundary.sh T2-B16 (16/16, Run 1 == Run 2)
 Fixed-Point Rebuild: Stage 1 == Stage 2 verified (oodac_pure_build).
-Locked: 2026-09-18 against oodac v0.2.138.
+Size/Memory Lock: smallest-program text 21000 <= 22016 bytes; LL piece
+4273 <= 8192; ELF piece 32304 <= 33792; build peak 95364 kB and link peak
+95040 kB <= 131072 kB (oodar v4.0.41 liboodar-core.a; prior 19456 figure
+recorded nowhere in tree, budgets re-baselined from measurement).
+Locked: 2026-09-23 against oodac v0.5.0.

@@ -33,6 +33,7 @@ SUITE_LIST=(
   "test_tier1_r3_qa.sh"
   "test_tier1_r5_boot.sh"
   "test_tier2_boundary.sh"
+  "test_size_memory_budgets.sh"
   "test_tier3_cross.sh"
   "test_tier4_realworld.sh"
   "test_polyrepo_parity.sh"
