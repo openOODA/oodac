@@ -1,0 +1,39 @@
+// # ROCm short-circuit logic proof
+//
+// Logline: AND OR and NOT lower to native short-circuit ops on gfx1100.
+//
+// Setup: Plain main needs no GPU cap. Default rocm build. No emit/c import.
+//
+// Beats:
+//   1. AND of true and false prints 0.
+//   2. OR and NOT print 1 1 0.
+//   3. Chained comparisons print 7.
+
+// pass: logic executes on gfx1100
+pub fn main() {
+    let a: Bool = true;
+    let b: Bool = false;
+    if a && b {
+        println(1);
+    } else {
+        println(0);
+    }
+    if a || b {
+        println(1);
+    } else {
+        println(0);
+    }
+    if !b {
+        println(1);
+    } else {
+        println(0);
+    }
+    if !a {
+        println(1);
+    } else {
+        println(0);
+    }
+    if 1 < 2 && 3 < 4 {
+        println(7);
+    }
+}

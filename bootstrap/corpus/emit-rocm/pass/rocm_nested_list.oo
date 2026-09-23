@@ -1,0 +1,23 @@
+// # ROCm nested list construction proof
+//
+// Logline: Ok of list_new threads the element hint and runs on gfx1100.
+//
+// Setup: The LLVM backend cannot build this shape, so the proof is double-run
+//   identity plus exit zero on gfx1100 with no independent oracle.
+//   Default rocm build. No emit/c import.
+//
+// Beats:
+//   1. Nested Ok(list_new()) builds through hint threading.
+//   2. Ok arm reads length through val twice identically.
+
+// pass: nested list construction executes on gfx1100
+pub fn main() {
+    let r: Result[List[Int], String] = Ok(list_new());
+    if r.is_ok() {
+        println(list_len(r.val));
+    }
+    let e2: Result[List[Int], String] = Err("bad");
+    if e2.is_err() {
+        println(e2.err);
+    }
+}

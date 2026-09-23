@@ -10,6 +10,7 @@
 
 import "rocm_tok.oo";
 import "rocm_ty.oo";
+import "lex/token_parse_int.oo";
 
 pub fn rc_match_head(sty: String, top: String, sc: String, ind: String) -> String {
     let v: String = rc_var(sc);
@@ -41,4 +42,145 @@ pub fn rc_binder_decl(sty: String, ctor: String, binder: String, sc: String, ind
     if sty == "os" && ctor == "Some" { return ind + "std::string " + b + " = (" + v + ").val;\n"; }
     rc_fail(rc_line(toks, pos), "arm mismatch");
     return "";
+}
+
+pub fn rc_match_expr(toks: List[String], pos: Int, n: Int, env: String, fns: String, hint: String, capv: String) -> String {
+    if pos + 1 >= n || rc_k(toks, pos + 1) != "IDENT" {
+        rc_fail(rc_line(toks, pos), "match needs a variable");
+        return "0\t?\t";
+    }
+    let sc: String = rc_t(toks, pos + 1);
+    let sty: String = rc_env_get(env, sc);
+    if sty != "rss" && sty != "rli" && sty != "oi" && sty != "os" {
+        rc_fail(rc_line(toks, pos), "match needs a result or option");
+        return "0\t?\t";
+    }
+    let mut p: Int = pos + 2;
+    if p >= n || rc_k(toks, p) != "LBRACE" {
+        rc_fail(rc_line(toks, pos), "match needs arms");
+        return "0\t?\t";
+    }
+    let mend: Int = rc_skip_balanced(toks, p);
+    let a1: String = rc_expr_arm(toks, p + 1, mend, n);
+    let mut q: Int = parse_int(rc_tab_field(a1, 0));
+    if rc_k(toks, q) != "COMMA" {
+        rc_fail(rc_line(toks, pos), "match needs two arms");
+        return "0\t?\t";
+    }
+    let a2: String = rc_expr_arm(toks, q + 1, mend, n);
+    q = parse_int(rc_tab_field(a2, 0));
+    if rc_k(toks, q) == "COMMA" { q = q + 1; }
+    if q != mend - 1 {
+        rc_fail(rc_line(toks, pos), "match needs two arms");
+        return "0\t?\t";
+    }
+    let c1: String = rc_tab_field(a1, 1);
+    let c2: String = rc_tab_field(a2, 1);
+    let ok_pair: Bool = (c1 == "Ok" && c2 == "Err") || (c1 == "Err" && c2 == "Ok");
+    let opt_pair: Bool = (c1 == "Some" && c2 == "None") || (c1 == "None" && c2 == "Some");
+    if !ok_pair && !opt_pair {
+        rc_fail(rc_line(toks, pos), "match arms out of order");
+        return "0\t?\t";
+    }
+    let e1: String = rc_arm_expr(toks, pos, n, env, fns, capv, sty, sc, a1);
+    let e2: String = rc_arm_expr(toks, pos, n, env, fns, capv, sty, sc, a2);
+    let t1: String = rc_tab_field(e1, 1);
+    let t2: String = rc_tab_field(e2, 1);
+    if t1 != t2 {
+        rc_fail(rc_line(toks, pos), "match arm type");
+        return "0\t?\t";
+    }
+    if hint != "" && hint != t1 {
+        rc_fail(rc_line(toks, pos), "match type mismatch");
+        return "0\t?\t";
+    }
+    if rc_ctype(t1) == "" {
+        rc_fail(rc_line(toks, pos), "match type unsupported");
+        return "0\t?\t";
+    }
+    let v: String = rc_var(sc);
+    let cond: String = "((" + v + ").ok != 0)";
+    let first_ok: Bool = (c1 == "Ok" || c1 == "Some");
+    let ok_code: String = if first_ok { rc_tab_field(e1, 2) } else { rc_tab_field(e2, 2) };
+    let err_code: String = if first_ok { rc_tab_field(e2, 2) } else { rc_tab_field(e1, 2) };
+    let ok_decl: String = if first_ok { rc_tab_field(e1, 3) } else { rc_tab_field(e2, 3) };
+    let err_decl: String = if first_ok { rc_tab_field(e2, 3) } else { rc_tab_field(e1, 3) };
+    let ct: String = rc_ctype(t1);
+    let code: String = "(" + cond + " ? ([&]()->" + ct + "{" + ok_decl + "return (" + ok_code + ");})() : ([&]()->" + ct + "{" + err_decl + "return (" + err_code + ");})())";
+    return rc_e_pack(q + 1, t1, code);
+}
+
+fn rc_expr_arm(toks: List[String], q0: Int, mend: Int, n: Int) -> String {
+    if q0 >= mend || rc_k(toks, q0) != "IDENT" {
+        rc_fail(rc_line(toks, q0), "bad match arm");
+        return "0\t\t\t";
+    }
+    let ctor: String = rc_t(toks, q0);
+    let mut q: Int = q0 + 1;
+    let mut binder: String = "-";
+    if q < mend && rc_k(toks, q) == "LPAREN" {
+        if q + 1 >= mend || rc_k(toks, q + 1) != "IDENT" {
+            rc_fail(rc_line(toks, q), "arm needs a binder");
+            return "0\t\t\t";
+        }
+        binder = rc_t(toks, q + 1);
+        if q + 2 >= mend || rc_k(toks, q + 2) != "RPAREN" {
+            rc_fail(rc_line(toks, q), "arm binder unbalanced");
+            return "0\t\t\t";
+        }
+        q = q + 3;
+    }
+    if q >= mend || rc_k(toks, q) != "FATARROW" {
+        rc_fail(rc_line(toks, q), "arm needs =>");
+        return "0\t\t\t";
+    }
+    q = q + 1;
+    if q < mend && rc_k(toks, q) == "LBRACE" {
+        rc_fail(rc_line(toks, q), "match arm needs a value");
+        return "0\t\t\t";
+    }
+    let bs: Int = q;
+    let mut r: Int = q;
+    let mut dp: Int = 0;
+    let mut db: Int = 0;
+    let mut dk: Int = 0;
+    while r < mend {
+        let k: String = rc_k(toks, r);
+        if dp == 0 && db == 0 && dk == 0 && (k == "COMMA" || k == "RBRACE") {
+            return r.to_string() + "\t" + ctor + "\t" + binder + "\t" + bs.to_string();
+        }
+        if k == "LPAREN" { dp = dp + 1; }
+        if k == "RPAREN" { dp = dp - 1; }
+        if k == "LBRACE" { db = db + 1; }
+        if k == "RBRACE" { db = db - 1; }
+        if k == "LBRACKET" { dk = dk + 1; }
+        if k == "RBRACKET" { dk = dk - 1; }
+        r = r + 1;
+    }
+    rc_fail(rc_line(toks, q), "arm body unbalanced");
+    return "0\t\t\t";
+}
+
+fn rc_arm_expr(toks: List[String], pos: Int, n: Int, env: String, fns: String, capv: String, sty: String, sc: String, arm: String) -> String {
+    let ctor: String = rc_tab_field(arm, 1);
+    let binder: String = rc_tab_field(arm, 2);
+    let bs: Int = parse_int(rc_tab_field(arm, 3));
+    let decl: String = rc_expr_binder(sty, ctor, binder, sc, toks, pos);
+    let aenv: String = rc_binder_env(env, sty, ctor, binder, toks, pos);
+    let e: String = rc_expr(toks, bs, n, aenv, fns, "", capv);
+    return rc_e_pos(e).to_string() + "\t" + rc_e_ty(e) + "\t" + rc_e_code(e) + "\t" + decl;
+}
+
+fn rc_expr_binder(sty: String, ctor: String, binder: String, sc: String, toks: List[String], pos: Int) -> String {
+    if ctor == "None" {
+        if binder != "" && binder != "-" {
+            rc_fail(rc_line(toks, pos), "none takes no binder");
+        }
+        return "";
+    }
+    if binder == "" || binder == "-" {
+        rc_fail(rc_line(toks, pos), "arm needs a binder");
+        return "";
+    }
+    return rc_binder_decl(sty, ctor, binder, sc, "", toks, pos);
 }

@@ -1,0 +1,63 @@
+// # ROCm string builtin lowering
+//
+// Logline: chars_len, char_at, and str_slice over std::string with guards.
+//
+// Setup: Args arrive pre-lowered as tab packs. Lengths are byte counts, which
+//   match the host runtime on ASCII subjects.
+//
+// Beats:
+//   1. chars_len reads vector size without a helper.
+//   2. char_at traps out-of-range indexes with a named error.
+//   3. str_slice yields empty unless 0<=st<=en<=len, mirroring the host.
+
+import "rocm_tok.oo";
+import "rocm_ty.oo";
+
+pub fn rc_apply_str(name: String, argstr: String, nargs: Int, line: Int) -> String {
+    if name == "chars_len" {
+        if nargs != 1 {
+            rc_fail(line, "chars_len takes one string");
+            return "0\t?\t";
+        }
+        if rc_tab_field(argstr, 1) != "s" {
+            rc_fail(line, "chars_len needs a string");
+            return "0\t?\t";
+        }
+        let x: String = rc_tab_field(argstr, 2);
+        return rc_e_pack(0, "i", "((long long)((" + x + ").size()))");
+    }
+    if name == "char_at" {
+        if nargs != 2 {
+            rc_fail(line, "char_at takes a string and an index");
+            return "0\t?\t";
+        }
+        if rc_tab_field(argstr, 1) != "s" || rc_tab_field(argstr, 4) != "i" {
+            rc_fail(line, "char_at needs a string and an int");
+            return "0\t?\t";
+        }
+        let xs: String = rc_tab_field(argstr, 2);
+        let xi: String = rc_tab_field(argstr, 5);
+        let bad: String = "(" + xi + " < 0 || (long long)(" + xi + ") >= (long long)((" + xs + ").size()))";
+        let trap: String = "(fprintf(stderr, \"ERR\\trocm\\tchar_at OOB\\n\"), exit(1), std::string())";
+        return rc_e_pack(0, "s", "(" + bad + " ? " + trap + " : ((" + xs + ").substr((size_t)(" + xi + "), 1)))");
+    }
+    if name == "str_slice" {
+        if nargs != 3 {
+            rc_fail(line, "str_slice takes a string and two bounds");
+            return "0\t?\t";
+        }
+        if rc_tab_field(argstr, 1) != "s" || rc_tab_field(argstr, 4) != "i" || rc_tab_field(argstr, 7) != "i" {
+            rc_fail(line, "str_slice needs a string and int bounds");
+            return "0\t?\t";
+        }
+        let ss: String = rc_tab_field(argstr, 2);
+        let sa: String = rc_tab_field(argstr, 5);
+        let sb: String = rc_tab_field(argstr, 8);
+        let len: String = "(long long)((" + ss + ").size())";
+        let bad2: String = "(" + sa + " < 0 || (" + sb + ") < (" + sa + ") || (" + sa + ") > " + len + " || (" + sb + ") > " + len + ")";
+        let good: String = "((" + ss + ").substr((size_t)(" + sa + "), (size_t)((" + sb + ") - (" + sa + "))))";
+        return rc_e_pack(0, "s", "(" + bad2 + " ? std::string() : " + good + ")");
+    }
+    rc_fail(line, "unsupported string op " + name);
+    return "0\t?\t";
+}

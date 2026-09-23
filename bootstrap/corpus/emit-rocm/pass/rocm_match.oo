@@ -1,0 +1,24 @@
+// # ROCm match expression proof
+//
+// Logline: Match expressions over results and options run on gfx1100.
+//
+// Setup: Ok-first and Err-first arms crossed with result and option shapes.
+//   Default rocm build. No emit/c import.
+//
+// Beats:
+//   1. Result match binds payloads and prints hello.
+//   2. Err-first arms print boom.
+//   3. Option match prints the int payload.
+
+// pass: match expressions execute on gfx1100
+pub fn main() {
+    let r: Result[String, String] = Ok("hello");
+    let m: String = match r { Ok(v) => v, Err(e) => e };
+    println(m);
+    let e2: Result[String, String] = Err("boom");
+    let s: String = match e2 { Err(x) => x, Ok(y) => y };
+    println(s);
+    let o: Option[Int] = Some(7);
+    let t: Int = match o { Some(v) => v, None => 0 };
+    println(t);
+}

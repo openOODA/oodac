@@ -114,8 +114,10 @@ fn rc_match(toks: List[String], pos: Int, n: Int, env: String, fns: String, capv
     p = p + 1;
     let a1: String = rc_arm(toks, p, mend, n, env, fns, capv, in_main, ret, ind + "  ", sc, sty);
     p = rc_s_pos(a1);
+    if p < mend && rc_k(toks, p) == "COMMA" { p = p + 1; }
     let a2: String = rc_arm(toks, p, mend, n, env, fns, capv, in_main, ret, ind + "  ", sc, sty);
     p = rc_s_pos(a2);
+    if p < mend && rc_k(toks, p) == "COMMA" { p = p + 1; }
     if p != mend {
         rc_fail(rc_line(toks, pos), "match needs two arms");
         return rc_s_pack(mend + 1, env, "");
@@ -178,7 +180,7 @@ fn rc_arm(toks: List[String], pos: Int, mend: Int, n: Int, env: String, fns: Str
     return rc_s_pack(p, env, ctor + "\t" + decl + "\t" + rc_s_text(body));
 }
 
-fn rc_binder_env(env: String, sty: String, ctor: String, binder: String, toks: List[String], pos: Int) -> String {
+pub fn rc_binder_env(env: String, sty: String, ctor: String, binder: String, toks: List[String], pos: Int) -> String {
     if binder == "" { return env; }
     if sty == "rss" { return rc_env_put(env, binder, "s"); }
     if sty == "rli" && ctor == "Ok" { return rc_env_put(env, binder, "li"); }

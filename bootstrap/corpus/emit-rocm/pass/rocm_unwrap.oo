@@ -1,0 +1,40 @@
+// # ROCm unwrap and field proof
+//
+// Logline: unwrap, is_ok, is_err, is_some, is_none, val, err run on gfx1100.
+//
+// Setup: make_ok returns Ok("hi"). Default rocm build. No emit/c import.
+//
+// Beats:
+//   1. String result unwraps and reads through val.
+//   2. List-result error reads through err.
+//   3. Option payload unwraps with some and none flags.
+
+// pass: unwrap and fields execute on gfx1100
+pub fn make_ok() -> Result[String, String] {
+    return Ok("hi");
+}
+
+pub fn main() {
+    let r: Result[String, String] = make_ok();
+    println(r.unwrap());
+    if r.is_ok() {
+        println(r.val);
+    }
+    if r.is_err() {
+        println("bad");
+    }
+    let e: Result[List[Int], String] = Err("nope");
+    println(e.err);
+    let o: Option[Int] = Some(5);
+    println(o.unwrap());
+    if o.is_some() {
+        println(1);
+    } else {
+        println(0);
+    }
+    if o.is_none() {
+        println(1);
+    } else {
+        println(0);
+    }
+}

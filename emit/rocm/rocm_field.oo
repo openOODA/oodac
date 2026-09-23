@@ -1,0 +1,91 @@
+// # ROCm field and method lowering
+//
+// Logline: One-level dot access over result and option shapes with traps.
+//
+// Setup: The receiver arrives lowered with its type code. Payloads copy by
+//   value; unwrap traps wrong-tag access with a named error.
+//
+// Beats:
+//   1. val and err read the payload member for their shapes.
+//   2. is_ok, is_err, is_some, and is_none read the ok flag.
+//   3. unwrap selects the payload or traps; unknown members fail closed.
+
+import "rocm_tok.oo";
+import "rocm_ty.oo";
+
+fn rc_field_shape(toks: List[String], pos: Int, ty: String) -> String {
+    if ty == "rss" || ty == "rli" || ty == "oi" || ty == "os" {
+        return ty;
+    }
+    rc_fail(rc_line(toks, pos), "field access unsupported");
+    return "";
+}
+
+pub fn rc_field(toks: List[String], pos: Int, n: Int, env: String, fns: String, r: String, capv: String) -> String {
+    let mut p: Int = rc_e_pos(r) + 1;
+    let ty: String = rc_e_ty(r);
+    let vc: String = rc_e_code(r);
+    if rc_k(toks, p) != "IDENT" {
+        rc_fail(rc_line(toks, pos), "field needs a name");
+        return "0\t?\t";
+    }
+    let m: String = rc_t(toks, p);
+    p = p + 1;
+    let is_call: Bool = p < n && rc_k(toks, p) == "LPAREN";
+    if is_call {
+        if p + 1 >= n || rc_k(toks, p + 1) != "RPAREN" {
+            rc_fail(rc_line(toks, pos), "method args unsupported");
+            return "0\t?\t";
+        }
+        p = p + 2;
+        let st: String = rc_field_shape(toks, pos, ty);
+        if st == "" {
+            return "0\t?\t";
+        }
+        if m == "is_ok" && (st == "rss" || st == "rli") { return rc_e_pack(p, "b", "(((" + vc + ").ok) != 0)"); }
+        if m == "is_err" && (st == "rss" || st == "rli") { return rc_e_pack(p, "b", "(((" + vc + ").ok) == 0)"); }
+        if m == "is_some" && (st == "oi" || st == "os") { return rc_e_pack(p, "b", "(((" + vc + ").ok) != 0)"); }
+        if m == "is_none" && (st == "oi" || st == "os") { return rc_e_pack(p, "b", "(((" + vc + ").ok) == 0)"); }
+        if m == "unwrap" { return rc_unwrap(toks, pos, st, vc, p); }
+        rc_fail(rc_line(toks, pos), "unsupported method " + m);
+        return "0\t?\t";
+    }
+    let st2: String = rc_field_shape(toks, pos, ty);
+    if st2 == "" {
+        return "0\t?\t";
+    }
+    if m == "val" {
+        if st2 == "rss" || st2 == "os" { return rc_e_pack(p, "s", "((" + vc + ").val)"); }
+        if st2 == "rli" { return rc_e_pack(p, "li", "((" + vc + ").vec)"); }
+        if st2 == "oi" { return rc_e_pack(p, "i", "((" + vc + ").val)"); }
+    }
+    if m == "err" {
+        if st2 == "rss" { return rc_e_pack(p, "s", "((" + vc + ").val)"); }
+        if st2 == "rli" { return rc_e_pack(p, "s", "((" + vc + ").err)"); }
+    }
+    rc_fail(rc_line(toks, pos), "unknown field " + m);
+    return "0\t?\t";
+}
+
+fn rc_unwrap(toks: List[String], pos: Int, st: String, vc: String, p: Int) -> String {
+    let line: Int = rc_line(toks, pos);
+    if st != "rss" && st != "rli" && st != "oi" && st != "os" {
+        rc_fail(line, "unwrap needs Result or Option");
+        return "0\t?\t";
+    }
+    let pay: String = rc_unwrap_pay(st, vc);
+    let pty: String = rc_unwrap_ty(st);
+    let trap: String = "(fprintf(stderr, \"ERR\\trocm\\tunwrap\\n\"), exit(1), (" + pay + "))";
+    return rc_e_pack(p, pty, "(((" + vc + ").ok) != 0 ? (" + pay + ") : " + trap + ")");
+}
+
+fn rc_unwrap_pay(st: String, vc: String) -> String {
+    if st == "rli" { return "(" + vc + ").vec"; }
+    return "(" + vc + ").val";
+}
+
+fn rc_unwrap_ty(st: String) -> String {
+    if st == "rli" { return "li"; }
+    if st == "oi" { return "i"; }
+    return "s";
+}

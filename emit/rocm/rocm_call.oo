@@ -82,6 +82,7 @@ pub fn rc_span_start(info: String, i: Int) -> Int {
 pub fn rc_call_kind(name: String) -> Int {
     if name == "list_new" { return 1; }
     if name == "list_push" { return 2; }
+    if name == "chars_len" || name == "char_at" || name == "str_slice" { return 8; }
     if name == "list_len" || name == "list_get" { return 3; }
     if name == "Some" || name == "None" || name == "Ok" || name == "Err" { return 4; }
     if name == "gpu_hip_try_launch" || name == "gpu_hip_vec_add" || name == "gpu_buffer_alloc" || name == "gpu_buffer_free" || name == "gpu_copy_h2d" || name == "gpu_copy_d2h" || name == "gpu_sync" || name == "gpu_init" { return 5; }

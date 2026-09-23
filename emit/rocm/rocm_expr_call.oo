@@ -1,0 +1,102 @@
+// # ROCm call and println statements
+//
+// Logline: User, list, constructor, gpu, device, and string calls plus println.
+//
+// Setup: Args arrive pre-lowered as tab packs. Hints thread let annotations
+//   into nested constructors. String ops lower through std::string.
+//
+// Beats:
+//   1. rc_call routes nine call kinds with fail-closed arity and types.
+//   2. Constructor hints derive from the outer result or option annotation.
+//   3. rc_println covers int, float, string, and bool payloads.
+
+import "rocm_tok.oo";
+import "rocm_ty.oo";
+import "rocm_buf.oo";
+import "rocm_call.oo";
+import "rocm_kernel.oo";
+import "rocm_device.oo";
+import "rocm_str.oo";
+import "lex/token_parse_int.oo";
+
+pub fn rc_call(toks: List[String], pos: Int, n: Int, env: String, fns: String, hint: String, capv: String) -> String {
+    let name: String = rc_t(toks, pos);
+    let line: Int = rc_line(toks, pos);
+    let info: String = rc_arg_spans(toks, pos, n);
+    let endp: Int = rc_span_end(info);
+    let nargs: Int = rc_span_nargs(info);
+    let kind: Int = rc_call_kind(name);
+    if kind == 1 {
+        if nargs == 0 && hint == "li" { return rc_e_pack(endp + 1, "li", "std::vector<long long>()"); }
+        if nargs == 0 && hint == "lf" { return rc_e_pack(endp + 1, "lf", "std::vector<double>()"); }
+        rc_fail(line, "list_new needs a typed let");
+        return "0\t?\t";
+    }
+    if kind == 2 {
+        rc_fail(line, "push is a statement");
+        return "0\t?\t";
+    }
+    let mut argstr: String = "";
+    let mut i: Int = 0;
+    while i < nargs {
+        let mut h: String = rc_arg_hint(name, i, fns);
+        if name == "Ok" && hint == "rss" { h = "s"; }
+        if name == "Ok" && hint == "rli" { h = "li"; }
+        if name == "Err" { h = "s"; }
+        if name == "Some" && hint == "oi" { h = "i"; }
+        if name == "Some" && hint == "os" { h = "s"; }
+        let a: String = rc_expr(toks, rc_span_start(info, i), n, env, fns, h, capv);
+        if i > 0 { argstr = argstr + "\t"; }
+        argstr = argstr + rc_e_pos(a).to_string() + "\t" + rc_e_ty(a) + "\t" + rc_e_code(a);
+        i = i + 1;
+    }
+    if kind == 3 {
+        let r: String = rc_apply_list(name, argstr, nargs, line);
+        return rc_e_pack(endp + 1, rc_e_ty(r), rc_e_code(r));
+    }
+    if kind == 4 {
+        let r2: String = rc_apply_ctor(name, argstr, nargs, hint, line);
+        return rc_e_pack(endp + 1, rc_e_ty(r2), rc_e_code(r2));
+    }
+    if kind == 5 {
+        if name == "gpu_hip_vec_add" && rc_k(toks, rc_span_start(info, 3)) != "IDENT" {
+            rc_fail(line, "vec_add output needs a variable");
+            return "0\t?\t";
+        }
+        if name == "gpu_copy_d2h" && rc_k(toks, rc_span_start(info, 1)) != "IDENT" {
+            rc_fail(line, "copy_d2h output needs a variable");
+            return "0\t?\t";
+        }
+        let r3: String = rc_gpu_call(name, argstr, nargs, capv, line);
+        return rc_e_pack(endp + 1, rc_e_ty(r3), rc_e_code(r3));
+    }
+    if kind == 6 {
+        let r4: String = rc_dev_call(name, argstr, nargs, capv, line);
+        return rc_e_pack(endp + 1, rc_e_ty(r4), rc_e_code(r4));
+    }
+    if kind == 8 {
+        let r5: String = rc_apply_str(name, argstr, nargs, line);
+        return rc_e_pack(endp + 1, rc_e_ty(r5), rc_e_code(r5));
+    }
+    let r6: String = rc_apply_user(name, argstr, nargs, fns, line);
+    return rc_e_pack(endp + 1, rc_e_ty(r6), rc_e_code(r6));
+}
+
+pub fn rc_println(toks: List[String], pos: Int, n: Int, env: String, fns: String, capv: String, ind: String) -> String {
+    let info: String = rc_arg_spans(toks, pos, n);
+    if rc_span_nargs(info) != 1 {
+        rc_fail(rc_line(toks, pos), "println takes one arg");
+        return rc_s_pack(pos + 1, env, "");
+    }
+    let a: String = rc_expr(toks, rc_span_start(info, 0), n, env, fns, "", capv);
+    let q: Int = rc_span_end(info) + 1;
+    let qq: Int = if q < n && rc_k(toks, q) == "SEMI" { q + 1 } else { q };
+    let at: String = rc_e_ty(a);
+    let ac: String = rc_e_code(a);
+    if at == "i" { return rc_s_pack(qq, env, ind + "printf(\"%lld\\n\", (long long)(" + ac + "));\n"); }
+    if at == "f" { return rc_s_pack(qq, env, ind + "printf(\"%g\\n\", (double)(" + ac + "));\n"); }
+    if at == "s" { return rc_s_pack(qq, env, ind + "{ std::string oo_t = (" + ac + "); fwrite(oo_t.data(), 1, oo_t.size(), stdout); putchar(10); }\n"); }
+    if at == "b" { return rc_s_pack(qq, env, ind + "printf(\"%s\\n\", (" + ac + ") ? \"true\" : \"false\");\n"); }
+    rc_fail(rc_line(toks, pos), "println type unsupported");
+    return rc_s_pack(qq, env, "");
+}

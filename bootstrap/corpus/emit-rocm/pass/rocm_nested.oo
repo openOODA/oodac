@@ -1,0 +1,31 @@
+// # ROCm nested construction proof
+//
+// Logline: Result constructors wrapping call payloads run on gfx1100.
+//
+// Setup: str_slice payloads nest inside Ok and Err with a match statement.
+//   Default rocm build. No emit/c import.
+//
+// Beats:
+//   1. Nested Ok(str_slice(..)) builds and unwraps.
+//   2. Nested Err(str_slice(..)) reads through err.
+//   3. Match statement prints the bound payload.
+
+// pass: nested construction executes on gfx1100
+pub fn main() {
+    let s: String = "hello world";
+    let r: Result[String, String] = Ok(str_slice(s, 0, 5));
+    println(r.unwrap());
+    let e: Result[String, String] = Err(str_slice(s, 6, 11));
+    if e.is_err() {
+        println(e.err);
+    }
+    let m: Result[String, String] = Ok("nested-ok");
+    match m {
+        Ok(v) => {
+            println(v);
+        },
+        Err(x) => {
+            println(x);
+        },
+    }
+}
