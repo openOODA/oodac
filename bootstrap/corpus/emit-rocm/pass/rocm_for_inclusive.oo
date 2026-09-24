@@ -1,0 +1,32 @@
+// # ROCm inclusive for-range loop proof
+//
+// Logline: Inclusive-range for loops lower to host for loops on gfx1100.
+//
+// Setup: Plain main needs no GPU cap. Default rocm build. No emit/c import.
+//
+// Beats:
+//   1. 0..=5 sums to 15 through the loop counter.
+//   2. An Int variable bound iterates inclusively to 6.
+//   3. Nested inclusive a/b loops accumulate the double sum 18.
+
+// pass: inclusive for-range loops execute on gfx1100
+pub fn main() {
+    let mut s: Int = 0;
+    for i in 0..=5 {
+        s = s + i;
+    }
+    println(s);
+    let m: Int = 3;
+    let mut u: Int = 0;
+    for k in 0..=m {
+        u = u + k;
+    }
+    println(u);
+    let mut t: Int = 0;
+    for a in 0..=2 {
+        for b in 0..=2 {
+            t = t + a + b;
+        }
+    }
+    println(t);
+}

@@ -1,0 +1,18 @@
+// # ROCm bool println probe
+//
+// Logline: Bool println prints 1/0, matching the llvm and wasm backends.
+//
+// Setup: Plain main needs no GPU cap. Default rocm build. No emit/c import.
+//
+// Beats:
+//   1. true prints 1 and false prints 0.
+//   2. Comparison results print 1 for holds and 0 for fails.
+//   3. Output equals the llvm oracle for the same program.
+
+// pass: bool println prints 1/0 on gfx1100
+pub fn main() {
+    println(true);
+    println(false);
+    println(1 < 2);
+    println(1 > 2);
+}

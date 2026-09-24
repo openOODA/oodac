@@ -125,6 +125,33 @@ regression_double_run() {
   fi
 }
 
+prove_output() {
+  local id="$1" src="$2" want="$3"
+  local d="$TMPDIR/$id"
+  mkdir -p "$d"
+  local r1="$d/run1.out" r2="$d/run2.out" exp="$d/expected.out"
+  printf '%s\n' "$want" > "$exp"
+  if ! timeout 300s "$OODAC" build --backend rocm "$src" -o "$d/prog.bin" >/dev/null 2>&1; then
+    record_test "$id" "rocm builds" 1
+    return
+  fi
+  if ! timeout 60s "$d/prog.bin" > "$r1" 2>&1; then
+    record_test "$id" "rocm runs on gfx1100" 1
+    return
+  fi
+  if ! timeout 60s "$d/prog.bin" > "$r2" 2>&1; then
+    record_test "$id" "rocm re-runs on gfx1100" 1
+    return
+  fi
+  if cmp -s "$r1" "$r2" && cmp -s "$r1" "$exp"; then
+    record_test "$id" "double-run matches expected output" 0
+  else
+    echo "    expected:"; head -n 10 "$exp" | sed 's/^/      /'
+    echo "    got:"; head -n 10 "$r1" | sed 's/^/      /'
+    record_test "$id" "double-run matches expected output" 1
+  fi
+}
+
 refusal_closed() {
   local id="$1" want="$2"
   shift 2
@@ -167,6 +194,9 @@ run_suite() {
   prove_against_llvm "ROCM-F09" "$llvm_pass/for_range_int.oo"
   prove_against_llvm "ROCM-F10" "$llvm_pass/for_range_sum.oo"
   prove_against_llvm "ROCM-F11" "$llvm_pass/for_nested_sum.oo"
+  prove_output "ROCM-F12" "$CORPUS/rocm_for_inclusive.oo" "$(printf '15\n6\n18\n')"
+  prove_output "ROCM-F13" "$CORPUS/rocm_for_shadow.oo" "$(printf '10\n100\n9\n')"
+  prove_against_llvm "ROCM-F14" "$CORPUS/rocm_bool_print.oo"
 
   cat > "$d/width.oo" << 'EOF'
 pub fn main() {
@@ -177,16 +207,16 @@ pub fn main() {
 }
 EOF
   refusal_closed "ROCM-X01" "$(printf 'ERR\trocm\tunsupported type u32')" "$d/width.oo"
-  cat > "$d/for_inclusive.oo" << 'EOF'
+  cat > "$d/for_norange.oo" << 'EOF'
 pub fn main() {
     let mut s = 0;
-    for i in 0..=5 {
+    for i in 5 {
         s = s + i;
     }
     println(s);
 }
 EOF
-  refusal_closed "ROCM-X02" "$(printf 'ERR\trocm\tfor range needs ..')" "$d/for_inclusive.oo"
+  refusal_closed "ROCM-X02" "$(printf 'ERR\trocm\tfor range needs ..')" "$d/for_norange.oo"
   cat > "$d/ris.oo" << 'EOF'
 pub fn main() {
     let o: Result[Int, String] = Ok(42);
@@ -204,17 +234,16 @@ pub fn main() {
 }
 EOF
   refusal_closed "ROCM-X04" "$(printf 'ERR\trocm\tunsupported type x')" "$d/struct.oo"
-  cat > "$d/forshadow.oo" << 'EOF'
+  cat > "$d/forstrbound.oo" << 'EOF'
 pub fn main() {
-    let i = 9;
     let mut s = 0;
-    for i in 0..3 {
+    for i in "a".."z" {
         s = s + i;
     }
     println(s);
 }
 EOF
-  refusal_closed "ROCM-X05" "$(printf 'ERR\trocm\tfor shadows')" "$d/forshadow.oo"
+  refusal_closed "ROCM-X05" "$(printf 'ERR\trocm\tfor bounds need int')" "$d/forstrbound.oo"
 }
 
 run_suite "1"

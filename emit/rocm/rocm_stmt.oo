@@ -108,17 +108,14 @@ fn rc_for(toks: List[String], pos: Int, n: Int, env: String, fns: String, capv: 
         rc_fail(rc_line(toks, pos), "for needs in");
         return rc_s_pack(pos + 1, env, "");
     }
-    if rc_env_get(env, nm) != "" {
-        rc_fail(rc_line(toks, pos), "for shadows " + nm);
-        return rc_s_pack(pos + 1, env, "");
-    }
     let lo: String = rc_expr(toks, pos + 3, n, env, fns, "i", capv);
     if rc_e_ty(lo) != "i" {
         rc_fail(rc_line(toks, pos), "for bounds need int");
         return rc_s_pack(pos + 1, env, "");
     }
     let mid: Int = rc_e_pos(lo);
-    if mid >= n || rc_k(toks, mid) != "DOTDOT" {
+    let rk: String = if mid < n { rc_k(toks, mid) } else { "" };
+    if rk != "DOTDOT" && rk != "DOTDOTEQ" {
         rc_fail(rc_line(toks, pos), "for range needs ..");
         return rc_s_pack(pos + 1, env, "");
     }
@@ -137,7 +134,8 @@ fn rc_for(toks: List[String], pos: Int, n: Int, env: String, fns: String, capv: 
     let bend: Int = rc_skip_balanced(toks, top) - 1;
     let body: String = rc_stmts(toks, top + 1, bend, n, benv, fns, capv, in_main, ret, ind + "  ");
     let p: Int = rc_skip_balanced(toks, top);
-    let head: String = ind + "{ long long " + rc_var(nm) + " = " + rc_e_code(lo) + "; long long " + rc_var(end) + " = " + rc_e_code(hi) + "; for (; " + rc_var(nm) + " < " + rc_var(end) + "; ++" + rc_var(nm) + ") {\n";
+    let cmp: String = if rk == "DOTDOTEQ" { "<=" } else { "<" };
+    let head: String = ind + "{ long long " + rc_var(nm) + " = " + rc_e_code(lo) + "; long long " + rc_var(end) + " = " + rc_e_code(hi) + "; for (; " + rc_var(nm) + " " + cmp + " " + rc_var(end) + "; ++" + rc_var(nm) + ") {\n";
     return rc_s_pack(p, env, head + rc_s_text(body) + ind + "}\n" + ind + "}\n");
 }
 

@@ -96,7 +96,7 @@ pub fn rc_println(toks: List[String], pos: Int, n: Int, env: String, fns: String
     if at == "i" { return rc_s_pack(qq, env, ind + "printf(\"%lld\\n\", (long long)(" + ac + "));\n"); }
     if at == "f" { return rc_s_pack(qq, env, ind + "printf(\"%g\\n\", (double)(" + ac + "));\n"); }
     if at == "s" { return rc_s_pack(qq, env, ind + "{ std::string oo_t = (" + ac + "); fwrite(oo_t.data(), 1, oo_t.size(), stdout); putchar(10); }\n"); }
-    if at == "b" { return rc_s_pack(qq, env, ind + "printf(\"%s\\n\", (" + ac + ") ? \"true\" : \"false\");\n"); }
+    if at == "b" { return rc_s_pack(qq, env, ind + "printf(\"%lld\\n\", (long long)(" + ac + "));\n"); }
     rc_fail(rc_line(toks, pos), "println type unsupported");
     return rc_s_pack(qq, env, "");
 }

@@ -1,0 +1,28 @@
+// # ROCm shadowed for-loop variable proof
+//
+// Logline: For loops may reuse an outer name without clobbering it on gfx1100.
+//
+// Setup: Plain main needs no GPU cap. Default rocm build. No emit/c import.
+//
+// Beats:
+//   1. for i sums 0..5 to 10 while the outer i stays 100.
+//   2. A nested for a reuses the outer loop name and sums to 9.
+//   3. The outer loop counter still drives its own three iterations.
+
+// pass: shadowed for-loop variables execute on gfx1100
+pub fn main() {
+    let i: Int = 100;
+    let mut s: Int = 0;
+    for i in 0..5 {
+        s = s + i;
+    }
+    println(s);
+    println(i);
+    let mut t: Int = 0;
+    for a in 0..3 {
+        for a in 0..3 {
+            t = t + a;
+        }
+    }
+    println(t);
+}
