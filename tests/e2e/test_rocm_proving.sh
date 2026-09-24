@@ -148,12 +148,16 @@ run_suite() {
   prove_against_llvm "ROCM-F05" "$CORPUS/rocm_match.oo"
   prove_against_llvm "ROCM-F06" "$CORPUS/rocm_multifile_main.oo"
   prove_double_run "ROCM-F07" "$CORPUS/rocm_nested_list.oo"
+  prove_against_llvm "ROCM-F08" "$CORPUS/rocm_for_range.oo"
 
   local llvm_pass="$PROJECT_ROOT/bootstrap/corpus/emit-llvm/pass"
   [[ ! -d "$llvm_pass" && -d "$PROJECT_ROOT/oodac/bootstrap/corpus/emit-llvm/pass" ]] && llvm_pass="$PROJECT_ROOT/oodac/bootstrap/corpus/emit-llvm/pass"
   for f in println_int println_str arith_muldiv while_sum while_if_else fn_ret_int; do
     regression_double_run "ROCM-R-$f" "$llvm_pass/$f.oo"
   done
+  prove_against_llvm "ROCM-F09" "$llvm_pass/for_range_int.oo"
+  prove_against_llvm "ROCM-F10" "$llvm_pass/for_range_sum.oo"
+  prove_against_llvm "ROCM-F11" "$llvm_pass/for_nested_sum.oo"
 
   cat > "$d/width.oo" << 'EOF'
 pub fn main() {
@@ -164,7 +168,16 @@ pub fn main() {
 }
 EOF
   refusal_closed "ROCM-X01" "$(printf 'ERR\trocm\tunsupported type u32')" "$d/width.oo"
-  refusal_closed "ROCM-X02" "$(printf 'ERR\trocm\tunsupported statement')" "$llvm_pass/for_range_int.oo"
+  cat > "$d/for_inclusive.oo" << 'EOF'
+pub fn main() {
+    let mut s = 0;
+    for i in 0..=5 {
+        s = s + i;
+    }
+    println(s);
+}
+EOF
+  refusal_closed "ROCM-X02" "$(printf 'ERR\trocm\tfor range needs ..')" "$d/for_inclusive.oo"
   cat > "$d/ris.oo" << 'EOF'
 pub fn main() {
     let o: Result[Int, String] = Ok(42);
@@ -182,6 +195,17 @@ pub fn main() {
 }
 EOF
   refusal_closed "ROCM-X04" "$(printf 'ERR\trocm\tunsupported type x')" "$d/struct.oo"
+  cat > "$d/forshadow.oo" << 'EOF'
+pub fn main() {
+    let i = 9;
+    let mut s = 0;
+    for i in 0..3 {
+        s = s + i;
+    }
+    println(s);
+}
+EOF
+  refusal_closed "ROCM-X05" "$(printf 'ERR\trocm\tfor shadows')" "$d/forshadow.oo"
 }
 
 run_suite "1"

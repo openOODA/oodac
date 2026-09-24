@@ -6,7 +6,7 @@
 //
 // Beats:
 //   1. rc_stmts walks one block and returns end, env, and text.
-//   2. rc_if and rc_while lower conditions with bool checks.
+//   2. rc_if, rc_while, and rc_for lower conditions and int ranges.
 //   3. rc_match validates arm pairs and binds payloads into scopes.
 
 import "rocm_tok.oo";
@@ -45,6 +45,10 @@ pub fn rc_stmts(toks: List[String], pos: Int, end: Int, n: Int, env: String, fns
             text = text + rc_s_text(r);
         } else if k == "KW_WHILE" {
             let r: String = rc_while(toks, p, n, cur, fns, capv, in_main, ret, ind);
+            p = rc_s_pos(r);
+            text = text + rc_s_text(r);
+        } else if k == "KW_FOR" {
+            let r: String = rc_for(toks, p, n, cur, fns, capv, in_main, ret, ind);
             p = rc_s_pos(r);
             text = text + rc_s_text(r);
         } else if k == "KW_MATCH" {
@@ -92,6 +96,49 @@ fn rc_while(toks: List[String], pos: Int, n: Int, env: String, fns: String, capv
     let a: String = rc_stmts(toks, p + 1, rc_skip_balanced(toks, p) - 1, n, env, fns, capv, in_main, ret, ind + "  ");
     p = rc_skip_balanced(toks, p);
     return rc_s_pack(p, env, ind + "while (" + rc_e_code(c) + ") {\n" + rc_s_text(a) + ind + "}\n");
+}
+
+fn rc_for(toks: List[String], pos: Int, n: Int, env: String, fns: String, capv: String, in_main: Bool, ret: String, ind: String) -> String {
+    if pos + 1 >= n || rc_k(toks, pos + 1) != "IDENT" {
+        rc_fail(rc_line(toks, pos), "for needs a variable");
+        return rc_s_pack(pos + 1, env, "");
+    }
+    let nm: String = rc_t(toks, pos + 1);
+    if pos + 2 >= n || rc_k(toks, pos + 2) != "KW_IN" {
+        rc_fail(rc_line(toks, pos), "for needs in");
+        return rc_s_pack(pos + 1, env, "");
+    }
+    if rc_env_get(env, nm) != "" {
+        rc_fail(rc_line(toks, pos), "for shadows " + nm);
+        return rc_s_pack(pos + 1, env, "");
+    }
+    let lo: String = rc_expr(toks, pos + 3, n, env, fns, "i", capv);
+    if rc_e_ty(lo) != "i" {
+        rc_fail(rc_line(toks, pos), "for bounds need int");
+        return rc_s_pack(pos + 1, env, "");
+    }
+    let mid: Int = rc_e_pos(lo);
+    if mid >= n || rc_k(toks, mid) != "DOTDOT" {
+        rc_fail(rc_line(toks, pos), "for range needs ..");
+        return rc_s_pack(pos + 1, env, "");
+    }
+    let hi: String = rc_expr(toks, mid + 1, n, env, fns, "i", capv);
+    if rc_e_ty(hi) != "i" {
+        rc_fail(rc_line(toks, pos), "for bounds need int");
+        return rc_s_pack(pos + 1, env, "");
+    }
+    let top: Int = rc_e_pos(hi);
+    if top >= n || rc_k(toks, top) != "LBRACE" {
+        rc_fail(rc_line(toks, pos), "for needs a block");
+        return rc_s_pack(top, env, "");
+    }
+    let end: String = "__for_end_" + pos.to_string();
+    let benv: String = rc_env_put(rc_env_put(env, nm, "i"), end, "i");
+    let bend: Int = rc_skip_balanced(toks, top) - 1;
+    let body: String = rc_stmts(toks, top + 1, bend, n, benv, fns, capv, in_main, ret, ind + "  ");
+    let p: Int = rc_skip_balanced(toks, top);
+    let head: String = ind + "{ long long " + rc_var(nm) + " = " + rc_e_code(lo) + "; long long " + rc_var(end) + " = " + rc_e_code(hi) + "; for (; " + rc_var(nm) + " < " + rc_var(end) + "; ++" + rc_var(nm) + ") {\n";
+    return rc_s_pack(p, env, head + rc_s_text(body) + ind + "}\n" + ind + "}\n");
 }
 
 fn rc_match(toks: List[String], pos: Int, n: Int, env: String, fns: String, capv: String, in_main: Bool, ret: String, ind: String) -> String {
