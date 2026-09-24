@@ -173,7 +173,7 @@ EOF
   local p7_loc=0
   local files=(
     "emit/llvm/ll_need_tab.oo" "emit/llvm/ll_need.oo" "emit/llvm/ll_rt.oo"
-    "emit/llvm/ll_rt_decl.oo" "emit/llvm/ll_int.oo" "emit/llvm/ll_call.oo"
+    "emit/llvm/ll_int.oo" "emit/llvm/ll_call.oo"
     "emit/llvm/ll_fn.oo" "emit/llvm/ll_decl.oo" "emit/llvm/ll_contract.oo"
     "emit/llvm/ll_range.oo"
   )
@@ -182,16 +182,16 @@ EOF
     cnt=$(wc -l < "$OODAC_ROOT/$f")
     if [[ "$cnt" -gt 256 ]]; then p7_loc=1; fi
   done
-  record "CH1-P07-01" "All 10 touched M3 compiler files <= 256 LOC" "$p7_loc"
+  record "CH1-P07-01" "All 9 touched M3 compiler files <= 256 LOC" "$p7_loc"
 
   local p7_parens=0
-  if grep -E 'if\s*\(' "$OODAC_ROOT/emit/llvm/"ll_{need_tab,need,rt,rt_decl,int,call,fn,decl,contract,range}.oo >/dev/null 2>&1; then
+  if grep -E 'if\s*\(' "$OODAC_ROOT/emit/llvm/"ll_{need_tab,need,rt,int,call,fn,decl,contract,range}.oo >/dev/null 2>&1; then
     p7_parens=1
   fi
   record "CH1-P07-02" "Zero outer condition parens in touched files" "$p7_parens"
 
   local p7_commas=0
-  if grep -E ',\s*\}' "$OODAC_ROOT/emit/llvm/"ll_{need_tab,need,rt,rt_decl,int,call,fn,decl,contract,range}.oo >/dev/null 2>&1; then
+  if grep -E ',\s*\}' "$OODAC_ROOT/emit/llvm/"ll_{need_tab,need,rt,int,call,fn,decl,contract,range}.oo >/dev/null 2>&1; then
     p7_commas=1
   fi
   record "CH1-P07-03" "Zero struct trailing commas in touched files" "$p7_commas"

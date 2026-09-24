@@ -10,7 +10,6 @@
 //   3. STRING globals use @.s<pos> from the token index.
 
 import "ll_need.oo";
-import "ll_rt_decl.oo";
 import "ll_ir.oo";
 import "ll_range.oo";
 
