@@ -1,0 +1,58 @@
+# Ecosystem gaps for an outside production user (document only)
+
+File: oodac/docs/ecosystem-gaps.oot
+
+Status: SURVEY 2026-09-24. No new features were built to fill these gaps.
+Each gap below is grounded in a file inspected on that date.
+
+## 1. Package registry breadth
+
+- The default registry is `https://catalog.openooda.org`, with a seed
+  catalog in-repo (`opm/docs/registry.oot`). The seed catalog file
+  (`opm/seed/catalog`) lists exactly 4 packages: `echo`, `hello`, `caps`,
+  `sqlite` (all 0.1.0).
+- Mechanism exists (CAS integrity, minisign, `opm search/add`), but breadth
+  is demo-scale: no HTTP client, JSON/YAML, crypto suite, logging, CLI-arg,
+  testing, or async library ships in the registry. A production user should
+  expect to vendor or write common dependencies.
+- No action taken: documenting only.
+
+## 2. Editor tooling
+
+- An LSP server exists (`lsp/server/`, capabilities in
+  `lsp/docs/capabilities.oot`: incremental sync, completion resolve,
+  workspace folders, watched files).
+- There is deliberately no bundled editor extension. `lsp/docs/client_config.oot`
+  states: "The server has no bundled editor extension. Wire a standard LSP
+  3.17 client to `ooda-lsp` over stdio." No VSCode/Vim/Emacs plugin,
+  no tree-sitter grammar, and no TextMate/Sublime syntax was found in-repo.
+- A production user gets protocol-level support but must hand-wire their
+  editor config; syntax highlighting and debug-adapter support are absent.
+- No action taken: documenting only.
+
+## 3. Docs
+
+- In-repo compiler docs (`oodac/docs/*.oot`, `opm/docs/*.oot`,
+  `lsp/docs/*.oot`, EBNF grammar) are substantive for contributors.
+- The public surface is thin: `website/docs/` and `website/src/` each
+  contain only `anchor.oo`; `website/llms.txt` is ~4KB. There is no
+  published stdlib reference, tutorial track, or cookbook on the site.
+- An outside user can read the in-repo spec but will not find
+  a hosted book/API reference.
+- No action taken: documenting only.
+
+## 4. Known language-side limits hit while building real-world shapes
+
+Recorded because the stretch corpus (`bootstrap/corpus/vs-rustc-stretch/`)
+had to route around them; not fixed here:
+
+- 3-link struct chains (`c.eng.lead.salary`) and `let`-rebinds of
+  struct-typed fields (`let od: Dept = c.ops`) fail at `clang` with
+  `invalid getelementptr indices` (index over-count on the inner struct).
+  2-link chains (`d.lead.salary`) and passing `c.eng`/`c.ops` directly as
+  fn arguments lower correctly; the stretch `nested` pair is written
+  that way and notes the constraint in its header.
+- `str_to_uppercase` typechecks but has no runtime symbol
+  (`undefined value '@oo_str_to_uppercase'` at link); avoided in corpus.
+- String builtin argument order is (subject, pattern):
+  `str_contains(row, "f1999,")`, verified by build-and-run, not by docs.

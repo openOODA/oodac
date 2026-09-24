@@ -1,0 +1,62 @@
+// # vs-rustc-stretch errpath
+// Logline: Stretch pair member errpath (Result pipelines, ok/err mix, messages).
+// Beats: 1. validate 300000 ages, count ok/err. 2. print Err message.
+//   3. lookup ok + missing id paths.
+pub fn validate_age(age: Int) -> Result[Int, String] {
+    if age < 0 {
+        return Err("negative age");
+    }
+    if age > 150 {
+        return Err("implausible age");
+    }
+    return Ok(age);
+}
+
+pub fn lookup_user(id: Int) -> Result[String, String] {
+    if id < 0 {
+        return Err("negative id");
+    }
+    if id > 1000 {
+        return Err("unknown id");
+    }
+    return Ok("user-" + id.to_string());
+}
+
+pub fn main() {
+    let mut ok_count: Int = 0;
+    let mut err_count: Int = 0;
+    let mut a: Int = 0;
+    while a < 300000 {
+        let r: Result[Int, String] = validate_age(a - 150000);
+        let v = match r {
+            Ok(x) => x,
+            Err(e) => -1
+        };
+        if v >= 0 {
+            ok_count = ok_count + 1;
+        } else {
+            err_count = err_count + 1;
+        }
+        a = a + 1;
+    }
+    println(ok_count);
+    println(err_count);
+    let bad: Result[Int, String] = validate_age(200);
+    let msg = match bad {
+        Ok(x) => "unexpected-ok",
+        Err(e) => e
+    };
+    println(msg);
+    let u: Result[String, String] = lookup_user(42);
+    let name = match u {
+        Ok(s) => s,
+        Err(e) => e
+    };
+    println(name);
+    let missing: Result[String, String] = lookup_user(9999);
+    let m2 = match missing {
+        Ok(s) => s,
+        Err(e) => e
+    };
+    println(m2);
+}

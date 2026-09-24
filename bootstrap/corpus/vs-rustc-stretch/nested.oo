@@ -1,0 +1,41 @@
+// # vs-rustc-stretch nested
+// Logline: Stretch pair member nested (nested structs via fn boundaries).
+// Beats: 1. build Company/Dept/Employee. 2. payroll via fns. 3. lead names.
+//   4. 100000-hire accumulation loop.
+// NOTE: 3-link chains (c.eng.lead.salary) and let-rebinds of struct-typed
+// fields (let od: Dept = c.ops) miscompile (bad GEP); nested values cross
+// fn boundaries instead, which lowers correctly.
+pub type Employee = struct { name: String, salary: Int };
+pub type Dept = struct { lead: Employee, headcount: Int };
+pub type Company = struct { eng: Dept, ops: Dept };
+
+pub fn dept_cost(d: Dept) -> Int {
+    return d.lead.salary + d.headcount;
+}
+
+pub fn payroll(c: Company) -> Int {
+    return dept_cost(c.eng) + dept_cost(c.ops);
+}
+
+pub fn lead_name(d: Dept) -> String {
+    return d.lead.name;
+}
+
+pub fn main() {
+    let e1: Employee = Employee { name: "ada", salary: 120 };
+    let e2: Employee = Employee { name: "grace", salary: 140 };
+    let eng: Dept = Dept { lead: e1, headcount: 12 };
+    let ops: Dept = Dept { lead: e2, headcount: 8 };
+    let c: Company = Company { eng: eng, ops: ops };
+    println(payroll(c));
+    println(lead_name(c.eng));
+    println(lead_name(c.ops));
+    let mut total: Int = payroll(c);
+    let mut n: Int = 0;
+    while n < 100000 {
+        let e: Employee = Employee { name: "c" + n.to_string(), salary: 100 + n };
+        total = total + e.salary;
+        n = n + 1;
+    }
+    println(total);
+}

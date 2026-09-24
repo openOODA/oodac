@@ -1,0 +1,26 @@
+// # vs-rustc-stretch listxform
+// Logline: Stretch pair member listxform (list-heavy push/set/sum/slice).
+// Beats: 1. push 0..200000. 2. double in place. 3. sum. 4. slice check.
+pub fn main() {
+    let mut xs: List[Int] = list_new();
+    let mut i: Int = 0;
+    while i < 200000 {
+        xs = list_push(xs, i);
+        i = i + 1;
+    }
+    let mut j: Int = 0;
+    while j < list_len(xs) {
+        xs = list_set(xs, j, list_get(xs, j) * 2);
+        j = j + 1;
+    }
+    let mut s: Int = 0;
+    let mut k: Int = 0;
+    while k < list_len(xs) {
+        s = s + list_get(xs, k);
+        k = k + 1;
+    }
+    println(s);
+    let mid: List[Int] = list_slice(xs, 1000, 2000);
+    println(list_len(mid));
+    println(list_get(mid, 0));
+}

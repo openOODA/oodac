@@ -1,0 +1,29 @@
+// # vs-rustc-stretch logscan
+// Logline: Stretch pair member logscan (List[String] build + substring scan).
+// Beats: 1. build 60000 log lines. 2. count ERROR via contains.
+//   3. spot-check line + length.
+pub fn main() {
+    let mut lines: List[String] = list_new();
+    let mut i: Int = 0;
+    while i < 60000 {
+        if i % 2 == 0 {
+            lines = list_push(lines, "INFO id=" + i.to_string() + " ok");
+        } else {
+            lines = list_push(lines, "ERROR id=" + i.to_string() + " fail");
+        }
+        i = i + 1;
+    }
+    let mut errors: Int = 0;
+    let mut k: Int = 0;
+    while k < list_len(lines) {
+        let line: String = list_get(lines, k);
+        if str_contains(line, "ERROR") {
+            errors = errors + 1;
+        }
+        k = k + 1;
+    }
+    println(errors);
+    println(list_len(lines));
+    println(list_get(lines, 1));
+    println(chars_len(list_get(lines, 59999)));
+}

@@ -1,0 +1,29 @@
+// # vs-rustc-stretch strbuild
+// Logline: Stretch pair member strbuild (string-heavy CSV build + predicates).
+// Beats: 1. concat 6000 records. 2. len checks. 3. prefix/contains/suffix. 4. trim.
+pub fn main() {
+    let mut row: String = "";
+    let mut i: Int = 0;
+    while i < 6000 {
+        row = row + "f" + i.to_string() + ",";
+        i = i + 1;
+    }
+    println(chars_len(row));
+    println(bytes_len(row));
+    if str_starts_with(row, "f0,") {
+        println(1);
+    } else {
+        println(0);
+    }
+    if str_contains(row, "f5999,") {
+        println(1);
+    } else {
+        println(0);
+    }
+    if str_ends_with(row, ",") {
+        println(1);
+    } else {
+        println(0);
+    }
+    println(str_trim("  pad  "));
+}
