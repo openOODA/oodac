@@ -6,7 +6,7 @@
 //
 // Beats:
 //   1. Let binds a slot and records its type code for later use.
-//   2. If, else-if, while, and for-range lower to structured control ops.
+//   2. If, else-if, and while lower to structured control ops; for-range lives in wasm_for.oo.
 //   3. Println dispatches on type; unknown statements fail closed.
 
 import "wasm_buf.oo";
@@ -17,6 +17,7 @@ import "wasm_fn.oo";
 import "wasm_expr.oo";
 import "wasm_store.oo";
 import "wasm_match.oo";
+import "wasm_for.oo";
 
 pub fn ws_stmt_block(b: &mut WasmBuf, toks: List[String], pos: Int, end: Int, n: Int, g: &WsG, lits: &mut WsLits, cx: &mut WsCx, ret: String) -> String {
     let mut p: Int = pos;
@@ -150,61 +151,6 @@ pub fn ws_stmt_while(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &
     ws_br_if(b, 1);
     let t: String = ws_stmt_block(b, toks, top + 1, n, n, ws_g_new(env, g.fns, g.structs, g.order, g.arity, g.scratch), lits, cx, ret);
     let p: Int = ws_un_pos(t) + 1;
-    ws_br(b, 0);
-    ws_end(b);
-    ws_end(b);
-    return ws_block_pack(p, env);
-}
-
-pub fn ws_stmt_for(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &WsG, env: String, lits: &mut WsLits, cx: &mut WsCx, ret: String) -> String {
-    if pos + 1 >= n || ws_k(toks, pos + 1) != "IDENT" {
-        ws_fail(ws_line(toks, pos), "for name");
-    }
-    let nm: String = ws_t(toks, pos + 1);
-    if pos + 2 >= n || ws_k(toks, pos + 2) != "KW_IN" {
-        ws_fail(ws_line(toks, pos), "for in");
-    }
-    if ws_env_get(env, nm) != "" {
-        ws_fail(ws_line(toks, pos), "for shadow " + nm);
-    }
-    let gg: WsG = ws_g_new(env, g.fns, g.structs, g.order, g.arity, g.scratch);
-    let lo: String = ws_expr(b, toks, pos + 3, n, gg, lits, cx);
-    if ws_un_ty(lo) != "i" {
-        ws_fail(ws_line(toks, pos), "for bounds");
-    }
-    let mid: Int = ws_un_pos(lo);
-    if mid >= n || ws_k(toks, mid) != "DOTDOT" {
-        ws_fail(ws_line(toks, pos), "for range");
-    }
-    let hi: String = ws_expr(b, toks, mid + 1, n, gg, lits, cx);
-    if ws_un_ty(hi) != "i" {
-        ws_fail(ws_line(toks, pos), "for bounds");
-    }
-    let top: Int = ws_un_pos(hi);
-    if top >= n || ws_k(toks, top) != "LBRACE" {
-        ws_fail(ws_line(toks, pos), "for brace");
-    }
-    let idx: Int = ws_local_idx(g.order, g.arity, nm);
-    let eidx: Int = ws_local_idx(g.order, g.arity, "__for_end_" + pos.to_string());
-    if idx < 0 || eidx < 0 {
-        ws_fail(ws_line(toks, pos), "for slot " + nm);
-    }
-    ws_set(b, eidx);
-    ws_set(b, idx);
-    ws_block(b);
-    ws_loop(b);
-    ws_get(b, idx);
-    ws_get(b, eidx);
-    ws_lt_s(b);
-    ws_eqz(b);
-    ws_br_if(b, 1);
-    let benv: String = ws_env_put(env, nm, idx, "i");
-    let t: String = ws_stmt_block(b, toks, top + 1, n, n, ws_g_new(benv, g.fns, g.structs, g.order, g.arity, g.scratch), lits, cx, ret);
-    let p: Int = ws_un_pos(t) + 1;
-    ws_get(b, idx);
-    ws_const(b, 1);
-    ws_add(b);
-    ws_set(b, idx);
     ws_br(b, 0);
     ws_end(b);
     ws_end(b);

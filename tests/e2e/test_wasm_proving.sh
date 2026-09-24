@@ -90,6 +90,33 @@ regression_double_run() {
   fi
 }
 
+prove_output() {
+  local id="$1" src="$2" want="$3"
+  local d="$TMPDIR/$id"
+  mkdir -p "$d"
+  local r1="$d/run1.out" r2="$d/run2.out" exp="$d/expected.out"
+  printf '%s\n' "$want" > "$exp"
+  if ! timeout 120s "$OODAC" build --backend wasm "$src" -o "$d/prog.wasm" >/dev/null 2>&1; then
+    record_test "$id" "wasm builds" 1
+    return
+  fi
+  if ! timeout 30s wasmtime run "$d/prog.wasm" > "$r1" 2>&1; then
+    record_test "$id" "wasm runs under wasmtime" 1
+    return
+  fi
+  if ! timeout 30s wasmtime run "$d/prog.wasm" > "$r2" 2>&1; then
+    record_test "$id" "wasm re-runs under wasmtime" 1
+    return
+  fi
+  if cmp -s "$r1" "$r2" && cmp -s "$r1" "$exp"; then
+    record_test "$id" "double-run matches expected output" 0
+  else
+    echo "    expected:"; head -n 10 "$exp" | sed 's/^/      /'
+    echo "    got:"; head -n 10 "$r1" | sed 's/^/      /'
+    record_test "$id" "double-run matches expected output" 1
+  fi
+}
+
 refusal_closed() {
   local id="$1" want="$2"
   shift 2
@@ -131,6 +158,8 @@ run_suite() {
   prove_against_llvm "WASM-F08" "$llvm_pass/for_range_int.oo"
   prove_against_llvm "WASM-F09" "$llvm_pass/for_range_sum.oo"
   prove_against_llvm "WASM-F10" "$llvm_pass/for_nested_sum.oo"
+  prove_output "WASM-F11" "$CORPUS/wasm_for_inclusive.oo" "$(printf '15\n6\n18\n')"
+  prove_output "WASM-F12" "$CORPUS/wasm_for_shadow.oo" "$(printf '10\n100\n9\n')"
 
   cat > "$d/float.oo" << 'EOF'
 pub fn main() {
@@ -138,16 +167,16 @@ pub fn main() {
 }
 EOF
   refusal_closed "WASM-X01" "$(printf 'ERR\twasm\texpr FLOAT')" "$d/float.oo"
-  cat > "$d/for_inclusive.oo" << 'EOF'
+  cat > "$d/for_norange.oo" << 'EOF'
 pub fn main() {
     let mut s = 0;
-    for i in 0..=5 {
+    for i in 5 {
         s = s + i;
     }
     println(s);
 }
 EOF
-  refusal_closed "WASM-X02" "$(printf 'ERR\twasm\tfor range')" "$d/for_inclusive.oo"
+  refusal_closed "WASM-X02" "$(printf 'ERR\twasm\tfor range')" "$d/for_norange.oo"
   cat > "$d/optmatch.oo" << 'EOF'
 pub fn main() {
     let o: Option[Int] = Some(3);
@@ -166,17 +195,16 @@ pub fn main() {
 }
 EOF
   refusal_closed "WASM-X04" "$(printf 'ERR\twasm\tmatch scrutinee type')" "$d/matchint.oo"
-  cat > "$d/forshadow.oo" << 'EOF'
+  cat > "$d/forstrbound.oo" << 'EOF'
 pub fn main() {
-    let i = 9;
     let mut s = 0;
-    for i in 0..3 {
+    for i in "a".."z" {
         s = s + i;
     }
     println(s);
 }
 EOF
-  refusal_closed "WASM-X05" "$(printf 'ERR\twasm\tfor shadow')" "$d/forshadow.oo"
+  refusal_closed "WASM-X05" "$(printf 'ERR\twasm\tfor bounds')" "$d/forstrbound.oo"
 }
 
 run_suite "1"

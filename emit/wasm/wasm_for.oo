@@ -1,0 +1,78 @@
+// # WASM for-range loop lowering
+//
+// Logline: Exclusive and inclusive Int for-range loops lower to block/loop branches.
+//
+// Setup: The counter and end bound each own a scan-order local. Inclusive
+//   ranges add one to the upper bound so the loop keeps a single `<` test.
+//   Loop names bind a position-mangled slot, so shadowing an outer name or
+//   nesting the same name leaves every outer slot live.
+//
+// Beats:
+//   1. DOTDOT runs exclusive; DOTDOTEQ adds one to hi. Else fails closed.
+//   2. Bounds still need Int codes on both sides of the range op.
+//   3. The body binds the source name to the mangled slot for its span.
+
+import "lex/token_fmt.oo";
+import "wasm_buf.oo";
+import "wasm_op.oo";
+import "wasm_tok.oo";
+import "wasm_data.oo";
+import "wasm_fn.oo";
+import "lex/token_parse_int.oo";
+
+pub fn ws_stmt_for(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &WsG, env: String, lits: &mut WsLits, cx: &mut WsCx, ret: String) -> String {
+    if pos + 1 >= n || ws_k(toks, pos + 1) != "IDENT" {
+        ws_fail(ws_line(toks, pos), "for name");
+    }
+    let nm: String = ws_t(toks, pos + 1);
+    if pos + 2 >= n || ws_k(toks, pos + 2) != "KW_IN" {
+        ws_fail(ws_line(toks, pos), "for in");
+    }
+    let gg: WsG = ws_g_new(env, g.fns, g.structs, g.order, g.arity, g.scratch);
+    let lo: String = ws_expr(b, toks, pos + 3, n, gg, lits, cx);
+    if ws_un_ty(lo) != "i" {
+        ws_fail(ws_line(toks, pos), "for bounds");
+    }
+    let mid: Int = ws_un_pos(lo);
+    let rk: String = if mid < n { ws_k(toks, mid) } else { "" };
+    if rk != "DOTDOT" && rk != "DOTDOTEQ" {
+        ws_fail(ws_line(toks, pos), "for range");
+    }
+    let hi: String = ws_expr(b, toks, mid + 1, n, gg, lits, cx);
+    if ws_un_ty(hi) != "i" {
+        ws_fail(ws_line(toks, pos), "for bounds");
+    }
+    let top: Int = ws_un_pos(hi);
+    if top >= n || ws_k(toks, top) != "LBRACE" {
+        ws_fail(ws_line(toks, pos), "for brace");
+    }
+    let idx: Int = ws_local_idx(g.order, g.arity, "__for_var_" + pos.to_string());
+    let eidx: Int = ws_local_idx(g.order, g.arity, "__for_end_" + pos.to_string());
+    if idx < 0 || eidx < 0 {
+        ws_fail(ws_line(toks, pos), "for slot " + nm);
+    }
+    if rk == "DOTDOTEQ" {
+        ws_const(b, 1);
+        ws_add(b);
+    }
+    ws_set(b, eidx);
+    ws_set(b, idx);
+    ws_block(b);
+    ws_loop(b);
+    ws_get(b, idx);
+    ws_get(b, eidx);
+    ws_lt_s(b);
+    ws_eqz(b);
+    ws_br_if(b, 1);
+    let benv: String = ws_env_put(env, nm, idx, "i");
+    let t: String = ws_stmt_block(b, toks, top + 1, n, n, ws_g_new(benv, g.fns, g.structs, g.order, g.arity, g.scratch), lits, cx, ret);
+    let p: Int = ws_un_pos(t) + 1;
+    ws_get(b, idx);
+    ws_const(b, 1);
+    ws_add(b);
+    ws_set(b, idx);
+    ws_br(b, 0);
+    ws_end(b);
+    ws_end(b);
+    return ws_block_pack(p, env);
+}
