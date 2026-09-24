@@ -18,6 +18,15 @@ export OODAC_BIN="$OODAC"
 export LD_LIBRARY_PATH="/opt/rocm/lib:${LD_LIBRARY_PATH:-}"
 export OODA_FS_READDIR="${OODA_FS_READDIR:-$PROJECT_ROOT:$(cd "$PROJECT_ROOT/.." && pwd -P):$HOME/.openooda:/opt:/etc:/tmp}"
 export OODA_FS_WRITEDIR="${OODA_FS_WRITEDIR:-$PROJECT_ROOT:/tmp}"
+REQ_RDIR="$PROJECT_ROOT:$(cd "$PROJECT_ROOT/.." && pwd -P):$HOME/.openooda:/opt:/etc:/tmp"
+_OIFS="$IFS"; IFS=':'
+for _rp in $REQ_RDIR; do
+  case ":$OODA_FS_READDIR:" in *":$_rp:"*) ;; *) OODA_FS_READDIR="$OODA_FS_READDIR:$_rp";; esac
+done
+IFS="$_OIFS"
+export OODA_FS_READDIR
+
+cd "$PROJECT_ROOT"
 
 TMPDIR="$(mktemp -d /tmp/e2e_rocm_XXXXXX)"
 trap 'rm -rf "$TMPDIR"' EXIT INT TERM

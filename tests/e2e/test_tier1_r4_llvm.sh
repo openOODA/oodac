@@ -91,7 +91,8 @@ EOF
   cat << 'EOF' > "$d/mono.oo"
 pub fn main(t: &TimeCap) -> Int {
     let x: Int = monotonic_us(t);
-    return x;
+    if x > 0 { return 0; }
+    return 1;
 }
 EOF
   local f9_ll=1

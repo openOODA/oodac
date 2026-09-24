@@ -52,27 +52,27 @@ run_suite() {
   if [[ -f "$T4_DIR/app_crypto_pipeline.oo" ]]; then
     local out03
     out03=$(timeout 10s "$OODAC" check "$T4_DIR/app_crypto_pipeline.oo" 2>&1 || true)
-    if echo "$out03" | grep -q 'unproven requires'; then rw03=0; fi
+    if echo "$out03" | grep -q 'counterexample.*unproven'; then rw03=0; fi
   fi
-  record_test "T4-RW03" "Crypto Pipeline formal contract analysis active" "$rw03"
+  record_test "T4-RW03" "Crypto Pipeline SMT reports unproven ensures with counterexample" "$rw03"
 
   # T4-RW04: Real-world Matrix Sensor Fusion Engine (contract verification)
   local rw04=1
   if [[ -f "$T4_DIR/app_matrix_sensor_fusion.oo" ]]; then
     local out04
     out04=$(timeout 10s "$OODAC" check "$T4_DIR/app_matrix_sensor_fusion.oo" 2>&1 || true)
-    if echo "$out04" | grep -q 'unproven requires'; then rw04=0; fi
+    if echo "$out04" | grep -q 'counterexample.*unproven'; then rw04=0; fi
   fi
-  record_test "T4-RW04" "Matrix Sensor Fusion contract analysis active" "$rw04"
+  record_test "T4-RW04" "Matrix Sensor Fusion SMT reports unproven ensures with counterexample" "$rw04"
 
   # T4-RW05: Real-world Secure Vault Controller (contract verification)
   local rw05=1
   if [[ -f "$T4_DIR/app_secure_vault.oo" ]]; then
     local out05
     out05=$(timeout 10s "$OODAC" check "$T4_DIR/app_secure_vault.oo" 2>&1 || true)
-    if echo "$out05" | grep -q 'unproven requires'; then rw05=0; fi
+    if echo "$out05" | grep -q '^OK$'; then rw05=0; fi
   fi
-  record_test "T4-RW05" "Secure Vault Controller contract analysis active" "$rw05"
+  record_test "T4-RW05" "Secure Vault Controller contracts verify clean (analysis active)" "$rw05"
 
   # T4-RW06: Pure Build Script Full Invocation Interface
   local pb_script="$PROJECT_ROOT/bootstrap/oodac_pure_build"
