@@ -1,0 +1,31 @@
+// # WASM for-range loop proof
+//
+// Logline: Exclusive-range for loops lower to block/loop branches under wasmtime.
+//
+// Setup: Default wasm build. No emit/c import.
+//
+// Beats:
+//   1. 0..5 sums to 10 through the loop counter.
+//   2. Nested i/j loops accumulate the double sum 48.
+//   3. An Int variable bound iterates exactly like a literal.
+
+pub fn main() {
+    let mut s: Int = 0;
+    for i in 0..5 {
+        s = s + i;
+    }
+    println(s);
+    let mut t: Int = 0;
+    for i in 0..4 {
+        for j in 0..4 {
+            t = t + i + j;
+        }
+    }
+    println(t);
+    let m: Int = 3;
+    let mut u: Int = 0;
+    for k in 0..m {
+        u = u + k;
+    }
+    println(u);
+}

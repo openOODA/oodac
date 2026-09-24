@@ -222,6 +222,9 @@ pub fn ws_scan_locals(toks: List[String], pos: Int, end: Int, acc: String) -> St
         } else if k == "KW_MATCH" {
             out = ws_scan_match_binders(toks, i, end, out);
             i = i + 1;
+        } else if k == "KW_FOR" {
+            if ws_k(toks, i + 1) == "IDENT" { out = ws_acc_add(out, ws_t(toks, i + 1)); out = ws_acc_add(out, "__for_end_" + i.to_string()); }
+            i = i + 1;
         } else {
             i = i + 1;
         }

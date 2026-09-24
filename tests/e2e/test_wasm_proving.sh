@@ -121,12 +121,16 @@ run_suite() {
   prove_against_llvm "WASM-F04" "$CORPUS/wasm_nested_construct.oo"
   prove_against_llvm "WASM-F05" "$CORPUS/wasm_match_result.oo"
   prove_against_llvm "WASM-F06" "$CORPUS/wasm_multifile_main.oo"
+  prove_against_llvm "WASM-F07" "$CORPUS/wasm_for_range.oo"
 
   local llvm_pass="$PROJECT_ROOT/bootstrap/corpus/emit-llvm/pass"
   [[ ! -d "$llvm_pass" && -d "$PROJECT_ROOT/oodac/bootstrap/corpus/emit-llvm/pass" ]] && llvm_pass="$PROJECT_ROOT/oodac/bootstrap/corpus/emit-llvm/pass"
   for f in arith_muldiv bare_return_main call_nested fn_ret_int if_else println_int println_str str_concat while_sum result_val_err struct_nest user_fn_call; do
     regression_double_run "WASM-R-$f" "$llvm_pass/$f.oo"
   done
+  prove_against_llvm "WASM-F08" "$llvm_pass/for_range_int.oo"
+  prove_against_llvm "WASM-F09" "$llvm_pass/for_range_sum.oo"
+  prove_against_llvm "WASM-F10" "$llvm_pass/for_nested_sum.oo"
 
   cat > "$d/float.oo" << 'EOF'
 pub fn main() {
@@ -134,7 +138,16 @@ pub fn main() {
 }
 EOF
   refusal_closed "WASM-X01" "$(printf 'ERR\twasm\texpr FLOAT')" "$d/float.oo"
-  refusal_closed "WASM-X02" "$(printf 'ERR\twasm\tstmt KW_FOR')" "$llvm_pass/for_range_int.oo"
+  cat > "$d/for_inclusive.oo" << 'EOF'
+pub fn main() {
+    let mut s = 0;
+    for i in 0..=5 {
+        s = s + i;
+    }
+    println(s);
+}
+EOF
+  refusal_closed "WASM-X02" "$(printf 'ERR\twasm\tfor range')" "$d/for_inclusive.oo"
   cat > "$d/optmatch.oo" << 'EOF'
 pub fn main() {
     let o: Option[Int] = Some(3);
@@ -153,6 +166,17 @@ pub fn main() {
 }
 EOF
   refusal_closed "WASM-X04" "$(printf 'ERR\twasm\tmatch scrutinee type')" "$d/matchint.oo"
+  cat > "$d/forshadow.oo" << 'EOF'
+pub fn main() {
+    let i = 9;
+    let mut s = 0;
+    for i in 0..3 {
+        s = s + i;
+    }
+    println(s);
+}
+EOF
+  refusal_closed "WASM-X05" "$(printf 'ERR\twasm\tfor shadow')" "$d/forshadow.oo"
 }
 
 run_suite "1"

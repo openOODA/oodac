@@ -130,6 +130,22 @@ pub fn ws_rt_into(pay: &mut WasmBuf, which: Int) {
     }
 }
 
+pub fn ws_order_count(order: String) -> Int {
+    let mut rest: String = order;
+    let mut c: Int = 0;
+    while rest != "" {
+        if str_slice(rest, 0, 1) == "\n" {
+            rest = str_slice(rest, 1, chars_len(rest));
+            continue;
+        }
+        let at: Int = str_index_of(rest, "\n");
+        c = c + 1;
+        if at < 0 { return c; }
+        rest = str_slice(rest, at + 1, chars_len(rest));
+    }
+    return c;
+}
+
 pub fn ws_fn_body(b: &mut WasmBuf, toks: List[String], n: Int, row: String, params: String, bodies: String, structs: String, fns: String, lits: &mut WsLits) -> Int {
     let nm: String = field_at(row, 0);
     let arity: Int = parse_int(field_at(row, 1));
