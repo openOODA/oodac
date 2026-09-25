@@ -236,6 +236,10 @@ pub fn ll_store_field_stmt(toks: List[String], p0: Int, n: Int, ssa0: Int, env: 
         ll_ir_inst(ir, "load", ll_ir_val(fk), ll_ssa(ns), "ptr " + ll_pptr(rhs) + ", align 8", 1, 1);
         src = ll_ssa(ns);
     }
+    if ll_arc_owned(fk) {
+        if ll_is_var(ll_pptr(rhs)) { ns = ll_arc_keep_ptr(fk, ll_pptr(rhs), ns, ir); }
+        ns = ll_arc_rel_ptr(fk, ll_pptr(fp), ns, ir);
+    }
     ll_ir_inst(ir, "store", ll_ir_val(fk), "", src + ", ptr " + ll_pptr(fp) + ", align 8", 1, 1);
     if np < n && ll_k(toks, np) == "SEMI" { np = np + 1; }
     return ll_pack(np, ns, fk, "");

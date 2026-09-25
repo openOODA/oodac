@@ -166,6 +166,10 @@ pub fn ll_arc_keep_ptr(kind: String, ptr: String, ssa0: Int, ir: &mut IrBuf) -> 
     return ll_arc_rr(kind, ptr, ssa0, 1, ir);
 }
 
+pub fn ll_arc_rel_ptr(kind: String, ptr: String, ssa0: Int, ir: &mut IrBuf) -> Int {
+    return ll_arc_rr(kind, ptr, ssa0, 0, ir);
+}
+
 pub fn ll_arc_exit(env: String, ssa0: Int, ir: &mut IrBuf) -> Int {
     if type_env_get(env, "__no_arc__") == "1" { return ssa0; }
     let at: Int = ll_arc_frame_at(env);
