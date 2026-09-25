@@ -486,7 +486,7 @@ jobs:
   auto-release:
     needs: release-assets
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-    uses: openOODA/openOODA/.github/workflows/auto-release.yml@v2.10.23
+    uses: openOODA/openOODA/.github/workflows/auto-release.yml@v2.10.43
     secrets: inherit
     with:
       artifact_pattern: 'release-assets-*'
