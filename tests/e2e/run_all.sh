@@ -32,6 +32,7 @@ SUITE_LIST=(
   "test_rocm_proving.sh"
   "test_llvm_ir_props.sh"
   "test_llvm_cap_require.sh"
+  "test_llvm_struct_capname.sh"
   "test_llvm_rpath.sh"
   "test_tier1_r3_qa.sh"
   "test_tier1_r5_boot.sh"

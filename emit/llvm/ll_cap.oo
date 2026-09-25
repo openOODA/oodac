@@ -20,7 +20,10 @@ import "ll_tok.oo";
 import "ll_ir.oo";
 
 pub fn ll_is_cap_ty(t: String) -> Bool {
-    return str_index_of(t, "Cap") >= 0;
+    // Suffix-only, mirrors check art_is_cap_name: a mere "Cap" substring must not shadow user structs (CapT).
+    let n: Int = chars_len(t);
+    if n <= 3 { return false; }
+    return str_slice(t, n - 3, n) == "Cap";
 }
 
 pub fn ll_cap_grant(ty: String) -> String {
