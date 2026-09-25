@@ -94,7 +94,7 @@ fn ext_archive_path(fs_r: &FsReadCap, od: String, leaf: String) -> String {
 
 pub fn oodar_resolve_exts(fs_r: &FsReadCap, od: String, ir: String) -> List[String] {
     let mut exts: List[String] = list_new();
-    if str_contains(ir, "@crypto_ml") || str_contains(ir, "@crypto_pq") || str_contains(ir, "@oo_shake") || str_contains(ir, "@oo_sha3") || str_contains(ir, "@crypto_aes_gcm") {
+    if str_contains(ir, "@crypto_ml") || str_contains(ir, "@crypto_pq") || str_contains(ir, "@oo_shake") || str_contains(ir, "@oo_sha3") || str_contains(ir, "@crypto_sha3") || str_contains(ir, "@crypto_aes_gcm") {
         let p: String = ext_archive_path(fs_r, od, "liboodar-pqc.a");
         if path_exists(fs_r, p) { exts = list_push(exts, p); }
     }
