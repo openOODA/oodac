@@ -73,9 +73,9 @@ pub fn ll_st_rr(fl: String, nm: String, is_ret: Int, ir: &mut IrBuf) {
                         ll_ir_inst(ir, "br", "label", "", "%" + rtag + "_end", 1, 1);
                         ll_ir_label(ir, rtag + "_end");
                         s = s + 7;
-                    } else if fk == "resi" || fk == "resb" || fk == "resl" || fk == "resil" || fk == "ress" {
+                    } else if fk == "resi" || fk == "resb" || fk == "resf" || fk == "resl" || fk == "resil" || fk == "ress" {
                         let mut inner: Int = 1;
-                        if fk == "resi" || fk == "resb" || fk == "resl" || fk == "resil" { inner = 2; }
+                        if fk == "resi" || fk == "resb" || fk == "resf" || fk == "resl" || fk == "resil" { inner = 2; }
                         ll_ir_inst(ir, "getelementptr inbounds", ll_ir_alloc(fk), ll_ssa(s + 1), "ptr " + ll_ssa(s) + ", i32 0, i32 " + inner.to_string(), 1, 1);
                         ll_ir_inst(ir, "load", "{ ptr, i64 }", ll_ssa(s + 2), "ptr " + ll_ssa(s + 1) + ", align 8", 1, 1);
                         ll_ir_inst(ir, "call", "void", "", "@oo_str_" + op + "({ ptr, i64 } " + ll_ssa(s + 2) + ")", 1, 1);

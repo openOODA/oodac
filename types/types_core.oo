@@ -67,6 +67,7 @@ pub fn type_env(env: String, name: String, ty: String) -> String {
 pub fn result_ok_payload_type(rty: String) -> String {
     if rty == "resi" { return "Int"; }
     if rty == "resb" { return "Bool"; }
+    if rty == "resf" { return "Float"; }
     if rty == "ress" { return "String"; }
     if rty == "resl" { return "List[String]"; }
     if rty == "resil" { return "List[Int]"; }

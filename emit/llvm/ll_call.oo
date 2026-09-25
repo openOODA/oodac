@@ -90,6 +90,8 @@ pub fn ll_match_bind(sk: String, ptr: String, bn: String, ok: Int, id: Int, ssa0
     if sk == "resi" && ok == 0 { bk = "str"; fi = "2"; }
     if sk == "resb" && ok == 1 { bk = "i1"; }
     if sk == "resb" && ok == 0 { bk = "str"; fi = "2"; }
+    if sk == "resf" && ok == 1 { bk = "f64"; }
+    if sk == "resf" && ok == 0 { bk = "str"; fi = "2"; }
     if sk == "resl" && ok == 1 { bk = "slist"; }
     if sk == "resl" && ok == 0 { bk = "str"; fi = "2"; }
     if sk == "resil" && ok == 1 { bk = "ilist"; }

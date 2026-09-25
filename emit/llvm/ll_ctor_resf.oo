@@ -1,0 +1,37 @@
+// # LLVM Result[Float] constructors
+//
+// Logline: Lower Ok(f64)/Err(str) into %OoResF behind the resf expect kind.
+//
+// Setup: Called from ll_ctor_ok/ll_ctor_err. Mirrors ll_ctor_resb.oo with a
+//   double payload. Only expect == resf takes this path.
+//
+// Beats:
+//   1. Ok stores tag 1 plus the double payload at field 1.
+//   2. Err stores tag 0 plus the message at field 2.
+//
+
+import "ll_tok.oo";
+import "ll_ty.oo";
+import "ll_slot.oo";
+import "ll_ir.oo";
+import "ll_ctor_resb.oo";
+
+pub fn ll_ctor_ok_resf(arg: String, ssa0: Int, ir: &mut IrBuf) -> String {
+    let avb: String = ll_as_val(arg, ssa0, ir);
+    let ab: String = ll_tmpa(ll_pssa(avb) + 1);
+    ll_slot_ty(ab, "%OoResF", ir);
+    let osb: Int = ll_pssa(avb) + 1;
+    ll_ir_inst(ir, "insertvalue", "%OoResF", ll_ssa(osb), "{ i32 1, double 0.0, %OoStr { ptr null, i64 0 } }, double " + ll_opnd(avb) + ", 1", 1, 1);
+    ll_ir_inst(ir, "store", "%OoResF", "", ll_ssa(osb) + ", ptr " + ab + ", align 8", 1, 1);
+    return ll_pack(0, osb, "resf", ab);
+}
+
+pub fn ll_ctor_err_resf(av: String, ir: &mut IrBuf) -> String {
+    let a: String = ll_tmpa(ll_pssa(av) + 1);
+    ll_slot_ty(a, "%OoResF", ir);
+    let os: Int = ll_oostr_from_pair(ll_pssa(av), ir);
+    let s2: Int = os + 1;
+    ll_ir_inst(ir, "insertvalue", "%OoResF", ll_ssa(s2), "{ i32 0, double 0.0, %OoStr { ptr null, i64 0 } }, %OoStr " + ll_ssa(os) + ", 2", 1, 1);
+    ll_ir_inst(ir, "store", "%OoResF", "", ll_ssa(s2) + ", ptr " + a + ", align 8", 1, 1);
+    return ll_pack(0, s2, "resf", a);
+}

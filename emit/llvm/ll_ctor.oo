@@ -14,6 +14,7 @@ import "ll_slot.oo";
 import "ll_ir.oo";
 import "ll_niche.oo";
 import "ll_ctor_resb.oo";
+import "ll_ctor_resf.oo";
 
 fn ll_resst_base(expect: String) -> String {
     if chars_len(expect) >= 6 && str_slice(expect, 0, 6) == "resSt_" {
@@ -130,6 +131,9 @@ fn ll_ctor_ok(arg: String, ssa0: Int, expect: String, ir: &mut IrBuf) -> String 
     if ll_pk(arg) == "i1" && expect == "resb" {
         return ll_ctor_ok_resb(arg, ssa0, ir);
     }
+    if ll_pk(arg) == "f64" && expect == "resf" {
+        return ll_ctor_ok_resf(arg, ssa0, ir);
+    }
     let oav: String = ll_int_convert(arg, ssa0, "i64", ir);
     let oab: Int = ll_hw(ssa0, ll_pssa(oav));
     if ll_pk(oav) == "i64" && (expect == "resi" || expect == "resim" || expect == "") {
@@ -235,6 +239,9 @@ fn ll_ctor_err(arg: String, ssa0: Int, expect: String, ir: &mut IrBuf) -> String
     }
     if expect == "resb" {
         return ll_ctor_err_resb(av, ir);
+    }
+    if expect == "resf" {
+        return ll_ctor_err_resf(av, ir);
     }
     let a: String = ll_tmpa(ll_pssa(av) + 1);
     ll_slot_ty(a, "%OoResI", ir);

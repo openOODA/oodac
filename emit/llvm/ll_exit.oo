@@ -70,7 +70,7 @@ pub fn ll_return_stmt(toks: List[String], p: Int, n: Int, ssa: Int, env: String,
         ll_ir_inst(ir, "ret", "i32", "", "0", 1, 1);
     } else if ret_kind == "resi" {
         ns = ll_ret_resi(v, ns, ir);
-    } else if ret_kind == "resl" || ret_kind == "resil" || ret_kind == "ress" || ret_kind == "resb" {
+    } else if ret_kind == "resl" || ret_kind == "resil" || ret_kind == "ress" || ret_kind == "resb" || ret_kind == "resf" {
         ns = ll_ret_res(v, ret_kind, ns, ir);
     } else if ret_kind == "void" {
         ll_ir_inst(ir, "ret", "void", "", "", 1, 1);
