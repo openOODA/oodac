@@ -50,15 +50,15 @@ run_suite() {
     "opm/cli/main.oo"
     "lsp/cli/main.oo"
     "mcp/cli/main.oo"
-    "bb/cli/main.oo"
+    "mcp/qa/suite.oo"
   )
   for entry in "${entries[@]}"; do
-    local tag="POLY-CHK-${entry%%/*}"
+    local tag="POLY-CHK-$(echo "$entry" | tr / -)"
     local ep="$PROJECT_ROOT/$entry"
     local chk_st=1
     if [[ -f "$ep" ]]; then
       local chk_quota="$OO_LIST_AMBIENT_QUOTA"
-      if [[ "$entry" == "bb/cli/main.oo" ]]; then
+      if [[ "$entry" == "mcp/qa/suite.oo" ]]; then
         chk_quota="34359738368"
       fi
       if OO_LIST_AMBIENT_QUOTA="$chk_quota" timeout 120s "$OODAC" \
@@ -71,13 +71,13 @@ run_suite() {
 
   # 2. LLVM IR emission parity for polyrepo entrypoints
   for entry in "${entries[@]}"; do
-    local tag="POLY-LL-${entry%%/*}"
+    local tag="POLY-LL-$(echo "$entry" | tr / -)"
     local ep="$PROJECT_ROOT/$entry"
-    local base="${entry%%/*}"
+    local base="$(echo "$entry" | tr / -)"
     local ll_st=1
     if [[ -f "$ep" ]]; then
       local ll_quota="$OO_LIST_AMBIENT_QUOTA"
-      if [[ "$entry" == "bb/cli/main.oo" ]]; then
+      if [[ "$entry" == "mcp/qa/suite.oo" ]]; then
         ll_quota="34359738368"
       fi
       if OO_LIST_AMBIENT_QUOTA="$ll_quota" timeout 120s "$OODAC" \
