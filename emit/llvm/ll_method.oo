@@ -146,6 +146,7 @@ pub fn ll_method(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, env:
             process_exit(1);
         }
         let mut vk: String = "i64";
+        if kind == "resb" { vk = "i1"; }
         if kind == "ress" || kind == "opts" { vk = "str"; }
         if kind == "resl" { vk = "slist"; }
         if ll_is_resst(kind) || ll_is_optst(kind) {

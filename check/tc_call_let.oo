@@ -11,7 +11,10 @@
 //
 // residual: ret_table built on first non-cap miss, not at entry
 
+import "tc_call_util.oo";
+import "tc_struct_chain.oo";
 import "tc_tables_ret.oo";
+import "types/types_core.oo";
 
 
 pub fn typecheck_let_ann_call_init(toks: List[String]) {
@@ -56,6 +59,17 @@ pub fn typecheck_let_ann_call_init(toks: List[String]) {
                                                                     ret_table,
                                                                     aliases
                                                                 );
+                                                            }
+                                                            if gty != "" {
+                                                                let crp: Int = match_rparen(toks, p + 1);
+                                                                if crp > 0 && crp + 3 < n && field_at(list_get(toks, crp + 1), 0) == "DOT" && field_at(list_get(toks, crp + 3), 0) == "LPAREN" {
+                                                                    let cmname: String = field_at(list_get(toks, crp + 2), 3);
+                                                                    if cmname == "to_string" && (gty == "Int" || gty == "Float" || gty == "String" || gty == "Bool") { gty = "String"; }
+                                                                    if cmname == "len" && (gty == "String" || is_list_type_name(gty)) { gty = "Int"; }
+                                                                    if (cmname == "is_ok" || cmname == "is_err") && is_result_type_name(gty) { gty = "Bool"; }
+                                                                    if cmname == "unwrap" && is_result_type_name(gty) { gty = result_ok_payload_type(gty); }
+                                                                    if cmname == "unwrap_or" && is_result_type_name(gty) { gty = result_ok_payload_type(gty); }
+                                                                }
                                                             }
                                                             if gty != "" {
                                                                 if !types_compatible(ann, gty) {
