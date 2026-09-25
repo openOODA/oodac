@@ -13,6 +13,7 @@ import "tc_read_result.oo";
 
 import "tc_infer.oo";
 import "tc_ok_err.oo";
+import "types/types_core.oo";
 
 
 pub fn ann_check_let(toks: List[String], i: Int, n: Int, aliases: String, lit_env0: String, ret_table: String, struct_table: String) -> String {
@@ -102,7 +103,12 @@ if p < n && field_at(list_get(toks, p), 0) == "KW_MUT" { p = p + 1;
                                         }
                                         if mname == "unwrap" {
                                             if is_result_type_name(rty) {
-                                                init_ty = "String";
+                                                init_ty = result_ok_payload_type(rty);
+                                            }
+                                        }
+                                        if mname == "unwrap_or" {
+                                            if is_result_type_name(rty) {
+                                                init_ty = result_ok_payload_type(rty);
                                             }
                                         }
                                     }

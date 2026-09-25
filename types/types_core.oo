@@ -65,6 +65,12 @@ pub fn type_env(env: String, name: String, ty: String) -> String {
 }
 
 pub fn result_ok_payload_type(rty: String) -> String {
+    if rty == "resi" { return "Int"; }
+    if rty == "resb" { return "Bool"; }
+    if rty == "ress" { return "String"; }
+    if rty == "resl" { return "List[String]"; }
+    if rty == "resil" { return "List[Int]"; }
+    if chars_len(rty) >= 6 && str_slice(rty, 0, 6) == "resSt_" { return str_slice(rty, 6, chars_len(rty)); }
     let n: Int = chars_len(rty);
     if n < 8 || str_slice(rty, 0, 7) != "Result[" { return "String"; }
     let mut i: Int = 7;

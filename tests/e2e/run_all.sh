@@ -33,6 +33,7 @@ SUITE_LIST=(
   "test_llvm_ir_props.sh"
   "test_llvm_cap_require.sh"
   "test_llvm_struct_capname.sh"
+  "test_llvm_resbool.sh"
   "test_cli_json_errors.sh"
   "test_llvm_rpath.sh"
   "test_tier1_r3_qa.sh"
