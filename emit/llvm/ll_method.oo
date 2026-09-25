@@ -113,7 +113,7 @@ pub fn ll_method(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, env:
         process_exit(1);
     }
     if m == "unwrap" {
-        if kind != "resi" && kind != "ress" && kind != "resl" && kind != "opti" && kind != "opts" && !ll_is_resst(kind) && !ll_is_optst(kind) {
+        if kind != "resi" && kind != "resb" && kind != "ress" && kind != "resl" && kind != "resil" && kind != "opti" && kind != "opts" && !ll_is_resst(kind) && !ll_is_optst(kind) {
             println("ERR\tllvm\tunwrap needs Result or Option");
             process_exit(1);
         }
@@ -137,7 +137,7 @@ pub fn ll_method(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, env:
         return ll_pack(0, ll_pssa(lv), ll_pk(lv), ll_pptr(lv));
     }
     if m == "unwrap_or" {
-        if kind != "resi" && kind != "ress" && kind != "resl" && kind != "opti" && kind != "opts" && !ll_is_resst(kind) && !ll_is_optst(kind) {
+        if kind != "resi" && kind != "resb" && kind != "ress" && kind != "resl" && kind != "resil" && kind != "opti" && kind != "opts" && !ll_is_resst(kind) && !ll_is_optst(kind) {
             println("ERR\tllvm\tunwrap_or needs Result or Option");
             process_exit(1);
         }

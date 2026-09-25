@@ -69,6 +69,7 @@ pub fn ll_ty_at(toks: List[String], pos: Int, n: Int, stab: String) -> String {
             let e: String = ll_t(toks, p + 2);
             if e == "String" { return "ress"; }
             if e == "Int" { return "resi"; }
+            if e == "Bool" { return "resb"; }
             if e == "Void" { return "ress"; }
             if e == "List" {
                 if p + 4 < n && ll_t(toks, p + 4) == "Int" { return "resil"; }
@@ -172,6 +173,7 @@ pub fn ll_ir_alloc(kind: String) -> String {
     if k == "opts" { return "%OoOptS"; }
     if k == "ress" { return "%OoResS"; }
     if k == "resi" { return "%OoResI"; }
+    if k == "resb" { return "%OoResB"; }
     if k == "resl" { return "%OoResL"; }
     if k == "resil" { return "%OoResLI"; }
     if k == "i1" { return "i1"; }
@@ -207,7 +209,7 @@ pub fn ll_ir_val(kind: String) -> String {
 pub fn ll_is_agg(kind: String) -> Bool {
     let k: String = ll_unp(kind);
     if k == "slist" || k == "ilist" || k == "flist" || k == "ll_i" || k == "ll_s" || k == "str" || k == "opti" || k == "opts" { return true; }
-    if k == "ress" || k == "resi" || k == "resl" || k == "resil" { return true; }
+    if k == "ress" || k == "resi" || k == "resb" || k == "resl" || k == "resil" { return true; }
     if chars_len(k) >= 3 && str_slice(k, 0, 3) == "St_" { return true; }
     if chars_len(k) >= 6 && (str_slice(k, 0, 6) == "olist_" || str_slice(k, 0, 6) == "resSt_" || str_slice(k, 0, 6) == "optSt_") { return true; }
     return false;
@@ -215,7 +217,7 @@ pub fn ll_is_agg(kind: String) -> Bool {
 pub fn ll_is_mem(kind: String) -> Bool {
     let k: String = ll_unp(kind);
     if k == "slist" || k == "ilist" || k == "flist" || k == "ll_i" || k == "ll_s" || k == "opti" || k == "opts" { return true; }
-    if k == "ress" || k == "resi" || k == "resl" || k == "resil" { return true; }
+    if k == "ress" || k == "resi" || k == "resb" || k == "resl" || k == "resil" { return true; }
     if chars_len(k) >= 3 && str_slice(k, 0, 3) == "St_" { return true; }
     if chars_len(k) >= 6 && (str_slice(k, 0, 6) == "olist_" || str_slice(k, 0, 6) == "resSt_" || str_slice(k, 0, 6) == "optSt_") { return true; }
     return false;

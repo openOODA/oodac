@@ -1,0 +1,48 @@
+// # LLVM Result[Bool] constructors
+//
+// Logline: Lower Ok(i1)/Err(str) into %OoResB behind the resb expect kind.
+//
+// Setup: Called from ll_ctor_ok/ll_ctor_err. Unannotated Ok(true) still
+//   flows to resi; only expect == resb takes this path.
+//
+// Beats:
+//   1. Ok stores tag 1 plus the i1 payload at field 1.
+//   2. Err stores tag 0 plus the message at field 2.
+//
+
+import "ll_tok.oo";
+import "ll_ty.oo";
+import "ll_slot.oo";
+import "ll_ir.oo";
+
+pub fn ll_oostr_from_pair(pair: Int, ir: &mut IrBuf) -> Int {
+    let s0: Int = pair + 1;
+    ll_ir_inst(ir, "extractvalue", "{ ptr, i64 } " + ll_ssa(pair), ll_ssa(s0), "0", 1, 1);
+    let s1: Int = s0 + 1;
+    ll_ir_inst(ir, "extractvalue", "{ ptr, i64 } " + ll_ssa(pair), ll_ssa(s1), "1", 1, 1);
+    let s2: Int = s1 + 1;
+    ll_ir_inst(ir, "insertvalue", "%OoStr", ll_ssa(s2), "{ ptr null, i64 0 }, ptr " + ll_ssa(s0) + ", 0", 1, 1);
+    let s3: Int = s2 + 1;
+    ll_ir_inst(ir, "insertvalue", "%OoStr", ll_ssa(s3), ll_ssa(s2) + ", i64 " + ll_ssa(s1) + ", 1", 1, 1);
+    return s3;
+}
+
+pub fn ll_ctor_ok_resb(arg: String, ssa0: Int, ir: &mut IrBuf) -> String {
+    let avb: String = ll_as_val(arg, ssa0, ir);
+    let ab: String = ll_tmpa(ll_pssa(avb) + 1);
+    ll_slot_ty(ab, "%OoResB", ir);
+    let osb: Int = ll_pssa(avb) + 1;
+    ll_ir_inst(ir, "insertvalue", "%OoResB", ll_ssa(osb), "{ i32 1, i1 false, %OoStr { ptr null, i64 0 } }, i1 " + ll_opnd(avb) + ", 1", 1, 1);
+    ll_ir_inst(ir, "store", "%OoResB", "", ll_ssa(osb) + ", ptr " + ab + ", align 8", 1, 1);
+    return ll_pack(0, osb, "resb", ab);
+}
+
+pub fn ll_ctor_err_resb(av: String, ir: &mut IrBuf) -> String {
+    let a: String = ll_tmpa(ll_pssa(av) + 1);
+    ll_slot_ty(a, "%OoResB", ir);
+    let os: Int = ll_oostr_from_pair(ll_pssa(av), ir);
+    let s2: Int = os + 1;
+    ll_ir_inst(ir, "insertvalue", "%OoResB", ll_ssa(s2), "{ i32 0, i1 false, %OoStr { ptr null, i64 0 } }, %OoStr " + ll_ssa(os) + ", 2", 1, 1);
+    ll_ir_inst(ir, "store", "%OoResB", "", ll_ssa(s2) + ", ptr " + a + ", align 8", 1, 1);
+    return ll_pack(0, s2, "resb", a);
+}

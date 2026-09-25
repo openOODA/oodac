@@ -13,6 +13,7 @@ import "ll_struct.oo";
 import "ll_slot.oo";
 import "ll_ir.oo";
 import "ll_niche.oo";
+import "ll_ctor_resb.oo";
 
 fn ll_resst_base(expect: String) -> String {
     if chars_len(expect) >= 6 && str_slice(expect, 0, 6) == "resSt_" {
@@ -79,18 +80,6 @@ pub fn ll_ctor(name: String, arg: String, ssa0: Int, expect: String, ir: &mut Ir
     return arg;
 }
 
-fn ll_oostr_from_pair(pair: Int, ir: &mut IrBuf) -> Int {
-    let s0: Int = pair + 1;
-    ll_ir_inst(ir, "extractvalue", "{ ptr, i64 } " + ll_ssa(pair), ll_ssa(s0), "0", 1, 1);
-    let s1: Int = s0 + 1;
-    ll_ir_inst(ir, "extractvalue", "{ ptr, i64 } " + ll_ssa(pair), ll_ssa(s1), "1", 1, 1);
-    let s2: Int = s1 + 1;
-    ll_ir_inst(ir, "insertvalue", "%OoStr", ll_ssa(s2), "{ ptr null, i64 0 }, ptr " + ll_ssa(s0) + ", 0", 1, 1);
-    let s3: Int = s2 + 1;
-    ll_ir_inst(ir, "insertvalue", "%OoStr", ll_ssa(s3), ll_ssa(s2) + ", i64 " + ll_ssa(s1) + ", 1", 1, 1);
-    return s3;
-}
-
 fn ll_ctor_some(arg: String, ssa0: Int, expect: String, ir: &mut IrBuf) -> String {
     let sav: String = ll_int_convert(arg, ssa0, "i64", ir);
     let sab: Int = ll_hw(ssa0, ll_pssa(sav));
@@ -137,6 +126,9 @@ fn ll_ctor_ok(arg: String, ssa0: Int, expect: String, ir: &mut IrBuf) -> String 
         ll_slot_ty(a, "%OoResS", ir);
         ll_ir_inst(ir, "store", "%OoResS", "", "{ i32 1, %OoStr { ptr null, i64 0 } }, ptr " + a + ", align 8", 1, 1);
         return ll_pack(0, ssa0 + 1, "ress", a);
+    }
+    if ll_pk(arg) == "i1" && expect == "resb" {
+        return ll_ctor_ok_resb(arg, ssa0, ir);
     }
     let oav: String = ll_int_convert(arg, ssa0, "i64", ir);
     let oab: Int = ll_hw(ssa0, ll_pssa(oav));
@@ -240,6 +232,9 @@ fn ll_ctor_err(arg: String, ssa0: Int, expect: String, ir: &mut IrBuf) -> String
         ll_ir_inst(ir, "insertvalue", "%OoResLI", ll_ssa(s2), "{ i32 0, %OoIList zeroinitializer, %OoStr { ptr null, i64 0 } }, %OoStr " + ll_ssa(os) + ", 2", 1, 1);
         ll_ir_inst(ir, "store", "%OoResLI", "", ll_ssa(s2) + ", ptr " + a + ", align 8", 1, 1);
         return ll_pack(0, s2, "resil", a);
+    }
+    if expect == "resb" {
+        return ll_ctor_err_resb(av, ir);
     }
     let a: String = ll_tmpa(ll_pssa(av) + 1);
     ll_slot_ty(a, "%OoResI", ir);

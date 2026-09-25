@@ -80,6 +80,7 @@ pub fn ll_rt_header_triple(toks: List[String], triple: String) {
     println("%OoLL_I = type { ptr, i64, i64 }");
     println("%OoLL_S = type { ptr, i64, i64 }");
     println("%OoResI = type { i32, i64, %OoStr }");
+    println("%OoResB = type { i32, i1, %OoStr }");
     println("%OoResL = type { i32, %OoSList, %OoStr }");
     println("%OoResLI = type { i32, %OoIList, %OoStr }");
     println("%OoResS = type { i32, %OoStr }");

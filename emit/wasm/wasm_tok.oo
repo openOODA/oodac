@@ -147,7 +147,7 @@ pub fn ws_un_ty(pack: String) -> String {
 
 pub fn ws_fail(line: Int, msg: String) {
     println("ERR\twasm\t" + msg + " at line " + line.to_string());
-    process_exit(1);
+    process_exit(2);
 }
 
 pub fn ws_line(toks: List[String], i: Int) -> Int {
