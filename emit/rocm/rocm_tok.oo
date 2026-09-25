@@ -30,7 +30,7 @@ pub fn rc_line(toks: List[String], i: Int) -> Int {
 
 pub fn rc_fail(line: Int, msg: String) {
     println("ERR\trocm\t" + msg + " at line " + line.to_string());
-    process_exit(1);
+    process_exit(2);
 }
 
 pub fn rc_skip_balanced(toks: List[String], pos0: Int) -> Int {
