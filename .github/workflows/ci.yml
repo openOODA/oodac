@@ -2,9 +2,9 @@ name: oodac CI
 
 on:
   push:
-    branches: [main, phase-0-honest-ci]
+    branches: [master, phase-0-honest-ci]
   pull_request:
-    branches: [main]
+    branches: [master]
   workflow_dispatch:
     inputs:
       target_tag:
@@ -485,7 +485,7 @@ jobs:
           if-no-files-found: error
   auto-release:
     needs: release-assets
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
     uses: openOODA/openOODA/.github/workflows/auto-release.yml@v2.10.44
     secrets: inherit
     with:
