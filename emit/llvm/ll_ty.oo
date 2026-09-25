@@ -43,7 +43,6 @@ pub fn ll_ty_at(toks: List[String], pos: Int, n: Int, stab: String) -> String {
     if t == "f64x4" { return "v4f64"; }
     if t == "String" { return "str"; }
     if t == "Void" { return "void"; }
-    if ll_is_cap_ty(t) { return "i64"; }
     if t == "List" {
         if p + 2 < n && ll_k(toks, p + 1) == "LBRACKET" && ll_k(toks, p + 2) == "IDENT" {
             let e: String = ll_t(toks, p + 2);
@@ -102,6 +101,9 @@ pub fn ll_ty_at(toks: List[String], pos: Int, n: Int, stab: String) -> String {
     if sr != "" { return sr; }
     let sc: String = ll_ty_struct_rich(toks, t, n, stab);
     if sc != "" { return sc; }
+    // Struct stab wins over the *Cap suffix: user structs like BudgetCap
+    // keep their shape; only undefined names fall through to caps.
+    if ll_is_cap_ty(t) { return "i64"; }
     println("ERR\tllvm\tunknown type " + t);
     process_exit(1);
     return "i64";

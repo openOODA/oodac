@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Tier 1: struct field reads via params; struct names containing "Cap" must not
-# be shadowed by capability detection (check uses suffix-match; emit must too).
-# Covers the CapT minimal repro plus the multi-field owned/borrowed matrix.
+# be shadowed by capability detection (stab lookup wins over the *Cap suffix).
+# Covers the CapT minimal repro, the multi-field owned/borrowed matrix, and
+# true-suffix structs like BudgetCap (which the old suffix rule ate).
 # Compliance: wc -l <= 256, Double-Run ($Run_1 == Run_2), Zero-Trust.
 set -euo pipefail
 
@@ -148,6 +149,34 @@ EOF
     fi
   fi
   record_test "CAPNAME-08" "Capacity/Cap binary prints q s" "$ed_run"
+
+  # True suffix: struct name ENDS with Cap (BudgetCap shape); stab must win.
+  cat > "$d/suffix.oo" << 'EOF'
+pub type BudgetCap = struct { max_prompt_tokens: Int, max_total_tokens: Int };
+fn sp(c: BudgetCap) -> Int { return c.max_prompt_tokens; }
+fn spb(c: &BudgetCap) -> Int { return c.max_total_tokens; }
+pub fn main() {
+    let b = BudgetCap { max_prompt_tokens: 100, max_total_tokens: 200 };
+    println(sp(b));
+    println(spb(&b));
+}
+EOF
+
+  local sf_ok=1
+  if timeout 30s "$OODAC" check "$d/suffix.oo" >/dev/null 2>&1; then
+    if timeout 30s "$OODAC" emit-llvm "$d/suffix.oo" > "$d/suffix.ll" 2>&1; then
+      sf_ok=0
+    fi
+  fi
+  record_test "CAPNAME-10" "BudgetCap-suffix struct emits" "$sf_ok"
+
+  local sf_run=1
+  if [[ "$sf_ok" -eq 0 ]] && timeout 120s "$OODAC" build --backend llvm "$d/suffix.oo" -o "$d/suffix.bin" >/dev/null 2>&1; then
+    if [[ "$("$d/suffix.bin" 2>/dev/null)" == "$(printf '100\n200')" ]]; then
+      sf_run=0
+    fi
+  fi
+  record_test "CAPNAME-11" "BudgetCap binary prints 100 200" "$sf_run"
 
   # Real capabilities still lower as i64 tokens with explicit require gates.
   cat > "$d/gated.oo" << 'EOF'
