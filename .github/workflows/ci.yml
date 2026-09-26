@@ -442,8 +442,10 @@ jobs:
           /tmp/oodac_ll_ci build --backend wasm oodac/bootstrap/corpus/emit-llvm/pass/fn_ret_int.oo -o /tmp/s6.wasm
           wasm_rc=$?
           set -e
-          echo "wasm_residual_rc=$wasm_rc"
-          test "$wasm_rc" -eq 2
+          echo "wasm_rc=$wasm_rc"
+          test "$wasm_rc" -eq 0
+          test -f /tmp/s6.wasm
+          od -An -tx1 /tmp/s6.wasm | head -1 | grep -q '00 61 73 6d'
           /tmp/oodac_ll_ci build --backend llvm cli/main.oo -o /tmp/cli_ll
           test -x /tmp/cli_ll
           /tmp/cli_ll --help | head -5
