@@ -16,6 +16,7 @@ pub fn host_rt_c() -> String {
     s = s + "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n";
     s = s + "#include <unistd.h>\n#include <limits.h>\n#include <sys/prctl.h>\n";
     s = s + "#include \"oodar.h\"\n";
+    s = s + "void blackbox_init(void); /* oodar blackbox: internal header, keep prototype local */\n";
     s = s + "static int g_tn, g_np, g_nm;\nstatic int g_marks[64];\n";
     s = s + "static char g_names[256][16];\n";
     s = s + "void oo_emit_tmp_reset(void) { g_tn = 0; g_np = 0; g_nm = 0; }\n";
@@ -51,6 +52,7 @@ pub fn host_rt_c() -> String {
     s = s + "static OoStr jail_str(const char *s) {\n";
     s = s + "  OoStr o; o.data = (char *)s; o.len = s ? (long long)strlen(s) : 0; return o;\n}\n";
     s = s + "__attribute__((constructor)) void oo_jail_landlock_ctor(void) {\n";
+    s = s + "  blackbox_init(); /* eager crash handlers; oodar init is lazy since 4.0.40 */\n";
     s = s + "  const char *off = getenv(\"OODA_NO_JAIL\");\n";
     s = s + "  if (off && off[0] == '1' && off[1] == 0) return;\n";
     s = s + "  const char *rd = getenv(\"OODA_FS_READDIR\");\n";

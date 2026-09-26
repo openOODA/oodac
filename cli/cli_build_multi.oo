@@ -205,10 +205,12 @@ pub fn build_multi(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env: &
 
     let lib_a: String = oodar_lib_core(fs_r, od);
     let mut lr: Result[String, String] = Err("");
+    // Gate anchors: strip-debug keeps the symtab the nm probes verify
+    // (landlock ctor, blackbox trio); -u keeps trap_cap past gc-sections.
     if is_shared {
         lr = sys_exec(sys, "clang", "--no-default-config", "-shared", "-fPIC", "-DOO_SHARED=1", "-fvisibility=hidden", "-Wl,--exclude-libs,ALL", "-Os", "-g0", "-fno-ident", "-ffunction-sections", "-fdata-sections", "-fno-asynchronous-unwind-tables", "-fno-unwind-tables", "-Wno-override-module", "-I" + od, hr, "@" + rsp_path, lib_a, "-frandom-seed=0", "-Wl,--build-id=none", "-Wl,--gc-sections", "-Wl,-z,noseparate-code", "-Wl,--strip-all", "-lm", "-ldl", "-lpthread", "-o", out);
     } else {
-        lr = sys_exec(sys, "clang", "--no-default-config", "-Os", "-g0", "-fno-ident", "-ffunction-sections", "-fdata-sections", "-fno-asynchronous-unwind-tables", "-fno-unwind-tables", "-Wno-override-module", "-I" + od, hr, "@" + rsp_path, lib_a, "-frandom-seed=0", "-Wl,--build-id=none", "-Wl,--gc-sections", "-Wl,-z,noseparate-code", "-Wl,--strip-all", "-lm", "-ldl", "-lpthread", "-o", out);
+        lr = sys_exec(sys, "clang", "--no-default-config", "-Os", "-g0", "-fno-ident", "-ffunction-sections", "-fdata-sections", "-fno-asynchronous-unwind-tables", "-fno-unwind-tables", "-Wno-override-module", "-I" + od, hr, "@" + rsp_path, lib_a, "-Wl,-u,oo_blackbox_trap_cap", "-frandom-seed=0", "-Wl,--build-id=none", "-Wl,--gc-sections", "-Wl,-z,noseparate-code", "-Wl,--strip-debug", "-lm", "-ldl", "-lpthread", "-o", out);
     }
     let _: Result[String, String] = sys_exec(sys, "/usr/bin/rm", "-f", rsp_path);
     if !lr.is_ok() {

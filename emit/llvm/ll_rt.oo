@@ -60,6 +60,7 @@ pub fn ll_rt_header(toks: List[String]) {
 }
 
 pub fn ll_rt_header_triple(toks: List[String], triple: String) {
+    println("source_filename = \"oodac\"");
     println("target datalayout = \"" + ll_layout_of(triple) + "\"");
     println("target triple = \"" + triple + "\"");
     println("!llvm.module.flags = !{!0, !1, !12}");

@@ -26,7 +26,9 @@ export OODA_NO_JAIL="${OODA_NO_JAIL:-1}"
 
 TEXT_BUDGET=22016
 LL_BUDGET=8192
-BIN_BUDGET=33792
+# 36 KiB: strip-debug anchor symtab (landlock ctor, blackbox trio) costs ~2 KiB
+# over strip-all; still catches real bloat (full static oodar is MBs).
+BIN_BUDGET=36864
 BUILD_PEAK_BUDGET_KB=131072
 LINK_PEAK_BUDGET_KB=131072
 
@@ -106,8 +108,8 @@ run_suite() {
       if /usr/bin/time -v clang --no-default-config -Os -g0 -fno-ident \
         -ffunction-sections -fdata-sections -fno-asynchronous-unwind-tables \
         -fno-unwind-tables -Wno-override-module -I"$od" "$hr" @"$d/link.rsp" \
-        "$lib" -frandom-seed=0 -Wl,--build-id=none -Wl,--gc-sections \
-        -Wl,-z,noseparate-code -Wl,--strip-all -lm -ldl -lpthread \
+        "$lib" -Wl,-u,oo_blackbox_trap_cap -frandom-seed=0 -Wl,--build-id=none -Wl,--gc-sections \
+        -Wl,-z,noseparate-code -Wl,--strip-debug -lm -ldl -lpthread \
         -o "$d/replay.bin" >"$d/link.log" 2>"$d/link.time"; then
         lpeak=$(awk '/Maximum resident set size/ {print $6}' "$d/link.time")
         if cmp -s "$d/replay.bin" "$d/small.bin"; then m05=0; fi
