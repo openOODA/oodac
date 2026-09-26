@@ -77,12 +77,6 @@ fn src_has_main(src: String) -> Bool {
 }
 
 fn path_is_compiler_main(path: String) -> Bool {
-    let n: Int = chars_len(path);
-    if n >= 13 {
-        if str_slice(path, n - 13, n) == "oodac/main.oo" {
-            return true;
-        }
-    }
     return path == "oodac/main.oo";
 }
 
@@ -108,6 +102,10 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
     if backend != "" && backend != "llvm" && backend != "elf" && backend != "wasm" && backend != "rocm" {
         println("ERR\tbuild\tbackend residual: " + backend);
         process_exit(2);
+    }
+    if path_is_compiler_main(path) {
+        println("ERR\tbuild\tcompiler rebuild is unique_fns");
+        process_exit(1);
     }
     if path_exists(fs_r, out) {
         if path_exists(fs_r, out + "/.") {
@@ -135,6 +133,7 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
         println("ERR\tbuild\tmkdir failed");
         process_exit(1);
     }
+    // Dormant while the unique_fns refusal above stands (pure_build rebuilds).
     let is_multi: Bool = path_is_compiler_main(path);
     if backend != "elf" && is_multi {
         build_multi(fs_r, fs_w, sys, env, ar, host, od, tmp_dir, path, out, is_shared);
