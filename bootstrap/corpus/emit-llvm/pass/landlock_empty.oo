@@ -1,0 +1,20 @@
+// # landlock restrict lowers; empty dirs lock everything down
+//
+// Logline: landlock_restrict with empty dir lists returns Ok and applies
+//   a total filesystem lockdown (GAP-10: zero rules, maximal jail).
+//
+// Setup: Needs SysCap. Safe: stdout is an already-open fd, unaffected
+//   by the path lockdown; the process prints then exits.
+//
+// Beats:
+//   1. Restrict with empty read and write lists.
+//   2. Result is Ok (lockdown applied); print ll-ok.
+
+pub fn main(sys: &SysCap) {
+    let r: Result[Bool, String] = landlock_restrict(sys, "", "");
+    if r.is_ok() {
+        println("ll-ok");
+    } else {
+        println("FAIL refused");
+    }
+}

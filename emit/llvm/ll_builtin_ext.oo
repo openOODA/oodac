@@ -27,7 +27,9 @@ pub fn ll_builtin_ext_sig(sym: String) -> String {
     if s3 != "" { return s3; }
     let s4: String = ll_ext_sig_actor(s);
     if s4 != "" { return s4; }
-    return ll_ext_sig_audio(s);
+    let s5: String = ll_ext_sig_audio(s);
+    if s5 != "" { return s5; }
+    return ll_ext_sig_ffi(s);
 }
 
 pub fn ll_builtin_ext_sym(sym: String) -> String {
@@ -44,6 +46,7 @@ pub fn ll_builtin_ext_sym(sym: String) -> String {
     if n >= 8 && str_slice(s, 0, 8) == "channel_" { return "oo_" + s; }
     if n >= 7 && str_slice(s, 0, 7) == "thread_" { return "oo_" + s; }
     if s == "otp_supervise" { return "oo_otp_supervise"; }
+    if s == "dlopen" || s == "dlsym" || s == "dlclose" { return "oo_" + s; }
     return s;
 }
 
@@ -142,5 +145,12 @@ fn ll_ext_sig_audio(sym: String) -> String {
     if sym == "oo_audio_init" || sym == "oo_audio_capture_init" || sym == "audio_init" { return "i64>i32"; }
     if sym == "oo_audio_capture" || sym == "oo_audio_capture_read" || sym == "audio_capture" { return "i64,ptr>ress"; }
     if sym == "oo_audio_release" || sym == "audio_release" { return "ptr>void"; }
+    return "";
+}
+
+fn ll_ext_sig_ffi(sym: String) -> String {
+    if sym == "oo_dlopen" || sym == "dlopen" { return "i64,str>ress"; }
+    if sym == "oo_dlsym" || sym == "dlsym" { return "i64,str,str>ress"; }
+    if sym == "oo_dlclose" || sym == "dlclose" { return "i64,str>ress"; }
     return "";
 }

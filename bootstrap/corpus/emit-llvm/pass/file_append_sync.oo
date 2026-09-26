@@ -1,0 +1,30 @@
+// # file append sync lowers and lands bytes
+//
+// Logline: file_append_sync appends to a scratch file; readback contains the bytes.
+//
+// Setup: Needs FsWriteCap + FsReadCap. Scratch lives in .ooda-cache/ooda-tmp.
+// Rerun-safe: asserts containment, not exact equality.
+//
+// Beats:
+//   1. Append a marker line to the scratch file.
+//   2. Read back; content contains the marker.
+
+pub fn main(fs_w: &FsWriteCap, fs_r: &FsReadCap) {
+    let p: String = ".ooda-cache/ooda-tmp/corpus_fas.txt";
+    let w: Result[Void, String] = file_append_sync(fs_w, p, "fas-marker-1\n");
+    if w.is_err() {
+        println("FAIL append");
+        return;
+    }
+    let r: Result[String, String] = read_file(fs_r, p);
+    if r.is_err() {
+        println("FAIL readback");
+        return;
+    }
+    let t: String = match r { Ok(s) => s, Err(_) => "" };
+    if str_index_of(t, "fas-marker-1") < 0 {
+        println("FAIL content");
+        return;
+    }
+    println("fas-ok");
+}

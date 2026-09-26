@@ -1,0 +1,17 @@
+// # ord lowers; first byte code, empty is minus one
+//
+// Logline: ord returns the first byte's code; empty string gives -1.
+//
+// Setup: Pure call, no caps. Mirrors oo_byte_at bounds behavior.
+//
+// Beats:
+//   1. ord of "A" is 65.
+//   2. ord of "" is -1.
+
+pub fn main() {
+    if ord("A") == 65 && ord("") == 0 - 1 {
+        println("ord-ok");
+    } else {
+        println("FAIL ord");
+    }
+}

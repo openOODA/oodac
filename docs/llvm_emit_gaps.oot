@@ -1,0 +1,183 @@
+# LLVM emitter gaps blocking std probes (document only)
+
+File: oodac/docs/llvm_emit_gaps.oot
+
+Status: SURVEY 2026-09-25. Grounded in serial `oodac build` runs of all
+55 std probes with oodac 0.11.15 + oodar libs built from source + clang
+22. 40 probes build; 15 fail at emit-llvm while `check` passes. Each
+gap below is a check/emit divergence: the checker accepts code the
+emitter cannot lower. No action taken: documenting only.
+
+Reproduce: from the std repo root, with OODA_COMPILER pointing at
+oodac/bin/oodac and jail dirs set to the workspace, run
+`oodac build qa/<probe>.oo -o /tmp/x.bin` for any probe named below.
+
+## Gap 1. Ok(Float) constructor — FIXED in source 2026-09-25
+
+- Error: `ERR llvm Ok kind` (emit/llvm/ll_ctor.oo, end of ll_ctor_ok).
+- Cause: no float branch and no %OoResF representation; worse,
+  `Result[Float]` fell through the mapping into `resSt_Float`
+  (a struct Result for a struct that cannot exist).
+- Fix: new `resf` kind mirroring `resil` across 10 files:
+  mapping + LLVM type + agg/mem predicates (ll_ty.oo),
+  Ok/Err construction (ll_ctor.oo), match binding (ll_call.oo),
+  val/err fields (ll_field.oo), unwrap gates + default kind
+  (ll_method.oo), sret returns (ll_exit.oo), tag + err-string
+  ARC with no payload call for the scalar (ll_arc.oo),
+  `%OoResF = { i32, double, %OoStr }` preamble (ll_rt.oo),
+  match-statement scrutinee gate incl. the missing `resol_`
+  admit (ll_match.oo), and Result-typed struct field release
+  (ll_struct_rr.oo). No runtime C change: scalars need no
+  retain/release and the tag/err machinery is type-generic.
+  Proven by a chain harness on the repro's real tokens
+  (mapping + Ok + Err + sret return + match phi + unwrap +
+  is_ok PASS), with a negative control on unfixed sources
+  (maps to `resSt_Float`, FAIL).
+- Shelf test: bootstrap/corpus/emit-llvm/pass/result_float_full.oo
+  (expects `isok`/`m-ok`/`u-ok`; NOT wired into the CI gate
+  until the fixed binary ships).
+- Blocks: probe_science (via science/phys/classical/ideal_gas_law.oo).
+  152 std files mention Result[Float; each needs an emit trial
+  once the fixed binary ships.
+
+## Gap 2. Net builtins unlowered — FIXED in source 2026-09-25
+
+- Error: `ERR llvm unknown call tcp_connect` (emit/llvm/ll_user_call.oo).
+- Cause: check knows tcp_connect/tcp_read/tcp_write (cap table), but
+  no emitter dispatch lowers them. Runtime symbol oo_tcp_connect
+  exists (liboodar-net.a). Same likely holds for the tcp_read,
+  tcp_write, tcp_close, tcp_accept siblings.
+- Fix: new emit/llvm/ll_builtin_net.oo with all five arms, sharing
+  the sys OoResS helper (made pub); delegate hook in
+  ll_builtin_host.oo; declare protos in ll_need_tab.oo; need
+  registrations in ll_need.oo. Harness-proven with tcp gate.
+- Shelf test: bootstrap/corpus/emit-llvm/pass/tcp_connect_refused.oo
+  (expects `tcp-ok`; NOT wired into the CI gate until the fixed
+  binary ships).
+- Blocks: probe_cap_net.
+
+## Gap 3. ord unlowered (call form and runtime) — FIXED in source 2026-09-25
+
+- Error: `ERR llvm unknown call ord`.
+- Cause: check lists `ord` as a known method name
+  (check/tc_names_known.oo), but the emitter has no lowering and no
+  oo_ord symbol exists in any oodar archive. Needs runtime + emit.
+- Fix: new `long long oo_ord(OoStr s)` in oodar/core/str/str_ops.c
+  (first byte via oo_byte_at, -1 when empty) + oodar.h declare;
+  new arm in emit/llvm/ll_builtin.oo mirroring bytes_len (capless);
+  declare proto + need registration. Harness-proven with negative
+  control. Core lib rebuilt; symbol present.
+- Shelf test: bootstrap/corpus/emit-llvm/pass/ord_first_byte.oo
+  (expects `ord-ok`; NOT wired into the CI gate until the fixed
+  binary ships).
+- Blocks: probe_wayland_wire, probe_dbus_wire.
+
+## Gap 4. Match arm type mismatch — FIXED in source 2026-09-25
+
+- Error: `ERR llvm match arm type mismatch`.
+- Cause: `Result[List[Struct]]` collapsed to kind `resl`
+  (the string-list Result), so `Ok` built the wrong layout and
+  the match bound the payload as `slist` while the default arm
+  was `olist_X`. Minimal repro: match on `Result[List[Cell]]`
+  with a `list_new()` default (m3b).
+- Fix: new `resol_X` kind mirroring the `resSt_` idiom across
+  8 files: mapping + LLVM type + agg/mem/ABI predicates
+  (ll_ty.oo), `ll_is_resol` + wrapper type emission
+  (ll_struct_list.oo), Ok/Err construction (ll_ctor.oo),
+  match binding (ll_call.oo), val/err fields (ll_field.oo),
+  unwrap gates (ll_method.oo), retain/release (ll_arc.oo), and
+  import type emission (ll_struct_imp.oo). Representation:
+  `%OoRes_OL_X = { i32, %OoL_X, %OoStr }`. Returns ride the
+  generic sret tail via `ll_is_mem`; tag checks were already
+  generic. Proven by a chain harness on the repro's real
+  tokens (mapping + Ok + Err + match merge PASS), with a
+  negative control on unfixed sources (maps to `resl`, FAIL).
+  Note: `Result[List[Float]]` still maps to `resl` (same
+  latent mistype, no probe hits it); fixing it needs a
+  `%OoResFL` representation by the same recipe. Follow-up:
+  struct fields typed `resol_X` skip retain/release in
+  ll_struct_rr.oo (leak-only, no probe covers it).
+- Shelf test: bootstrap/corpus/emit-llvm/pass/result_struct_list_match.oo
+  (expects `1`; NOT wired into the CI gate until the fixed
+  binary ships).
+- Blocks: probe_data.
+
+## Gap 5. dlopen/dlsym/dlclose mistyped as i64 — FIXED in source 2026-09-25
+
+- Error: `ERR llvm method val kind i64` (field access `.val` on the
+  dlopen result), or clang `invalid getelementptr indices` for
+  is_err-only use.
+- Cause: dlopen/dlsym/dlclose lower through the generic C-ABI guess,
+  which yields kind i64. The runtime returns OoResS. Check treats
+  the result as Result-like, so this is a check/emit kind divergence.
+- Fix: explicit ext sig table (ll_ext_sig_ffi: dlopen/dlsym/dlclose
+  to OoResS shapes) + sym mapping to oo_ forms; declare protos +
+  need registrations. Harness-proven with negative control.
+- Shelf test: bootstrap/corpus/emit-llvm/pass/dlopen_missing.oo
+  (expects `dl-ok`; NOT wired into the CI gate until the fixed
+  binary ships).
+- Blocks: probe_sdl_window, probe_anim_2d, probe_sdl_blit, probe_sdl_gl.
+
+## Gap 6. file_append_sync unlowered — FIXED in source 2026-09-25
+
+- Error: `ERR llvm unknown call file_append_sync`.
+- Cause: runtime symbol oo_file_append_sync exists
+  (liboodar-core.a); no emitter dispatch maps the bare name.
+- Fix: new dispatch arm in emit/llvm/ll_builtin_fs.oo using the
+  resv3 helper (cap + path + content), mirroring fs_hardlink.
+  Harness-proven: arm fires, emits the call plus fswrite gate;
+  negative control on unfixed source fails as before.
+- Shelf test: bootstrap/corpus/emit-llvm/pass/file_append_sync.oo
+  (expects `fas-ok`; NOT wired into the CI gate until the fixed
+  binary ships).
+- Blocks: probe_wal_disk.
+
+## Gap 7. Struct load without pointer — FIXED in source 2026-09-25
+
+- Error: `ERR llvm struct load no ptr` (shipped binary); current
+  source instead emitted an invalid empty-pointer field address.
+- Cause: if/match expressions yield struct values with no home
+  address; ll_struct_field_load ran the field address off the
+  empty pointer. Minimal repro: `(if c { a } else { b }).id`.
+- Fix: spill the struct value to a fresh temp in
+  emit/llvm/ll_struct.oo, then address the field off the temp.
+  Proven by a chain harness driving the new ll_expr/ll_ifexpr/
+  ll_method sources on the repro's real tokens (PASS), with a
+  negative control on unfixed sources (FAIL: empty-ptr GEP).
+- Shelf test: bootstrap/corpus/emit-llvm/pass/struct_ifexpr_field.oo
+  (expects `1`; NOT wired into the CI gate until the fixed
+  binary ships).
+- Blocks: probe_swarm.
+
+## Gap 8. random unlowered — FIXED in source 2026-09-25
+
+- Error: `ERR llvm unknown call random`.
+- Fix: new arm in emit/llvm/ll_builtin_host.oo mirroring now_ms
+  (i64, rand gate); declare proto + need registration.
+  Harness-proven. Blocks: probe_cap_system.
+- Shelf test: bootstrap/corpus/emit-llvm/pass/random_runs.oo
+  (expects `rand-ok`; NOT wired into the CI gate until the fixed
+  binary ships).
+
+## Gap 9. landlock_restrict unlowered — FIXED in source 2026-09-25
+
+- Error: `ERR llvm unknown call landlock_restrict`.
+- Fix: new arm in emit/llvm/ll_builtin_sys.oo using the shared
+  OoResS helper (cap + read dirs + write dirs); declare proto +
+  need registration. Harness-proven with sys gate. Note: callers
+  bind Result[Bool, String] but only use is_ok/is_err, which read
+  the tag generically — the OoResS shape is sufficient.
+- Shelf test: bootstrap/corpus/emit-llvm/pass/landlock_empty.oo
+  (expects `ll-ok`; NOT wired into the CI gate until the fixed
+  binary ships).
+- Blocks: probe_sandbox_adv1, probe_sandbox_m1, probe_sandbox_stress.
+
+## Notes for the fixer
+
+- Parallel probe builds collide (shared .ooda-cache/tmp): one probe
+  failed under xargs -P6 and passed serially. Measure serially.
+- Emitter fixes cannot be verified without rebuilding oodac, and the
+  self-host pipeline exceeds local build capacity (see the 360-minute
+  CI job note in oodac/.github/workflows/ci.yml). Budget for that.
+- The 15 failing probes are the regression suite: they already fail
+  closed on every run. No new tests are needed to cover these gaps.

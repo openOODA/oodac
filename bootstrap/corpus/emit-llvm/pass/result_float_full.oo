@@ -1,0 +1,24 @@
+// # Result holding a Float lowers end to end
+//
+// Logline: Result[Float, String] constructs, returns, matches, and unwraps.
+//
+// Setup: Uses string markers only (no float printing). Expects run
+//   output isok / m-ok / u-ok, one per line.
+//
+// Beats:
+//   1. is_ok on a temporary Ok result prints isok.
+//   2. match over the result merges the payload; equality prints m-ok.
+//   3. unwrap yields the payload; equality prints u-ok.
+
+fn g(n: Float) -> Result[Float, String] {
+    if n <= 0.0 { return Err("bad"); }
+    return Ok(n);
+}
+
+pub fn main() {
+    if g(1.5).is_ok() { println("isok"); } else { println("FAIL"); }
+    let r: Result[Float, String] = g(2.5);
+    let v: Float = match r { Ok(x) => x, Err(_) => 0.0 };
+    if v == 2.5 { println("m-ok"); } else { println("FAIL"); }
+    if g(3.5).unwrap() == 3.5 { println("u-ok"); } else { println("FAIL"); }
+}

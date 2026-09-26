@@ -1,0 +1,20 @@
+// # Struct field of an if-expression value
+//
+// Logline: (if c { a } else { b }).id prints the taken arm's field.
+//
+// Setup: If-expr arms merge through a phi with no home address; the
+//   field read must spill the merged struct to a temp first.
+//   Expect run output 1.
+//
+// Beats:
+//   1. Arms hold structs with different ids.
+//   2. True condition takes the first arm; prints 1.
+
+pub type Cell = struct { id: Int };
+
+pub fn main() {
+    let a: Cell = Cell { id: 1 };
+    let b: Cell = Cell { id: 2 };
+    let c: Bool = true;
+    println((if c { a } else { b }).id);
+}

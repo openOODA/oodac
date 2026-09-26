@@ -1,0 +1,20 @@
+// # random lowers and runs
+//
+// Logline: random returns a whole number; the test proves lowering only.
+//
+// Setup: Needs RandCap. Output is fixed: the test asserts the call
+// runs, not the quality of the entropy.
+//
+// Beats:
+//   1. Call random twice.
+//   2. Print rand-ok.
+
+pub fn main(rand: &RandCap) {
+    let a: Int = random(rand);
+    let b: Int = random(rand);
+    if a == b {
+        println("rand-ok");
+    } else {
+        println("rand-ok");
+    }
+}

@@ -1,0 +1,19 @@
+// # dlopen lowers; missing lib fails closed
+//
+// Logline: dlopen of a missing path returns Err with no crash.
+//
+// Setup: Needs FfiCap. No env gate or signed lib needed: a missing
+// path fails closed on every machine.
+//
+// Beats:
+//   1. Open a path that cannot exist.
+//   2. Result is Err; print dl-ok.
+
+pub fn main(ffi: &FfiCap) {
+    let h = dlopen(ffi, "/nonexistent-ooda-xyz/libno.so");
+    if h.is_err() {
+        println("dl-ok");
+    } else {
+        println("FAIL opened");
+    }
+}

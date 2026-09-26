@@ -1,0 +1,19 @@
+// # tcp connect lowers; empty host fails closed
+//
+// Logline: tcp_connect with an empty host returns Err without packets.
+//
+// Setup: Needs TcpCap. No network leaves the machine: the runtime
+// refuses empty host and port 0 before resolving.
+//
+// Beats:
+//   1. Connect with empty host and port 0.
+//   2. Result is Err; print tcp-ok.
+
+pub fn main(tcp: &TcpCap) {
+    let r: Result[String, String] = tcp_connect(tcp, "", 0);
+    if r.is_err() {
+        println("tcp-ok");
+    } else {
+        println("FAIL accepted");
+    }
+}

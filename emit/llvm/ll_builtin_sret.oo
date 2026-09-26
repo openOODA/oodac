@@ -23,8 +23,8 @@ pub fn ll_builtin_sret(name: String, args: List[String], ssa0: Int, expect: Stri
     if (name == "file_append_sync" || name == "oo_file_append_sync") && na >= 3 {
         let a1: String = ll_as_val(list_get(args, 1), ssa0, ir);
         let a2: String = ll_as_val(list_get(args, 2), ll_pssa(a1), ir);
-        let a: String = ll_tmpa(ll_pssa(a2) + 1);
-        let s: Int = ll_pssa(a2) + 1;
+        let a: String = ll_tmpa(ll_hw(ssa0, ll_hw(ll_pssa(a1), ll_pssa(a2))) + 1);
+        let s: Int = ll_hw(ssa0, ll_hw(ll_pssa(a1), ll_pssa(a2))) + 1;
         ll_slot_ty(a, "%OoResV", ir);
         ll_cap_emit_require(name, ll_ssa(ll_pssa(list_get(args, 0))), ir);
         ll_ir_inst(ir, "call", "void", "", "@oo_file_append_sync(ptr sret(%OoResV) align 8 " + a + ", i64 " + ll_ssa(ll_pssa(list_get(args, 0))) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a2)) + ")", 1, 1);
@@ -33,8 +33,8 @@ pub fn ll_builtin_sret(name: String, args: List[String], ssa0: Int, expect: Stri
     if (name == "landlock_restrict" || name == "oo_landlock_restrict") && na >= 3 {
         let a1: String = ll_as_val(list_get(args, 1), ssa0, ir);
         let a2: String = ll_as_val(list_get(args, 2), ll_pssa(a1), ir);
-        let a: String = ll_tmpa(ll_pssa(a2) + 1);
-        let s: Int = ll_pssa(a2) + 1;
+        let a: String = ll_tmpa(ll_hw(ssa0, ll_hw(ll_pssa(a1), ll_pssa(a2))) + 1);
+        let s: Int = ll_hw(ssa0, ll_hw(ll_pssa(a1), ll_pssa(a2))) + 1;
         ll_slot_ty(a, "%OoResS", ir);
         ll_cap_emit_require(name, ll_ssa(ll_pssa(list_get(args, 0))), ir);
         ll_ir_inst(ir, "call", "void", "", "@oo_landlock_restrict(ptr sret(%OoResS) align 8 " + a + ", i64 " + ll_ssa(ll_pssa(list_get(args, 0))) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a2)) + ")", 1, 1);
@@ -43,11 +43,49 @@ pub fn ll_builtin_sret(name: String, args: List[String], ssa0: Int, expect: Stri
     if (name == "tcp_connect" || name == "oo_tcp_connect") && na >= 3 {
         let a1: String = ll_as_val(list_get(args, 1), ssa0, ir);
         let a2: String = ll_i64arg(args, 2, ll_pssa(a1), ir);
-        let a: String = ll_tmpa(ll_pssa(a2) + 1);
-        let s: Int = ll_pssa(a2) + 1;
+        let a: String = ll_tmpa(ll_hw(ssa0, ll_hw(ll_pssa(a1), ll_pssa(a2))) + 1);
+        let s: Int = ll_hw(ssa0, ll_hw(ll_pssa(a1), ll_pssa(a2))) + 1;
         ll_slot_ty(a, "%OoResS", ir);
         ll_cap_emit_require(name, ll_ssa(ll_pssa(list_get(args, 0))), ir);
         ll_ir_inst(ir, "call", "void", "", "@oo_tcp_connect(ptr sret(%OoResS) align 8 " + a + ", i64 " + ll_ssa(ll_pssa(list_get(args, 0))) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ", i64 " + ll_opnd(a2) + ")", 1, 1);
+        return ll_pack(0, s, "ress", a);
+    }
+    if (name == "tcp_write" || name == "oo_tcp_write") && na >= 3 {
+        let a1: String = ll_i64arg(args, 1, ssa0, ir);
+        let a2: String = ll_as_val(list_get(args, 2), ll_pssa(a1), ir);
+        let a: String = ll_tmpa(ll_hw(ssa0, ll_hw(ll_pssa(a1), ll_pssa(a2))) + 1);
+        let s: Int = ll_hw(ssa0, ll_hw(ll_pssa(a1), ll_pssa(a2))) + 1;
+        ll_slot_ty(a, "%OoResS", ir);
+        ll_cap_emit_require(name, ll_ssa(ll_pssa(list_get(args, 0))), ir);
+        ll_ir_inst(ir, "call", "void", "", "@oo_tcp_write(ptr sret(%OoResS) align 8 " + a + ", i64 " + ll_ssa(ll_pssa(list_get(args, 0))) + ", i64 " + ll_opnd(a1) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a2)) + ")", 1, 1);
+        return ll_pack(0, s, "ress", a);
+    }
+    if (name == "tcp_read" || name == "oo_tcp_read") && na >= 3 {
+        let a1: String = ll_i64arg(args, 1, ssa0, ir);
+        let a2: String = ll_i64arg(args, 2, ll_pssa(a1), ir);
+        let a: String = ll_tmpa(ll_hw(ssa0, ll_hw(ll_pssa(a1), ll_pssa(a2))) + 1);
+        let s: Int = ll_hw(ssa0, ll_hw(ll_pssa(a1), ll_pssa(a2))) + 1;
+        ll_slot_ty(a, "%OoResS", ir);
+        ll_cap_emit_require(name, ll_ssa(ll_pssa(list_get(args, 0))), ir);
+        ll_ir_inst(ir, "call", "void", "", "@oo_tcp_read(ptr sret(%OoResS) align 8 " + a + ", i64 " + ll_ssa(ll_pssa(list_get(args, 0))) + ", i64 " + ll_opnd(a1) + ", i64 " + ll_opnd(a2) + ")", 1, 1);
+        return ll_pack(0, s, "ress", a);
+    }
+    if (name == "tcp_close" || name == "oo_tcp_close") && na >= 2 {
+        let a1: String = ll_i64arg(args, 1, ssa0, ir);
+        let a: String = ll_tmpa(ll_hw(ssa0, ll_pssa(a1)) + 1);
+        let s: Int = ll_hw(ssa0, ll_pssa(a1)) + 1;
+        ll_slot_ty(a, "%OoResS", ir);
+        ll_cap_emit_require(name, ll_ssa(ll_pssa(list_get(args, 0))), ir);
+        ll_ir_inst(ir, "call", "void", "", "@oo_tcp_close(ptr sret(%OoResS) align 8 " + a + ", i64 " + ll_ssa(ll_pssa(list_get(args, 0))) + ", i64 " + ll_opnd(a1) + ")", 1, 1);
+        return ll_pack(0, s, "ress", a);
+    }
+    if (name == "tcp_accept" || name == "oo_tcp_accept") && na >= 2 {
+        let a1: String = ll_i64arg(args, 1, ssa0, ir);
+        let a: String = ll_tmpa(ll_hw(ssa0, ll_pssa(a1)) + 1);
+        let s: Int = ll_hw(ssa0, ll_pssa(a1)) + 1;
+        ll_slot_ty(a, "%OoResS", ir);
+        ll_cap_emit_require(name, ll_ssa(ll_pssa(list_get(args, 0))), ir);
+        ll_ir_inst(ir, "call", "void", "", "@oo_tcp_accept(ptr sret(%OoResS) align 8 " + a + ", i64 " + ll_ssa(ll_pssa(list_get(args, 0))) + ", i64 " + ll_opnd(a1) + ")", 1, 1);
         return ll_pack(0, s, "ress", a);
     }
     return "";

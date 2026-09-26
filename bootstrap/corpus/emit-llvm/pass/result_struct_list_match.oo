@@ -1,0 +1,22 @@
+// # Match over a Result holding a struct list
+//
+// Logline: match on Result[List[Cell]] merges the payload with a default.
+//
+// Setup: The struct-list Result has its own representation; both arms
+//   meet as the same list kind. Expect run output 1.
+//
+// Beats:
+//   1. Build a one-element struct list and wrap it in Ok.
+//   2. Match takes the Ok arm; prints the merged length 1.
+
+pub type Cell = struct { id: Int };
+
+pub fn main() {
+    let c: Cell = Cell { id: 1 };
+    let mut b: List[Cell] = list_new();
+    b = list_push(b, c);
+    let r: Result[List[Cell], String] = Ok(b);
+    let empty: List[Cell] = list_new();
+    let xs: List[Cell] = match r { Ok(v) => v, Err(_) => empty };
+    println(list_len(xs));
+}
