@@ -75,6 +75,11 @@ jobs:
           swapon --show
       - name: Install clang
         run: sudo apt-get update && sudo apt-get install -y clang
+      - name: Build oodar libs
+        run: |
+          chmod +x oodar/scripts/repro_build.sh
+          ./oodar/scripts/repro_build.sh
+          test -f oodar/scripts/lib/liboodar-core.a
       - name: Count anchor imports
         run: |
           n=$(grep -c '^import "' oodac/anchor.oo)
@@ -354,6 +359,11 @@ jobs:
           swapon --show
       - name: Install clang
         run: sudo apt-get update && sudo apt-get install -y clang
+      - name: Build oodar libs
+        run: |
+          chmod +x oodar/scripts/repro_build.sh
+          ./oodar/scripts/repro_build.sh
+          test -f oodar/scripts/lib/liboodar-core.a
       - name: Restore LLVM emit TUs
         uses: actions/cache/restore@v4
         with:
