@@ -37,6 +37,7 @@ SUITE_LIST=(
   "test_llvm_backend_refusal.sh"
   "test_llvm_resbool.sh"
   "test_llvm_resfloat.sh"
+  "test_llvm_cpu_target.sh"
   "test_cli_json_errors.sh"
   "test_llvm_rpath.sh"
   "test_tier1_r3_qa.sh"

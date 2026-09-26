@@ -1,0 +1,23 @@
+// # CPU attribute helpers for LLVM defines
+//
+// Logline: Suffix user-function defines with #0 and print the
+//   attributes group when a CPU target rides the type env.
+//
+// Setup: __cpu__ arrives via the emit extra channel. No imports:
+//   resolved through the backend closure like the other ll_
+//   table helpers.
+//
+// Beats:
+//   1. ll_cpu_use returns " #0" iff __cpu__ is set.
+//   2. ll_cpu_attr_def prints the attributes group iff set.
+
+pub fn ll_cpu_use(env: String) -> String {
+    if type_env_get(env, "__cpu__") != "" { return " #0"; }
+    return "";
+}
+
+pub fn ll_cpu_attr_def(extra: String, ir: &mut IrBuf) {
+    let c: String = type_env_get(extra, "__cpu__");
+    if c == "" { return; }
+    ll_ir_text(ir, "attributes #0 = { \"target-cpu\"=\"" + c + "\" }");
+}

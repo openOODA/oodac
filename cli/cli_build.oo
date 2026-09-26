@@ -9,7 +9,8 @@
 //   2. sys_exec host check; on ERR do not emit or link.
 //   3. mkdir; emit-llvm (clang -O2), rocm HIP (hipcc gfx1100), or native ELF. --backend c is residual.
 
-import "lex/token_fmt.oo";
+import "cli_build_util.oo";
+import "cli_cpu.oo";
 import "lex/token_parse_int.oo";
 import "check/check_collect.oo";
 import "ast/load_import.oo";
@@ -54,45 +55,6 @@ fn compiler_host(fs_r: &FsReadCap, env: &EnvCap) -> String {
     println("ERR\tbuild\tOODA_COMPILER or OODAC_BIN required (or OODA_TOOLCHAIN layout)");
     process_exit(1);
     return "";
-}
-
-fn src_has_main(src: String) -> Bool {
-    let toks: List[String] = tokenize_lines(src);
-    let n: Int = list_len(toks);
-    let mut i: Int = 0;
-    while i < n {
-        let k: String = field_at(list_get(toks, i), 0);
-        if k == "KW_FN" {
-            if i + 1 < n {
-                let k2: String = field_at(list_get(toks, i + 1), 0);
-                let t2: String = field_at(list_get(toks, i + 1), 3);
-                if k2 == "IDENT" && t2 == "main" {
-                    return true;
-                }
-            }
-        }
-        i = i + 1;
-    }
-    return false;
-}
-
-fn path_is_compiler_main(path: String) -> Bool {
-    return path == "oodac/main.oo";
-}
-
-fn cache_dir(env: &EnvCap) -> String {
-    let wd: Result[String, String] = env_get(env, "OODA_FS_WRITEDIR");
-    if wd.is_ok() {
-        let s: String = wd.val;
-        if s != "" {
-            let mut end: Int = chars_len(s);
-            let col: Int = str_index_of(s, ":");
-            if col >= 0 { end = col; }
-            let base: String = str_slice(s, 0, end);
-            if base != "" { return base + "/.ooda-cache/ooda-tmp"; }
-        }
-    }
-    return ".ooda-cache/ooda-tmp";
 }
 
 pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env: &EnvCap, ar: &ArenaCap, path: String, out_arg: String, backend: String, is_shared: Bool) {
@@ -224,7 +186,7 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
             process_exit(1);
         }
         let lib_a: String = oodar_lib_core(fs_r, od);
-        let exts: List[String] = oodar_resolve_exts(fs_r, od, em.val);
+        let exts: List[String] = cpu_extend_exts(oodar_resolve_exts(fs_r, od, em.val), env);
         let rsp_path: String = oodar_link_rsp(fs_w, tmp_dir, tmp_ll, exts);
         let cm: Int = clang_major(sys);
         if cm < 15 {

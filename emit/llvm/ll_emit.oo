@@ -26,6 +26,7 @@ import "ll_reach.oo";
 import "types/token_search.oo";
 import "types/types_core.oo";
 import "ll_range.oo";
+import "ll_cpu.oo";
 
 fn skip_balanced(toks: List[String], pos0: Int) -> Int {
     let n: Int = list_len(toks);
@@ -109,6 +110,7 @@ pub fn ll_emit_stream_plus_t(toks: List[String], extra: String, triple: String) 
         } else { p2 = p2 + 1; }
     }
     ll_emit_import_decls(extra, local_fns, want);
+    ll_cpu_attr_def(extra, ir);
     let mut pos: Int = 0;
     let mut seen_fn: String = "\t";
     let mut ctors: String = "";
@@ -130,6 +132,7 @@ pub fn ll_emit_stream_plus_t(toks: List[String], extra: String, triple: String) 
                 ll_emit_fn_strings(toks, pos, n, ir);
                 let mut penv: String = ll_prune_sigs(sigs, stenv, ll_callee_set(toks, pos, n));
                 penv = type_env_put(penv, "__rng_tab__", ll_range_scan_all(toks));
+                penv = type_env_put(penv, "__cpu__", type_env_get(extra, "__cpu__"));
                 pos = ll_emit_fn(toks, pos, n, penv, stab, ir);
                 ll_ir_flush(ir);
                 ir = ll_ir_new();

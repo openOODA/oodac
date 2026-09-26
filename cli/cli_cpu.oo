@@ -1,0 +1,45 @@
+// # CPU target plumbing for LLVM builds
+//
+// Logline: Validate OODA_LLVM_CPU and render clang flags plus IR extras.
+//
+// Setup: Pure string shaping over EnvCap. Unset means baseline:
+//   no flags, no extras, byte-identical output to before.
+//
+// Beats:
+//   1. cpu_valid admits letters, digits, dot, plus, minus, underscore.
+//   2. cpu_extend_exts appends -march for the link response file.
+//   3. cpu_extra renders the __cpu__ pair for the emit channel.
+
+pub fn cpu_valid(s: String) -> Bool {
+    let n: Int = chars_len(s);
+    if n < 1 { return false; }
+    let mut i: Int = 0;
+    while i < n {
+        let c: String = char_at(s, i);
+        if !char_is_alpha(c) && !char_is_digit(c) && c != "." && c != "+" && c != "-" && c != "_" { return false; }
+        i = i + 1;
+    }
+    return true;
+}
+
+pub fn cpu_extend_exts(exts: List[String], env: &EnvCap) -> List[String] {
+    let r: Result[String, String] = env_get(env, "OODA_LLVM_CPU");
+    let c: String = match r { Ok(s) => s, Err(_) => "" };
+    if c == "" { return exts; }
+    if !cpu_valid(c) {
+        println("ERR\tbuild\tbad cpu " + c);
+        process_exit(1);
+    }
+    return list_push(exts, "-march=" + c);
+}
+
+pub fn cpu_extra(env: &EnvCap) -> String {
+    let r: Result[String, String] = env_get(env, "OODA_LLVM_CPU");
+    let c: String = match r { Ok(s) => s, Err(_) => "" };
+    if c == "" { return ""; }
+    if !cpu_valid(c) {
+        println("ERR\tllvm\tbad cpu " + c);
+        process_exit(1);
+    }
+    return "__cpu__=" + c + ";";
+}

@@ -24,6 +24,7 @@ import "lex/token_parse_int.oo";
 import "ll_di.oo";
 import "ll_cap.oo";
 import "ll_c_abi.oo";
+import "ll_cpu.oo";
 
 pub fn ll_fn_name_at(toks: List[String], pos: Int, n: Int) -> String {
     let mut p: Int = pos;
@@ -184,15 +185,15 @@ pub fn ll_emit_fn(toks: List[String], pos: Int, n: Int, fenv: String, stab: Stri
     let is_c_entry: Bool = is_export || (name != "main" && ll_is_c_abi_call(name));
     if is_c_entry && ll_is_niche_ptr(rk) {
         let sig_p: String = if plist != "" { "ptr noalias sret(%OoOpt_Ptr) align 8 %ret, " + plist } else { "ptr noalias sret(%OoOpt_Ptr) align 8 %ret" };
-        ll_ir_fn_open(ir, "define default void @" + gnm + "(" + sig_p + ") nounwind" + ds + " {");
+        ll_ir_fn_open(ir, "define default void @" + gnm + "(" + sig_p + ") nounwind" + ll_cpu_use(env) + ds + " {");
     } else if ll_is_mem(rk) {
         let sig_p: String = if plist != "" { "ptr noalias sret(" + ll_ir_alloc(rk) + ") align 8 %ret, " + plist } else { "ptr noalias sret(" + ll_ir_alloc(rk) + ") align 8 %ret" };
-        ll_ir_fn_open(ir, "define " + vis + "void @" + gnm + "(" + sig_p + ") nounwind" + ds + " {");
+        ll_ir_fn_open(ir, "define " + vis + "void @" + gnm + "(" + sig_p + ") nounwind" + ll_cpu_use(env) + ds + " {");
     } else if rk == "void" {
-        ll_ir_fn_open(ir, "define " + vis + "void @" + gnm + "(" + plist + ") nounwind" + ds + " {");
+        ll_ir_fn_open(ir, "define " + vis + "void @" + gnm + "(" + plist + ") nounwind" + ll_cpu_use(env) + ds + " {");
     } else {
         let rk_val: String = if ll_range_is_bint(rk) { ll_range_ret_val(rk) } else if ll_is_int(rk) { "noundef " + ll_ir_val(rk) } else { ll_ir_val(rk) };
-        ll_ir_fn_open(ir, "define " + vis + rk_val + " @" + gnm + "(" + plist + ") " + fn_attrs + ds + " {");
+        ll_ir_fn_open(ir, "define " + vis + rk_val + " @" + gnm + "(" + plist + ") " + fn_attrs + ll_cpu_use(env) + ds + " {");
     }
     ll_heap(ir);
     let mut fi: Int = 0;

@@ -18,6 +18,7 @@ import "emit/llvm/ll_emit.oo";
 import "emit/llvm/ll_struct.oo";
 import "emit/llvm/ll_tok.oo";
 import "lex/token_parse_int.oo";
+import "cli_cpu.oo";
 
 fn parse_arena_id(res: Result[String, String]) -> Int {
     if res.is_err() { return 0 - 1; }
@@ -159,6 +160,7 @@ pub fn run_emit_llvm(fs: &FsReadCap, fs_w: &FsWriteCap, env: &EnvCap, ar: &Arena
             let s_smt: String = ll_smt_sanitize(art.smt);
             extra = extra + "__sym____art_smt__=" + s_smt + ";";
             extra = extra + "__art_smt__=" + s_smt + ";";
+            extra = extra + cpu_extra(env);
         }
         let tx: Result[String, String] = env_get(env, "OODA_LLVM_TRIPLE");
         let mut triple: String = match tx { Ok(s) => s, Err(_) => "" };
@@ -207,6 +209,7 @@ pub fn run_emit_llvm(fs: &FsReadCap, fs_w: &FsWriteCap, env: &EnvCap, ar: &Arena
         let s_smt: String = ll_smt_sanitize(all_smt);
         extra = extra + "__sym____art_smt__=" + s_smt + ";";
         extra = extra + "__art_smt__=" + s_smt + ";";
+        extra = extra + cpu_extra(env);
     }
     let tx: Result[String, String] = env_get(env, "OODA_LLVM_TRIPLE");
     let mut triple: String = match tx { Ok(s) => s, Err(_) => "" };
