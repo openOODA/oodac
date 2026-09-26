@@ -6,8 +6,8 @@
 //
 // Beats:
 //   1. sys_args sret a string list. sys_exec_wait sret resi.
-//   2. spawn/wait/kill/epoll/inotify/prctl sret ress.
-//   3. landlock_is_available is a 0-arg i32. stdin returns str or ress.
+//   2. spawn/wait/kill/epoll/inotify/prctl/rlimit sret ress.
+//   3. landlock_is_available is a 0-arg i32. sys_path_is_dir is a 1-path i32. stdin returns str or ress.
 
 import "ll_tok.oo";
 import "ll_ty.oo";
@@ -105,6 +105,26 @@ pub fn ll_builtin_sys(name: String, args: List[String], ssa0: Int, expect: Strin
     if (name == "sys_prctl" || name == "oo_sys_prctl") && na >= 2 {
         let op: String = ll_i64arg(args, 1, ssa0, ir);
         return ll_ty_ress("oo_sys_prctl", args, ll_pssa(op), ", i64 " + ll_opnd(op), ir);
+    }
+    if (name == "rlimit_set_mem_mb" || name == "oo_rlimit_set_mem_mb") && na >= 2 {
+        let mb: String = ll_i64arg(args, 1, ssa0, ir);
+        return ll_ty_ress("oo_rlimit_set_mem_mb", args, ll_pssa(mb), ", i64 " + ll_opnd(mb), ir);
+    }
+    if (name == "rlimit_set_nofile" || name == "oo_rlimit_set_nofile") && na >= 2 {
+        let nf: String = ll_i64arg(args, 1, ssa0, ir);
+        return ll_ty_ress("oo_rlimit_set_nofile", args, ll_pssa(nf), ", i64 " + ll_opnd(nf), ir);
+    }
+    if (name == "rlimit_set_cpu_sec" || name == "oo_rlimit_set_cpu_sec") && na >= 2 {
+        let sec: String = ll_i64arg(args, 1, ssa0, ir);
+        return ll_ty_ress("oo_rlimit_set_cpu_sec", args, ll_pssa(sec), ", i64 " + ll_opnd(sec), ir);
+    }
+    if (name == "sys_path_is_dir" || name == "oo_sys_path_is_dir") && na >= 2 {
+        let p1: String = ll_as_val(list_get(args, 1), ssa0, ir);
+        let s: Int = ll_pssa(p1) + 1;
+        ll_cap_emit_require(name, ll_tok_sys_cap(args), ir);
+        ll_ir_inst(ir, "call", "i32", ll_ssa(s), "@oo_sys_path_is_dir(i64 " + ll_tok_sys_cap(args) + ", { ptr, i64 } " + ll_ssa(ll_pssa(p1)) + ")", 1, 1);
+        ll_ir_inst(ir, "icmp ne", "i32", ll_ssa(s + 1), ll_ssa(s) + ", 0", 1, 1);
+        return ll_pack(0, s + 1, "i1", "");
     }
     if name == "landlock_is_available" || name == "oo_landlock_is_available" {
         let s: Int = ssa0 + 1;

@@ -15,6 +15,8 @@ import "ll_ir.oo";
 import "ll_niche.oo";
 import "ll_ctor_resb.oo";
 import "ll_ctor_resf.oo";
+import "ll_ctor_keep.oo";
+import "ll_reinterpret.oo";
 
 fn ll_resst_base(expect: String) -> String {
     if chars_len(expect) >= 6 && str_slice(expect, 0, 6) == "resSt_" {
@@ -94,7 +96,7 @@ fn ll_ctor_some(arg: String, ssa0: Int, expect: String, ir: &mut IrBuf) -> Strin
         return ll_pack(0, s2, "opti", a);
     }
     if ll_pk(arg) == "str" && (expect == "opts" || expect == "") {
-        let av: String = ll_as_val(arg, ssa0, ir);
+        let av: String = ll_as_val(arg, ll_ctor_keep(arg, ssa0, ir), ir);
         let a: String = ll_tmpa(ll_pssa(av) + 1);
         ll_slot_ty(a, "%OoOptS", ir);
         let os: Int = ll_oostr_from_pair(ll_pssa(av), ir);
@@ -146,7 +148,7 @@ fn ll_ctor_ok(arg: String, ssa0: Int, expect: String, ir: &mut IrBuf) -> String 
         return ll_pack(0, s2, "resi", a);
     }
     if ll_pk(arg) == "str" && (expect == "ress" || expect == "") {
-        let av: String = ll_as_val(arg, ssa0, ir);
+        let av: String = ll_as_val(arg, ll_ctor_keep(arg, ssa0, ir), ir);
         let a: String = ll_tmpa(ll_pssa(av) + 1);
         ll_slot_ty(a, "%OoResS", ir);
         let os: Int = ll_oostr_from_pair(ll_pssa(av), ir);
@@ -156,16 +158,18 @@ fn ll_ctor_ok(arg: String, ssa0: Int, expect: String, ir: &mut IrBuf) -> String 
         return ll_pack(0, s2, "ress", a);
     }
     if ll_pk(arg) == "slist" || expect == "resl" {
-        let av: String = ll_as_val(arg, ssa0, ir);
-        let a: String = ll_tmpa(ll_pssa(av) + 1);
+        let av: String = ll_as_val(arg, ll_ctor_keep(arg, ssa0, ir), ir);
+        let mut avv: Int = ll_pssa(av);
+        if chars_len(ll_pk(av)) >= 6 && str_slice(ll_pk(av), 0, 6) == "olist_" { avv = ll_reinterpret(ll_ir_val(ll_pk(av)), ll_pssa(av), "%OoSList", ll_pssa(av), ir); }
+        let a: String = ll_tmpa(avv + 1);
         ll_slot_ty(a, "%OoResL", ir);
-        let os: Int = ll_pssa(av) + 1;
-        ll_ir_inst(ir, "insertvalue", "%OoResL", ll_ssa(os), "{ i32 1, %OoSList zeroinitializer, %OoStr { ptr null, i64 0 } }, %OoSList " + ll_ssa(ll_pssa(av)) + ", 1", 1, 1);
+        let os: Int = avv + 1;
+        ll_ir_inst(ir, "insertvalue", "%OoResL", ll_ssa(os), "{ i32 1, %OoSList zeroinitializer, %OoStr { ptr null, i64 0 } }, %OoSList " + ll_ssa(avv) + ", 1", 1, 1);
         ll_ir_inst(ir, "store", "%OoResL", "", ll_ssa(os) + ", ptr " + a + ", align 8", 1, 1);
         return ll_pack(0, os, "resl", a);
     }
     if ll_pk(arg) == "ilist" || expect == "resil" {
-        let av: String = ll_as_val(arg, ssa0, ir);
+        let av: String = ll_as_val(arg, ll_ctor_keep(arg, ssa0, ir), ir);
         let a: String = ll_tmpa(ll_pssa(av) + 1);
         ll_slot_ty(a, "%OoResLI", ir);
         let os: Int = ll_pssa(av) + 1;
@@ -182,7 +186,7 @@ fn ll_ctor_ok(arg: String, ssa0: Int, expect: String, ir: &mut IrBuf) -> String 
             else { rb = str_slice(ak, 3, hh); }
         }
         if rb != "" {
-            let av: String = ll_as_val(arg, ssa0, ir);
+            let av: String = ll_as_val(arg, ll_ctor_keep(arg, ssa0, ir), ir);
             let a: String = ll_tmpa(ll_pssa(av) + 1);
             ll_slot_ty(a, "%OoRes_St_" + rb, ir);
             let os: Int = ll_pssa(av) + 1;
@@ -201,7 +205,7 @@ fn ll_ctor_err(arg: String, ssa0: Int, expect: String, ir: &mut IrBuf) -> String
         println("ERR\tllvm\tErr kind");
         process_exit(1);
     }
-    let av: String = ll_as_val(arg, ssa0, ir);
+    let av: String = ll_as_val(arg, ll_ctor_keep(arg, ssa0, ir), ir);
     if ll_resst_base(expect) != "" {
         let rb: String = ll_resst_base(expect);
         let a: String = ll_tmpa(ll_pssa(av) + 1);

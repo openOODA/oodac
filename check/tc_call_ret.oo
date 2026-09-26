@@ -159,7 +159,8 @@ pub fn cap_builtin_ret(name: String) -> String {
     if name == "env_get" || name == "oo_env_get" || name == "read_file" || name == "oo_read_file" || name == "write_file" || name == "oo_write_file" || name == "file_append_sync" || name == "fs_read_file" || name == "fs_write_file" || name == "fetch" || name == "sys_exec" || name == "oo_sys_exec" || name == "sys_exec_wait" || name == "oo_sys_exec_wait" || name == "landlock_restrict" || name == "oo_landlock_restrict" || name == "fs_mkdir" || name == "oo_fs_mkdir" || name == "fs_remove_file" || name == "oo_fs_remove_file" || name == "fs_rmdir" || name == "oo_fs_rmdir" || name == "fs_mkdir_p" || name == "fs_remove_tree" || name == "fs_copy_file" || name == "fs_copy_tree" { return "Result";
 }
     if name == "path_exists" || name == "oo_path_exists" || name == "fs_path_exists" || name == "fs_is_dir"
-        || name == "oo_fs_is_dir" || name == "cap_attenuate_ok" || name == "oo_cap_attenuate_ok" {
+        || name == "oo_fs_is_dir" || name == "cap_attenuate_ok" || name == "oo_cap_attenuate_ok"
+        || name == "sys_path_is_dir" || name == "oo_sys_path_is_dir" {
         return "Bool";
     }
     if name == "file_size" || name == "oo_file_size" || name == "fs_file_size" || name == "now_ms" || name == "monotonic_us" || name == "landlock_is_available" || name == "oo_landlock_is_available" || name == "str_byte_at" || name == "byte_at" {

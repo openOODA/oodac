@@ -15,6 +15,7 @@ import "ll_int.oo";
 import "ll_struct.oo";
 import "ll_slot.oo";
 import "ll_ir.oo";
+import "ll_reinterpret.oo";
 
 pub fn ll_match_expr(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String, ir: &mut IrBuf) -> String {
     let scr: String = ll_expr(toks, pos + 1, n, ssa0, env, ir);
@@ -102,8 +103,20 @@ pub fn ll_match_expr(toks: List[String], pos: Int, n: Int, ssa0: Int, env: Strin
     let mut pk: String = ll_pk(okarm);
     let ek: String = ll_pk(erarm);
     let mut ers2: Int = ers0;
+    let mut post_ol: String = "";
     if pk != ek {
-        if ll_is_int(pk) && ll_is_int(ek) {
+        let pk_ol: Bool = chars_len(pk) >= 6 && str_slice(pk, 0, 6) == "olist_";
+        let ek_ol: Bool = chars_len(ek) >= 6 && str_slice(ek, 0, 6) == "olist_";
+        if ll_is_struct(pk) && ll_is_struct(ek) && ll_st_basek(pk) == ll_st_basek(ek) {
+            if str_index_of(pk, "#") < 0 && str_index_of(ek, "#") >= 0 { pk = ek; }
+        } else if (pk == "slist" && ek_ol) || (pk_ol && ek == "slist") {
+            if pk == "slist" {
+                ers2 = ll_reinterpret(ll_ir_val(ek), ers2, "%OoSList", ll_hw(oks, ers2), ir);
+                post_ol = ek;
+            } else {
+                ers2 = ll_reinterpret("%OoSList", ers2, ll_ir_val(pk), ll_hw(oks, ers2), ir);
+            }
+        } else if ll_is_int(pk) && ll_is_int(ek) {
             let pkw: String = ll_int_wide(pk);
             let ekw: String = ll_int_wide(ek);
             if pkw == "i64" {
@@ -129,5 +142,9 @@ pub fn ll_match_expr(toks: List[String], pos: Int, n: Int, ssa0: Int, env: Strin
     ll_ir_label(ir, "mend" + id.to_string());
     let ph: Int = ll_hw(oks, ers2) + 1;
     ll_ir_inst(ir, "phi", ll_ir_val(pk), ll_ssa(ph), "[ " + ll_ssa(oks) + ", %tj" + id.to_string() + " ], [ " + ll_ssa(ers2) + ", %ej" + id.to_string() + " ]", 1, 1);
+    if post_ol != "" {
+        let ph2: Int = ll_reinterpret("%OoSList", ph, ll_ir_val(post_ol), ph, ir);
+        return ll_pack(p, ph2, post_ol, "");
+    }
     return ll_pack(p, ph, pk, "");
 }

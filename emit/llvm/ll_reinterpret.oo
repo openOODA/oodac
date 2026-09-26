@@ -1,0 +1,25 @@
+// # LLVM aggregate reinterpretation
+//
+// Logline: Reinterpret an aggregate SSA value between identical-layout struct types.
+//
+// Setup: LLVM bitcast rejects struct-to-struct casts, so same-layout moves
+//   (olist to slist and back) spill through a slot and reload at the new type.
+//
+// Beats:
+//   1. Alloca a slot at the target type.
+//   2. Store the source-typed value through the opaque pointer.
+//   3. Load it back at the target type and return the new SSA id.
+//
+
+import "ll_tok.oo";
+import "ll_slot.oo";
+import "ll_ir.oo";
+
+pub fn ll_reinterpret(from_ty: String, ssa: Int, to_ty: String, ssa0: Int, ir: &mut IrBuf) -> Int {
+    let sa: String = ll_tmpa(ssa0 + 1);
+    ll_slot_ty(sa, to_ty, ir);
+    ll_ir_inst(ir, "store", from_ty, "", ll_ssa(ssa) + ", ptr " + sa + ", align 8", 1, 1);
+    let bc: Int = ssa0 + 1;
+    ll_ir_inst(ir, "load", to_ty, ll_ssa(bc), "ptr " + sa + ", align 8", 1, 1);
+    return bc;
+}

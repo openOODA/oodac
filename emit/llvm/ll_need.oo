@@ -109,7 +109,9 @@ fn ll_need_call(need: String, nm: String) -> String {
     if nm == "path_exists" || nm == "file_size" || nm == "file_stamp" { return ll_need_add(n, "oo_" + nm); }
     if nm == "read_file" || nm == "write_file" { return ll_need_add(n, "oo_" + nm); }
     if nm == "env_get" || nm == "sys_exec" || nm == "process_exit" { return ll_need_add(n, "oo_" + nm); }
-    if nm == "sleep_ms" || nm == "now_ms" || nm == "monotonic_us" { return ll_need_add(n, "oo_" + nm); }
+    if nm == "free_bytes" || nm == "tcp_connect" || nm == "file_append_sync" || nm == "landlock_restrict" || nm == "landlock_is_available" { return ll_need_add(n, "oo_" + nm); }
+    if nm == "ord" { return ll_need_add(n, "oo_byte_at"); }
+    if nm == "sleep_ms" || nm == "now_ms" || nm == "monotonic_us" || nm == "random" { return ll_need_add(n, "oo_" + nm); }
     if nm == "hot_reload" || nm == "alloc_bytes" { return ll_need_add(n, "oo_" + nm); }
     if chars_len(nm) >= 3 && str_slice(nm, 0, 3) == "oo_" { return ll_need_add(n, nm); }
     if chars_len(nm) >= 4 && str_slice(nm, 0, 4) == "sys_" { return ll_need_add(n, "oo_" + nm); }

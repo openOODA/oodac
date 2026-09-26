@@ -1,0 +1,89 @@
+// # LLVM struct list ARC emitters
+//
+// Logline: Emit per-struct retain/release with header validation.
+//
+// Setup: Split from ll_struct_list_ops.oo (256-line ceiling). Mirrors the
+//   oo_slist_retain/release guards: null data, refcount range, and poison
+//   flags all skip instead of touching freed backing stores.
+//
+// Beats:
+//   1. Retain skips null, zero/huge refcount, and flagged headers.
+//   2. Release validates before the atomic decrement.
+//   3. Free path poisons flags so a second release skips.
+//
+
+import "ll_ir.oo";
+import "ll_slot.oo";
+
+pub fn ll_olist_emit_arc(nm: String, ir: &mut IrBuf) {
+    ll_ir_fn_open(ir, "define hidden void @oo_l_" + nm + "_retain(ptr %l) {");
+    ll_ir_inst(ir, "getelementptr inbounds", "%OoL_" + nm, "%dp", "ptr %l, i32 0, i32 0", 1, 1);
+    ll_ir_inst(ir, "load", "ptr", "%d", "ptr %dp, align 8", 1, 1);
+    ll_ir_inst(ir, "icmp ne", "ptr", "%hasd", "%d, null", 1, 1);
+    ll_ir_inst(ir, "br", "i1", "", "%hasd, label %rok_" + nm + ", label %rend_" + nm, 1, 1);
+    ll_ir_label(ir, "rok_" + nm);
+    ll_ir_inst(ir, "getelementptr inbounds", "i8", "%hp", "ptr %d, i64 -8", 1, 1);
+    ll_ir_inst(ir, "load atomic", "i32", "%rc0", ", ptr %hp acquire, align 4", 1, 1);
+    ll_ir_inst(ir, "icmp eq", "i32", "%rcz", "%rc0, 0", 1, 1);
+    ll_ir_inst(ir, "icmp ugt", "i32", "%rcbig", "%rc0, 1000000", 1, 1);
+    ll_ir_inst(ir, "or", "i1", "%rcbad", "%rcz, %rcbig", 1, 1);
+    ll_ir_inst(ir, "br", "i1", "", "%rcbad, label %rend_" + nm + ", label %rokf_" + nm, 1, 1);
+    ll_ir_label(ir, "rokf_" + nm);
+    ll_ir_inst(ir, "getelementptr inbounds", "i8", "%fp", "ptr %hp, i64 4", 1, 1);
+    ll_ir_inst(ir, "load", "i32", "%fl", "ptr %fp, align 4", 1, 1);
+    ll_ir_inst(ir, "and", "i32", "%flm", "%fl, 3", 1, 1);
+    ll_ir_inst(ir, "icmp ne", "i32", "%flbad", "%flm, 0", 1, 1);
+    ll_ir_inst(ir, "br", "i1", "", "%flbad, label %rend_" + nm + ", label %rokb_" + nm, 1, 1);
+    ll_ir_label(ir, "rokb_" + nm);
+    ll_ir_inst(ir, "atomicrmw add", "", "%prc", "ptr %hp, i32 1 acq_rel, align 4", 1, 1);
+    ll_ir_inst(ir, "br", "label", "", "%rend_" + nm, 1, 1);
+    ll_ir_label(ir, "rend_" + nm);
+    ll_ir_inst(ir, "ret", "void", "", "", 1, 1); ll_ir_fn_close(ir);
+    ll_ir_fn_open(ir, "define hidden void @oo_l_" + nm + "_release(ptr %l) {");
+    ll_ir_inst(ir, "getelementptr inbounds", "%OoL_" + nm, "%dp", "ptr %l, i32 0, i32 0", 1, 1);
+    ll_ir_inst(ir, "load", "ptr", "%d", "ptr %dp, align 8", 1, 1);
+    ll_ir_inst(ir, "icmp ne", "ptr", "%hasd", "%d, null", 1, 1);
+    ll_ir_inst(ir, "br", "i1", "", "%hasd, label %relsub_" + nm + ", label %relend_" + nm, 1, 1);
+    ll_ir_label(ir, "relsub_" + nm);
+    ll_ir_inst(ir, "getelementptr inbounds", "i8", "%hp", "ptr %d, i64 -8", 1, 1);
+    ll_ir_inst(ir, "load atomic", "i32", "%rc0", ", ptr %hp acquire, align 4", 1, 1);
+    ll_ir_inst(ir, "icmp eq", "i32", "%rcz", "%rc0, 0", 1, 1);
+    ll_ir_inst(ir, "icmp ugt", "i32", "%rcbig", "%rc0, 1000000", 1, 1);
+    ll_ir_inst(ir, "or", "i1", "%rcbad", "%rcz, %rcbig", 1, 1);
+    ll_ir_inst(ir, "br", "i1", "", "%rcbad, label %relend_" + nm + ", label %relchk_" + nm, 1, 1);
+    ll_ir_label(ir, "relchk_" + nm);
+    ll_ir_inst(ir, "getelementptr inbounds", "i8", "%fp", "ptr %hp, i64 4", 1, 1);
+    ll_ir_inst(ir, "load", "i32", "%fl", "ptr %fp, align 4", 1, 1);
+    ll_ir_inst(ir, "and", "i32", "%flm", "%fl, 3", 1, 1);
+    ll_ir_inst(ir, "icmp ne", "i32", "%flbad", "%flm, 0", 1, 1);
+    ll_ir_inst(ir, "br", "i1", "", "%flbad, label %relend_" + nm + ", label %reldec_" + nm, 1, 1);
+    ll_ir_label(ir, "reldec_" + nm);
+    ll_ir_inst(ir, "atomicrmw sub", "", "%prc", "ptr %hp, i32 1 acq_rel, align 4", 1, 1);
+    ll_ir_inst(ir, "icmp eq", "i32", "%iszero", "%prc, 1", 1, 1);
+    ll_ir_inst(ir, "br", "i1", "", "%iszero, label %relfree_" + nm + ", label %relend_" + nm, 1, 1);
+    ll_ir_label(ir, "relfree_" + nm);
+    ll_ir_inst(ir, "getelementptr inbounds", "%OoL_" + nm, "%lp", "ptr %l, i32 0, i32 1", 1, 1);
+    ll_ir_inst(ir, "load", "i64", "%len", "ptr %lp, align 8", 1, 1);
+    ll_ir_inst(ir, "getelementptr inbounds", "%OoL_" + nm, "%cp", "ptr %l, i32 0, i32 2", 1, 1);
+    ll_ir_inst(ir, "load", "i64", "%cap", "ptr %cp, align 8", 1, 1);
+    ll_slot_ty("%ri", "i64", ir);
+    ll_ir_inst(ir, "store", "i64", "", "0, ptr %ri, align 8", 1, 1); ll_ir_inst(ir, "br", "label", "", "%relloop_" + nm, 1, 1);
+    ll_ir_label(ir, "relloop_" + nm);
+    ll_ir_inst(ir, "load", "i64", "%i", "ptr %ri, align 8", 1, 1);
+    ll_ir_inst(ir, "icmp ult", "i64", "%more", "%i, %len", 1, 1);
+    ll_ir_inst(ir, "br", "i1", "", "%more, label %relstep_" + nm + ", label %reldone_" + nm, 1, 1);
+    ll_ir_label(ir, "relstep_" + nm);
+    ll_ir_inst(ir, "getelementptr inbounds", "%St_" + nm, "%ep", "ptr %d, i64 %i", 1, 1);
+    ll_ir_inst(ir, "call", "void", "", "@oo_release_St_" + nm + "(ptr %ep)", 1, 1);
+    ll_ir_inst(ir, "add", "i64", "%i2", "%i, 1", 1, 1);
+    ll_ir_inst(ir, "store", "i64", "", "%i2, ptr %ri, align 8", 1, 1); ll_ir_inst(ir, "br", "label", "", "%relloop_" + nm, 1, 1);
+    ll_ir_label(ir, "reldone_" + nm);
+    ll_ir_inst(ir, "getelementptr inbounds", "%St_" + nm, "%szp", "ptr null, i32 1", 1, 1);
+    ll_ir_inst(ir, "ptrtoint", "ptr", "%esz", "%szp to i64", 1, 1);
+    ll_ir_inst(ir, "call", "void", "", "@oo_list_quota_release_bytes(i64 %cap, i64 %esz)", 1, 1);
+    ll_ir_inst(ir, "store atomic", "i32", "", "-1, ptr %fp release, align 4", 1, 1);
+    ll_ir_inst(ir, "call", "void", "", "@oo_payload_free(ptr %d)", 1, 1);
+    ll_ir_inst(ir, "br", "label", "", "%relend_" + nm, 1, 1);
+    ll_ir_label(ir, "relend_" + nm);
+    ll_ir_inst(ir, "ret", "void", "", "", 1, 1); ll_ir_fn_close(ir);
+}

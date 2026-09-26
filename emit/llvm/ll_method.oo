@@ -16,6 +16,7 @@ import "ll_tok.oo";
 import "ll_ty.oo";
 import "ll_int.oo";
 import "ll_struct.oo";
+import "ll_struct_enrich.oo";
 import "ll_slot.oo";
 import "ll_ir.oo";
 import "ll_call.oo";
@@ -36,7 +37,14 @@ pub fn ll_method(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, env:
             println("ERR\tllvm\tunknown field " + m);
             process_exit(1);
         }
-        let fr: String = ll_struct_field_load(skind, ssa, ptr, m, ssa0, ir);
+        let mut eptr: String = str_slice(ptr, 0, chars_len(ptr));
+        let mut es0: Int = ssa0;
+        if eptr == "" {
+            let ep: String = ll_ensure_ptr(ll_pack(0, ssa, str_slice(skind, 0, chars_len(skind)), ""), ssa0, ir);
+            eptr = ll_pptr(ep);
+            es0 = ll_pssa(ep);
+        }
+        let fr: String = ll_struct_field_load(skind, ssa, eptr, m, es0, ir);
         if ll_pptr(fr) == "" && ll_is_struct(ll_pk(fr)) {
             let a: String = ll_tmpa(ll_pssa(fr) + 1);
             ll_slot_ty(a, ll_ir_alloc(ll_pk(fr)), ir);
@@ -226,7 +234,7 @@ pub fn ll_borrow_addr(toks: List[String], pos: Int, n: Int, ssa0: Int, env: Stri
     ap = ap + 1;
     while ap + 1 < n && ll_k(toks, ap) == "DOT" && ll_k(toks, ap + 1) == "IDENT" {
         if ap + 2 < n && ll_k(toks, ap + 2) == "LPAREN" { break; }
-        let fp: String = ll_struct_field_ptr(ll_pk(ad), ll_pptr(ad), ll_t(toks, ap + 1), ll_pssa(ad), ir);
+        let fp: String = ll_struct_field_ptr(ll_struct_enrich(ll_pk(ad), env), ll_pptr(ad), ll_t(toks, ap + 1), ll_pssa(ad), ir);
         ad = ll_pack(0, ll_pssa(fp), ll_pk(fp), ll_pptr(fp));
         ap = ap + 2;
     }

@@ -4,6 +4,7 @@
 // Beats: St kinds plus rich tables; %St types plus retain/release; literals fail closed.
 import "ll_tok.oo";
 import "ll_ty.oo";
+import "ll_arc.oo";
 import "ll_int.oo";
 import "ll_struct_list.oo";
 import "ll_struct_rr.oo";
@@ -60,6 +61,7 @@ pub fn ll_struct_field(kind: String, field: String) -> String {
     let h: Int = str_index_of(kind, "#");
     if h < 0 { return ""; }
     let body: String = str_slice(kind, h + 1, chars_len(kind));
+    if str_index_of(body, "|") >= 0 && str_index_of(body, ",") < 0 { return ""; }
     let n: Int = chars_len(body);
     let mut i: Int = 0; let mut idx: Int = 0; let mut cur: String = "";
     while i <= n {
@@ -69,7 +71,7 @@ pub fn ll_struct_field(kind: String, field: String) -> String {
                 let c: Int = str_index_of(cur, ":");
                 if c >= 0 {
                     if str_slice(cur, 0, c) == field {
-                        return idx.to_string() + ":" + ll_st_map(str_slice(cur, c + 1, chars_len(cur)), "|", ",");
+                        return idx.to_string() + ":" + str_slice(cur, c + 1, chars_len(cur));
                     }
                     idx = idx + 1;
                 }
@@ -247,6 +249,7 @@ pub fn ll_struct_lit_at(toks: List[String], pos: Int, n: Int, ssa0: Int, env: St
         } else {
             ll_ir_inst(ir, "store", fk_ty, "", ll_opnd(v) + ", ptr " + ll_ssa(s) + ", align 8", 1, 1);
         }
+        if ll_arc_owned(fk) && ll_is_var(ll_pptr(v)) { s = ll_arc_keep_ptr(fk, ll_pptr(v), s, ir); }
     }
     if p >= n || ll_k(toks, p) != "RBRACE" { println("ERR\tllvm\tstruct lit rbrace"); process_exit(1); }
     return ll_pack(p + 1, s, rich, a);

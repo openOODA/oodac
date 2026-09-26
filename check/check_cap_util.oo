@@ -93,6 +93,8 @@ pub fn sealed_sys_kind_of(name: String) -> String {
     }
     if name == "oo_rlimit_set_cpu_sec" { return "SysCap";
     }
+    if name == "sys_path_is_dir" || name == "oo_sys_path_is_dir" { return "SysCap";
+    }
     if name == "landlock_restrict" || name == "oo_landlock_restrict" { return "SysCap";
     }
     if name == "oo_cap_kernel_seal" || name == "cap_kernel_seal" { return "SysCap";

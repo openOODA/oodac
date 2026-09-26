@@ -1,0 +1,28 @@
+// # LLVM struct kind enrichment
+//
+// Logline: Rebuild comma-joined rich kinds from env for bare or pipe-joined kinds.
+//
+// Setup: Field lookup needs comma-joined bodies; nested-mapped fks carry
+// pipe-joined bodies that only env can re-expand. Callers without a fallback
+// enrich first; lookup returns "" on pipe bodies so fallback paths trigger.
+//
+// Beats:
+//   1. Bare St kinds expand via ll_rich_of.
+//   2. Pipe-joined bodies without commas expand via ll_rich_of.
+//   3. Normal comma-joined bodies pass through untouched.
+
+import "ll_tok.oo";
+import "ll_struct.oo";
+
+pub fn ll_struct_enrich(kind: String, env: String) -> String {
+    if !ll_is_struct(kind) { return kind; }
+    let h: Int = str_index_of(kind, "#");
+    if h < 0 {
+        return ll_rich_of(env, str_slice(ll_st_basek(kind), 3, chars_len(ll_st_basek(kind))));
+    }
+    let body: String = str_slice(kind, h + 1, chars_len(kind));
+    if str_index_of(body, "|") >= 0 && str_index_of(body, ",") < 0 {
+        return ll_rich_of(env, str_slice(ll_st_basek(kind), 3, chars_len(ll_st_basek(kind))));
+    }
+    return kind;
+}

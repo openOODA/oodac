@@ -69,6 +69,7 @@ pub fn typecheck_call_arity_with_imports(toks: List[String], import_arity: Strin
         + "alloc_bytes=2\tfree_bytes=2\tmalloc=2\tfree=2\trealloc=3\t"
         + "println=1\tprint=1\tprocess_exit=1\tto_string=1\tmeta_epoch=0\tmeta_mix=1\tmeta_is_path_a=0\tmeta_decoy_touch=0\tenv_get=2\t"
         + "oo_rlimit_set_mem_mb=2\too_rlimit_set_nofile=2\too_rlimit_set_cpu_sec=2\t"
+        + "sys_path_is_dir=2\too_sys_path_is_dir=2\t"
         + "oo_arena_create=2\tarena_create=2\too_arena_alloc=3\tarena_alloc=3\too_arena_reset=2\tarena_reset=2\too_arena_destroy=2\tarena_destroy=2\t"
         + "oo_actor_restart=2\tactor_restart=2\too_read_stdin=1\too_read_stdin_chunk=2\too_file_stamp=2\t"
         + "soa_layout=1\tdod_layout=1\tcheckpoint=1\trollback=0\t"

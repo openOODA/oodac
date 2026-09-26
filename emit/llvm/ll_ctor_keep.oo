@@ -1,0 +1,22 @@
+// # LLVM constructor retain helper
+//
+// Logline: Retain a constructor payload so the source keeps its reference.
+//
+// Setup: Ok/Err/Some copy payload bits into the new aggregate. When the
+//   payload comes from a variable, that variable keeps its reference, so the
+//   aggregate must take its own. Fresh values transfer with no retain.
+//
+// Beats:
+//   1. Skip primitives and non-variable payloads.
+//   2. Retain owned variable payloads and return the new high-water mark.
+//
+
+import "ll_tok.oo";
+import "ll_arc.oo";
+
+pub fn ll_ctor_keep(arg: String, ssa0: Int, ir: &mut IrBuf) -> Int {
+    if ll_arc_owned(ll_pk(arg)) && ll_is_var(ll_pptr(arg)) {
+        return ll_arc_keep_ptr(ll_pk(arg), ll_pptr(arg), ssa0, ir);
+    }
+    return ssa0;
+}

@@ -80,7 +80,7 @@ pub fn ll_cap_require_sym(op: String) -> String {
     if ll_cap_in("|read_file|fs_read|path_exists|file_size|file_stamp|read_stdin|read_stdin_chunk|fs_is_dir|fs_read_dir|", c) { return "oo_cap_require_fsread"; }
     if ll_cap_in("|write_file|fs_write|file_append_sync|fs_mkdir|fs_rmdir|fs_remove_file|fs_hardlink|fs_symlink|", c) { return "oo_cap_require_fswrite"; }
     if ll_cap_in("|sys_exec|process_exec|sys_exec_wait|exec|spawn_process|sys_spawn|sys_wait|sys_kill|lto_xlang_link|sys_args|", c) { return "oo_cap_require_process"; }
-    if ll_cap_in("|proc_mem_read|python_embed|python_embed_internal|sys_epoll_create|sys_inotify_init|sys_prctl|rlimit_set_mem_mb|rlimit_set_nofile|rlimit_set_cpu_sec|landlock_restrict|cap_kernel_seal|enclave_enter|", c) { return "oo_cap_require_sys"; }
+    if ll_cap_in("|proc_mem_read|python_embed|python_embed_internal|sys_epoll_create|sys_inotify_init|sys_prctl|rlimit_set_mem_mb|rlimit_set_nofile|rlimit_set_cpu_sec|sys_path_is_dir|landlock_restrict|cap_kernel_seal|enclave_enter|", c) { return "oo_cap_require_sys"; }
     if ll_cap_in("|env_get|env_set|getenv|", c) { return "oo_cap_require_env"; }
     if ll_cap_in("|now_ms|sleep_ms|", c) { return "oo_cap_require_time"; }
     if ll_cap_in("|random|seed|", c) { return "oo_cap_require_rand"; }

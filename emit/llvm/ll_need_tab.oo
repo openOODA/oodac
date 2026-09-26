@@ -132,11 +132,16 @@ fn ll_need_proto_sys(sym: String) -> String {
     if sym == "oo_sys_exec" { return "declare void @oo_sys_exec(ptr noalias sret(%OoResS) align 8, i64, i32, ptr) nounwind"; }
     if sym == "oo_sleep_ms" { return "declare void @oo_sleep_ms(i64, i64) nounwind"; }
     if sym == "oo_now_ms" { return "declare i64 @oo_now_ms(i64) nounwind"; }
+    if sym == "oo_random" { return "declare i64 @oo_random(i64) nounwind"; }
     if sym == "oo_monotonic_us" { return "declare i64 @oo_monotonic_us() nounwind"; }
     if sym == "oo_alloc_bytes" { return "declare i64 @oo_alloc_bytes(i64, i64) nounwind"; }
     if sym == "oo_hot_reload" { return "declare i64 @oo_hot_reload({ ptr, i64 }) nounwind"; }
     if sym == "oo_read_file" { return "declare void @oo_read_file(ptr noalias sret(%OoResS) align 8, i64, { ptr, i64 }) nounwind"; }
     if sym == "oo_write_file" { return "declare void @oo_write_file(ptr noalias sret(%OoResV) align 8, i64, { ptr, i64 }, { ptr, i64 }) nounwind"; }
+    if sym == "oo_file_append_sync" { return "declare void @oo_file_append_sync(ptr noalias sret(%OoResV) align 8, i64, { ptr, i64 }, { ptr, i64 }) nounwind"; }
+    if sym == "oo_landlock_restrict" { return "declare void @oo_landlock_restrict(ptr noalias sret(%OoResS) align 8, i64, { ptr, i64 }, { ptr, i64 }) nounwind"; }
+    if sym == "oo_tcp_connect" { return "declare void @oo_tcp_connect(ptr noalias sret(%OoResS) align 8, i64, { ptr, i64 }, i64) nounwind"; }
+    if sym == "oo_free_bytes" { return "declare void @oo_free_bytes(i64, i64) nounwind"; }
     if sym == "oo_file_stamp" { return "declare { ptr, i64 } @oo_file_stamp(i64, { ptr, i64 }) nounwind"; }
     if sym == "oo_fs_is_dir" { return "declare i32 @oo_fs_is_dir(i64, { ptr, i64 }) nounwind"; }
     if sym == "oo_fs_read_dir" { return "declare void @oo_fs_read_dir(ptr noalias sret(%OoSList) align 8, i64, { ptr, i64 }) nounwind"; }
@@ -153,6 +158,10 @@ fn ll_need_proto_sys(sym: String) -> String {
     if sym == "oo_sys_epoll_create" { return "declare void @oo_sys_epoll_create(ptr noalias sret(%OoResS) align 8, i64, i64) nounwind"; }
     if sym == "oo_sys_inotify_init" { return "declare void @oo_sys_inotify_init(ptr noalias sret(%OoResS) align 8, i64) nounwind"; }
     if sym == "oo_sys_prctl" { return "declare void @oo_sys_prctl(ptr noalias sret(%OoResS) align 8, i64, i64) nounwind"; }
+    if sym == "oo_sys_path_is_dir" { return "declare i32 @oo_sys_path_is_dir(i64, { ptr, i64 }) nounwind"; }
+    if sym == "oo_rlimit_set_mem_mb" { return "declare void @oo_rlimit_set_mem_mb(ptr noalias sret(%OoResS) align 8, i64, i64) nounwind"; }
+    if sym == "oo_rlimit_set_nofile" { return "declare void @oo_rlimit_set_nofile(ptr noalias sret(%OoResS) align 8, i64, i64) nounwind"; }
+    if sym == "oo_rlimit_set_cpu_sec" { return "declare void @oo_rlimit_set_cpu_sec(ptr noalias sret(%OoResS) align 8, i64, i64) nounwind"; }
     if sym == "oo_landlock_is_available" { return "declare i32 @oo_landlock_is_available() nounwind"; }
     if sym == "oo_read_stdin" { return "declare { ptr, i64 } @oo_read_stdin(i64) nounwind"; }
     if sym == "oo_read_stdin_chunk" { return "declare void @oo_read_stdin_chunk(ptr noalias sret(%OoResS) align 8, i64, i64) nounwind"; }
