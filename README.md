@@ -21,8 +21,13 @@
 Primary self-hosting compiler. Root `anchor.oo` re-exports six
 surfaces: `lex`, `ast`, `check`, `types`, `emit/llvm`, and `cli`.
 Product `oodac build` is LLVM IR + clang. `--backend c` / `emit-c`
-/ `--gcc` are residual (exit 2). Experimental/auxiliary backends include
-`emit/elf` (direct ELF code emission) and `emit/wasm` (WebAssembly emission).
+/ `--gcc` are residual (exit 2). Measured auxiliary-backend status
+(Audit 15, `bootstrap/corpus/backend_sweep.sh` in CI): `wasm` partial
+(23/41 corpus fixtures execute byte-identical under node WASI, rest fail
+closed with exit 2); `elf` minimal (2/41 int-only fixtures run natively,
+rest fail closed with exit 1); `rocm` emits HIP but needs a ROCm toolchain
+to compile (unproven on CI hosts). Zero silent miscompiles: non-LLVM
+backends fail closed, never emit a lying binary.
 
 ## Install
 

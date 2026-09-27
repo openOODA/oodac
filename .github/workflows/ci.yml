@@ -267,6 +267,10 @@ jobs:
           echo "=== differential C-vs-LLVM ratchet ==="
           oodac/bootstrap/corpus/differential/diffrun.sh "$HOST"
           echo "DIFF_RATCHET_OK"
+          echo "=== non-LLVM backend sweep (Audit 15) ==="
+          chmod +x oodac/bootstrap/corpus/backend_sweep.sh
+          oodac/bootstrap/corpus/backend_sweep.sh "$HOST"
+          echo "SWEEP_OK"
           echo "=== compiler not concat ==="
           "$HOST" build oodac/qa/probe_compiler_not_concat.oo -o .ooda-cache/ooda-tmp/ci_nocat.bin
           .ooda-cache/ooda-tmp/ci_nocat.bin

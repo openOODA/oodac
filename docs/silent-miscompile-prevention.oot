@@ -6,8 +6,18 @@ LLVM IR is the reference ISA. `oodac check` is the front door of `oodac build`. 
 
 A new `--backend` is allowed only as a second consumer of the typed artifact (tokens + type env + cap set + source coords) that check writes. That backend lives in `emit/<name>/`. It imports `types/` and the artifact. It does not import another backend's lowering.
 
-`--backend llvm` is the product arm: `emit/llvm/` consumes the typed artifact and clang links oodar. Residual names (c, wasm, x86) exit 2.
+`--backend llvm` is the product arm: `emit/llvm/` consumes the typed artifact and clang links oodar. Residual names (c, x86, aarch64, romc) exit 2.
 
 LLVM lowering must fail closed rather than emit a lying ELF. The unique bar is the hostile probe a new backend must also pass: cap-sealed, List/Option/Result kinds, landlock, std-import, tokenize-once artifact mutate, four product mains.
 
-Status: LLVM is the reference. Attach is open. Residual backends are not product.
+Measured backend status (Audit 15, 41-fixture sweep vs LLVM oracle):
+`llvm` full product. `wasm` partial: 23/41 execute byte-identical under node
+WASI (ints, strings, loops, lists, match, structs); the rest exit 2 with an
+`ERR wasm` line (caps, methods, floats, ifexpr, wide ints, str-match). `elf` minimal: 2/41
+execute natively (int-only fixtures); the rest exit 1 with `ERR emit elf`.
+`rocm` emits genuine HIP (`__global__` kernels + host main, host C++ is
+syntax-valid) but no hipcc/AMD GPU on CI hosts, so compilation is unproven.
+Zero silent miscompiles in the sweep: every non-OK row fails closed.
+Ratchet: `bootstrap/corpus/backend_sweep.sh` (CI, after diffrun).
+
+Status: LLVM is the reference. Attach is open. Non-LLVM backends are not product.
