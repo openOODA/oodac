@@ -1,0 +1,221 @@
+// # CUDA typed expression lowering
+//
+// Logline: Climb parser from tokens to typed C++ expressions with packs.
+//
+// Setup: Packs carry end pos, type code, and C++ text. No logic ops in v1.
+//
+// Beats:
+//   1. Compare, add, mul, unary, and primary levels dispatch on kinds.
+//   2. cu_call routes list, gpu, constructor, and user calls with hints.
+//   3. Int division guards zero and fails closed at run time.
+
+import "cuda_tok.oo";
+import "cuda_ty.oo";
+import "cuda_buf.oo";
+import "cuda_call.oo";
+import "cuda_kernel.oo";
+import "cuda_device.oo";
+import "cuda_expr_call.oo";
+import "cuda_field.oo";
+import "cuda_match.oo";
+import "lex/token_parse_int.oo";
+
+pub fn cu_expr(toks: List[String], pos: Int, n: Int, env: String, fns: String, hint: String, capv: String) -> String {
+    return cu_expr_logic(toks, pos, n, env, fns, hint, capv);
+}
+
+pub fn cu_expr_logic(toks: List[String], pos: Int, n: Int, env: String, fns: String, hint: String, capv: String) -> String {
+    let mut r: String = cu_expr_cmp(toks, pos, n, env, fns, hint, capv);
+    let mut p: Int = cu_e_pos(r);
+    let mut lt: String = cu_e_ty(r);
+    let mut lc: String = cu_e_code(r);
+    while p < n {
+        let k: String = cu_k(toks, p);
+        if k != "ANDAND" && k != "OROR" { return r; }
+        let sym: String = if k == "ANDAND" { "&&" } else { "||" };
+        let q: String = cu_expr_cmp(toks, p + 1, n, env, fns, hint, capv);
+        p = cu_e_pos(q);
+        if lt != "b" || cu_e_ty(q) != "b" {
+            cu_fail(cu_line(toks, p), "logic needs bools");
+            return "0\t?\t";
+        }
+        lc = "((" + lc + ") " + sym + " (" + cu_e_code(q) + "))";
+        lt = "b";
+        r = cu_e_pack(p, lt, lc);
+    }
+    return r;
+}
+
+pub fn cu_expr_cmp(toks: List[String], pos: Int, n: Int, env: String, fns: String, hint: String, capv: String) -> String {
+    let l: String = cu_expr_add(toks, pos, n, env, fns, hint, capv);
+    let mut p: Int = cu_e_pos(l);
+    let k: String = cu_k(toks, p);
+    if k != "EQEQ" && k != "NEQ" && k != "LT" && k != "GT" && k != "LTE" && k != "GTE" { return l; }
+    let q: String = cu_expr_add(toks, p + 1, n, env, fns, hint, capv);
+    p = cu_e_pos(q);
+    let lt: String = cu_e_ty(l);
+    let rt: String = cu_e_ty(q);
+    let sym: String = cu_cmp_sym(k);
+    if k == "EQEQ" || k == "NEQ" {
+        if lt == "s" && rt == "s" { return cu_e_pack(p, "b", "((" + cu_e_code(l) + ") " + sym + " (" + cu_e_code(q) + "))"); }
+        if lt == "b" && rt == "b" { return cu_e_pack(p, "b", "((" + cu_e_code(l) + ") " + sym + " (" + cu_e_code(q) + "))"); }
+    }
+    let want: String = cu_num2(lt, rt);
+    if want == "" {
+        cu_fail(cu_line(toks, p), "compare type mismatch");
+        return "0\t?\t";
+    }
+    if cu_k(toks, p) == "EQEQ" || cu_k(toks, p) == "NEQ" || cu_k(toks, p) == "LT" || cu_k(toks, p) == "GT" || cu_k(toks, p) == "LTE" || cu_k(toks, p) == "GTE" {
+        cu_fail(cu_line(toks, p), "chained compare");
+        return "0\t?\t";
+    }
+    return cu_e_pack(p, "b", "((" + cu_prom(cu_e_code(l), lt, want) + ") " + sym + " (" + cu_prom(cu_e_code(q), rt, want) + "))");
+}
+
+fn cu_cmp_sym(k: String) -> String {
+    if k == "EQEQ" { return "=="; }
+    if k == "NEQ" { return "!="; }
+    if k == "LT" { return "<"; }
+    if k == "GT" { return ">"; }
+    if k == "LTE" { return "<="; }
+    return ">=";
+}
+
+pub fn cu_expr_add(toks: List[String], pos: Int, n: Int, env: String, fns: String, hint: String, capv: String) -> String {
+    let mut r: String = cu_expr_mul(toks, pos, n, env, fns, hint, capv);
+    let mut p: Int = cu_e_pos(r);
+    let mut lt: String = cu_e_ty(r);
+    let mut lc: String = cu_e_code(r);
+    while p < n {
+        let k: String = cu_k(toks, p);
+        if k != "PLUS" && k != "MINUS" { return r; }
+        if k == "PLUS" && lt == "s" {
+            let q0: String = cu_expr_mul(toks, p + 1, n, env, fns, hint, capv);
+            p = cu_e_pos(q0);
+            if cu_e_ty(q0) != "s" {
+                cu_fail(cu_line(toks, p), "concat needs strings");
+                return "0\t?\t";
+            }
+            lc = "((" + lc + ") + (" + cu_e_code(q0) + "))";
+            lt = "s";
+            r = cu_e_pack(p, lt, lc);
+            continue;
+        }
+        let sym: String = if k == "PLUS" { "+" } else { "-" };
+        let q: String = cu_expr_mul(toks, p + 1, n, env, fns, hint, capv);
+        p = cu_e_pos(q);
+        let want: String = cu_num2(lt, cu_e_ty(q));
+        if want == "" {
+            cu_fail(cu_line(toks, p), "arith type mismatch");
+            return "0\t?\t";
+        }
+        lc = "((" + cu_prom(lc, lt, want) + ") " + sym + " (" + cu_prom(cu_e_code(q), cu_e_ty(q), want) + "))";
+        lt = want;
+        r = cu_e_pack(p, lt, lc);
+    }
+    return r;
+}
+
+pub fn cu_expr_mul(toks: List[String], pos: Int, n: Int, env: String, fns: String, hint: String, capv: String) -> String {
+    let mut r: String = cu_expr_unary(toks, pos, n, env, fns, hint, capv);
+    let mut p: Int = cu_e_pos(r);
+    let mut lt: String = cu_e_ty(r);
+    let mut lc: String = cu_e_code(r);
+    while p < n {
+        let k: String = cu_k(toks, p);
+        if k != "STAR" && k != "SLASH" && k != "PERCENT" { return r; }
+        let q: String = cu_expr_unary(toks, p + 1, n, env, fns, hint, capv);
+        p = cu_e_pos(q);
+        let want: String = cu_num2(lt, cu_e_ty(q));
+        if want == "" {
+            cu_fail(cu_line(toks, p), "arith type mismatch");
+            return "0\t?\t";
+        }
+        let lz: String = "(" + cu_prom(lc, lt, want) + ")";
+        let rz: String = "(" + cu_prom(cu_e_code(q), cu_e_ty(q), want) + ")";
+        if k == "STAR" { lc = "(" + lz + " * " + rz + ")"; }
+        if k == "SLASH" { lc = cu_div_code(lz, rz, want, cu_line(toks, p)); }
+        if k == "PERCENT" {
+            if want != "i" {
+                cu_fail(cu_line(toks, p), "percent needs ints");
+                return "0\t?\t";
+            }
+            lc = cu_mod_code(lz, rz, cu_line(toks, p));
+        }
+        lt = want;
+        r = cu_e_pack(p, lt, lc);
+    }
+    return r;
+}
+
+fn cu_div_code(lz: String, rz: String, want: String, line: Int) -> String {
+    if want == "f" { return "(" + lz + " / " + rz + ")"; }
+    let bad: String = "(fprintf(stderr, \"ERR\\tcuda\\tdiv zero at line " + line.to_string() + "\\n\"), exit(1), (long long)0)";
+    return "((" + rz + " == 0) ? " + bad + " : (" + lz + " / " + rz + "))";
+}
+
+fn cu_mod_code(lz: String, rz: String, line: Int) -> String {
+    let bad: String = "(fprintf(stderr, \"ERR\\tcuda\\tdiv zero at line " + line.to_string() + "\\n\"), exit(1), (long long)0)";
+    return "((" + rz + " == 0) ? " + bad + " : (" + lz + " % " + rz + "))";
+}
+
+pub fn cu_expr_unary(toks: List[String], pos: Int, n: Int, env: String, fns: String, hint: String, capv: String) -> String {
+    if pos < n && cu_k(toks, pos) == "MINUS" {
+        let r: String = cu_expr_unary(toks, pos + 1, n, env, fns, hint, capv);
+        if cu_e_ty(r) != "i" && cu_e_ty(r) != "f" {
+            cu_fail(cu_line(toks, pos), "negate needs a number");
+            return "0\t?\t";
+        }
+        return cu_e_pack(cu_e_pos(r), cu_e_ty(r), "(-(" + cu_e_code(r) + "))");
+    }
+    if pos < n && cu_k(toks, pos) == "BANG" {
+        let r2: String = cu_expr_unary(toks, pos + 1, n, env, fns, hint, capv);
+        if cu_e_ty(r2) != "b" {
+            cu_fail(cu_line(toks, pos), "not needs a bool");
+            return "0\t?\t";
+        }
+        return cu_e_pack(cu_e_pos(r2), "b", "(!(" + cu_e_code(r2) + "))");
+    }
+    return cu_expr_postfix(toks, pos, n, env, fns, hint, capv);
+}
+
+pub fn cu_expr_postfix(toks: List[String], pos: Int, n: Int, env: String, fns: String, hint: String, capv: String) -> String {
+    let r: String = cu_expr_primary(toks, pos, n, env, fns, hint, capv);
+    if cu_k(toks, cu_e_pos(r)) != "DOT" {
+        return r;
+    }
+    return cu_field(toks, pos, n, env, fns, r, capv);
+}
+
+pub fn cu_expr_primary(toks: List[String], pos: Int, n: Int, env: String, fns: String, hint: String, capv: String) -> String {
+    let k: String = cu_k(toks, pos);
+    if k == "INT" { return cu_e_pack(pos + 1, "i", "((long long)" + cu_t(toks, pos) + ")"); }
+    if k == "FLOAT" { return cu_e_pack(pos + 1, "f", "((double)" + cu_t(toks, pos) + ")"); }
+    if k == "STRING" { return cu_e_pack(pos + 1, "s", "std::string(\"" + cu_c_esc(cu_t(toks, pos)) + "\")"); }
+    if k == "KW_TRUE" { return cu_e_pack(pos + 1, "b", "true"); }
+    if k == "KW_FALSE" { return cu_e_pack(pos + 1, "b", "false"); }
+    if k == "LPAREN" {
+        let r: String = cu_expr(toks, pos + 1, n, env, fns, hint, capv);
+        if cu_k(toks, cu_e_pos(r)) != "RPAREN" {
+            cu_fail(cu_line(toks, pos), "missing rparen");
+            return "0\t?\t";
+        }
+        return cu_e_pack(cu_e_pos(r) + 1, cu_e_ty(r), "(" + cu_e_code(r) + ")");
+    }
+    if k == "IDENT" || k == "KW_GPU" {
+        if cu_k(toks, pos + 1) == "LPAREN" { return cu_call(toks, pos, n, env, fns, hint, capv); }
+        let got: String = cu_env_get(env, cu_t(toks, pos));
+        if got == "" {
+            cu_fail(cu_line(toks, pos), "unknown var " + cu_t(toks, pos));
+            return "0\t?\t";
+        }
+        return cu_e_pack(pos + 1, got, cu_var(cu_t(toks, pos)));
+    }
+    if k == "KW_MATCH" {
+        return cu_match_expr(toks, pos, n, env, fns, hint, capv);
+    }
+    cu_fail(cu_line(toks, pos), "bad expression");
+    return "0\t?\t";
+}
+
+

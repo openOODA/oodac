@@ -202,7 +202,7 @@ pub fn rc_expr_primary(toks: List[String], pos: Int, n: Int, env: String, fns: S
         }
         return rc_e_pack(rc_e_pos(r) + 1, rc_e_ty(r), "(" + rc_e_code(r) + ")");
     }
-    if k == "IDENT" {
+    if k == "IDENT" || k == "KW_GPU" {
         if rc_k(toks, pos + 1) == "LPAREN" { return rc_call(toks, pos, n, env, fns, hint, capv); }
         let got: String = rc_env_get(env, rc_t(toks, pos));
         if got == "" {

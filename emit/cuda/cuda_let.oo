@@ -1,0 +1,113 @@
+// # CUDA let, assign, and call statements
+//
+// Logline: Binding, push, plain assign, and expression statements.
+//
+// Setup: Env threads through packs. Push targets must name a list variable.
+//
+// Beats:
+//   1. cu_let binds annotated or inferred types with strict checks.
+//   2. cu_push_stmt lowers list_push to push_back on the same variable.
+//   3. cu_ident_stmt routes assign, println, and value calls.
+
+import "cuda_tok.oo";
+import "cuda_ty.oo";
+import "cuda_expr.oo";
+import "cuda_call.oo";
+
+pub fn cu_let(toks: List[String], pos: Int, n: Int, env: String, fns: String, capv: String, ind: String) -> String {
+    let mut p: Int = pos + 1;
+    if p < n && cu_k(toks, p) == "KW_MUT" { p = p + 1; }
+    let name: String = cu_t(toks, p);
+    p = p + 1;
+    let mut ann: String = "";
+    if p < n && cu_k(toks, p) == "COLON" {
+        let tr: String = cu_read_ty(toks, p + 1, n);
+        p = cu_ty_pos(tr);
+        ann = cu_ty_code(tr);
+    }
+    if p >= n || cu_k(toks, p) != "EQ" {
+        cu_fail(cu_line(toks, pos), "let needs a value");
+        return cu_s_pack(p, env, "");
+    }
+    if cu_is_push_of(toks, p + 1, n, name) {
+        return cu_push_stmt(toks, pos, p + 1, n, env, fns, capv, ind, name);
+    }
+    let e: String = cu_expr(toks, p + 1, n, env, fns, ann, capv);
+    let q: Int = cu_e_pos(e);
+    let qq: Int = if q < n && cu_k(toks, q) == "SEMI" { q + 1 } else { q };
+    let got: String = cu_e_ty(e);
+    let ty: String = if ann != "" { ann } else { got };
+    if ann != "" && ann != got {
+        cu_fail(cu_line(toks, pos), "let type mismatch");
+        return cu_s_pack(qq, env, "");
+    }
+    if cu_ctype(ty) == "" {
+        cu_fail(cu_line(toks, pos), "let type unsupported");
+        return cu_s_pack(qq, env, "");
+    }
+    let line: String = ind + cu_ctype(ty) + " " + cu_var(name) + " = " + cu_e_code(e) + ";";
+    return cu_s_pack(qq, cu_env_put(env, name, ty), line + "\n");
+}
+
+pub fn cu_is_push_of(toks: List[String], pos: Int, n: Int, name: String) -> Bool {
+    if pos + 3 >= n { return false; }
+    if cu_k(toks, pos) != "IDENT" || cu_t(toks, pos) != "list_push" { return false; }
+    if cu_k(toks, pos + 1) != "LPAREN" { return false; }
+    if cu_k(toks, pos + 2) != "IDENT" || cu_t(toks, pos + 2) != name { return false; }
+    return true;
+}
+
+pub fn cu_push_stmt(toks: List[String], pos: Int, epos: Int, n: Int, env: String, fns: String, capv: String, ind: String, name: String) -> String {
+    let xt: String = cu_env_get(env, name);
+    if xt != "li" && xt != "lf" {
+        cu_fail(cu_line(toks, pos), "push needs a list");
+        return cu_s_pack(epos, env, "");
+    }
+    let info: String = cu_arg_spans(toks, epos, n);
+    let nargs: Int = cu_span_nargs(info);
+    if nargs != 2 {
+        cu_fail(cu_line(toks, pos), "push takes a list and a value");
+        return cu_s_pack(epos, env, "");
+    }
+    let want: String = if xt == "li" { "i" } else { "f" };
+    let v: String = cu_expr(toks, cu_span_start(info, 1), n, env, fns, want, capv);
+    if cu_e_ty(v) != want {
+        cu_fail(cu_line(toks, pos), "push value mismatch");
+        return cu_s_pack(epos, env, "");
+    }
+    let q: Int = cu_span_end(info) + 1;
+    let qq: Int = if q < n && cu_k(toks, q) == "SEMI" { q + 1 } else { q };
+    return cu_s_pack(qq, env, ind + cu_var(name) + ".push_back(" + cu_e_code(v) + ");\n");
+}
+
+pub fn cu_ident_stmt(toks: List[String], pos: Int, n: Int, env: String, fns: String, capv: String, ind: String) -> String {
+    let name: String = cu_t(toks, pos);
+    if pos + 1 < n && cu_k(toks, pos + 1) == "EQ" {
+        if cu_env_get(env, name) == "" {
+            cu_fail(cu_line(toks, pos), "assign to unknown " + name);
+            return cu_s_pack(pos + 1, env, "");
+        }
+        if cu_is_push_of(toks, pos + 2, n, name) {
+            return cu_push_stmt(toks, pos, pos + 2, n, env, fns, capv, ind, name);
+        }
+        let e: String = cu_expr(toks, pos + 2, n, env, fns, cu_env_get(env, name), capv);
+        let q: Int = cu_e_pos(e);
+        let qq: Int = if q < n && cu_k(toks, q) == "SEMI" { q + 1 } else { q };
+        if cu_e_ty(e) != cu_env_get(env, name) {
+            cu_fail(cu_line(toks, pos), "assign type mismatch");
+            return cu_s_pack(qq, env, "");
+        }
+        return cu_s_pack(qq, env, ind + cu_var(name) + " = " + cu_e_code(e) + ";\n");
+    }
+    if pos + 1 < n && cu_k(toks, pos + 1) == "LPAREN" {
+        if name == "println" {
+            return cu_println(toks, pos, n, env, fns, capv, ind);
+        }
+        let e: String = cu_call(toks, pos, n, env, fns, "", capv);
+        let q: Int = cu_e_pos(e);
+        let qq: Int = if q < n && cu_k(toks, q) == "SEMI" { q + 1 } else { q };
+        return cu_s_pack(qq, env, ind + cu_e_code(e) + ";\n");
+    }
+    cu_fail(cu_line(toks, pos), "bad statement");
+    return cu_s_pack(pos + 1, env, "");
+}

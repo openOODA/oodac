@@ -51,6 +51,7 @@ fn ll_need_proto_gpu(sym: String) -> String {
 fn ll_need_proto_gpu_mem(sym: String) -> String {
     if sym == "oo_gpu_init" { return "declare i32 @oo_gpu_init(i64) nounwind"; }
     if sym == "oo_gpu_hip_available" { return "declare i32 @oo_gpu_hip_available() nounwind"; }
+    if sym == "oo_gpu_cuda_available" { return "declare i32 @oo_gpu_cuda_available() nounwind"; }
     if sym == "oo_gpu_probe_device" { return "declare void @oo_gpu_probe_device(ptr noalias sret(%OoResS) align 8, i64, i32) nounwind"; }
     if sym == "oo_gpu_buffer_alloc" { return "declare i64 @oo_gpu_buffer_alloc(i64, i64, i32) nounwind"; }
     if sym == "oo_gpu_buffer_free" { return "declare i32 @oo_gpu_buffer_free(i64, i64) nounwind"; }
@@ -83,6 +84,17 @@ fn ll_need_proto_gpu_exec(sym: String) -> String {
     if sym == "oo_gpu_hip_rope" { return "declare void @oo_gpu_hip_rope(ptr noalias sret(%OoResS) align 8, i64, ptr, ptr, ptr, ptr, i32, i32) nounwind"; }
     if sym == "oo_gpu_hip_stencil_3d" { return "declare void @oo_gpu_hip_stencil_3d(ptr noalias sret(%OoResS) align 8, i64, ptr, ptr, i32, i32, i32, float, float) nounwind"; }
     if sym == "oo_gpu_hip_try_launch" { return "declare void @oo_gpu_hip_try_launch(ptr noalias sret(%OoResS) align 8, i64, { ptr, i64 }) nounwind"; }
+    if sym == "oo_gpu_cuda_vec_add" { return "declare void @oo_gpu_cuda_vec_add(ptr noalias sret(%OoResS) align 8, i64, ptr, ptr, ptr, i32) nounwind"; }
+    if sym == "oo_gpu_cuda_sgemm" { return "declare void @oo_gpu_cuda_sgemm(ptr noalias sret(%OoResS) align 8, i64, ptr, ptr, ptr, i32, i32, i32) nounwind"; }
+    if sym == "oo_gpu_cuda_rmsnorm" { return "declare void @oo_gpu_cuda_rmsnorm(ptr noalias sret(%OoResS) align 8, i64, ptr, ptr, ptr, i32, i32) nounwind"; }
+    if sym == "oo_gpu_cuda_attention" { return "declare void @oo_gpu_cuda_attention(ptr noalias sret(%OoResS) align 8, i64, ptr, ptr, ptr, ptr, i32, i32) nounwind"; }
+    if sym == "oo_gpu_cuda_reduce_sum" { return "declare void @oo_gpu_cuda_reduce_sum(ptr noalias sret(%OoResS) align 8, i64, ptr, ptr, i32) nounwind"; }
+    if sym == "oo_gpu_cuda_try_launch" { return "declare void @oo_gpu_cuda_try_launch(ptr noalias sret(%OoResS) align 8, i64, { ptr, i64 }) nounwind"; }
+    if sym == "oo_gpu_cuda_vec_add_flist" { return "declare void @oo_gpu_cuda_vec_add_flist(ptr noalias sret(%OoResS) align 8, i64, ptr, ptr, ptr, i32) nounwind"; }
+    if sym == "oo_gpu_cuda_sgemm_flist" { return "declare void @oo_gpu_cuda_sgemm_flist(ptr noalias sret(%OoResS) align 8, i64, ptr, ptr, ptr, i32, i32, i32) nounwind"; }
+    if sym == "oo_gpu_cuda_rmsnorm_flist" { return "declare void @oo_gpu_cuda_rmsnorm_flist(ptr noalias sret(%OoResS) align 8, i64, ptr, ptr, ptr, i32, i32) nounwind"; }
+    if sym == "oo_gpu_cuda_attention_flist" { return "declare void @oo_gpu_cuda_attention_flist(ptr noalias sret(%OoResS) align 8, i64, ptr, ptr, ptr, ptr, i32, i32) nounwind"; }
+    if sym == "oo_gpu_cuda_reduce_sum_flist" { return "declare void @oo_gpu_cuda_reduce_sum_flist(ptr noalias sret(%OoResS) align 8, i64, ptr, ptr, i32) nounwind"; }
     return "";
 }
 

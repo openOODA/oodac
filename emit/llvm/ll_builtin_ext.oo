@@ -40,6 +40,11 @@ pub fn ll_builtin_ext_sym(sym: String) -> String {
     let n: Int = chars_len(s);
     if n >= 3 && str_slice(s, 0, 3) == "oo_" { return s; }
     if n >= 7 && str_slice(s, 0, 7) == "crypto_" { return s; }
+    if s == "gpu_cuda_vec_add" { return "oo_gpu_cuda_vec_add_flist"; }
+    if s == "gpu_cuda_sgemm" { return "oo_gpu_cuda_sgemm_flist"; }
+    if s == "gpu_cuda_rmsnorm" { return "oo_gpu_cuda_rmsnorm_flist"; }
+    if s == "gpu_cuda_attention" { return "oo_gpu_cuda_attention_flist"; }
+    if s == "gpu_cuda_reduce_sum" { return "oo_gpu_cuda_reduce_sum_flist"; }
     if n >= 4 && str_slice(s, 0, 4) == "gpu_" { return "oo_" + s; }
     if n >= 6 && str_slice(s, 0, 6) == "actor_" { return "oo_" + s; }
     if n >= 6 && str_slice(s, 0, 6) == "audio_" { return "oo_" + s; }
@@ -89,6 +94,7 @@ fn ll_ext_sig_pqc(sym: String) -> String {
 fn ll_ext_sig_gpu_mem(sym: String) -> String {
     if sym == "oo_gpu_init" || sym == "gpu_init" { return "i64>i32"; }
     if sym == "oo_gpu_hip_available" || sym == "gpu_hip_available" { return ">i32"; }
+    if sym == "oo_gpu_cuda_available" || sym == "gpu_cuda_available" { return ">i32"; }
     if sym == "oo_gpu_probe_device" || sym == "gpu_probe_device" { return "i64,i32>ress"; }
     if sym == "oo_gpu_buffer_alloc" || sym == "gpu_buffer_alloc" { return "i64,i64,i32>i64"; }
     if sym == "oo_gpu_buffer_free" || sym == "gpu_buffer_free" { return "i64,i64>i32"; }
@@ -121,6 +127,12 @@ fn ll_ext_sig_gpu_exec(sym: String) -> String {
     if sym == "oo_gpu_hip_rope" || sym == "gpu_hip_rope" { return "i64,ptr,ptr,ptr,ptr,i32,i32>ress"; }
     if sym == "oo_gpu_hip_stencil_3d" || sym == "gpu_hip_stencil_3d" { return "i64,ptr,ptr,i32,i32,i32,f32,f32>ress"; }
     if sym == "oo_gpu_hip_try_launch" || sym == "gpu_hip_try_launch" { return "i64,str>ress"; }
+    if sym == "oo_gpu_cuda_vec_add" || sym == "gpu_cuda_vec_add" { return "i64,ptr,ptr,ptr,i32>ress"; }
+    if sym == "oo_gpu_cuda_sgemm" || sym == "gpu_cuda_sgemm" { return "i64,ptr,ptr,ptr,i32,i32,i32>ress"; }
+    if sym == "oo_gpu_cuda_rmsnorm" || sym == "gpu_cuda_rmsnorm" { return "i64,ptr,ptr,ptr,i32,i32>ress"; }
+    if sym == "oo_gpu_cuda_attention" || sym == "gpu_cuda_attention" { return "i64,ptr,ptr,ptr,ptr,i32,i32>ress"; }
+    if sym == "oo_gpu_cuda_reduce_sum" || sym == "gpu_cuda_reduce_sum" { return "i64,ptr,ptr,i32>ress"; }
+    if sym == "oo_gpu_cuda_try_launch" || sym == "gpu_cuda_try_launch" { return "i64,str>ress"; }
     return "";
 }
 

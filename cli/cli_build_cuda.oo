@@ -1,0 +1,77 @@
+// # CUDA backend build path
+//
+// Logline: Emit .cu via emit/cuda, compile with nvcc, link via @rsp.
+//
+// Setup: nvcc on PATH. OODA_CUDA_ARCH overrides the sm_89 default.
+// Mirrors the rocm path in cli_build.oo (nvcc links cudart itself).
+//
+// Beats:
+//   1. cuda_emit_program lowers the source-with-imports to one .cu TU.
+//   2. nvcc -c compiles the TU (arch sm_89 + PTX for forward compat).
+//   3. nvcc links @rsp + liboodar-core and reports OK_PURE_NATIVE.
+
+import "emit/cuda/anchor.oo";
+import "cli_oodar.oo";
+import "ast/load_import.oo";
+
+// sys_exec does no PATH search (bare "nvcc" never resolves), so probe
+// absolute locations by execution (path_exists would false-negative
+// outside the read jail). OODA_NVCC wins when set.
+fn cuda_nvcc(sys: &ProcessCap, env: &EnvCap) -> String {
+    let oe: Result[String, String] = env_get(env, "OODA_NVCC");
+    if oe.is_ok() && oe.val != "" {
+        return oe.val;
+    }
+    if sys_exec(sys, "/usr/local/cuda/bin/nvcc", "--version").is_ok() {
+        return "/usr/local/cuda/bin/nvcc";
+    }
+    if sys_exec(sys, "/opt/cuda/bin/nvcc", "--version").is_ok() {
+        return "/opt/cuda/bin/nvcc";
+    }
+    return "";
+}
+
+pub fn run_build_cuda(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env: &EnvCap, od: String, tmp_dir: String, tmp_h: String, path: String, out: String, is_shared: Bool) {
+    if is_shared {
+        println("ERR\tbuild\tcuda shared unsupported");
+        process_exit(2);
+    }
+    let cu: String = cuda_emit_program(load_source_with_imports(fs_r, path));
+    let tmp_cu: String = tmp_dir + "/cuda_" + str_slice(tmp_h, 0, 16) + ".cu";
+    let tmp_o: String = tmp_dir + "/cuda_" + str_slice(tmp_h, 0, 16) + ".o";
+    let wr: Result[Void, String] = write_file(fs_w, tmp_cu, cu);
+    if wr.is_err() {
+        println("ERR\tbuild\twrite cuda cu failed");
+        process_exit(1);
+    }
+    let mut arch: String = "sm_89";
+    let ae: Result[String, String] = env_get(env, "OODA_CUDA_ARCH");
+    if ae.is_ok() && ae.val != "" {
+        arch = ae.val;
+    }
+    let nvcc: String = cuda_nvcc(sys, env);
+    if nvcc == "" {
+        println("ERR\tbuild\tnvcc not found (set OODA_NVCC=/path/to/nvcc or install the CUDA toolkit at /usr/local/cuda)");
+        process_exit(1);
+    }
+    let hc: Result[String, String] = sys_exec(sys, nvcc, "-O2", "-arch=" + arch, "-I" + od, "-c", tmp_cu, "-o", tmp_o);
+    if !hc.is_ok() {
+        println("ERR\tbuild\tnvcc cuda compile failed");
+        let hmsg: String = match hc { Ok(s) => s, Err(e) => e };
+        println(hmsg);
+        process_exit(1);
+    }
+    let lib_a: String = oodar_lib_core(fs_r, od);
+    let gexts: List[String] = oodar_gpu_ext(fs_r, od);
+    let rsp_path: String = oodar_link_rsp(fs_w, tmp_dir, tmp_o, gexts);
+    let r: Result[String, String] = sys_exec(sys, nvcc, "-O2", "-optf", rsp_path, lib_a, "-o", out);
+    let _: Result[String, String] = sys_exec(sys, "/usr/bin/rm", "-f", rsp_path);
+    if !r.is_ok() {
+        println("ERR\tbuild\tnvcc link cuda failed");
+        let gtxt: String = match r { Ok(s) => s, Err(e) => e };
+        println(gtxt);
+        process_exit(1);
+    }
+    println("OK_PURE_NATIVE");
+    println("OK\tbuild\t" + out);
+}

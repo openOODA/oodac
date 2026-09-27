@@ -95,6 +95,23 @@ for f in method_calls float_arith float_calls str_starts_with str_escapes str_ma
          multi_diamond ifexpr ifexpr_break ifexpr_multi ifexpr_strnest ifexpr_unit \
          width_ints width_struct_for cap_spread cap_spread2 export_fn for_int_bound; do closed wasm "$PASS/$f.oo"; done
 
+echo "=== cuda emission (full exec needs nvcc; CI asserts emission) ==="
+rm -f .ooda-cache/ooda-tmp/cuda_*.cu
+if timeout 120 "$HOST" build --backend cuda "$PASS/fn_ret_int.oo" -o "$TMP/cuda_fn.bin" >/dev/null 2>&1; then
+  got="$("$TMP/cuda_fn.bin" 2>/dev/null)"
+  if [[ "$got" == "42" ]]; then echo "OK cuda-exec fn_ret_int (nvcc present, prints 42)";
+  else echo "WRONG cuda-exec fn_ret_int: got [$got] want [42]"; fails=$((fails+1)); fi
+else
+  if command -v nvcc >/dev/null 2>&1; then
+    echo "WRONG cuda build failed WITH nvcc present (broken .cu or link)"; fails=$((fails+1))
+  else
+    cu=$(ls -t .ooda-cache/ooda-tmp/cuda_*.cu 2>/dev/null | head -1)
+    if [[ -n "${cu:-}" ]] && grep -q "int main" "$cu" && grep -q "cuda_runtime.h" "$cu"; then
+      echo "OK cuda-emit fn_ret_int (no nvcc here; .cu with main + cuda_runtime)"
+    else echo "WRONG cuda-emit: no .cu artifact"; fails=$((fails+1)); fi
+  fi
+fi
+
 echo "=== rocm emission (no hipcc on CI hosts) ==="
 rm -f "$TMP"/rocm_*.hip
 timeout 120 "$HOST" build --backend rocm "$PASS/fn_ret_int.oo" -o "$TMP/rocm.out" >/dev/null 2>&1

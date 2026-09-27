@@ -1,0 +1,237 @@
+// # CUDA statement dispatch and blocks
+//
+// Logline: Block walk with branch, loop, and match drivers.
+//
+// Setup: Leaf statements live in cuda_let. Branch and match text assemble apart.
+//
+// Beats:
+//   1. cu_stmts walks one block and returns end, env, and text.
+//   2. cu_if, cu_while, and cu_for lower conditions and int ranges.
+//   3. cu_match validates arm pairs and binds payloads into scopes.
+
+import "cuda_tok.oo";
+import "cuda_ty.oo";
+import "cuda_expr.oo";
+import "cuda_scan.oo";
+import "cuda_let.oo";
+import "cuda_branch.oo";
+import "cuda_match.oo";
+
+pub fn cu_stmts(toks: List[String], pos: Int, end: Int, n: Int, env: String, fns: String, capv: String, in_main: Bool, ret: String, ind: String) -> String {
+    let mut p: Int = pos;
+    let mut cur: String = env;
+    let mut text: String = "";
+    while p < end && p < n {
+        let k: String = cu_k(toks, p);
+        if k == "SEMI" {
+            p = p + 1;
+        } else if k == "KW_LET" {
+            let r: String = cu_let(toks, p, n, cur, fns, capv, ind);
+            p = cu_s_pos(r);
+            cur = cu_s_env(r);
+            text = text + cu_s_text(r);
+        } else if k == "IDENT" {
+            let r: String = cu_ident_stmt(toks, p, n, cur, fns, capv, ind);
+            p = cu_s_pos(r);
+            cur = cu_s_env(r);
+            text = text + cu_s_text(r);
+        } else if k == "KW_RETURN" {
+            let r: String = cu_return(toks, p, n, cur, fns, capv, in_main, ret, ind);
+            p = cu_s_pos(r);
+            text = text + cu_s_text(r);
+        } else if k == "KW_IF" {
+            let r: String = cu_if(toks, p, n, cur, fns, capv, in_main, ret, ind);
+            p = cu_s_pos(r);
+            text = text + cu_s_text(r);
+        } else if k == "KW_WHILE" {
+            let r: String = cu_while(toks, p, n, cur, fns, capv, in_main, ret, ind);
+            p = cu_s_pos(r);
+            text = text + cu_s_text(r);
+        } else if k == "KW_FOR" {
+            let r: String = cu_for(toks, p, n, cur, fns, capv, in_main, ret, ind);
+            p = cu_s_pos(r);
+            text = text + cu_s_text(r);
+        } else if k == "KW_MATCH" {
+            let r: String = cu_match(toks, p, n, cur, fns, capv, in_main, ret, ind);
+            p = cu_s_pos(r);
+            text = text + cu_s_text(r);
+        } else {
+            cu_fail(cu_line(toks, p), "unsupported statement");
+            return cu_s_pack(p + 1, cur, text);
+        }
+    }
+    return cu_s_pack(p, cur, text);
+}
+
+fn cu_if(toks: List[String], pos: Int, n: Int, env: String, fns: String, capv: String, in_main: Bool, ret: String, ind: String) -> String {
+    let c: String = cu_cond(toks, pos + 1, n, env, fns, capv);
+    let mut p: Int = cu_e_pos(c);
+    if p >= n || cu_k(toks, p) != "LBRACE" {
+        cu_fail(cu_line(toks, pos), "if needs a block");
+        return cu_s_pack(p, env, "");
+    }
+    let a: String = cu_stmts(toks, p + 1, cu_skip_balanced(toks, p) - 1, n, env, fns, capv, in_main, ret, ind + "  ");
+    p = cu_skip_balanced(toks, p);
+    let mut o: String = ind + "if (" + cu_e_code(c) + ") {\n" + cu_s_text(a) + ind + "}";
+    if p < n && cu_k(toks, p) == "KW_ELSE" {
+        p = p + 1;
+        if p >= n || cu_k(toks, p) != "LBRACE" {
+            cu_fail(cu_line(toks, pos), "else needs a block");
+            return cu_s_pack(p, env, "");
+        }
+        let b2: String = cu_stmts(toks, p + 1, cu_skip_balanced(toks, p) - 1, n, env, fns, capv, in_main, ret, ind + "  ");
+        p = cu_skip_balanced(toks, p);
+        o = o + " else {\n" + cu_s_text(b2) + ind + "}";
+    }
+    return cu_s_pack(p, env, o + "\n");
+}
+
+fn cu_while(toks: List[String], pos: Int, n: Int, env: String, fns: String, capv: String, in_main: Bool, ret: String, ind: String) -> String {
+    let c: String = cu_cond(toks, pos + 1, n, env, fns, capv);
+    let mut p: Int = cu_e_pos(c);
+    if p >= n || cu_k(toks, p) != "LBRACE" {
+        cu_fail(cu_line(toks, pos), "while needs a block");
+        return cu_s_pack(p, env, "");
+    }
+    let a: String = cu_stmts(toks, p + 1, cu_skip_balanced(toks, p) - 1, n, env, fns, capv, in_main, ret, ind + "  ");
+    p = cu_skip_balanced(toks, p);
+    return cu_s_pack(p, env, ind + "while (" + cu_e_code(c) + ") {\n" + cu_s_text(a) + ind + "}\n");
+}
+
+fn cu_for(toks: List[String], pos: Int, n: Int, env: String, fns: String, capv: String, in_main: Bool, ret: String, ind: String) -> String {
+    if pos + 1 >= n || cu_k(toks, pos + 1) != "IDENT" {
+        cu_fail(cu_line(toks, pos), "for needs a variable");
+        return cu_s_pack(pos + 1, env, "");
+    }
+    let nm: String = cu_t(toks, pos + 1);
+    if pos + 2 >= n || cu_k(toks, pos + 2) != "KW_IN" {
+        cu_fail(cu_line(toks, pos), "for needs in");
+        return cu_s_pack(pos + 1, env, "");
+    }
+    let lo: String = cu_expr(toks, pos + 3, n, env, fns, "i", capv);
+    if cu_e_ty(lo) != "i" {
+        cu_fail(cu_line(toks, pos), "for bounds need int");
+        return cu_s_pack(pos + 1, env, "");
+    }
+    let mid: Int = cu_e_pos(lo);
+    let rk: String = if mid < n { cu_k(toks, mid) } else { "" };
+    if rk != "DOTDOT" && rk != "DOTDOTEQ" {
+        cu_fail(cu_line(toks, pos), "for range needs ..");
+        return cu_s_pack(pos + 1, env, "");
+    }
+    let hi: String = cu_expr(toks, mid + 1, n, env, fns, "i", capv);
+    if cu_e_ty(hi) != "i" {
+        cu_fail(cu_line(toks, pos), "for bounds need int");
+        return cu_s_pack(pos + 1, env, "");
+    }
+    let top: Int = cu_e_pos(hi);
+    if top >= n || cu_k(toks, top) != "LBRACE" {
+        cu_fail(cu_line(toks, pos), "for needs a block");
+        return cu_s_pack(top, env, "");
+    }
+    let end: String = "__for_end_" + pos.to_string();
+    let benv: String = cu_env_put(cu_env_put(env, nm, "i"), end, "i");
+    let bend: Int = cu_skip_balanced(toks, top) - 1;
+    let body: String = cu_stmts(toks, top + 1, bend, n, benv, fns, capv, in_main, ret, ind + "  ");
+    let p: Int = cu_skip_balanced(toks, top);
+    let cmp: String = if rk == "DOTDOTEQ" { "<=" } else { "<" };
+    let head: String = ind + "{ long long " + cu_var(nm) + " = " + cu_e_code(lo) + "; long long " + cu_var(end) + " = " + cu_e_code(hi) + "; for (; " + cu_var(nm) + " " + cmp + " " + cu_var(end) + "; ++" + cu_var(nm) + ") {\n";
+    return cu_s_pack(p, env, head + cu_s_text(body) + ind + "}\n" + ind + "}\n");
+}
+
+fn cu_match(toks: List[String], pos: Int, n: Int, env: String, fns: String, capv: String, in_main: Bool, ret: String, ind: String) -> String {
+    if pos + 2 >= n || cu_k(toks, pos + 1) != "IDENT" {
+        cu_fail(cu_line(toks, pos), "match needs a variable");
+        return cu_s_pack(pos + 1, env, "");
+    }
+    let sc: String = cu_t(toks, pos + 1);
+    let sty: String = cu_env_get(env, sc);
+    if sty != "rss" && sty != "rli" && sty != "oi" && sty != "os" {
+        cu_fail(cu_line(toks, pos), "match needs a result or option");
+        return cu_s_pack(pos + 1, env, "");
+    }
+    let mut p: Int = pos + 2;
+    if p >= n || cu_k(toks, p) != "LBRACE" {
+        cu_fail(cu_line(toks, pos), "match needs arms");
+        return cu_s_pack(p, env, "");
+    }
+    let mend: Int = cu_skip_balanced(toks, p) - 1;
+    p = p + 1;
+    let a1: String = cu_arm(toks, p, mend, n, env, fns, capv, in_main, ret, ind + "  ", sc, sty);
+    p = cu_s_pos(a1);
+    if p < mend && cu_k(toks, p) == "COMMA" { p = p + 1; }
+    let a2: String = cu_arm(toks, p, mend, n, env, fns, capv, in_main, ret, ind + "  ", sc, sty);
+    p = cu_s_pos(a2);
+    if p < mend && cu_k(toks, p) == "COMMA" { p = p + 1; }
+    if p != mend {
+        cu_fail(cu_line(toks, pos), "match needs two arms");
+        return cu_s_pack(mend + 1, env, "");
+    }
+    let t1: String = cu_s_text(a1);
+    let t2: String = cu_s_text(a2);
+    let top: String = cu_tab_field(t1, 0);
+    let bot: String = cu_tab_field(t2, 0);
+    let head: String = cu_match_head(sty, top, sc, ind);
+    if head == "" {
+        cu_fail(cu_line(toks, pos), "match arms out of order");
+        return cu_s_pack(mend + 1, env, "");
+    }
+    if top == "Ok" && bot != "Err" {
+        cu_fail(cu_line(toks, pos), "match needs an Err arm");
+        return cu_s_pack(mend + 1, env, "");
+    }
+    if top == "Some" && bot != "None" {
+        cu_fail(cu_line(toks, pos), "match needs a None arm");
+        return cu_s_pack(mend + 1, env, "");
+    }
+    let o: String = head + cu_tab_field(t1, 1) + cu_s_text(t1) + ind + "} else {\n" + cu_tab_field(t2, 1) + cu_s_text(t2) + ind + "}\n";
+    return cu_s_pack(mend + 1, env, o);
+}
+
+fn cu_arm(toks: List[String], pos: Int, mend: Int, n: Int, env: String, fns: String, capv: String, in_main: Bool, ret: String, ind: String, sc: String, sty: String) -> String {
+    let ctor: String = cu_t(toks, pos);
+    if cu_k(toks, pos) != "IDENT" {
+        cu_fail(cu_line(toks, pos), "bad match arm");
+        return cu_s_pack(pos + 1, env, "");
+    }
+    let mut p: Int = pos + 1;
+    let mut binder: String = "";
+    if p < mend && cu_k(toks, p) == "LPAREN" {
+        if p + 1 >= mend || cu_k(toks, p + 1) != "IDENT" {
+            cu_fail(cu_line(toks, pos), "arm needs a binder");
+            return cu_s_pack(p + 1, env, "");
+        }
+        binder = cu_t(toks, p + 1);
+        p = p + 2;
+        if p >= mend || cu_k(toks, p) != "RPAREN" {
+            cu_fail(cu_line(toks, pos), "arm binder unbalanced");
+            return cu_s_pack(p, env, "");
+        }
+        p = p + 1;
+    }
+    if p >= mend || cu_k(toks, p) != "FATARROW" {
+        cu_fail(cu_line(toks, pos), "arm needs =>");
+        return cu_s_pack(p, env, "");
+    }
+    p = p + 1;
+    if p >= mend || cu_k(toks, p) != "LBRACE" {
+        cu_fail(cu_line(toks, pos), "arm needs a block");
+        return cu_s_pack(p, env, "");
+    }
+    let decl: String = cu_binder_decl(sty, ctor, binder, sc, ind, toks, pos);
+    let aenv: String = cu_binder_env(env, sty, ctor, binder, toks, pos);
+    let body: String = cu_stmts(toks, p + 1, cu_skip_balanced(toks, p) - 1, n, aenv, fns, capv, in_main, ret, ind);
+    p = cu_skip_balanced(toks, p);
+    return cu_s_pack(p, env, ctor + "\t" + decl + "\t" + cu_s_text(body));
+}
+
+pub fn cu_binder_env(env: String, sty: String, ctor: String, binder: String, toks: List[String], pos: Int) -> String {
+    if binder == "" { return env; }
+    if sty == "rss" { return cu_env_put(env, binder, "s"); }
+    if sty == "rli" && ctor == "Ok" { return cu_env_put(env, binder, "li"); }
+    if sty == "rli" { return cu_env_put(env, binder, "s"); }
+    if sty == "oi" { return cu_env_put(env, binder, "i"); }
+    if sty == "os" { return cu_env_put(env, binder, "s"); }
+    cu_fail(cu_line(toks, pos), "arm mismatch");
+    return env;
+}

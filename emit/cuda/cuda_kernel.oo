@@ -1,0 +1,194 @@
+// # CUDA GPU op dispatch and host glue
+//
+// Logline: Lower gpu calls to typed C++ with reuse of oo_gpu CUDA runtime.
+//
+// Setup: Args arrive pre-lowered as tab packs. Cap var name threads through.
+//
+// Beats:
+//   1. cu_kernel_needs prescans token idents for helper selection.
+//   2. cu_gpu_call validates arity and types per op with fail closed.
+//   3. cu_help emits only the helper bodies the program uses.
+
+import "cuda_tok.oo";
+import "cuda_ty.oo";
+
+pub fn cu_kernel_needs(toks: List[String], n: Int) -> String {
+    let mut t: String = "0";
+    let mut v: String = "0";
+    let mut k: String = "0";
+    let mut h: String = "0";
+    let mut c: String = "0";
+    let mut i: Int = 0;
+    while i < n {
+        if cu_k(toks, i) == "IDENT" {
+            let nm: String = cu_t(toks, i);
+            if nm == "gpu_cuda_try_launch" { t = "1"; }
+            if nm == "gpu_cuda_vec_add" { v = "1"; }
+            if nm == "gpu_cuda_int_add" { k = "1"; }
+            if nm == "gpu_cuda_hello" { h = "1"; }
+            if nm == "gpu_copy_h2d" || nm == "gpu_copy_d2h" { c = "1"; }
+        }
+        i = i + 1;
+    }
+    return t + v + k + h + c;
+}
+
+fn cu_arg_ty(argstr: String, i: Int) -> String {
+    return cu_tab_field(argstr, i * 3 + 1);
+}
+
+fn cu_arg_code(argstr: String, i: Int) -> String {
+    return cu_tab_field(argstr, i * 3 + 2);
+}
+
+pub fn cu_gpu_call(name: String, argstr: String, nargs: Int, capv: String, line: Int) -> String {
+    if capv == "" {
+        cu_fail(line, "gpu call without a cap var");
+        return "0\t?\t";
+    }
+    if nargs < 1 || cu_arg_code(argstr, 0) != capv {
+        cu_fail(line, "gpu call needs the cap first");
+        return "0\t?\t";
+    }
+    if name == "gpu_cuda_try_launch" { return cu_op_try(argstr, nargs, capv, line); }
+    if name == "gpu_cuda_vec_add" { return cu_op_vec(argstr, nargs, capv, line); }
+    if name == "gpu_buffer_alloc" { return cu_op_alloc(argstr, nargs, capv, line); }
+    if name == "gpu_buffer_free" { return cu_op_free(argstr, nargs, capv, line); }
+    if name == "gpu_copy_h2d" { return cu_op_cpy(argstr, nargs, capv, line, true); }
+    if name == "gpu_copy_d2h" { return cu_op_cpy(argstr, nargs, capv, line, false); }
+    if name == "gpu_sync" { return cu_op_sync(argstr, nargs, capv, line); }
+    if name == "gpu_init" { return cu_op_init(argstr, nargs, capv, line); }
+    cu_fail(line, "unsupported gpu op " + name);
+    return "0\t?\t";
+}
+
+fn cu_op_try(argstr: String, nargs: Int, capv: String, line: Int) -> String {
+    if nargs != 2 || cu_arg_ty(argstr, 1) != "s" {
+        cu_fail(line, "try_launch needs one string");
+        return "0\t?\t";
+    }
+    return cu_e_pack(0, "rss", "oo_cuda_try_launch(" + capv + ", " + cu_arg_code(argstr, 1) + ")");
+}
+
+fn cu_op_vec(argstr: String, nargs: Int, capv: String, line: Int) -> String {
+    if nargs != 5 {
+        cu_fail(line, "vec_add needs four operands and a count");
+        return "0\t?\t";
+    }
+    if cu_arg_ty(argstr, 1) != "lf" || cu_arg_ty(argstr, 2) != "lf" || cu_arg_ty(argstr, 3) != "lf" || cu_arg_ty(argstr, 4) != "i" {
+        cu_fail(line, "vec_add needs float lists and an int count");
+        return "0\t?\t";
+    }
+    let code: String = "oo_cuda_vec_add(" + capv + ", " + cu_arg_code(argstr, 1) + ", " + cu_arg_code(argstr, 2) + ", " + cu_arg_code(argstr, 3) + ", " + cu_arg_code(argstr, 4) + ")";
+    return cu_e_pack(0, "rss", code);
+}
+
+fn cu_op_alloc(argstr: String, nargs: Int, capv: String, line: Int) -> String {
+    if nargs != 3 || cu_arg_ty(argstr, 1) != "i" || cu_arg_ty(argstr, 2) != "i" {
+        cu_fail(line, "buffer_alloc needs byte and flag ints");
+        return "0\t?\t";
+    }
+    return cu_e_pack(0, "i", "oo_gpu_buffer_alloc(" + capv + ", " + cu_arg_code(argstr, 1) + ", (int)(" + cu_arg_code(argstr, 2) + "))");
+}
+
+fn cu_op_free(argstr: String, nargs: Int, capv: String, line: Int) -> String {
+    if nargs != 2 || cu_arg_ty(argstr, 1) != "i" {
+        cu_fail(line, "buffer_free needs a handle");
+        return "0\t?\t";
+    }
+    return cu_e_pack(0, "i", "((long long)oo_gpu_buffer_free(" + capv + ", " + cu_arg_code(argstr, 1) + "))");
+}
+
+fn cu_op_cpy(argstr: String, nargs: Int, capv: String, line: Int, is_h2d: Bool) -> String {
+    if nargs != 4 || cu_arg_ty(argstr, 3) != "i" {
+        cu_fail(line, "copy needs a byte count");
+        return "0\t?\t";
+    }
+    if is_h2d {
+        if cu_arg_ty(argstr, 1) != "i" {
+            cu_fail(line, "copy_h2d needs a handle first");
+            return "0\t?\t";
+        }
+        let xt: String = cu_arg_ty(argstr, 2);
+        if xt != "li" && xt != "lf" {
+            cu_fail(line, "copy_h2d needs an int or float list");
+            return "0\t?\t";
+        }
+        let x: String = cu_arg_code(argstr, 2);
+        let lim: String = "((long long)((" + x + ").size()) * 8)";
+        return cu_e_pack(0, "i", "((long long)oo_cuda_copy_h2d(" + capv + ", " + cu_arg_code(argstr, 1) + ", (const void*)((" + x + ").data()), " + cu_arg_code(argstr, 3) + ", " + lim + "))");
+    }
+    let yt: String = cu_arg_ty(argstr, 1);
+    if yt != "li" && yt != "lf" {
+        cu_fail(line, "copy_d2h needs an int or float list");
+        return "0\t?\t";
+    }
+    if cu_arg_ty(argstr, 2) != "i" {
+        cu_fail(line, "copy_d2h needs a handle second");
+        return "0\t?\t";
+    }
+    let y: String = cu_arg_code(argstr, 1);
+    let ylim: String = "((long long)((" + y + ").size()) * 8)";
+    return cu_e_pack(0, "i", "((long long)oo_cuda_copy_d2h(" + capv + ", (void*)((" + y + ").data()), " + cu_arg_code(argstr, 2) + ", " + cu_arg_code(argstr, 3) + ", " + ylim + "))");
+}
+
+fn cu_op_sync(argstr: String, nargs: Int, capv: String, line: Int) -> String {
+    if nargs != 1 {
+        cu_fail(line, "sync takes only the cap");
+        return "0\t?\t";
+    }
+    return cu_e_pack(0, "rss", "oo_cuda_ress(oo_gpu_sync(" + capv + "))");
+}
+
+fn cu_op_init(argstr: String, nargs: Int, capv: String, line: Int) -> String {
+    if nargs != 1 {
+        cu_fail(line, "init takes only the cap");
+        return "0\t?\t";
+    }
+    return cu_e_pack(0, "i", "((long long)oo_gpu_init(" + capv + "))");
+}
+
+pub fn cu_help_try() -> String {
+    let mut s: String = "static oo_cuda_ResS oo_cuda_try_launch(long long cap, const std::string& s) {\n";
+    s = s + "  OoStr o;\n";
+    s = s + "  o.data = (char*)s.c_str();\n";
+    s = s + "  o.len = (long long)s.size();\n";
+    s = s + "  OoResS r = oo_gpu_cuda_try_launch(cap, o);\n";
+    s = s + "  return oo_cuda_ress(r);\n";
+    s = s + "}\n";
+    return s;
+}
+
+pub fn cu_help_vec() -> String {
+    let mut s: String = "static oo_cuda_ResS oo_cuda_vec_add(long long cap, const std::vector<double>& a, const std::vector<double>& b, std::vector<double>& c, long long n) {\n";
+    s = s + "  oo_cuda_ResS o;\n";
+    s = s + "  o.ok = 0;\n";
+    s = s + "  if (n <= 0 || n > 2147483647 || (long long)a.size() < n || (long long)b.size() < n || (long long)c.size() < n) {\n";
+    s = s + "    o.val = \"ERR\\tcuda\\tvec_add length\";\n";
+    s = s + "    return o;\n";
+    s = s + "  }\n";
+    s = s + "  std::vector<float> fa((size_t)n);\n";
+    s = s + "  std::vector<float> fb((size_t)n);\n";
+    s = s + "  std::vector<float> fc((size_t)n);\n";
+    s = s + "  for (long long i = 0; i < n; i++) { fa[(size_t)i] = (float)a[(size_t)i]; fb[(size_t)i] = (float)b[(size_t)i]; }\n";
+    s = s + "  OoResS r = oo_gpu_cuda_vec_add(cap, fa.data(), fb.data(), fc.data(), (int)n);\n";
+    s = s + "  o = oo_cuda_ress(r);\n";
+    s = s + "  if (o.ok != 0) {\n";
+    s = s + "    for (long long i = 0; i < n; i++) { c[(size_t)i] = (double)fc[(size_t)i]; }\n";
+    s = s + "  }\n";
+    s = s + "  return o;\n";
+    s = s + "}\n";
+    return s;
+}
+
+pub fn cu_help_copy() -> String {
+    let mut s: String = "static int oo_cuda_copy_h2d(long long cap, long long h, const void* p, long long nbytes, long long maxbytes) {\n";
+    s = s + "  if (nbytes < 0 || nbytes > maxbytes) { return 0; }\n";
+    s = s + "  return oo_gpu_copy_h2d(cap, h, p, nbytes);\n";
+    s = s + "}\n";
+    s = s + "static int oo_cuda_copy_d2h(long long cap, void* p, long long h, long long nbytes, long long maxbytes) {\n";
+    s = s + "  if (nbytes < 0 || nbytes > maxbytes) { return 0; }\n";
+    s = s + "  return oo_gpu_copy_d2h(cap, p, h, nbytes);\n";
+    s = s + "}\n";
+    return s;
+}

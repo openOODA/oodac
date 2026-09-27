@@ -19,6 +19,7 @@ import "cli_build_multi.oo";
 import "emit/elf/elf_emit.oo";
 import "emit/wasm/anchor.oo";
 import "emit/rocm/anchor.oo";
+import "cli_build_cuda.oo";
 
 // Probe mirrors the link invocation: --no-default-config keeps distro
 // /etc configs (unreadable under the jail) from failing the version check.
@@ -61,7 +62,7 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
     let mut out: String = path + ".bin";
     if is_shared { out = path + ".so"; }
     if out_arg != "" { out = out_arg; }
-    if backend != "" && backend != "llvm" && backend != "elf" && backend != "wasm" && backend != "rocm" {
+    if backend != "" && backend != "llvm" && backend != "elf" && backend != "wasm" && backend != "rocm" && backend != "cuda" {
         println("ERR\tbuild\tbackend residual: " + backend);
         process_exit(2);
     }
@@ -169,6 +170,10 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
         }
         println("OK_PURE_NATIVE");
         println("OK\tbuild\t" + out);
+        return;
+    }
+    if b == "cuda" {
+        run_build_cuda(fs_r, fs_w, sys, env, od, tmp_dir, tmp_h, path, out, is_shared);
         return;
     }
     let hr: String = write_host_rt(fs_w, tmp_dir);

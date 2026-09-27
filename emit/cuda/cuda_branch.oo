@@ -1,0 +1,49 @@
+// # CUDA return and condition lowering
+//
+// Logline: Value returns with type checks plus bool condition reads.
+//
+// Setup: Main returns int codes. User fns return declared types.
+//
+// Beats:
+//   1. cu_return checks values against the declared return code.
+//   2. cu_cond requires a bool expression for branches and loops.
+
+import "cuda_tok.oo";
+import "cuda_ty.oo";
+import "cuda_expr.oo";
+
+pub fn cu_return(toks: List[String], pos: Int, n: Int, env: String, fns: String, capv: String, in_main: Bool, ret: String, ind: String) -> String {
+    let mut p: Int = pos + 1;
+    if p < n && cu_k(toks, p) == "SEMI" {
+        if in_main { return cu_s_pack(p + 1, env, ind + "return 0;\n"); }
+        if ret != "v" {
+            cu_fail(cu_line(toks, pos), "empty return needs void");
+            return cu_s_pack(p + 1, env, "");
+        }
+        return cu_s_pack(p + 1, env, ind + "return;\n");
+    }
+    let e: String = cu_expr(toks, p, n, env, fns, ret, capv);
+    let q: Int = cu_e_pos(e);
+    let qq: Int = if q < n && cu_k(toks, q) == "SEMI" { q + 1 } else { q };
+    if in_main {
+        if ret != "i" {
+            cu_fail(cu_line(toks, pos), "main value return needs int");
+            return cu_s_pack(qq, env, "");
+        }
+        return cu_s_pack(qq, env, ind + "return (int)(" + cu_e_code(e) + ");\n");
+    }
+    if cu_e_ty(e) != ret {
+        cu_fail(cu_line(toks, pos), "return type mismatch");
+        return cu_s_pack(qq, env, "");
+    }
+    return cu_s_pack(qq, env, ind + "return " + cu_e_code(e) + ";\n");
+}
+
+pub fn cu_cond(toks: List[String], pos: Int, n: Int, env: String, fns: String, capv: String) -> String {
+    let c: String = cu_expr(toks, pos, n, env, fns, "b", capv);
+    if cu_e_ty(c) != "b" {
+        cu_fail(cu_line(toks, pos), "condition needs bool");
+        return "0\t?\t";
+    }
+    return c;
+}

@@ -26,8 +26,10 @@ Product `oodac build` is LLVM IR + clang. `--backend c` / `emit-c`
 (23/41 corpus fixtures execute byte-identical under node WASI, rest fail
 closed with exit 2); `elf` minimal (2/41 int-only fixtures run natively,
 rest fail closed with exit 1); `rocm` emits HIP but needs a ROCm toolchain
-to compile (unproven on CI hosts). Zero silent miscompiles: non-LLVM
-backends fail closed, never emit a lying binary.
+to compile (unproven on CI hosts); `cuda` emits `.cu` compiled by nvcc
+(sm_89 default, `OODA_CUDA_ARCH` override) and links the oodar CUDA layer
+(`oo_gpu_cuda_*`, proven on 2x RTX 4060 Ti). Zero silent miscompiles:
+non-LLVM backends fail closed, never emit a lying binary.
 
 ## Install
 

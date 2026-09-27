@@ -97,8 +97,7 @@ fn ll_need_call(need: String, nm: String) -> String {
     if nm == "byte_at" { return ll_need_add(n, "oo_byte_at"); }
     if nm == "byte_slice" { return ll_need_add(n, "oo_byte_slice"); }
     if nm == "char_is_digit" { return ll_need_add(n, "oo_char_is_digit"); }
-    if nm == "char_is_alpha" { return ll_need_add(n, "oo_char_is_alpha"); }
-    if nm == "char_is_space" { return ll_need_add(n, "oo_char_is_space"); }
+    if nm == "char_is_alpha" || nm == "char_is_space" { return ll_need_add(n, "oo_" + nm); }
     if nm == "str_split" { return ll_need_add(n, "str_split"); }
     if nm == "str_trim" { return ll_need_add(n, "oo_str_trim"); }
     if nm == "str_concat" { return ll_need_add(n, "oo_str_concat"); }
@@ -121,6 +120,7 @@ fn ll_need_call(need: String, nm: String) -> String {
     if chars_len(nm) >= 7 && str_slice(nm, 0, 7) == "crypto_" { return ll_need_add(n, nm); }
     if nm == "arena_reset" { return ll_need_add(n, "oo_arena_reset"); }
     if chars_len(nm) >= 6 && str_slice(nm, 0, 6) == "arena_" { return ll_need_add(n, "oo_" + nm); }
+    if nm == "gpu_cuda_vec_add" || nm == "gpu_cuda_sgemm" || nm == "gpu_cuda_rmsnorm" || nm == "gpu_cuda_attention" || nm == "gpu_cuda_reduce_sum" { return ll_need_add(n, "oo_" + nm + "_flist"); }
     if chars_len(nm) >= 4 && str_slice(nm, 0, 4) == "gpu_" { return ll_need_add(n, "oo_" + nm); }
     if chars_len(nm) >= 6 && str_slice(nm, 0, 6) == "actor_" { return ll_need_add(n, "oo_" + nm); }
     if chars_len(nm) >= 6 && str_slice(nm, 0, 6) == "audio_" { return ll_need_add(n, "oo_" + nm); }

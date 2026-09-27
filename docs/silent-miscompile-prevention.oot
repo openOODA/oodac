@@ -17,6 +17,15 @@ WASI (ints, strings, loops, lists, match, structs); the rest exit 2 with an
 execute natively (int-only fixtures); the rest exit 1 with `ERR emit elf`.
 `rocm` emits genuine HIP (`__global__` kernels + host main, host C++ is
 syntax-valid) but no hipcc/AMD GPU on CI hosts, so compilation is unproven.
+Latent: the rocm link path uses bare `hipcc`/`clang++` and `@rsp`, neither
+of which works under sys_exec/nvcc respectively (proven while wiring cuda:
+sys_exec does no PATH search; nvcc wants `-optf`). Same fix pending proof.
+`cuda` is the proven twin: `.cu` via nvcc (sm_89), host fixtures execute
+byte-identical, GPU programs call `oo_gpu_cuda_*` through liboo_cuda.so.
+LLVM-backend GPU calls map to the by-value `oo_gpu_cuda_*_flist` entries
+(`ptr byval(%OoFList)` passes aggregates, never pointers; f64 converted).
+Landlock jail probes and allowlists existing `/dev/nvidia*` nodes so GPU
+binaries keep working jailed (OODA_NO_JAIL=1 remains the escape hatch).
 Zero silent miscompiles in the sweep: every non-OK row fails closed.
 Ratchet: `bootstrap/corpus/backend_sweep.sh` (CI, after diffrun).
 
