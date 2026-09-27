@@ -8,6 +8,11 @@
 //   1. Walk KW_IMPORT; next STRING or IDENT STRING is the import path.
 //   2. Extract stem without directories and .oo extension.
 //   3. Trace exact stem, prefix, split components, struct access, and main call hierarchy before flagging unused.
+//   4. Case-folded stem-prefix match (stem len >= 3): a type or value
+//      named for the module (e.g. LlmProvider from llm.oo) counts as use.
+//      Heuristic lints must err toward silence, not toward refusing valid
+//      programs (false negatives slip a dead import through; false
+//      positives block real code).
 
 fn tc_imp_ends(path: String, suf: String) -> Bool {
     let n: Int = chars_len(path);
@@ -38,6 +43,12 @@ fn tc_imp_allow(path: String) -> Bool {
         return true;
     }
     if tc_imp_ends(path, "std/core/list.oo") {
+        return true;
+    }
+    // int<->string prelude (int_to_str/int_to_hex): pervasive println
+    // formatting with zero textual link to the "num_buffer" stem, so no
+    // name heuristic can ever mark it used. Same class as list.oo above.
+    if tc_imp_ends(path, "std/core/text/num_buffer.oo") {
         return true;
     }
     if tc_imp_ends(path, "qa_harness.oo") {
@@ -114,6 +125,25 @@ fn tc_imp_shared_component(stem: String, id: String) -> Bool {
     return false;
 }
 
+fn tc_imp_fold1(c: String) -> String {
+    let up: String = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    let lo: String = "abcdefghijklmnopqrstuvwxyz";
+    let mut i: Int = 0;
+    while i < 26 {
+        if c == char_at(up, i) { return char_at(lo, i); }
+        i = i + 1;
+    }
+    return c;
+}
+
+fn tc_imp_fold(s: String) -> String {
+    let mut out: String = "";
+    let mut i: Int = 0;
+    let n: Int = chars_len(s);
+    while i < n { out = out + tc_imp_fold1(char_at(s, i)); i = i + 1; }
+    return out;
+}
+
 fn tc_imp_is_call(toks: List[String], n: Int, j: Int) -> Bool {
     if j + 1 >= n { return false;
     }
@@ -130,6 +160,10 @@ fn tc_imp_used(toks: List[String], n: Int, stem: String) -> Bool {
             if id == stem { return true;
             }
             if tc_imp_starts(id, stem + "_") { return true;
+            }
+            if chars_len(stem) >= 3 {
+                if tc_imp_starts(tc_imp_fold(id), tc_imp_fold(stem)) { return true;
+                }
             }
             if tc_imp_is_call(toks, n, j) {
                 if tc_imp_shared_component(stem, id) { return true;
