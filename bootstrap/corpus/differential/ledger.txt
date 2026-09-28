@@ -95,4 +95,4 @@ bootstrap/corpus/emit-llvm/pass/random_runs.oo parity d05fc05303637b3c d05fc0530
 bootstrap/corpus/emit-llvm/pass/result_float_full.oo parity 507d42144da8f92d 507d42144da8f92d  # prints isok/m-ok/u-ok (resf path)
 bootstrap/corpus/emit-llvm/pass/result_struct_list_match.oo parity 4355a46b19d348dc 4355a46b19d348dc  # prints 1
 bootstrap/corpus/emit-llvm/pass/struct_ifexpr_field.oo parity 4355a46b19d348dc 4355a46b19d348dc  # prints 1
-bootstrap/corpus/emit-llvm/pass/tcp_connect_refused.oo llvm-fail - -  # seed sret slot collides (%a15 dup alloca); ll_hw fix in source, flips when a fixed seed ships
+bootstrap/corpus/emit-llvm/pass/tcp_connect_refused.oo parity e13b9c86e36619c6 e13b9c86e36619c6  # prints tcp-ok; flipped 2026-09-28 (fixed seed ships net lowering)

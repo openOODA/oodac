@@ -52,8 +52,7 @@ oodac/bin/oodac and jail dirs set to the workspace, run
   ll_builtin_host.oo; declare protos in ll_need_tab.oo; need
   registrations in ll_need.oo. Harness-proven with tcp gate.
 - Shelf test: bootstrap/corpus/emit-llvm/pass/tcp_connect_refused.oo
-  (expects `tcp-ok`; NOT wired into the CI gate until the fixed
-  binary ships).
+  (prints `tcp-ok`; flipped to parity in the ledger 2026-09-28).
 - Blocks: probe_cap_net.
 
 ## Gap 3. ord unlowered (call form and runtime) — FIXED in source 2026-09-25
