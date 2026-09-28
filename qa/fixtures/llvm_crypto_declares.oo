@@ -1,0 +1,11 @@
+// Fixture: exercise crypto runtime externs so emit-llvm must declare them.
+// Never executed; probe_emit_crypto_declares.oo only checks + emits it.
+pub fn main() -> Result[Int, String] {
+    let c: String = crypto_aes_encrypt_internal("0123456789abcdef", "0123456789abcdef");
+    let s: String = crypto_chacha20poly1305_seal_internal("0123456789abcdef0123456789abcdef", "0123456789ab", "0123456789abcdef", "");
+    let o: String = crypto_chacha20poly1305_open_internal("0123456789abcdef0123456789abcdef", "0123456789ab", "0123456789abcdef", "0123456789abcdef", "");
+    if chars_len(c) == 0 || chars_len(s) == 0 || chars_len(o) == 0 {
+        return Err("fixture");
+    }
+    return Ok(0);
+}

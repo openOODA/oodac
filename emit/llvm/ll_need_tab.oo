@@ -126,6 +126,9 @@ fn ll_need_proto_sys(sym: String) -> String {
     if sym == "crypto_sha256_internal" { return "declare { ptr, i64 } @crypto_sha256_internal({ ptr, i64 }) nounwind"; }
     if sym == "crypto_sha512_internal" { return "declare { ptr, i64 } @crypto_sha512_internal({ ptr, i64 }) nounwind"; }
     if sym == "crypto_hmac_sha256_internal" { return "declare { ptr, i64 } @crypto_hmac_sha256_internal({ ptr, i64 }, { ptr, i64 }) nounwind"; }
+    if sym == "crypto_aes_encrypt_internal" { return "declare { ptr, i64 } @crypto_aes_encrypt_internal({ ptr, i64 }, { ptr, i64 }) nounwind"; }
+    if sym == "crypto_chacha20poly1305_seal_internal" { return "declare { ptr, i64 } @crypto_chacha20poly1305_seal_internal({ ptr, i64 }, { ptr, i64 }, { ptr, i64 }, { ptr, i64 }) nounwind"; }
+    if sym == "crypto_chacha20poly1305_open_internal" { return "declare { ptr, i64 } @crypto_chacha20poly1305_open_internal({ ptr, i64 }, { ptr, i64 }, { ptr, i64 }, { ptr, i64 }, { ptr, i64 }) nounwind"; }
     if sym == "oo_path_exists" { return "declare i32 @oo_path_exists(i64, { ptr, i64 }) nounwind"; }
     if sym == "oo_file_size" { return "declare i64 @oo_file_size(i64, { ptr, i64 }) nounwind"; }
     if sym == "oo_env_get" { return "declare void @oo_env_get(ptr noalias sret(%OoResS) align 8, i64, { ptr, i64 }) nounwind"; }

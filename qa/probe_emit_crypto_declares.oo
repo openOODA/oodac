@@ -1,0 +1,46 @@
+// # Probe: emit-llvm declares crypto runtime externs
+//
+// Logline: The LLVM need table must declare crypto_aes_encrypt_internal and
+// the chacha20poly1305 seal/open externs (the checker knows them and oodar
+// implements them; a missing declare is an uncompilable program).
+//
+// Setup: ProcessCap + EnvCap. Host is OODA_COMPILER. Fixture is
+// qa/fixtures/llvm_crypto_declares.oo (checked in).
+//
+// Beats:
+//   1. check accepts the fixture.
+//   2. emit-llvm prints all three declares with exact signatures.
+
+pub fn main(p: &ProcessCap, env: &EnvCap) {
+    let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
+    let host: String = match hr { Ok(s) => s, Err(_) => "" };
+    if host == "" {
+        println("ERR\tOODA_COMPILER required");
+        process_exit(1);
+    }
+    let srcp: String = "oodac/qa/fixtures/llvm_crypto_declares.oo";
+    let ck: Result[String, String] = sys_exec(p, host, "check", srcp);
+    if ck.is_err() {
+        println("ERR\tfixture must check");
+        process_exit(1);
+    }
+    let em: Result[String, String] = sys_exec(p, host, "emit-llvm", srcp);
+    if em.is_err() {
+        println("ERR\temit-llvm failed");
+        process_exit(1);
+    }
+    let ir: String = match em { Ok(s) => s, Err(_) => "" };
+    if str_index_of(ir, "declare { ptr, i64 } @crypto_aes_encrypt_internal({ ptr, i64 }, { ptr, i64 }) nounwind") < 0 {
+        println("ERR\tmissing aes declare");
+        process_exit(1);
+    }
+    if str_index_of(ir, "declare { ptr, i64 } @crypto_chacha20poly1305_seal_internal({ ptr, i64 }, { ptr, i64 }, { ptr, i64 }, { ptr, i64 }) nounwind") < 0 {
+        println("ERR\tmissing seal declare");
+        process_exit(1);
+    }
+    if str_index_of(ir, "declare { ptr, i64 } @crypto_chacha20poly1305_open_internal({ ptr, i64 }, { ptr, i64 }, { ptr, i64 }, { ptr, i64 }, { ptr, i64 }) nounwind") < 0 {
+        println("ERR\tmissing open declare");
+        process_exit(1);
+    }
+    println("OK");
+}

@@ -135,6 +135,9 @@ jobs:
           echo "=== json-errors ==="
           "$HOST" build oodac/qa/probe_json_errors.oo -o .ooda-cache/ooda-tmp/ci_json.bin
           .ooda-cache/ooda-tmp/ci_json.bin
+          echo "=== crypto declares ==="
+          "$HOST" build oodac/qa/probe_emit_crypto_declares.oo -o .ooda-cache/ooda-tmp/ci_crypto.bin
+          .ooda-cache/ooda-tmp/ci_crypto.bin
           echo "=== cap sealed ==="
           set +e
           "$HOST" check oodac/qa/probe_cap_sealed.oo
