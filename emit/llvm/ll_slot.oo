@@ -10,6 +10,7 @@
 //   3. Zero untyped stack memory buffer allocations.
 
 import "ll_ir.oo";
+import "ll_tok.oo";
 
 pub fn ll_heap(ir: &mut IrBuf) {
     ir.recs = ir.recs + "";
@@ -79,4 +80,44 @@ pub fn ll_trap(ir: &mut IrBuf) {
     ll_heap_end(ir);
     ll_ir_inst(ir, "call", "void", "", "@oo_process_exit(i64 1)", 0, 0);
     ll_ir_inst(ir, "unreachable", "", "", "", 0, 0);
+}
+
+// True when the expression at toks[start] is EXACTLY a borrowed
+// field-access chain: IDENT (. IDENT)+, optional grouping parens, then
+// an expression terminator. Field loads yield a GEP pointer (not a
+// %v_/%p_ var slot), so the ll_is_var retain gate in the store sites
+// misses them — yet scope exit releases the new owner unconditionally.
+// Without a retain the owner's release frees the lender's value early
+// (use-after-free / double-release).
+// The chain must be the whole RHS: `b.recs + x` is a fresh concat
+// (no retain), as are calls, literals, and operators. Anything
+// unrecognized returns false (status quo ante: may leak or alias, but
+// never emits a retain through a non-address). Plain vars stay on the
+// ll_is_var path.
+pub fn ll_slot_borrowed(toks: List[String], start: Int, n: Int) -> Bool {
+    let mut p: Int = start;
+    let mut depth: Int = 0;
+    while p < n && ll_k(toks, p) == "LPAREN" { depth = depth + 1; p = p + 1; }
+    if p >= n || ll_k(toks, p) != "IDENT" { return false; }
+    if p + 1 < n && ll_k(toks, p + 1) == "LPAREN" { return false; }
+    p = p + 1;
+    let mut dots: Int = 0;
+    let mut more: Bool = true;
+    while more {
+        while depth > 0 && p < n && ll_k(toks, p) == "RPAREN" { depth = depth - 1; p = p + 1; }
+        if p + 1 < n && ll_k(toks, p) == "DOT" && ll_k(toks, p + 1) == "IDENT" {
+            if p + 2 < n && ll_k(toks, p + 2) == "LPAREN" { return false; }
+            dots = dots + 1;
+            p = p + 2;
+        } else {
+            more = false;
+        }
+    }
+    if dots == 0 { return false; }
+    while depth > 0 && p < n && ll_k(toks, p) == "RPAREN" { depth = depth - 1; p = p + 1; }
+    if depth != 0 { return false; }
+    if p >= n { return true; }
+    let k: String = ll_k(toks, p);
+    if k == "SEMI" || k == "RBRACE" || k == "COMMA" || k == "RPAREN" || k == "RBRACKET" { return true; }
+    return false;
 }

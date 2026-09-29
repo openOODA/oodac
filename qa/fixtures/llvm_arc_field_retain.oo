@@ -1,0 +1,26 @@
+// Fixture: owned values stored from borrowed field-access chains must be
+// retained (scope exit releases the new owner unconditionally).
+type RetBox = struct { items: List[Int] };
+
+fn fr_bind(b: RetBox) -> Int {
+    let xs: List[Int] = b.items;
+    return list_len(xs);
+}
+
+fn fr_assign(b: RetBox) -> Int {
+    let mut acc: List[Int] = list_new();
+    acc = b.items;
+    return list_len(acc);
+}
+
+fn fr_lit(b: RetBox) -> Int {
+    let c: RetBox = RetBox { items: b.items };
+    return list_len(c.items);
+}
+
+pub fn main() {
+    let mut b: RetBox = RetBox { items: list_new() };
+    b.items = list_push(b.items, 7);
+    let n: Int = fr_bind(b) + fr_assign(b) + fr_lit(b);
+    if n == 3 { println("RETAIN-FIXTURE-OK"); } else { println("RETAIN-FIXTURE-BAD"); }
+}

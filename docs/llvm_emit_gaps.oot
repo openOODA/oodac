@@ -113,8 +113,7 @@ oodac/bin/oodac and jail dirs set to the workspace, run
   to OoResS shapes) + sym mapping to oo_ forms; declare protos +
   need registrations. Harness-proven with negative control.
 - Shelf test: bootstrap/corpus/emit-llvm/pass/dlopen_missing.oo
-  (expects `dl-ok`; NOT wired into the CI gate until the fixed
-  binary ships).
+  (prints `dl-ok`; flipped to parity in the ledger 2026-09-28).
 - Blocks: probe_sdl_window, probe_anim_2d, probe_sdl_blit, probe_sdl_gl.
 
 ## Gap 6. file_append_sync unlowered — FIXED in source 2026-09-25

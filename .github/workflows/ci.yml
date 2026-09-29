@@ -138,6 +138,9 @@ jobs:
           echo "=== crypto declares ==="
           "$HOST" build oodac/qa/probe_emit_crypto_declares.oo -o .ooda-cache/ooda-tmp/ci_crypto.bin
           .ooda-cache/ooda-tmp/ci_crypto.bin
+          echo "=== arc field retain ==="
+          "$HOST" build oodac/qa/probe_emit_arc_field_retain.oo -o .ooda-cache/ooda-tmp/ci_arc_field.bin
+          .ooda-cache/ooda-tmp/ci_arc_field.bin
           echo "=== cap sealed ==="
           set +e
           "$HOST" check oodac/qa/probe_cap_sealed.oo

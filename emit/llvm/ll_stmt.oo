@@ -52,6 +52,7 @@ pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String, env
             }
             if p < n && ll_k(toks, p) == "EQ" { p = p + 1; }
             let envx: String = type_env_put(env, "__e__", ty);
+            let rhs0: Int = p;
             let v: String = ll_expr(toks, p, n, ssa, envx, ir);
             p = ll_ppos(v);
             ssa = ll_pssa(v);
@@ -65,7 +66,7 @@ pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String, env
             ll_ir_inst(ir, "call", "void", "", "@llvm.dbg.declare(metadata ptr " + dst + ", metadata !" + vid.to_string() + ", metadata !DIExpression())", ll_line(toks, site), ll_col(toks, site));
             env = type_env_put(env, name, ty);
             if ll_pk(v) == "ilist" || ll_pk(v) == "slist" { env = type_env_put(env, name, ll_pk(v)); }
-            if ll_arc_owned(ty) && ll_is_var(ll_pptr(v)) { ssa = ll_arc_keep(name, ty, env, ssa, ir); }
+            if ll_arc_owned(ty) && (ll_is_var(ll_pptr(v)) || ll_slot_borrowed(toks, rhs0, n)) { ssa = ll_arc_keep(name, ty, env, ssa, ir); }
             if p < n && ll_k(toks, p) == "SEMI" { p = p + 1; }
         } else if k == "KW_IF" {
             let p_sc: Int = ir.scope_id;
@@ -184,11 +185,12 @@ pub fn ll_emit_stmts(toks: List[String], pos: Int, n: Int, ret_kind: String, env
         } else if k == "IDENT" && p + 1 < n && ll_k(toks, p + 1) == "EQ" {
             let name: String = ll_t(toks, p);
             let ty: String = type_env_get(env, name);
-            let v: String = ll_expr(toks, p + 2, n, ssa, type_env_put(env, "__e__", ty), ir);
+            let arhs0: Int = p + 2;
+            let v: String = ll_expr(toks, arhs0, n, ssa, type_env_put(env, "__e__", ty), ir);
             p = ll_ppos(v);
             ssa = ll_pssa(v);
             if ll_arc_owned(ty) {
-                if ll_is_var(ll_pptr(v)) { ssa = ll_arc_keep_ptr(ty, ll_pptr(v), ssa, ir); }
+                if ll_is_var(ll_pptr(v)) || (ll_pptr(v) != "" && ll_slot_borrowed(toks, arhs0, n)) { ssa = ll_arc_keep_ptr(ty, ll_pptr(v), ssa, ir); }
                 ssa = ll_arc_rel(name, ty, env, ssa, ir);
             }
             ssa = ll_store(name, ty, v, ssa, env, ir);
@@ -227,7 +229,8 @@ pub fn ll_store_field_stmt(toks: List[String], p0: Int, n: Int, ssa0: Int, env: 
     let bloc: String = type_env_get(env, "__l__" + ll_t(toks, p));
     if bloc != "" { bptr = bloc; }
     let fp: String = ll_struct_field_ptr(bk, bptr, ll_t(toks, p + 2), ssa0, ir);
-    let rhs0: String = ll_expr(toks, p + 4, n, ll_pssa(fp), type_env_put(env, "__e__", fk), ir);
+    let frhs0: Int = p + 4;
+    let rhs0: String = ll_expr(toks, frhs0, n, ll_pssa(fp), type_env_put(env, "__e__", fk), ir);
     let rhs: String = ll_int_convert(rhs0, ll_pssa(rhs0), fk, ir);
     let mut np: Int = ll_ppos(rhs); let mut ns: Int = ll_pssa(rhs);
     let mut src: String = ll_opnd(rhs);
@@ -237,7 +240,7 @@ pub fn ll_store_field_stmt(toks: List[String], p0: Int, n: Int, ssa0: Int, env: 
         src = ll_ssa(ns);
     }
     if ll_arc_owned(fk) {
-        if ll_is_var(ll_pptr(rhs)) { ns = ll_arc_keep_ptr(fk, ll_pptr(rhs), ns, ir); }
+        if ll_is_var(ll_pptr(rhs)) || (ll_pptr(rhs) != "" && ll_slot_borrowed(toks, frhs0, n)) { ns = ll_arc_keep_ptr(fk, ll_pptr(rhs), ns, ir); }
         ns = ll_arc_rel_ptr(fk, ll_pptr(fp), ns, ir);
     }
     ll_ir_inst(ir, "store", ll_ir_val(fk), "", src + ", ptr " + ll_pptr(fp) + ", align 8", 1, 1);
