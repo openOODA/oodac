@@ -170,6 +170,23 @@ oodac/bin/oodac and jail dirs set to the workspace, run
   binary ships).
 - Blocks: probe_sandbox_adv1, probe_sandbox_m1, probe_sandbox_stress.
 
+## Gap 10. Graph-TU missing deps pass check, fail emit — OPEN 2026-09-29
+
+- Error: `ERR llvm unknown type <T>` / `unknown call <f>` on programs
+  whose `check` is OK. Observed: RotXZ/TriIdx types, shade_ray_tri /
+  raster_area2 calls (std app/ui/media freeloaders).
+- Cause: a non-root TU references a sibling's symbol without importing
+  it, freeloading on the importer's transitive graph. The undefined-name
+  check fires inconsistently here (it caught font_rows_1 as an undefined
+  variable in one graph but missed RotXZ/TriIdx/shade_ray_tri/
+  raster_area2 in others), while emit always fails closed. No bad
+  binary ships; the contract "check-OK implies buildable" does not hold
+  for this shape.
+- Fix (source-side, done): give each freeloader its direct imports
+  (std commit "direct-import 7 media freeloaders"). Checker-side fix
+  (consistent graph-TU name validation) is future work.
+- Blocks: nothing, post-fix. std suite 61/61 green.
+
 ## Notes for the fixer
 
 - Parallel probe builds collide (shared .ooda-cache/tmp): one probe
