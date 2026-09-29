@@ -1,0 +1,33 @@
+// # Probe: emit-llvm lowers math builtins to oodar libm shims
+//
+// Logline: sqrt/sin/cos/exp/pow/ln calls must lower to the oo_sqrt (etc.)
+// runtime shims with f64 signatures; before the fix the backend had no
+// signature table entry, so math calls miscompiled.
+//
+// Setup: No caps. Default backend is llvm; backstop builds and runs this.
+//
+// Beats:
+//   1. sqrt(2) and sqrt(9) land in tight known-good ranges.
+//   2. sin(0)=0, cos(0)=1, exp(0)=1, exp(1)=e.
+//   3. pow(2,10)=1024.
+
+fn must_within(name: String, val: Float, lo: Float, hi: Float) {
+    if val < lo || val > hi {
+        println("ERR\t" + name + " out of range");
+        process_exit(1);
+    }
+}
+
+pub fn main() {
+    must_within("sqrt2", sqrt(2.0), 1.41421, 1.41422);
+    must_within("sqrt9", sqrt(9.0), 2.99999, 3.00001);
+    must_within("sin0", sin(0.0), -0.000001, 0.000001);
+    must_within("cos0", cos(0.0), 0.999999, 1.000001);
+    must_within("exp0", exp(0.0), 0.999999, 1.000001);
+    must_within("exp1", exp(1.0), 2.71828, 2.71829);
+    must_within("pow2_10", pow(2.0, 10.0), 1023.99999, 1024.00001);
+    must_within("sin_half_pi", sin(1.5707963), 0.999999, 1.000001);
+    must_within("ln1", ln(1.0), -0.000001, 0.000001);
+    must_within("ln_e", ln(2.7182818), 0.999999, 1.000001);
+    println("OK");
+}

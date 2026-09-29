@@ -14,6 +14,77 @@
 // param exactly like Pass 1: an IDENT followed by COLON at paren depth 1.
 // Skips line comments and string literals so commented-out headers cannot
 // poison the table. Local table always wins (consulted first at use sites).
+//
+// check_dup_proto: fail closed when one fn name carries two arities.
+// The import graph concatenates TUs and the language has no overload
+// semantics, so a same-name different-arity pair is a silent
+// first-wins hole (arity_get reads the first entry). Same-arity dupes
+// keep today's behavior (residual: first wins, no error).
+fn dup_proto_num(table: String, p: Int) -> Int {
+    let n: Int = chars_len(table);
+    let mut num: Int = 0;
+    let mut q: Int = p;
+    let mut cont: Bool = true;
+    while cont {
+        if q >= n {
+            cont = false;
+        } else {
+            let c: String = char_at(table, q);
+            if char_is_digit(c) {
+                if c == "0" { num = num * 10 + 0; }
+                if c == "1" { num = num * 10 + 1; }
+                if c == "2" { num = num * 10 + 2; }
+                if c == "3" { num = num * 10 + 3; }
+                if c == "4" { num = num * 10 + 4; }
+                if c == "5" { num = num * 10 + 5; }
+                if c == "6" { num = num * 10 + 6; }
+                if c == "7" { num = num * 10 + 7; }
+                if c == "8" { num = num * 10 + 8; }
+                if c == "9" { num = num * 10 + 9; }
+                q = q + 1;
+            } else {
+                cont = false;
+            }
+        }
+    }
+    return num;
+}
+
+pub fn check_dup_proto(table: String) {
+    let mut seen: String = "\t";
+    let n: Int = chars_len(table);
+    let mut i: Int = 0;
+    while i < n {
+        let c: String = char_at(table, i);
+        if c == "\t" {
+            i = i + 1;
+        } else {
+            let mut name: String = "";
+            while i < n && char_at(table, i) != "=" && char_at(table, i) != "\t" {
+                name = name + char_at(table, i);
+                i = i + 1;
+            }
+            if i < n && char_at(table, i) == "=" {
+                i = i + 1;
+                let argc: Int = dup_proto_num(table, i);
+                while i < n && char_at(table, i) != "\t" { i = i + 1; }
+                if name != "" {
+                    let key: String = "\t" + name + "=";
+                    let pos: Int = str_index_of(seen, key);
+                    if pos < 0 {
+                        seen = seen + name + "=" + argc.to_string() + "\t";
+                    } else {
+                        let old: Int = dup_proto_num(seen, pos + chars_len(key));
+                        if old != argc {
+                            println("ERR\tcheck\tdup proto '" + name + "': arity " + old.to_string() + " vs " + argc.to_string());
+                            process_exit(1);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 pub fn scan_import_arity(src: String) -> String {
     let mut table = "\t";
     let n = chars_len(src);

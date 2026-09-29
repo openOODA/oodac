@@ -151,6 +151,12 @@ fn ll_need_proto_sys(sym: String) -> String {
     if sym == "oo_dlopen" { return "declare void @oo_dlopen(ptr noalias sret(%OoResS) align 8, i64, { ptr, i64 }) nounwind"; }
     if sym == "oo_dlsym" { return "declare void @oo_dlsym(ptr noalias sret(%OoResS) align 8, i64, { ptr, i64 }, { ptr, i64 }) nounwind"; }
     if sym == "oo_dlclose" { return "declare void @oo_dlclose(ptr noalias sret(%OoResS) align 8, i64, { ptr, i64 }) nounwind"; }
+    if sym == "oo_sqrt" { return "declare double @oo_sqrt(double) nounwind"; }
+    if sym == "oo_sin" { return "declare double @oo_sin(double) nounwind"; }
+    if sym == "oo_cos" { return "declare double @oo_cos(double) nounwind"; }
+    if sym == "oo_exp" { return "declare double @oo_exp(double) nounwind"; }
+    if sym == "oo_pow" { return "declare double @oo_pow(double, double) nounwind"; }
+    if sym == "oo_ln" { return "declare double @oo_ln(double) nounwind"; }
     if sym == "oo_free_bytes" { return "declare void @oo_free_bytes(i64, i64) nounwind"; }
     if sym == "oo_file_stamp" { return "declare { ptr, i64 } @oo_file_stamp(i64, { ptr, i64 }) nounwind"; }
     if sym == "oo_fs_is_dir" { return "declare i32 @oo_fs_is_dir(i64, { ptr, i64 }) nounwind"; }

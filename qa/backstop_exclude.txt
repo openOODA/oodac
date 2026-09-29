@@ -49,10 +49,7 @@ probe_concat_default.oo # STALE: drives emit-c expecting Ok; verb refuses (exit 
 probe_amp_rvalue_emit.oo # STALE: drives emit-c expecting Ok; verb refuses (exit 2)
 # --- Blocked: upstream defects ---
 probe_adversarial_astrodynamics_stress.oo # BLOCKED: std facade calls undefined kepler_orbit_new
-probe_adversarial_stubs_failclosed.oo # BLOCKED: backend ERR llvm unknown call sqrt
-# --- Open compiler fail-open: dup protos silently accepted (no overload
-# semantics anywhere in rules). Victim builds+runs (enshrining the bug is
-# worse than excluding); driver asserts must-fail and fails. Needs check/
-# fix + seed rebuild. Revisit, do not silently wire.
-probe_dup_proto.oo # FAIL-OPEN: same-name different-arity imports accepted
-probe_dup_proto_build.oo # FAIL-OPEN: driver asserting the above must-fail
+# --- Must-fail victim: dup protos refused (no overload semantics anywhere
+# in rules). Victim stays excluded by design (runnable loop requires exit
+# 0); probe_dup_proto_build.oo is wired and asserts build ERR + no ELF.
+probe_dup_proto.oo # VICTIM: must-fail, driven by probe_dup_proto_build.oo

@@ -175,6 +175,7 @@ fn check_one_module(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, ar: &
     if !is_last { body = mod_strip_imports(raw2); }
     if chars_len(body) > 0 {
         let toks: List[String] = run_check_core_binds_at(sys, body, binds, pth2, arity_all);
+        typecheck_unused_imports_graph(fs_r, pth2, toks);
         let _: String = mod_artifact_write_toks(fs_w, sys, pth2, raw2, toks);
     }
     if ar_id >= 0 {
@@ -206,6 +207,7 @@ fn check_modules(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, ar: &Are
         arity_all = arity_all + scan_import_arity(raw);
         i = i + 1;
     }
+    check_dup_proto(arity_all);
     let binds: String = names_to_depth0_binds(names);
     let ar_res: Result[String, String] = arena_create(ar, 62914560);
     let ar_id: Int = parse_arena_id(ar_res);

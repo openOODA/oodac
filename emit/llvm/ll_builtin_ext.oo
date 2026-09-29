@@ -29,7 +29,9 @@ pub fn ll_builtin_ext_sig(sym: String) -> String {
     if s4 != "" { return s4; }
     let s5: String = ll_ext_sig_audio(s);
     if s5 != "" { return s5; }
-    return ll_ext_sig_ffi(s);
+    let s6: String = ll_ext_sig_ffi(s);
+    if s6 != "" { return s6; }
+    return ll_ext_sig_math(s);
 }
 
 pub fn ll_builtin_ext_sym(sym: String) -> String {
@@ -52,6 +54,7 @@ pub fn ll_builtin_ext_sym(sym: String) -> String {
     if n >= 7 && str_slice(s, 0, 7) == "thread_" { return "oo_" + s; }
     if s == "otp_supervise" { return "oo_otp_supervise"; }
     if s == "dlopen" || s == "dlsym" || s == "dlclose" { return "oo_" + s; }
+    if s == "sqrt" || s == "sin" || s == "cos" || s == "exp" || s == "pow" || s == "ln" { return "oo_" + s; }
     return s;
 }
 
@@ -164,5 +167,15 @@ fn ll_ext_sig_ffi(sym: String) -> String {
     if sym == "oo_dlopen" || sym == "dlopen" { return "i64,str>ress"; }
     if sym == "oo_dlsym" || sym == "dlsym" { return "i64,str,str>ress"; }
     if sym == "oo_dlclose" || sym == "dlclose" { return "i64,str>ress"; }
+    return "";
+}
+
+fn ll_ext_sig_math(sym: String) -> String {
+    if sym == "oo_sqrt" || sym == "sqrt" { return "f64>f64"; }
+    if sym == "oo_sin" || sym == "sin" { return "f64>f64"; }
+    if sym == "oo_cos" || sym == "cos" { return "f64>f64"; }
+    if sym == "oo_exp" || sym == "exp" { return "f64>f64"; }
+    if sym == "oo_pow" || sym == "pow" { return "f64,f64>f64"; }
+    if sym == "oo_ln" || sym == "ln" { return "f64>f64"; }
     return "";
 }

@@ -11,7 +11,6 @@
 //
 import "tc_unused_let.oo";
 import "tc_struct_cycle.oo";
-import "tc_unused_import.oo";
 import "check_secret.oo";
 import "check_borrow.oo";
 
@@ -117,7 +116,6 @@ pub fn run_check_core_binds_at(sys: &ProcessCap, src: String, extra_binds: Strin
     typecheck_undefined_vars_ext(toks, extra_binds);
     check_borrow(toks);
     typecheck_unused_lets(toks);
-    typecheck_unused_imports(toks);
     // R1 expand: call arity vs declared params; assign to immutable let.
     // E_CAP: cross-module calls checked against the import-arity table.
     typecheck_call_arity_with_imports(toks, import_arity);
