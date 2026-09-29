@@ -1,0 +1,58 @@
+# qa/backstop_exclude.txt — probes the CI orphan-backstop must NOT build+run.
+# Every entry names its cover: nothing here is untested, it is tested elsewhere
+# or documents a known gap. Format: "<file> # <reason>". The backstop matches
+# basenames; comment lines (starting with #) are ignored.
+#
+# --- Must-fail callees: mistyped call sites, asserted ERR by kind drivers ---
+# (probe_list_kind / probe_option_kind / probe_result_kind / probe_result_arg /
+# probe_result_let / probe_result_arg_ok / probe_result_let_ok — all wired.)
+probe_list_arg_callee.oo # must-fail input of probe_list_kind.oo
+probe_list_assign_callee.oo # must-fail input of probe_list_kind.oo
+probe_list_kind_callee.oo # must-fail input of probe_list_kind.oo
+probe_list_let_callee.oo # must-fail input of probe_list_kind.oo
+probe_option_arg_callee.oo # must-fail input of probe_option_kind.oo
+probe_option_arg_some_str.oo # must-fail input of probe_option_kind.oo
+probe_option_assign_callee.oo # must-fail input of probe_option_kind.oo
+probe_option_assign_some_str.oo # must-fail input of probe_option_kind.oo
+probe_option_kind_callee.oo # must-fail input of probe_option_kind.oo
+probe_option_kind_some_str.oo # must-fail input of probe_option_kind.oo
+probe_option_let_callee.oo # must-fail input of probe_option_kind.oo
+probe_option_let_some_str.oo # must-fail input of probe_option_kind.oo
+probe_result_arg_callee.oo # must-fail input of probe_result_arg.oo
+probe_result_arg_ok_str.oo # must-fail input of probe_result_arg.oo
+probe_result_assign_callee.oo # must-fail input of probe_result_let.oo
+probe_result_assign_ok_str.oo # must-fail input of probe_result_let.oo
+probe_result_kind_callee.oo # must-fail input of probe_result_kind.oo
+probe_result_kind_ok_str.oo # must-fail input of probe_result_kind.oo
+probe_result_let_callee.oo # must-fail input of probe_result_let.oo
+probe_result_let_ok_str.oo # must-fail input of probe_result_let.oo
+# --- Fixtures: inputs driven by wired probes, not standalone mains ---
+probe_type_stanza.oo # deliberate mistype; asserted by probe_json_errors.oo
+probe_comment_main.oo # no-main input; asserted by probe_comment_main_build.oo
+probe_concat_sib.oo # sibling TU of the stale emit-c concat family (below)
+probe_amp_rvalue.oo # victim of stale probe_amp_rvalue_emit.oo (emit-c residual)
+# --- Negatives: wired as must-fail assertions in the backstop step itself ---
+probe_no_main.oo # NEGATIVE: build must fail, no ELF
+probe_smt_false.oo # NEGATIVE: check+build must fail (unsat contract)
+probe_smt_unproven.oo # NEGATIVE: check+build must fail (unproven contract)
+probe_result_unknown.oo # NEGATIVE: check+build must fail (bad Result arity)
+probe_blackbox_capmiss.oo # NEGATIVE: check+build must fail (capability)
+probe_exec_wait_nocap.oo # NEGATIVE: check must fail (missing ProcessCap)
+probe_llvm_unknown_ty.oo # NEGATIVE: check OK, emit-llvm --concat must fail
+probe_result_main_err.oo # NEGATIVE: build OK, run must exit 1
+probe_blackbox_captrap.oo # NEGATIVE: build OK, run traps, autopsy CAPABILITY_VIOLATION
+probe_borrow_move.oo # NEGATIVE: also in Unique bar (borrowck must-fail)
+probe_borrow_mut_alias.oo # NEGATIVE: also in Unique bar (borrowck must-fail)
+probe_cap_sealed.oo # NEGATIVE: also in Unique bar (cap sealed)
+# --- Stale: emit-c verb is residual by design (main.oo); beats assert Ok ---
+probe_concat_default.oo # STALE: drives emit-c expecting Ok; verb refuses (exit 2)
+probe_amp_rvalue_emit.oo # STALE: drives emit-c expecting Ok; verb refuses (exit 2)
+# --- Blocked: upstream defects ---
+probe_adversarial_astrodynamics_stress.oo # BLOCKED: std facade calls undefined kepler_orbit_new
+probe_adversarial_stubs_failclosed.oo # BLOCKED: backend ERR llvm unknown call sqrt
+# --- Open compiler fail-open: dup protos silently accepted (no overload
+# semantics anywhere in rules). Victim builds+runs (enshrining the bug is
+# worse than excluding); driver asserts must-fail and fails. Needs check/
+# fix + seed rebuild. Revisit, do not silently wire.
+probe_dup_proto.oo # FAIL-OPEN: same-name different-arity imports accepted
+probe_dup_proto_build.oo # FAIL-OPEN: driver asserting the above must-fail

@@ -299,6 +299,102 @@ jobs:
           .ooda-cache/ooda-tmp/ci_smt_unp.bin
           .ooda-cache/ooda-tmp/ci_smt_unp.bin
           echo "UNIQUE_BAR_OK"
+      - name: Orphan backstop (every runnable probe + negatives)
+        env:
+          OODA_COMPILER: ${{ github.workspace }}/oodac/bin/oodac
+          OODAC_BIN: ${{ github.workspace }}/oodac/bin/oodac
+          OODA_FS_READDIR: ${{ github.workspace }}
+          OODA_FS_WRITEDIR: ${{ github.workspace }}
+          OO_LIST_AMBIENT_QUOTA: "8589934592"
+        run: |
+          set -u
+          HOST="$OODA_COMPILER"
+          test -x "$HOST"
+          mkdir -p .ooda-cache/ooda-tmp
+          failed=0
+          ran=0
+          echo "=== backstop: exclusion file sanity ==="
+          while read -r line || [[ -n "$line" ]]; do
+            case "$line" in ''|\#*) continue ;; esac
+            ef=${line%% *}
+            test -f "oodac/qa/$ef" || { echo "ERR stale exclusion (no such probe): $ef"; exit 1; }
+          done < oodac/qa/backstop_exclude.txt
+          echo "exclusions all name real probes"
+          echo "=== backstop: runnable probes ==="
+          for f in oodac/qa/probe_*.oo; do
+            base=$(basename "$f")
+            if grep -q "^${base} #" oodac/qa/backstop_exclude.txt; then
+              echo "  SKIP $base"
+              continue
+            fi
+            ran=$((ran + 1))
+            binp=".ooda-cache/ooda-tmp/backstop_${base%.oo}.bin"
+            if ! "$HOST" build "$f" -o "$binp" > /tmp/backstop_build.log 2>&1; then
+              echo "  FAIL build $base"
+              tail -3 /tmp/backstop_build.log
+              failed=$((failed + 1))
+              continue
+            fi
+            if ! "$binp" > /tmp/backstop_run.log 2>&1; then
+              echo "  FAIL run $base"
+              head -3 /tmp/backstop_run.log
+              failed=$((failed + 1))
+              continue
+            fi
+            echo "  PASS $base"
+          done
+          echo "backstop ran=$ran failed=$failed"
+          test "$ran" -ge 76 || { echo "ERR backstop floor: ran=$ran < 76"; exit 1; }
+          echo "=== backstop: negatives (must fail closed) ==="
+          must_fail() {
+            desc=$1; shift
+            set +e
+            "$@" > /tmp/backstop_neg.log 2>&1
+            rc=$?
+            set +e
+            if [ "$rc" -eq 0 ]; then echo "  FAIL negative passed: $desc"; failed=$((failed + 1)); else echo "  PASS negative: $desc (rc=$rc)"; fi
+          }
+          must_fail "no_main build" "$HOST" build oodac/qa/probe_no_main.oo -o .ooda-cache/ooda-tmp/neg_nomain.bin
+          test ! -e .ooda-cache/ooda-tmp/neg_nomain.bin || { echo "FAIL no_main ELF shipped"; failed=$((failed + 1)); }
+          must_fail "smt_false check" "$HOST" check oodac/qa/probe_smt_false.oo
+          must_fail "smt_false build" "$HOST" build oodac/qa/probe_smt_false.oo -o .ooda-cache/ooda-tmp/neg_smtf.bin
+          must_fail "smt_unproven check" "$HOST" check oodac/qa/probe_smt_unproven.oo
+          must_fail "smt_unproven build" "$HOST" build oodac/qa/probe_smt_unproven.oo -o .ooda-cache/ooda-tmp/neg_smtu.bin
+          must_fail "result_unknown check" "$HOST" check oodac/qa/probe_result_unknown.oo
+          must_fail "result_unknown build" "$HOST" build oodac/qa/probe_result_unknown.oo -o .ooda-cache/ooda-tmp/neg_resu.bin
+          must_fail "capmiss check" "$HOST" check oodac/qa/probe_blackbox_capmiss.oo
+          must_fail "capmiss build" "$HOST" build oodac/qa/probe_blackbox_capmiss.oo -o .ooda-cache/ooda-tmp/neg_capmiss.bin
+          set +e
+          "$HOST" check oodac/qa/probe_exec_wait_nocap.oo > /tmp/backstop_neg.log 2>&1
+          rc=$?
+          set +e
+          if [ "$rc" -eq 0 ]; then echo "FAIL negative passed: exec_wait_nocap check"; failed=$((failed + 1));
+          elif ! grep -qi "capab" /tmp/backstop_neg.log; then echo "FAIL exec_wait_nocap wrong cause"; failed=$((failed + 1));
+          else echo "PASS negative: exec_wait_nocap check (capability, rc=$rc)"; fi
+          "$HOST" check oodac/qa/probe_llvm_unknown_ty.oo || { echo "FAIL unknown_ty check must pass"; failed=$((failed + 1)); }
+          must_fail "unknown_ty emit-llvm --concat" "$HOST" emit-llvm --concat oodac/qa/probe_llvm_unknown_ty.oo
+          "$HOST" build oodac/qa/probe_result_main_err.oo -o .ooda-cache/ooda-tmp/neg_mainerr.bin || { echo "FAIL main_err build must pass"; failed=$((failed + 1)); }
+          set +e
+          .ooda-cache/ooda-tmp/neg_mainerr.bin > /tmp/backstop_neg.log 2>&1
+          rc=$?
+          set +e
+          if [ "$rc" -ne 1 ]; then echo "FAIL main_err must exit 1 (got $rc)"; failed=$((failed + 1)); else echo "PASS negative: main_err exits 1"; fi
+          "$HOST" build oodac/qa/probe_blackbox_captrap.oo -o .ooda-cache/ooda-tmp/neg_captrap.bin || { echo "FAIL captrap build must pass"; failed=$((failed + 1)); }
+          set +e
+          .ooda-cache/ooda-tmp/neg_captrap.bin > /tmp/backstop_neg.log 2>&1
+          rc=$?
+          set +e
+          if [ "$rc" -eq 0 ]; then echo "FAIL captrap must trap (rc 0)"; failed=$((failed + 1));
+          elif ! grep -q "CAPABILITY_VIOLATION" .blackbox/autopsy.json 2>/dev/null; then echo "FAIL captrap autopsy missing CAPABILITY_VIOLATION"; failed=$((failed + 1));
+          else echo "PASS negative: captrap traps with autopsy (rc=$rc)"; fi
+          rm -f .blackbox/autopsy.json
+          rmdir .blackbox 2>/dev/null || true
+          must_fail "borrow_move check" "$HOST" check oodac/qa/probe_borrow_move.oo
+          must_fail "borrow_mut_alias check" "$HOST" check oodac/qa/probe_borrow_mut_alias.oo
+          must_fail "cap_sealed check" "$HOST" check oodac/qa/probe_cap_sealed.oo
+          echo "backstop negatives done failed=$failed"
+          echo "BACKSTOP_OK ran=$ran"
+          test "$failed" -eq 0
       - name: Compiler core is ELF
         run: |
           test -x oodac/bin/oodac_bin.core
@@ -506,7 +602,7 @@ jobs:
           path: dist/
           if-no-files-found: error
   auto-release:
-    needs: release-assets
+    needs: [test, release-assets]
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
     uses: openOODA/openOODA/.github/workflows/auto-release.yml@v2.10.44
     secrets: inherit

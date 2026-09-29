@@ -9,6 +9,20 @@
 //   2. emit-llvm stdout contains define hidden @shown.
 //   3. emit-llvm stdout contains define internal @hid, not hidden @hid, and %St_Box.
 
+fn define_line(ir: String, sym: String) -> String {
+    let at: Int = str_index_of(ir, sym);
+    if at < 0 { return ""; }
+    let mut lo: Int = at;
+    while lo > 0 {
+        if str_slice(ir, lo - 1, lo) == "\n" { break; }
+        lo = lo - 1;
+    }
+    let rest: String = str_slice(ir, lo, chars_len(ir));
+    let nl: Int = str_index_of(rest, "\n");
+    if nl < 0 { return rest; }
+    return str_slice(rest, 0, nl);
+}
+
 pub fn main(p: &ProcessCap, env: &EnvCap) {
     let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
     let host: String = match hr { Ok(s) => s, Err(_) => "" };
@@ -28,15 +42,21 @@ pub fn main(p: &ProcessCap, env: &EnvCap) {
         process_exit(1);
     }
     let ir: String = match er { Ok(s) => s, Err(_) => "" };
-    if str_index_of(ir, "define hidden i64 @shown") < 0 {
+    // Linkage assertions, attribute-tolerant: the emitter spells
+    // `define hidden noundef i64 @shown()` etc.; match the linkage token on
+    // the symbol's own define line, not a frozen full line. (hid is
+    // module-mangled to @llvm_libmod_hid after its fixture.)
+    let shown_ln: String = define_line(ir, "@shown(");
+    if shown_ln == "" || str_index_of(shown_ln, "define hidden") < 0 {
         println("ERR\tmissing hidden shown");
         process_exit(1);
     }
-    if str_index_of(ir, "define internal i64 @hid") < 0 {
+    let hid_ln: String = define_line(ir, "@llvm_libmod_hid(");
+    if hid_ln == "" || str_index_of(hid_ln, "define internal") < 0 {
         println("ERR\tmissing internal hid");
         process_exit(1);
     }
-    if str_index_of(ir, "define hidden i64 @hid") >= 0 {
+    if str_index_of(hid_ln, "define hidden") >= 0 {
         println("ERR\thid must not be hidden");
         process_exit(1);
     }

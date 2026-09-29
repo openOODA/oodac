@@ -1,0 +1,26 @@
+// # Fixture: leaf module for unused-imports probe
+//
+// Logline: Leaf arithmetic and struct format used by probe_adversarial_unused_imports.
+//
+// Setup: Pure functions, no caps.
+//
+// Beats:
+//   1. fixture_leaf_calc implements x*10+y.
+//   2. FixtureLeafData carries name/val; format renders LEAF[name].
+
+type FixtureLeafData = struct {
+    name: String,
+    val: Int
+};
+
+pub fn fixture_leaf_calc(x: Int, y: Int) -> Int {
+    return x * 10 + y;
+}
+
+pub fn fixture_mid_leaf_new(name: String, val: Int) -> FixtureLeafData {
+    return FixtureLeafData { name: name, val: val };
+}
+
+pub fn fixture_leaf_format(d: FixtureLeafData) -> String {
+    return "LEAF[" + d.name + "]";
+}

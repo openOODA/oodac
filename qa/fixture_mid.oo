@@ -1,0 +1,20 @@
+// # Fixture: mid module for unused-imports probe
+//
+// Logline: Mid-layer call chains over fixture_leaf for probe_adversarial_unused_imports.
+//
+// Setup: Imports fixture_leaf.oo. Pure functions, no caps.
+//
+// Beats:
+//   1. fixture_mid_compute chains leaf_calc twice.
+//   2. fixture_mid_build_leaf constructs FixtureLeafData.
+
+import "fixture_leaf.oo";
+
+pub fn fixture_mid_compute(x: Int, y: Int, z: Int) -> Int {
+    let step1: Int = fixture_leaf_calc(x, y);
+    return fixture_leaf_calc(step1, z);
+}
+
+pub fn fixture_mid_build_leaf(name: String, val: Int) -> FixtureLeafData {
+    return fixture_mid_leaf_new(name, val);
+}
