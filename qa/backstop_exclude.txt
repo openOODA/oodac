@@ -47,8 +47,6 @@ probe_cap_sealed.oo # NEGATIVE: also in Unique bar (cap sealed)
 # --- Stale: emit-c verb is residual by design (main.oo); beats assert Ok ---
 probe_concat_default.oo # STALE: drives emit-c expecting Ok; verb refuses (exit 2)
 probe_amp_rvalue_emit.oo # STALE: drives emit-c expecting Ok; verb refuses (exit 2)
-# --- Blocked: upstream defects ---
-probe_adversarial_astrodynamics_stress.oo # BLOCKED: std facade calls undefined kepler_orbit_new
 # --- Must-fail victim: dup protos refused (no overload semantics anywhere
 # in rules). Victim stays excluded by design (runnable loop requires exit
 # 0); probe_dup_proto_build.oo is wired and asserts build ERR + no ELF.
