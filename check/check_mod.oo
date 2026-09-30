@@ -21,16 +21,11 @@ import "ast/load_import_parse.oo";
 import "lex/token_fmt.oo";
 import "lex/token_parse_int.oo";
 import "check_scan.oo";
-
-fn parse_arena_id(res: Result[String, String]) -> Int {
-    if res.is_err() { return 0 - 1; }
-    let s: String = match res { Ok(v) => v, Err(_) => "" };
-    if chars_len(s) >= 7 && str_slice(s, 0, 6) == "arena:" {
-        return parse_int(str_slice(s, 6, chars_len(s)));
-    }
-    return parse_int(s);
-}
-
+import "tc_unused_import.oo";
+import "check_collect.oo";
+import "check_drive.oo";
+import "check_hash.oo";
+import "tc_call_arity_imports.oo";
 
 fn sibling_anchor(fs_r: &FsReadCap, path: String) -> String {
     let n: Int = chars_len(path);
@@ -50,16 +45,6 @@ fn sibling_anchor(fs_r: &FsReadCap, path: String) -> String {
     return dir + "ANCHOR.oo";
 }
 
-fn path_is_main_oo(path: String) -> Bool {
-    let n: Int = chars_len(path);
-    if n >= 7 {
-        if str_slice(path, n - 7, n) == "main.oo" {
-            return true;
-        }
-    }
-    return path == "main.oo";
-}
-
 fn scan_graph_names(fs_r: &FsReadCap, paths: List[String]) -> String {
     let np: Int = list_len(paths);
     let mut names: String = "\t";
@@ -71,6 +56,18 @@ fn scan_graph_names(fs_r: &FsReadCap, paths: List[String]) -> String {
             let raw: String = match rr { Ok(s) => s, Err(_) => "" };
             names = names + scan_fn_names(raw);
         }
+        i = i + 1;
+    }
+    return names;
+}
+
+fn scan_graph_type_names(fs_r: &FsReadCap, paths: List[String]) -> String {
+    let np: Int = list_len(paths);
+    let mut names: String = "\t";
+    let mut i: Int = 0;
+    while i < np {
+        let rr: Result[String, String] = read_file(fs_r, list_get(paths, i));
+        if !rr.is_err() { names = names + tc_imp_scan_type_names(match rr { Ok(s) => s, Err(_) => "" }); }
         i = i + 1;
     }
     return names;
@@ -95,32 +92,6 @@ fn persist_graph(fs_r: &FsReadCap, fs: &FsWriteCap, sys: &ProcessCap, root: Stri
     let tk: String = check_cache_tree_key(fs_r, content_hash("dw1\n" + listing));
     check_cache_put(fs, sys, tk);
     check_cache_put_body(fs, sys, check_cache_graph_key(fs_r, root), listing);
-}
-
-fn count_lines(s: String) -> Int {
-    let n: Int = chars_len(s);
-    if n == 0 { return 0;
-    }
-    let mut c: Int = 0;
-    let mut i: Int = 0;
-    while i < n {
-        if char_at(s, i) == "\n" { c = c + 1;
-        }
-        i = i + 1;
-    }
-    if char_at(s, n - 1) != "\n" { c = c + 1;
-    }
-    return c;
-}
-
-fn fold_toks(toks: List[String], l: Int, r: Int) -> String {
-    let mut out: String = "";
-    let mut i: Int = l;
-    while i < r {
-        out = out + list_get(toks, i) + "\n";
-        i = i + 1;
-    }
-    return out;
 }
 
 fn mod_artifact_write_toks(fs_w: &FsWriteCap, sys: &ProcessCap, path: String, src: String, toks: List[String]) -> String {
@@ -165,7 +136,7 @@ fn mod_strip_imports(src: String) -> String {
     return fold_toks(lines, 0, list_len(lines));
 }
 
-fn check_one_module(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, ar: &ArenaCap, ar_id: Int, pth2: String, is_last: Bool, binds: String, arity_all: String) {
+fn check_one_module(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, ar: &ArenaCap, ar_id: Int, pth2: String, is_last: Bool, arity_all: String, extra_names: String) {
     if ar_id >= 0 {
         let _: Result[String, String] = arena_attach(ar, ar_id);
     }
@@ -174,6 +145,11 @@ fn check_one_module(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, ar: &
     let mut body: String = str_slice(raw2, 0, chars_len(raw2));
     if !is_last { body = mod_strip_imports(raw2); }
     if chars_len(body) > 0 {
+        // Gap 10: per-TU closure binds (not graph union); target keeps anchor.
+        let closure: List[String] = collect_module_paths(fs_r, pth2);
+        let mut tu_names: String = scan_graph_names(fs_r, closure) + scan_graph_type_names(fs_r, closure);
+        if is_last { tu_names = tu_names + extra_names; }
+        let binds: String = names_to_depth0_binds(tu_names);
         let toks: List[String] = run_check_core_binds_at(sys, body, binds, pth2, arity_all);
         typecheck_unused_imports_graph(fs_r, pth2, toks);
         let _: String = mod_artifact_write_toks(fs_w, sys, pth2, raw2, toks);
@@ -186,7 +162,6 @@ fn check_one_module(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, ar: &
 
 fn check_modules(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, ar: &ArenaCap, paths: List[String], extra_names: String) {
     let np = list_len(paths);
-    let mut names = extra_names;
     // E_CAP: graph-wide fn-arity table so cross-module calls cannot dodge
     // the arity check (capless net calls used to silent-OK via imports).
     let mut arity_all: String = "\t";
@@ -203,18 +178,16 @@ fn check_modules(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, ar: &Are
             println("ERR\tcheck\toversized " + pth + " " + count_lines(raw).to_string() + " > 256");
             process_exit(1);
         }
-        names = names + scan_fn_names(raw);
         arity_all = arity_all + scan_import_arity(raw);
         i = i + 1;
     }
     check_dup_proto(arity_all);
-    let binds: String = names_to_depth0_binds(names);
     let ar_res: Result[String, String] = arena_create(ar, 62914560);
     let ar_id: Int = parse_arena_id(ar_res);
     i = 0;
     while i < np {
         let pth2: String = list_get(paths, i);
-        check_one_module(fs_r, fs_w, sys, ar, ar_id, pth2, i + 1 == np, binds, arity_all);
+        check_one_module(fs_r, fs_w, sys, ar, ar_id, pth2, i + 1 == np, arity_all, extra_names);
         i = i + 1;
     }
     if ar_id >= 0 {

@@ -9,6 +9,11 @@
 //   2. ts_apply_let and ts_apply_ident bind aliases, apply method or call transitions, or construct from a >to spec.
 //   3. ts_walk_program finds each KW_FN body and ts_walk_fn_body seeds the param, walks the span, then checks exit and main-end.
 
+import "c_emit_env.oo";
+import "check_typestate_tok.oo";
+import "check_typestate_fn.oo";
+import "check_typestate_join.oo";
+
 pub fn ts_apply_call(env: String, binds0: String, fname: String, arg: String, line: String) -> String {
     let tspec: String = c_env_get(env, "__tsf__" + fname);
     if tspec == "" { return binds0;
@@ -225,7 +230,6 @@ pub fn ts_walk_fn_body(toks: List[String], fn_pos: Int, body_lo: Int, body_hi: I
     ts_check_exit(fnenv, binds, ts_tok_line(toks, fn_pos));
     ts_check_main_end(fnenv, binds, fname, ts_tok_line(toks, fn_pos));
 }
-
 pub fn ts_walk_program(toks: List[String], env: String) {
     let n = list_len(toks);
     let mut i = 0;

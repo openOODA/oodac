@@ -72,15 +72,6 @@ pub fn rc_expr_cmp(toks: List[String], pos: Int, n: Int, env: String, fns: Strin
     return rc_e_pack(p, "b", "((" + rc_prom(rc_e_code(l), lt, want) + ") " + sym + " (" + rc_prom(rc_e_code(q), rt, want) + "))");
 }
 
-fn rc_cmp_sym(k: String) -> String {
-    if k == "EQEQ" { return "=="; }
-    if k == "NEQ" { return "!="; }
-    if k == "LT" { return "<"; }
-    if k == "GT" { return ">"; }
-    if k == "LTE" { return "<="; }
-    return ">=";
-}
-
 pub fn rc_expr_add(toks: List[String], pos: Int, n: Int, env: String, fns: String, hint: String, capv: String) -> String {
     let mut r: String = rc_expr_mul(toks, pos, n, env, fns, hint, capv);
     let mut p: Int = rc_e_pos(r);
@@ -148,17 +139,6 @@ pub fn rc_expr_mul(toks: List[String], pos: Int, n: Int, env: String, fns: Strin
     return r;
 }
 
-fn rc_div_code(lz: String, rz: String, want: String, line: Int) -> String {
-    if want == "f" { return "(" + lz + " / " + rz + ")"; }
-    let bad: String = "(fprintf(stderr, \"ERR\\trocm\\tdiv zero at line " + line.to_string() + "\\n\"), exit(1), (long long)0)";
-    return "((" + rz + " == 0) ? " + bad + " : (" + lz + " / " + rz + "))";
-}
-
-fn rc_mod_code(lz: String, rz: String, line: Int) -> String {
-    let bad: String = "(fprintf(stderr, \"ERR\\trocm\\tdiv zero at line " + line.to_string() + "\\n\"), exit(1), (long long)0)";
-    return "((" + rz + " == 0) ? " + bad + " : (" + lz + " % " + rz + "))";
-}
-
 pub fn rc_expr_unary(toks: List[String], pos: Int, n: Int, env: String, fns: String, hint: String, capv: String) -> String {
     if pos < n && rc_k(toks, pos) == "MINUS" {
         let r: String = rc_expr_unary(toks, pos + 1, n, env, fns, hint, capv);
@@ -218,4 +198,54 @@ pub fn rc_expr_primary(toks: List[String], pos: Int, n: Int, env: String, fns: S
     return "0\t?\t";
 }
 
+
+fn rc_call_args(toks: List[String], info: String, n: Int, env: String, fns: String, hint: String, capv: String, name: String) -> String {
+    let nargs: Int = rc_span_nargs(info);
+    let mut argstr: String = "";
+    let mut i: Int = 0;
+    while i < nargs {
+        let mut h: String = rc_arg_hint(name, i, fns);
+        if name == "Ok" && hint == "rss" { h = "s"; }
+        if name == "Ok" && hint == "rli" { h = "li"; }
+        if name == "Err" { h = "s"; }
+        if name == "Some" && hint == "oi" { h = "i"; }
+        if name == "Some" && hint == "os" { h = "s"; }
+        let a: String = rc_expr(toks, rc_span_start(info, i), n, env, fns, h, capv);
+        if i > 0 { argstr = argstr + "\t"; }
+        argstr = argstr + rc_e_pos(a).to_string() + "\t" + rc_e_ty(a) + "\t" + rc_e_code(a);
+        i = i + 1;
+    }
+    return argstr;
+}
+
+pub fn rc_call(toks: List[String], pos: Int, n: Int, env: String, fns: String, hint: String, capv: String) -> String {
+    let name: String = rc_t(toks, pos);
+    let line: Int = rc_line(toks, pos);
+    let info: String = rc_arg_spans(toks, pos, n);
+    let kind: Int = rc_call_kind(name);
+    if kind == 1 || kind == 2 {
+        return rc_call_with_args(toks, name, info, "", env, fns, hint, capv, line);
+    }
+    let argstr: String = rc_call_args(toks, info, n, env, fns, hint, capv, name);
+    return rc_call_with_args(toks, name, info, argstr, env, fns, hint, capv, line);
+}
+
+pub fn rc_println(toks: List[String], pos: Int, n: Int, env: String, fns: String, capv: String, ind: String) -> String {
+    let info: String = rc_arg_spans(toks, pos, n);
+    if rc_span_nargs(info) != 1 {
+        rc_fail(rc_line(toks, pos), "println takes one arg");
+        return rc_s_pack(pos + 1, env, "");
+    }
+    let a: String = rc_expr(toks, rc_span_start(info, 0), n, env, fns, "", capv);
+    let q: Int = rc_span_end(info) + 1;
+    let qq: Int = if q < n && rc_k(toks, q) == "SEMI" { q + 1 } else { q };
+    let at: String = rc_e_ty(a);
+    let ac: String = rc_e_code(a);
+    if at == "i" { return rc_s_pack(qq, env, ind + "printf(\"%lld\\n\", (long long)(" + ac + "));\n"); }
+    if at == "f" { return rc_s_pack(qq, env, ind + "printf(\"%g\\n\", (double)(" + ac + "));\n"); }
+    if at == "s" { return rc_s_pack(qq, env, ind + "{ std::string oo_t = (" + ac + "); fwrite(oo_t.data(), 1, oo_t.size(), stdout); putchar(10); }\n"); }
+    if at == "b" { return rc_s_pack(qq, env, ind + "printf(\"%lld\\n\", (long long)(" + ac + "));\n"); }
+    rc_fail(rc_line(toks, pos), "println type unsupported");
+    return rc_s_pack(qq, env, "");
+}
 

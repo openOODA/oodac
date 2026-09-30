@@ -10,6 +10,12 @@
 //   3. Return [aliases, lit_env, table, ret_table, struct_table].
 
 import "tc_read_result.oo";
+import "lex/token_fmt.oo";
+import "tc_infer.oo";
+import "tc_struct_field_table.oo";
+import "tc_tables.oo";
+import "tc_tables_ret.oo";
+import "tc_types_core.oo";
 
 
 pub fn call_arg_prep(toks: List[String]) -> List[String] {

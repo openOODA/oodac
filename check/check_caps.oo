@@ -12,6 +12,7 @@
 import "check_cap_util.oo";
 import "lex/token_fmt.oo";
 import "types/token_search.oo";
+import "check_cap_grant.oo";
 
 fn check_fn_trunc() {
     println("ERR\tcheck\ttruncated fn header");

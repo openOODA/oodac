@@ -9,6 +9,7 @@
 //   2. rc_env rows map variable names to type codes with shadowing.
 //   3. rc_ctype and rc_default map codes to C++ types and fallbacks.
 
+import "rocm_tok.oo";
 import "lex/token_parse_int.oo";
 
 pub fn rc_e_pack(pos: Int, ty: String, code: String) -> String {
@@ -142,3 +143,35 @@ pub fn rc_default(ty: String) -> String {
     if ty == "cap" { return "0"; }
     return "";
 }
+
+pub fn rc_cmp_sym(k: String) -> String {
+    if k == "EQEQ" { return "=="; }
+    if k == "NEQ" { return "!="; }
+    if k == "LT" { return "<"; }
+    if k == "GT" { return ">"; }
+    if k == "LTE" { return "<="; }
+    return ">=";
+}
+
+pub fn rc_div_code(lz: String, rz: String, want: String, line: Int) -> String {
+    if want == "f" { return "(" + lz + " / " + rz + ")"; }
+    let bad: String = "(fprintf(stderr, \"ERR\\trocm\\tdiv zero at line " + line.to_string() + "\\n\"), exit(1), (long long)0)";
+    return "((" + rz + " == 0) ? " + bad + " : (" + lz + " / " + rz + "))";
+}
+
+pub fn rc_mod_code(lz: String, rz: String, line: Int) -> String {
+    let bad: String = "(fprintf(stderr, \"ERR\\trocm\\tdiv zero at line " + line.to_string() + "\\n\"), exit(1), (long long)0)";
+    return "((" + rz + " == 0) ? " + bad + " : (" + lz + " % " + rz + "))";
+}
+
+pub fn rc_binder_env(env: String, sty: String, ctor: String, binder: String, toks: List[String], pos: Int) -> String {
+    if binder == "" { return env; }
+    if sty == "rss" { return rc_env_put(env, binder, "s"); }
+    if sty == "rli" && ctor == "Ok" { return rc_env_put(env, binder, "li"); }
+    if sty == "rli" { return rc_env_put(env, binder, "s"); }
+    if sty == "oi" { return rc_env_put(env, binder, "i"); }
+    if sty == "os" { return rc_env_put(env, binder, "s"); }
+    rc_fail(rc_line(toks, pos), "arm mismatch");
+    return env;
+}
+

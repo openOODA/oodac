@@ -9,6 +9,11 @@
 //   2. KW_RETURN prints RETURN_VOID or RETURN; KW_WHILE prints WHILE and dumps cond plus block.
 //   3. IDENT EQ prints ASSIGN; anything else prints EXPR, then dump the expression and skip a semi.
 
+import "parse_skip.oo";
+import "lex/token_fmt.oo";
+import "parse_expr.oo";
+import "parse_stmt_nav.oo";
+
 pub fn parse_stmt_dump(toks: List[String], pos0: Int, depth: Int, si: Int) -> Int {
     let n = list_len(toks);
 let mut pos = pos0;

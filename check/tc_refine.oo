@@ -17,6 +17,11 @@ import "tc_refine_path.oo";
 import "smt_verify.oo";
 
 import "tc_diag.oo";
+import "lex/token_fmt.oo";
+import "lex/token_parse_int.oo";
+import "tc_refine_bind.oo";
+import "tc_refine_calls.oo";
+import "tc_refine_fn_ret.oo";
 
 
 pub fn typecheck_refinements(toks: List[String]) {

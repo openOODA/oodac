@@ -12,11 +12,12 @@
 
 import "check_scan.oo";
 import "ast/load_import_parse.oo";
+import "ast/cycle_allow.oo";
 
 
 // DFS collect paths (deps first). Returns List[String] of paths.
 pub fn collect_module_paths(fs: &FsReadCap, path: String) -> List[String] {
-    let r: List[String] = collect_expand(fs, path, "\t", "\t");
+    let r: List[String] = collect_expand(fs, path, "\t", "\t", "");
     let joined: String = list_get(r, 1);
     let mut out: List[String] = list_new();
     let n = chars_len(joined);
@@ -42,7 +43,7 @@ pub fn collect_module_paths(fs: &FsReadCap, path: String) -> List[String] {
 }
 
 // Returns [done', paths_joined_by_newline]
-fn collect_expand(fs: &FsReadCap, path: String, stack: String, done: String) -> List[String] {
+fn collect_expand(fs: &FsReadCap, path: String, stack: String, done: String, parent: String) -> List[String] {
     let mut out: List[String] = list_new();
     if set_has(done, path) {
         out = list_push(out, done);
@@ -50,6 +51,11 @@ fn collect_expand(fs: &FsReadCap, path: String, stack: String, done: String) -> 
         return out;
     }
     if set_has(stack, path) {
+        if cycle_edge_allowed(parent, path) {
+            out = list_push(out, done);
+            out = list_push(out, "");
+            return out;
+        }
         println("ERR\timport\tcycle involving " + path);
         process_exit(1);
     }
@@ -84,7 +90,7 @@ fn collect_expand(fs: &FsReadCap, path: String, stack: String, done: String) -> 
             process_exit(1);
         }
 
-                let sub: List[String] = collect_expand(fs, ipath, stack2, done_cur);
+                let sub: List[String] = collect_expand(fs, ipath, stack2, done_cur, path);
                 done_cur = list_get(sub, 0);
                 let subp: String = list_get(sub, 1);
                 if chars_len(subp) > 0 { if chars_len(paths_acc) > 0 { paths_acc = paths_acc + "\n" + subp;

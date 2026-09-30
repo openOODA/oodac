@@ -32,6 +32,9 @@ pub fn refine_check_return(toks: List[String], i: Int, has_ret_bound: Bool, ret_
     }
 }
 
+import "lex/token_fmt.oo";
+import "lex/token_parse_int.oo";
+import "tc_diag.oo";
 pub fn refine_capture_fn_ret_bound(toks: List[String], i: Int) -> List[String] {
     let n = list_len(toks);
     let mut j = i;

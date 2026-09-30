@@ -1,0 +1,42 @@
+// # Probe: graph-TU names validate hermetically (Gap 10)
+//
+// Logline: Deps that freeload ambient anchor names fail check; the
+// isolated target keeps its anchor exemption; identical protos dedup.
+//
+// Setup: ProcessCap + EnvCap. Host is OODA_COMPILER.
+//
+// Beats:
+//   1. check of gap10_call/root.oo is Err (dep calls ambient-only fn).
+//   2. check of gap10_type/root.oo is Err (dep names ambient-only type).
+//   3. check of gap10_exempt/user.oo is OK (target anchor exemption).
+//   4. check of gap10_dedup/root.oo is OK (identical proto dedup).
+
+pub fn main(p: &ProcessCap, env: &EnvCap) {
+    let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
+    let host: String = match hr { Ok(s) => s, Err(_) => "" };
+    if host == "" {
+        println("ERR\tOODA_COMPILER required");
+        process_exit(1);
+    }
+    let c: Result[String, String] = sys_exec(p, host, "check", "oodac/qa/fixtures/gap10_call/root.oo");
+    if c.is_ok() {
+        println("ERR\tgap10 call-freeload check must fail");
+        process_exit(1);
+    }
+    let t: Result[String, String] = sys_exec(p, host, "check", "oodac/qa/fixtures/gap10_type/root.oo");
+    if t.is_ok() {
+        println("ERR\tgap10 type-freeload check must fail");
+        process_exit(1);
+    }
+    let e: Result[String, String] = sys_exec(p, host, "check", "oodac/qa/fixtures/gap10_exempt/user.oo");
+    if e.is_err() {
+        println("ERR\tgap10 exempt target check must pass");
+        process_exit(1);
+    }
+    let d: Result[String, String] = sys_exec(p, host, "check", "oodac/qa/fixtures/gap10_dedup/root.oo");
+    if d.is_err() {
+        println("ERR\tgap10 identical-proto check must pass");
+        process_exit(1);
+    }
+    println("OK");
+}

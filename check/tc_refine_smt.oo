@@ -18,6 +18,7 @@ import "smt_poly_sign.oo";
 import "smt_poly_eval.oo";
 
 import "smt_clause_query.oo";
+import "lex/token_fmt.oo";
 
 
 fn smt_is_stop(k: String) -> Bool {

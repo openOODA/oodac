@@ -1,0 +1,11 @@
+// # Gap 10 fixture root: imports the freeloading dep only
+//
+// Logline: root.oo imports mid.oo but not ambient.oo. Old checker said OK
+// (ambient name leaked into the dep via the target's anchor); fixed
+// checker refuses the dep.
+
+import "mid.oo";
+
+pub fn main() {
+    println(gap10_mid_fn().to_string());
+}

@@ -1,0 +1,8 @@
+// # Gap 10 fixture: ambient fn for the exempt isolated target
+//
+// Logline: Defines gap10_exempt_fn. The anchor imports it; user.oo does
+// not. An isolated check of user.oo stays OK (anchor exemption).
+
+pub fn gap10_exempt_fn() -> Int {
+    return 5;
+}

@@ -9,6 +9,8 @@
 //   2. On `|` variants, record each top-level IDENT.
 //   3. Payload names inside () are not constructors.
 
+import "lex/token_fmt.oo";
+
 pub fn sum_ctor_tab(toks: List[String]) -> String {
     let n: Int = list_len(toks);
 let mut out_tab: String = "\t";

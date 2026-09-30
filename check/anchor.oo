@@ -32,6 +32,7 @@ import "check_typestate_tok.oo";
 import "check_typestate_walk.oo";
 import "diag_json.oo";
 import "diag_json_parse.oo";
+import "diag_json_obj.oo";
 import "poly_domain.oo";
 import "poly_schedule.oo";
 import "poly_tile.oo";

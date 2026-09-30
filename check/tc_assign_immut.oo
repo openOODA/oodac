@@ -9,6 +9,9 @@
 //   2. Walk IDENT EQ that is not after KW_LET, KW_MUT, or DOT.
 //   3. If the name is in immut and not in muts, tc_err_at with the let mut hint.
 
+import "lex/token_fmt.oo";
+import "tc_diag.oo";
+import "tc_scope.oo";
 pub fn typecheck_immut_assign(toks: List[String]) {
     let n = list_len(toks);
     let mut immut = "\t";

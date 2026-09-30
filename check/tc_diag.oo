@@ -13,6 +13,8 @@
 // OPEN-12: multi-module check uses per-file bodies (check_mod.oo np>1)
 // with import lines kept as blanks, so LINE:COL is local to that file.
 
+import "lex/token_fmt.oo";
+
 pub fn tc_src_path_of(toks: List[String]) -> String {
     let n = list_len(toks);
 if n <= 0 { return "";

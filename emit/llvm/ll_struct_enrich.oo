@@ -12,7 +12,7 @@
 //   3. Normal comma-joined bodies pass through untouched.
 
 import "ll_tok.oo";
-import "ll_struct.oo";
+import "ll_struct_kind.oo";
 
 pub fn ll_struct_enrich(kind: String, env: String) -> String {
     if !ll_is_struct(kind) { return kind; }

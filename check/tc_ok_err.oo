@@ -13,6 +13,9 @@
 import "tc_infer.oo";
 import "tc_read_result.oo";
 import "tc_struct_field_table.oo";
+import "lex/token_fmt.oo";
+import "tc_diag.oo";
+import "tc_types_core.oo";
 
 
 pub fn tc_infer_ok_err_ty(toks: List[String], pos: Int, lit_env: String, expected: String, err_idx: Int) -> String {

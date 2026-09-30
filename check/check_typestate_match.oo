@@ -9,6 +9,8 @@
 //   2. On FATARROW, require a following LBRACE or print ERR and exit; walk the arm from binds0 and merge into acc.
 //   3. Return binds0 if no arm ran, else acc. ts_match_end is the index after the match braces.
 
+import "check_typestate_tok.oo";
+import "check_typestate_join.oo";
 pub fn ts_eval_match(toks: List[String], i: Int, hi: Int, env: String, binds0: String) -> String {
     let line: String = ts_tok_line(toks, i);
 let lb: Int = ts_find_lbrace(toks, i, hi);

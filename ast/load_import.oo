@@ -10,6 +10,7 @@
 //   3. Append remaining source, mark the path done, and return done paths with the expanded body last.
 
 import "load_import_parse.oo";
+import "cycle_allow.oo";
 
 
 // Returns done-path list + expanded body as last element (for cli_build module walk).
@@ -26,6 +27,18 @@ pub fn load_expand(fs: &FsReadCap, path_raw: String, stack: List[String], done: 
         return out;
     }
     if list_has(stack, path) {
+        let sl = list_len(stack);
+        let mut top: String = "";
+        if sl > 0 { top = list_get(stack, sl - 1); }
+        if cycle_edge_allowed(top, path) {
+            let mut ci = 0;
+            let cdn = list_len(done);
+            while ci < cdn { out = list_push(out, list_get(done, ci));
+            ci = ci + 1;
+            }
+            out = list_push(out, "");
+            return out;
+        }
         println("ERR\timport\tcycle involving " + path);
         process_exit(1);
     }

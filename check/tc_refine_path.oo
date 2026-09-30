@@ -11,6 +11,7 @@
 //   4. Enforce compile-time least-privilege capability boundaries.
 
 import "tc_diag.oo";
+import "lex/token_fmt.oo";
 
 
 pub fn refine_path_glob_match(pattern: String, path: String) -> Bool {

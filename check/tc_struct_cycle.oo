@@ -9,6 +9,8 @@
 //   2. Record edges from fields naming other structs, through wrappers.
 //   3. Fail closed when a struct reaches itself.
 
+import "lex/token_fmt.oo";
+
 fn sc_kind(toks: List[String], i: Int) -> String {
     if i < 0 || i >= list_len(toks) { return ""; }
     return field_at(list_get(toks, i), 0);

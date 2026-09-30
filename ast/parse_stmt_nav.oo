@@ -9,6 +9,11 @@
 //   2. count_stmts walks depth 1 and skip_stmt advances past let, return, while-block, or an expression until SEMI.
 //   3. indent returns a two-space pad of depth d.
 
+import "lex/token_fmt.oo";
+import "parse_stmt_dump.oo";
+import "parse_skip.oo";
+import "parse_drive.oo";
+
 pub fn parse_block_dump(toks: List[String], pos0: Int, depth: Int) -> Int {
     let n = list_len(toks);
 let mut pos = pos0;
@@ -132,13 +137,3 @@ if k0 == "KW_LET" { while pos < n { if field_at(list_get(toks, pos), 0) == "SEMI
     }
     return pos;
 }
-
-pub fn indent(d: Int) -> String {
-    let mut s = "";
-let mut i = 0;
-while i < d { s = s + "  ";
-i = i + 1;
-}
-    return s;
-}
-

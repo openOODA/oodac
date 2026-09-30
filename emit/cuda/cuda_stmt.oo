@@ -224,14 +224,3 @@ fn cu_arm(toks: List[String], pos: Int, mend: Int, n: Int, env: String, fns: Str
     p = cu_skip_balanced(toks, p);
     return cu_s_pack(p, env, ctor + "\t" + decl + "\t" + cu_s_text(body));
 }
-
-pub fn cu_binder_env(env: String, sty: String, ctor: String, binder: String, toks: List[String], pos: Int) -> String {
-    if binder == "" { return env; }
-    if sty == "rss" { return cu_env_put(env, binder, "s"); }
-    if sty == "rli" && ctor == "Ok" { return cu_env_put(env, binder, "li"); }
-    if sty == "rli" { return cu_env_put(env, binder, "s"); }
-    if sty == "oi" { return cu_env_put(env, binder, "i"); }
-    if sty == "os" { return cu_env_put(env, binder, "s"); }
-    cu_fail(cu_line(toks, pos), "arm mismatch");
-    return env;
-}

@@ -1,0 +1,9 @@
+// # Gap 10 fixture: ambient call provider (not imported by the graph)
+//
+// Logline: Defines gap10_ambient_fn. Only the sibling anchor imports this
+// file, so graph TUs must NOT see the name (a dep that calls it fails
+// check; only an exempt isolated target may use it).
+
+pub fn gap10_ambient_fn() -> Int {
+    return 9;
+}

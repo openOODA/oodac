@@ -10,6 +10,10 @@
 //   3. Record fn return types.
 
 import "tc_read_result.oo";
+import "lex/token_fmt.oo";
+import "tc_infer.oo";
+import "tc_tables_ret.oo";
+import "tc_types_core.oo";
 
 
 pub fn build_pure_lit_env(toks: List[String]) -> String {

@@ -18,6 +18,7 @@ import "wasm_expr.oo";
 import "wasm_store.oo";
 import "wasm_match.oo";
 import "wasm_for.oo";
+import "wasm_util.oo";
 
 pub fn ws_stmt_block(b: &mut WasmBuf, toks: List[String], pos: Int, end: Int, n: Int, g: &WsG, lits: &mut WsLits, cx: &mut WsCx, ret: String) -> String {
     let mut p: Int = pos;

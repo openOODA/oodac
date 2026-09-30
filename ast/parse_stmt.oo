@@ -10,6 +10,8 @@
 //   3. Keeps private dump details hidden.
 
 import "parse_expr.oo";
+import "lex/token_fmt.oo";
+import "parse_stmt_dump.oo";
 
 
 pub fn parse_stmt_inner(src: String) -> String {

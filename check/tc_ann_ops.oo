@@ -36,6 +36,13 @@ pub fn ann_prep(toks: List[String]) -> List[String] {
     return r;
 }
 
+import "lex/token_fmt.oo";
+import "tc_diag.oo";
+import "tc_infer.oo";
+import "tc_struct_field_table.oo";
+import "tc_tables.oo";
+import "tc_tables_ret.oo";
+import "tc_types_core.oo";
 pub fn ann_check_binop(toks: List[String], i: Int, n: Int, lit_env: String, line: String, col: String) {
             let lty: String = operand_type_with_env(toks, i, lit_env);
             if lty != "" {

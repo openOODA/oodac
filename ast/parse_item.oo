@@ -11,6 +11,8 @@
 
 import "parse_stmt_nav.oo";
 import "parse_skip.oo";
+import "lex/token_fmt.oo";
+import "parse_drive.oo";
 
 
 pub fn parse_fn_item(toks: List[String], pos0: Int, item_idx: Int) -> Int {

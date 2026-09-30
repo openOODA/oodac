@@ -9,6 +9,33 @@
 //   2. skip_primary advances past lits, IDENT calls, struct lits, and method dots.
 //   3. Paren, match, and if or else forms skip their inner expr and braces; anything else steps one token.
 
+import "lex/token_fmt.oo";
+import "types/token_search.oo";
+
+pub fn bin_bp(k: String) -> Int {
+    if k == "OROR" { return 2;
+    }
+    if k == "ANDAND" { return 3;
+    }
+    if k == "PIPE" { return 4;
+    }
+    if k == "CARET" || k == "BXOR" { return 5;
+    }
+    if k == "AMP" { return 6;
+    }
+    if k == "EQEQ" || k == "NEQ" { return 7;
+    }
+    if k == "LT" || k == "LTE" || k == "GT" || k == "GTE" { return 8;
+    }
+    if k == "LSHIFT" || k == "RSHIFT" { return 9;
+    }
+    if k == "PLUS" || k == "MINUS" { return 10;
+    }
+    if k == "STAR" || k == "SLASH" || k == "PERCENT" { return 11;
+    }
+    return 0;
+}
+
 pub fn skip_expr_bp(toks: List[String], pos0: Int, min_bp: Int) -> Int {
     let n = list_len(toks);
 let mut pos = pos0;
@@ -160,4 +187,18 @@ if k == "INT" || k == "STRING" || k == "KW_TRUE" || k == "KW_FALSE" { return pos
     return pos + 1;
 }
 
+pub fn indent(d: Int) -> String {
+    let mut s = "";
+    let mut i = 0;
+    while i < d {
+        s = s + "  ";
+        i = i + 1;
+    }
+    return s;
+}
+
 // Print expression parent-first for BINs.
+
+pub fn n_toks(toks: List[String]) -> Int {
+    return list_len(toks);
+}

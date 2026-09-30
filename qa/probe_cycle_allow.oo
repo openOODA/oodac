@@ -1,0 +1,87 @@
+// # Probe: import-cycle allowlist is unit-scoped and fail-closed (Gap 10)
+//
+// Logline: Intra-unit backend cycles resolve; cross-unit and unlisted
+// cycles still fail check; the predicate itself is unit-tested.
+//
+// Setup: ProcessCap + EnvCap. Host is OODA_COMPILER.
+//
+// Beats:
+//   1. cycle_edge_allowed is true inside emit/llvm and emit/wasm.
+//   2. cycle_edge_allowed is false across units and outside units.
+//   3. check of the real listed match files is OK.
+//   4. check of gap10_cyc_bad/a.oo is Err (unlisted cycle).
+
+import "ast/cycle_allow.oo";
+
+pub fn main(p: &ProcessCap, env: &EnvCap) {
+    if !cycle_edge_allowed("/r/oodac/emit/llvm/ll_expr.oo", "/r/oodac/emit/llvm/ll_stmt.oo") {
+        println("ERR\tcycle allow: intra-llvm absolute must allow");
+        process_exit(1);
+    }
+    if !cycle_edge_allowed("emit/wasm/wasm_expr.oo", "emit/wasm/wasm_match.oo") {
+        println("ERR\tcycle allow: intra-wasm relative must allow");
+        process_exit(1);
+    }
+    if cycle_edge_allowed("/r/oodac/emit/llvm/ll_expr.oo", "/r/oodac/emit/wasm/wasm_expr.oo") {
+        println("ERR\tcycle allow: cross-unit must deny");
+        process_exit(1);
+    }
+    if cycle_edge_allowed("/r/oodac/qa/fixtures/gap10_cyc_bad/a.oo", "/r/oodac/qa/fixtures/gap10_cyc_bad/b.oo") {
+        println("ERR\tcycle allow: unlisted must deny");
+        process_exit(1);
+    }
+    if cycle_edge_allowed("/r/oodac/emit/llvm/ll_expr.oo", "/r/oodac/check/check_mod.oo") {
+        println("ERR\tcycle allow: unit-to-outside must deny");
+        process_exit(1);
+    }
+    if !cycle_edge_allowed("ast/parse_expr.oo", "ast/parse_method.oo") {
+        println("ERR\tcycle allow: intra-ast relative must allow");
+        process_exit(1);
+    }
+    if cycle_edge_allowed("/r/oodac/ast/parse_expr.oo", "/r/oodac/emit/llvm/ll_expr.oo") {
+        println("ERR\tcycle allow: ast-to-llvm must deny");
+        process_exit(1);
+    }
+    if !cycle_edge_allowed("check/check_typestate_walk.oo", "check/check_typestate_join.oo") {
+        println("ERR\tcycle allow: intra-check relative must allow");
+        process_exit(1);
+    }
+    if cycle_edge_allowed("/r/oodac/check/check_mod.oo", "/r/oodac/ast/parse_expr.oo") {
+        println("ERR\tcycle allow: check-to-ast must deny");
+        process_exit(1);
+    }
+    if !cycle_edge_allowed("emit/cuda/cuda_match.oo", "emit/cuda/cuda_expr.oo") {
+        println("ERR\tcycle allow: intra-cuda relative must allow");
+        process_exit(1);
+    }
+    if !cycle_edge_allowed("emit/rocm/rocm_match.oo", "emit/rocm/rocm_expr.oo") {
+        println("ERR\tcycle allow: intra-rocm relative must allow");
+        process_exit(1);
+    }
+    if cycle_edge_allowed("/r/oodac/emit/cuda/cuda_expr.oo", "/r/oodac/emit/rocm/rocm_expr.oo") {
+        println("ERR\tcycle allow: cuda-to-rocm must deny");
+        process_exit(1);
+    }
+    let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
+    let host: String = match hr { Ok(s) => s, Err(_) => "" };
+    if host == "" {
+        println("ERR\tOODA_COMPILER required");
+        process_exit(1);
+    }
+    let m: Result[String, String] = sys_exec(p, host, "check", "oodac/emit/llvm/ll_match_expr.oo");
+    if m.is_err() {
+        println("ERR\tcycle allow: listed llvm match check must pass");
+        process_exit(1);
+    }
+    let w: Result[String, String] = sys_exec(p, host, "check", "oodac/emit/wasm/wasm_match.oo");
+    if w.is_err() {
+        println("ERR\tcycle allow: listed wasm match check must pass");
+        process_exit(1);
+    }
+    let b: Result[String, String] = sys_exec(p, host, "check", "oodac/qa/fixtures/gap10_cyc_bad/a.oo");
+    if b.is_ok() {
+        println("ERR\tcycle allow: unlisted cycle check must fail");
+        process_exit(1);
+    }
+    println("OK");
+}

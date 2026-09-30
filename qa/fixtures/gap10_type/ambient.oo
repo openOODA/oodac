@@ -1,0 +1,8 @@
+// # Gap 10 fixture: ambient type provider (not imported by the graph)
+//
+// Logline: Defines Gap10AmbientTy. Only the sibling anchor imports this
+// file, so graph TUs must NOT see the name.
+
+type Gap10AmbientTy = struct {
+    v: Int,
+};

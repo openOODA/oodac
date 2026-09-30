@@ -13,6 +13,7 @@
 import "emit/cuda/anchor.oo";
 import "cli_oodar.oo";
 import "ast/load_import.oo";
+import "emit/cuda/cuda_emit.oo";
 
 // sys_exec does no PATH search (bare "nvcc" never resolves), so probe
 // absolute locations by execution (path_exists would false-negative

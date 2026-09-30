@@ -9,6 +9,15 @@
 //   2. A known immutable root uses tc_err_at cannot assign to field; known incompatible field and rhs types fail closed.
 //   3. typecheck_field_binop_uses types a field-chain OP atom and an atom OP field-chain; ERR_BINOP uses tc_err_at.
 
+import "lex/token_fmt.oo";
+import "tc_diag.oo";
+import "tc_infer.oo";
+import "tc_method.oo";
+import "tc_scope.oo";
+import "tc_struct_chain.oo";
+import "tc_struct_field_table.oo";
+import "tc_tables.oo";
+import "tc_types_core.oo";
 pub fn typecheck_field_assign(toks: List[String]) {
     let n = list_len(toks);
     let lit_env: String = build_pure_lit_env(toks);

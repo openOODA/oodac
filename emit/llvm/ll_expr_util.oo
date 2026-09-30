@@ -1,0 +1,67 @@
+// # LLVM expr atoms (leaf)
+// Logline: Precedence table, guards, and single-value lowerings. No recursion.
+
+import "ll_tok.oo";
+import "ll_ty.oo";
+import "ll_ir.oo";
+
+pub fn ll_bin_bp(k: String) -> Int {
+    if k == "OROR" { return 2; }
+    if k == "ANDAND" { return 3; }
+    if k == "PIPE" { return 4; }
+    if k == "CARET" || k == "BXOR" { return 5; }
+    if k == "AMP" { return 6; }
+    if k == "EQEQ" || k == "NEQ" { return 7; }
+    if k == "LT" || k == "LTE" || k == "GT" || k == "GTE" { return 8; }
+    if k == "LSHIFT" || k == "RSHIFT" { return 9; }
+    if k == "PLUS" || k == "MINUS" { return 10; }
+    if k == "STAR" || k == "SLASH" || k == "PERCENT" { return 11; }
+    return 0;
+}
+
+
+pub fn ll_guard_i1(kind: String, op: String, side: String) {
+    if kind != "i1" {
+        println("ERR\tllvm\tlogical " + op + " " + side + " requires i1, got " + kind);
+        process_exit(1);
+    }
+}
+
+pub fn ll_deref_load(r: String, ir: &mut IrBuf) -> String {
+        if ll_is_agg(ll_pk(r)) {
+            println("ERR\tllvm\tderef of aggregate ref");
+            process_exit(1);
+        }
+        if ll_is_refk(ll_pk(r)) {
+            let mut lk: String = "i64";
+            let mut ret_k: String = "i64";
+            if ll_pk(r) == "ri32" || ll_pk(r) == "ru32" { lk = "i32"; ret_k = "i32"; }
+            else if ll_pk(r) == "rf64" { lk = "double"; ret_k = "f64"; }
+            else if ll_pk(r) == "ri1" { lk = "i1"; ret_k = "i1"; }
+            let ptr_val: String = ll_pptr(r);
+            let mut cur_s: Int = ll_pssa(r);
+            let mut target_ptr: String = "";
+            if chars_len(ptr_val) < 3 || str_slice(ptr_val, 0, 3) != "%p_" {
+                cur_s = cur_s + 1;
+                ll_ir_inst(ir, "load", "ptr", ll_ssa(cur_s), "ptr " + ptr_val + ", align 8", 1, 1);
+                target_ptr = ll_ssa(cur_s);
+            } else {
+                target_ptr = ptr_val;
+            }
+            cur_s = cur_s + 1;
+            ll_ir_inst(ir, "load", lk, ll_ssa(cur_s), "ptr " + target_ptr + ", align 8", 1, 1);
+            return ll_pack(ll_ppos(r), cur_s, ret_k, "");
+        }
+        let s1: Int = ll_pssa(r) + 1;
+        ll_ir_inst(ir, "inttoptr", ll_ir_val(ll_pk(r)), ll_ssa(s1), ll_opnd(r) + " to ptr", 1, 1);
+        let s2: Int = s1 + 1;
+        ll_ir_inst(ir, "load", ll_ir_val(ll_pk(r)), ll_ssa(s2), "ptr " + ll_ssa(s1) + ", align 8", 1, 1);
+        return ll_pack(ll_ppos(r), s2, ll_pk(r), "");
+}
+
+pub fn ll_not_i1(r: String, ir: &mut IrBuf) -> String {
+        ll_guard_i1(ll_pk(r), "not", "operand");
+        let s: Int = ll_pssa(r) + 1;
+        ll_ir_inst(ir, "xor", "i1", ll_ssa(s), ll_opnd(r) + ", true", 1, 1);
+        return ll_pack(ll_ppos(r), s, "i1", "");
+}

@@ -9,6 +9,8 @@
 //   2. When the matching RPAREN is followed by SEMI, tc_err_at unused must-use.
 //   3. On KW_FN with ARROW to a non-Void IDENT, scan the body for KW_RETURN; a miss tc_err_at.
 
+import "lex/token_fmt.oo";
+import "tc_diag.oo";
 pub fn typecheck_must_use_result(toks: List[String]) {
     let n = list_len(toks);
     let mut i = 0;

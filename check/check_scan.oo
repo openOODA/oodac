@@ -11,6 +11,8 @@
 //
 // residual: shared sig tables not wired
 
+import "lex/token_parse_int.oo";
+
 fn scan_charset_has(set: String, c: String) -> Bool {
     let n = chars_len(set);
 let mut i = 0;
@@ -148,3 +150,49 @@ while i < n { if char_at(names, i) == "\t" { if i > start { binds = binds + str_
     }
     return binds;
 }
+
+pub fn parse_arena_id(res: Result[String, String]) -> Int {
+    if res.is_err() { return 0 - 1; }
+    let s: String = match res { Ok(v) => v, Err(_) => "" };
+    if chars_len(s) >= 7 && str_slice(s, 0, 6) == "arena:" {
+        return parse_int(str_slice(s, 6, chars_len(s)));
+    }
+    return parse_int(s);
+}
+
+pub fn path_is_main_oo(path: String) -> Bool {
+    let n: Int = chars_len(path);
+    if n >= 7 {
+        if str_slice(path, n - 7, n) == "main.oo" {
+            return true;
+        }
+    }
+    return path == "main.oo";
+}
+
+pub fn count_lines(s: String) -> Int {
+    let n: Int = chars_len(s);
+    if n == 0 { return 0;
+    }
+    let mut c: Int = 0;
+    let mut i: Int = 0;
+    while i < n {
+        if char_at(s, i) == "\n" { c = c + 1;
+        }
+        i = i + 1;
+    }
+    if char_at(s, n - 1) != "\n" { c = c + 1;
+    }
+    return c;
+}
+
+pub fn fold_toks(toks: List[String], l: Int, r: Int) -> String {
+    let mut out: String = "";
+    let mut i: Int = l;
+    while i < r {
+        out = out + list_get(toks, i) + "\n";
+        i = i + 1;
+    }
+    return out;
+}
+

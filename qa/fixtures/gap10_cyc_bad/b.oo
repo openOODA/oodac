@@ -1,0 +1,5 @@
+import "a.oo";
+
+pub fn cycb_fn() -> Int {
+    return 1;
+}

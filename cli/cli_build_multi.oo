@@ -13,6 +13,7 @@
 
 import "lex/token_parse_int.oo";
 import "check/check_collect.oo";
+import "check/check_mod.oo";
 import "cli_oodar.oo";
 import "cli_cache_prune.oo";
 

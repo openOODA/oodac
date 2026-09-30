@@ -9,6 +9,7 @@
 //   2. Skip type and import until SEMI; fail if a nonempty filter never matched.
 //   3. emit_fn_reflect packs name, pub, params, ret, requires, ensures, and caps from the signature.
 import "parse_drive.oo";
+import "lex/token_fmt.oo";
 
 
 pub fn ast_emit_reflect(src: String, filter_sym: String) {

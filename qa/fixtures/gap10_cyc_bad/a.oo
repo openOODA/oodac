@@ -1,0 +1,5 @@
+import "b.oo";
+
+pub fn cyca_main() -> Int {
+    return cycb_fn();
+}

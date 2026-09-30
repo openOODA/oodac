@@ -72,15 +72,6 @@ pub fn cu_expr_cmp(toks: List[String], pos: Int, n: Int, env: String, fns: Strin
     return cu_e_pack(p, "b", "((" + cu_prom(cu_e_code(l), lt, want) + ") " + sym + " (" + cu_prom(cu_e_code(q), rt, want) + "))");
 }
 
-fn cu_cmp_sym(k: String) -> String {
-    if k == "EQEQ" { return "=="; }
-    if k == "NEQ" { return "!="; }
-    if k == "LT" { return "<"; }
-    if k == "GT" { return ">"; }
-    if k == "LTE" { return "<="; }
-    return ">=";
-}
-
 pub fn cu_expr_add(toks: List[String], pos: Int, n: Int, env: String, fns: String, hint: String, capv: String) -> String {
     let mut r: String = cu_expr_mul(toks, pos, n, env, fns, hint, capv);
     let mut p: Int = cu_e_pos(r);
@@ -148,17 +139,6 @@ pub fn cu_expr_mul(toks: List[String], pos: Int, n: Int, env: String, fns: Strin
     return r;
 }
 
-fn cu_div_code(lz: String, rz: String, want: String, line: Int) -> String {
-    if want == "f" { return "(" + lz + " / " + rz + ")"; }
-    let bad: String = "(fprintf(stderr, \"ERR\\tcuda\\tdiv zero at line " + line.to_string() + "\\n\"), exit(1), (long long)0)";
-    return "((" + rz + " == 0) ? " + bad + " : (" + lz + " / " + rz + "))";
-}
-
-fn cu_mod_code(lz: String, rz: String, line: Int) -> String {
-    let bad: String = "(fprintf(stderr, \"ERR\\tcuda\\tdiv zero at line " + line.to_string() + "\\n\"), exit(1), (long long)0)";
-    return "((" + rz + " == 0) ? " + bad + " : (" + lz + " % " + rz + "))";
-}
-
 pub fn cu_expr_unary(toks: List[String], pos: Int, n: Int, env: String, fns: String, hint: String, capv: String) -> String {
     if pos < n && cu_k(toks, pos) == "MINUS" {
         let r: String = cu_expr_unary(toks, pos + 1, n, env, fns, hint, capv);
@@ -218,4 +198,54 @@ pub fn cu_expr_primary(toks: List[String], pos: Int, n: Int, env: String, fns: S
     return "0\t?\t";
 }
 
+
+fn cu_call_args(toks: List[String], info: String, n: Int, env: String, fns: String, hint: String, capv: String, name: String) -> String {
+    let nargs: Int = cu_span_nargs(info);
+    let mut argstr: String = "";
+    let mut i: Int = 0;
+    while i < nargs {
+        let mut h: String = cu_arg_hint(name, i, fns);
+        if name == "Ok" && hint == "rss" { h = "s"; }
+        if name == "Ok" && hint == "rli" { h = "li"; }
+        if name == "Err" { h = "s"; }
+        if name == "Some" && hint == "oi" { h = "i"; }
+        if name == "Some" && hint == "os" { h = "s"; }
+        let a: String = cu_expr(toks, cu_span_start(info, i), n, env, fns, h, capv);
+        if i > 0 { argstr = argstr + "\t"; }
+        argstr = argstr + cu_e_pos(a).to_string() + "\t" + cu_e_ty(a) + "\t" + cu_e_code(a);
+        i = i + 1;
+    }
+    return argstr;
+}
+
+pub fn cu_call(toks: List[String], pos: Int, n: Int, env: String, fns: String, hint: String, capv: String) -> String {
+    let name: String = cu_t(toks, pos);
+    let line: Int = cu_line(toks, pos);
+    let info: String = cu_arg_spans(toks, pos, n);
+    let kind: Int = cu_call_kind(name);
+    if kind == 1 || kind == 2 {
+        return cu_call_with_args(toks, name, info, "", env, fns, hint, capv, line);
+    }
+    let argstr: String = cu_call_args(toks, info, n, env, fns, hint, capv, name);
+    return cu_call_with_args(toks, name, info, argstr, env, fns, hint, capv, line);
+}
+
+pub fn cu_println(toks: List[String], pos: Int, n: Int, env: String, fns: String, capv: String, ind: String) -> String {
+    let info: String = cu_arg_spans(toks, pos, n);
+    if cu_span_nargs(info) != 1 {
+        cu_fail(cu_line(toks, pos), "println takes one arg");
+        return cu_s_pack(pos + 1, env, "");
+    }
+    let a: String = cu_expr(toks, cu_span_start(info, 0), n, env, fns, "", capv);
+    let q: Int = cu_span_end(info) + 1;
+    let qq: Int = if q < n && cu_k(toks, q) == "SEMI" { q + 1 } else { q };
+    let at: String = cu_e_ty(a);
+    let ac: String = cu_e_code(a);
+    if at == "i" { return cu_s_pack(qq, env, ind + "printf(\"%lld\\n\", (long long)(" + ac + "));\n"); }
+    if at == "f" { return cu_s_pack(qq, env, ind + "printf(\"%g\\n\", (double)(" + ac + "));\n"); }
+    if at == "s" { return cu_s_pack(qq, env, ind + "{ std::string oo_t = (" + ac + "); fwrite(oo_t.data(), 1, oo_t.size(), stdout); putchar(10); }\n"); }
+    if at == "b" { return cu_s_pack(qq, env, ind + "printf(\"%lld\\n\", (long long)(" + ac + "));\n"); }
+    cu_fail(cu_line(toks, pos), "println type unsupported");
+    return cu_s_pack(qq, env, "");
+}
 

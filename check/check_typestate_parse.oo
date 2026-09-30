@@ -10,6 +10,7 @@
 //   3. Ignore unknown lines.
 
 import "types/types_core.oo";
+import "c_emit_env.oo";
 
 // Line-start forms (leading space ok):
 //   // TYPESTATE: Type State1 State2 ...

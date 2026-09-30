@@ -15,6 +15,11 @@ import "tc_call_util.oo";
 import "tc_struct_chain.oo";
 import "tc_tables_ret.oo";
 import "types/types_core.oo";
+import "lex/token_fmt.oo";
+import "tc_call_ret.oo";
+import "tc_diag.oo";
+import "tc_read_result.oo";
+import "tc_types_core.oo";
 
 
 pub fn typecheck_let_ann_call_init(toks: List[String]) {

@@ -10,6 +10,7 @@
 //   3. Unknown backend names fail closed.
 
 import "llvm/anchor.oo";
+import "emit/llvm/ll_emit.oo";
 
 pub fn emit_backend(backend: String, src: String, toks: List[String], mode: String, path: String, is_plain: Bool) {
     let mut n: Int = 0;

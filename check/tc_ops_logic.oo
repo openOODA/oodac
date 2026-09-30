@@ -10,6 +10,15 @@
 //   3. Infer operand types (atoms, paren subexpressions, arithmetic, comparisons).
 //   4. Exit with a clean type error if either resolved operand is not Bool.
 
+import "lex/token_fmt.oo";
+import "tc_call_util.oo";
+import "tc_diag.oo";
+import "tc_infer.oo";
+import "tc_struct_chain.oo";
+import "tc_struct_field_table.oo";
+import "tc_tables.oo";
+import "tc_tables_ret.oo";
+import "tc_types_core.oo";
 fn tc_logic_left_span(toks: List[String], op_idx: Int) -> Int {
     let mut p = op_idx - 1;
     let mut depth = 0;

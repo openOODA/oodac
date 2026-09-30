@@ -12,10 +12,15 @@
 import "ll_tok.oo";
 import "ll_ty.oo";
 import "ll_int.oo";
-import "ll_struct.oo";
+import "ll_struct_kind.oo";
 import "ll_slot.oo";
 import "ll_ir.oo";
 import "ll_reinterpret.oo";
+import "ll_call.oo";
+import "ll_method.oo";
+import "types/types_core.oo";
+import "ll_expr.oo";
+import "ll_stmt.oo";
 
 pub fn ll_match_expr(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String, ir: &mut IrBuf) -> String {
     let scr: String = ll_expr(toks, pos + 1, n, ssa0, env, ir);

@@ -9,6 +9,8 @@
 //   2. Require COLON List [ Int ].
 //   3. Return true when the name matches.
 
+import "lex/token_fmt.oo";
+
 pub fn tc_name_is_int_list(toks: List[String], name: String) -> Bool {
     let n: Int = list_len(toks);
 let mut i: Int = 0;

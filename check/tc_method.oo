@@ -9,6 +9,9 @@
 //   2. Type the receiver and the method.
 //   3. Fail closed on a miss.
 import "types/types_core.oo";
+import "lex/token_fmt.oo";
+import "tc_types_core.oo";
+import "tc_struct_chain.oo";
 
 
 // Exclusive end after recv.method(...); 0 if pos is not a method call.

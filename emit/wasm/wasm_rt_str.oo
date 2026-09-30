@@ -10,6 +10,7 @@
 
 import "wasm_buf.oo";
 import "wasm_op.oo";
+import "wasm_rt.oo";
 
 pub fn ws_rt_str_cat(b: &mut WasmBuf) {
     ws_get(b, 0);

@@ -11,6 +11,7 @@
 import "rocm_tok.oo";
 import "rocm_ty.oo";
 import "lex/token_parse_int.oo";
+import "rocm_expr.oo";
 
 pub fn rc_match_head(sty: String, top: String, sc: String, ind: String) -> String {
     let v: String = rc_var(sc);

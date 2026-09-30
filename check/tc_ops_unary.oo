@@ -9,6 +9,13 @@
 //   2. is_value_token_kind marks literals, IDENT, RPAREN, and RBRACK so a binary MINUS is skipped.
 //   3. On unary MINUS, require Int or Float from the atom or a zero-arg call return.
 
+import "lex/token_fmt.oo";
+import "tc_diag.oo";
+import "tc_infer.oo";
+import "tc_method.oo";
+import "tc_tables.oo";
+import "tc_tables_ret.oo";
+import "tc_types_core.oo";
 pub fn typecheck_unary_bang_lit(toks: List[String]) {
     let n = list_len(toks);
     let lit_env: String = build_pure_lit_env(toks);

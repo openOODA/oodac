@@ -9,6 +9,10 @@
 //   2. Walk logic ops whose operand is a call.
 //   3. Fail closed on a type miss.
 
+import "lex/token_fmt.oo";
+import "tc_diag.oo";
+import "tc_tables_ret.oo";
+import "tc_types_core.oo";
 pub fn typecheck_call_logic_lits(toks: List[String]) {
     let n = list_len(toks);
     let mut ret_table: String = "";

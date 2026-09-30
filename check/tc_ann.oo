@@ -10,6 +10,11 @@
 //   3. KW_LET updates lit_env via ann_check_let; KW_RETURN calls ann_check_return; every other token calls ann_check_binop.
 
 import "tc_read_result.oo";
+import "tc_ann_ops.oo";
+import "tc_ann_let.oo";
+import "tc_ann_return.oo";
+import "tc_types_core.oo";
+import "lex/token_fmt.oo";
 
 
 pub fn lit_env_bind_fn_params(toks: List[String], start: Int, aliases: String) -> String {

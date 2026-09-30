@@ -170,22 +170,51 @@ oodac/bin/oodac and jail dirs set to the workspace, run
   binary ships).
 - Blocks: probe_sandbox_adv1, probe_sandbox_m1, probe_sandbox_stress.
 
-## Gap 10. Graph-TU missing deps pass check, fail emit — OPEN 2026-09-29
+## Gap 10. Graph-TU missing deps pass check, fail emit — FIXED 2026-09-30
 
 - Error: `ERR llvm unknown type <T>` / `unknown call <f>` on programs
   whose `check` is OK. Observed: RotXZ/TriIdx types, shade_ray_tri /
   raster_area2 calls (std app/ui/media freeloaders).
-- Cause: a non-root TU references a sibling's symbol without importing
-  it, freeloading on the importer's transitive graph. The undefined-name
-  check fires inconsistently here (it caught font_rows_1 as an undefined
-  variable in one graph but missed RotXZ/TriIdx/shade_ray_tri/
-  raster_area2 in others), while emit always fails closed. No bad
-  binary ships; the contract "check-OK implies buildable" does not hold
-  for this shape.
-- Fix (source-side, done): give each freeloader its direct imports
-  (std commit "direct-import 7 media freeloaders"). Checker-side fix
-  (consistent graph-TU name validation) is future work.
-- Blocks: nothing, post-fix. std suite 61/61 green.
+- Cause: every TU validated against the whole-graph union PLUS the
+  target's ambient anchor names, while emit only sees the import graph;
+  annotation positions (`: T`, `-> T`, `[T`, `&T`) were never validated
+  at all. A dep naming an ambient-only symbol passed check, failed emit.
+- Fix (source-side, done 2026-09-29): give each freeloader its direct
+  imports (std commit "direct-import 7 media freeloaders").
+- Fix (checker-side, done 2026-09-30): hermetic graph-TU name validation.
+  Each TU validates against its OWN import closure (fn + type names);
+  annotation positions validate (`undefined name 'T'`); the isolated
+  target keeps its ambient anchor names (anchor exemption); identical
+  protos still dedup silent/first-wins. Freeloading deps now fail check
+  with a caret at the use site instead of failing emit.
+- Contract: check-OK implies buildable for every TU compiled as a dep
+  (and for main.oo roots, which never had anchor names). Residual: an
+  isolated `check` of a non-main target keeps ambient anchor names
+  (iteration feature), so a target that ONLY freeloads still checks OK
+  standalone and fails at emit when built as a root. `check` of the
+  dir anchor.oo is the hermetic gate (every file validated as a dep).
+- Proofs: qa/probe_gap10_hermetic.oo + qa/fixtures/gap10_{call,type,
+  exempt,dedup}/ (backstop). Old binary says OK on both victims.
+- Blocks: nothing. std suite green.
+- Follow-up (done 2026-09-30): hermetic closure migration of oodac's own
+  tree. 255 direct-import edges added across 71 files (mechanical closer);
+  genuine mutual recursion cannot wire acyclically (import cycles are
+  still rejected) and cannot fuse (256-line module limit), so six
+  hermetic units permit intra-unit back-edges: emit/llvm, emit/wasm,
+  emit/cuda, emit/rocm, ast, check. Pairs do not compose (llvm alone has
+  9 cycles through ll_expr.oo: match/if/call/return/stmt/for/contract),
+  hence units, not pairs. Mechanism: ast/cycle_allow.oo predicate
+  consulted by both expanders (ast/load_import.oo skip-on-stack,
+  check/check_collect.oo parent-threaded skip); bootstrap/
+  oodac_pure_build mirrors it coarsely (precise .oo gate inside).
+  Skip-on-stack is complete: the skipped target is an ancestor whose
+  own frame still contributes its paths. Bootstrap ladder: each new
+  unit first ships in a stage-1 binary built by the previous host
+  (acyclic tree), then the tree takes the intra-unit edges and builds
+  stage-2 with OODAC_BIN pointing at stage-1. Fail-closed: default
+  deny preserved; cross-unit and unlisted cycles still error.
+- Proofs: qa/probe_cycle_allow.oo (predicate unit-tests + listed-OK /
+  unlisted-ERR integration) + qa/fixtures/gap10_cyc_bad/ (backstop).
 
 ## Notes for the fixer
 

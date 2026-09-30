@@ -1,0 +1,99 @@
+// # WASM call dispatch table (leaf)
+// Logline: Lowered-arg call dispatch by callee name. No expression recursion.
+//
+// Setup: Caller lowers args to type codes first; end is derived from p.
+
+import "lex/token_fmt.oo";
+import "lex/token_parse_int.oo";
+import "wasm_buf.oo";
+import "wasm_op.oo";
+import "wasm_tok.oo";
+import "wasm_data.oo";
+import "wasm_fn.oo";
+import "wasm_slice.oo";
+import "wasm_util.oo";
+
+pub fn ws_call_global_dispatch(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &WsG, lits: &mut WsLits, cx: &mut WsCx, name: String, nargs: Int, c0: String, c1: String, c2: String, p: Int) -> String {
+    let end: Int = p + 1;
+    if name == "str_slice" {
+        if nargs != 3 {
+            ws_fail(ws_line(toks, pos), "slice arity");
+        }
+        if c0 != "s" || c1 != "i" || c2 != "i" {
+            ws_fail(ws_line(toks, pos), "slice type");
+        }
+        ws_slice_emit(b, g.scratch + cx.depth * 2, cx.depth, toks, pos);
+        return ws_pack(end, "s");
+    }
+    if name == "char_at" {
+        if nargs != 2 {
+            ws_fail(ws_line(toks, pos), "char arity");
+        }
+        if c0 != "s" || c1 != "i" {
+            ws_fail(ws_line(toks, pos), "char type");
+        }
+        ws_char_emit(b, g.scratch + cx.depth * 2, cx.depth, toks, pos);
+        return ws_pack(end, "s");
+    }
+    if name == "println" {
+        if nargs != 1 {
+            ws_fail(ws_line(toks, pos), "println arity");
+        }
+        if c0 != "i" && c0 != "s" {
+            ws_fail(ws_line(toks, pos), "println type");
+        }
+        if c0 == "i" { ws_call(b, 4); } else { ws_call(b, 3); }
+        return ws_pack(end, "v");
+    }
+    if name == "list_new" {
+        ws_call(b, 7);
+        return ws_pack(end, "l[?]");
+    }
+    if name == "list_push" {
+        ws_call(b, 8);
+        let mut e: String = ws_elem(c0);
+        if e == "?" {
+            e = c1;
+        }
+        return ws_pack(end, "l[" + e + "]");
+    }
+    if name == "list_get" {
+        let s0: Int = g.scratch + cx.depth * 2;
+        let s1: Int = s0 + 1;
+        ws_set(b, s1);
+        ws_set(b, s0);
+        ws_get(b, s0);
+        ws_load(b, 0);
+        ws_get(b, s1);
+        ws_const(b, 4);
+        ws_mul(b);
+        ws_add(b);
+        ws_load(b, 0);
+        return ws_pack(end, ws_elem(c0));
+    }
+    if name == "list_len" {
+        ws_load(b, 4);
+        return ws_pack(end, "i");
+    }
+    if name == "chars_len" {
+        ws_load(b, 4);
+        return ws_pack(end, "i");
+    }
+    let row: String = ws_fn_row(g.fns, name);
+    if row == "" {
+        ws_fail(ws_line(toks, pos), "call " + name);
+    }
+    if parse_int(field_at(row, 1)) != nargs {
+        ws_fail(ws_line(toks, pos), "arity " + name);
+    }
+    ws_call(b, parse_int(field_at(row, 3)));
+    return ws_pack(end, field_at(row, 2));
+}
+
+pub fn ws_scratch2(g: &WsG, cx: &mut WsCx, toks: List[String], pos: Int) -> Int {
+    if cx.depth > 7 {
+        ws_fail(ws_line(toks, pos), "nested too deep");
+    }
+    return g.scratch + cx.depth * 2;
+}
+

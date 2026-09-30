@@ -12,6 +12,42 @@
 import "token_next.oo";
 import "token_parse_int.oo";
 
+// Encode tab/newline so TSV token lines stay 4 fields.
+pub fn tok_line(kind: String, line: Int, col: Int, text: String) -> String {
+    let tn: Int = bytes_len(text);
+    let mut need: Bool = false;
+    let mut ti: Int = 0;
+    while ti < tn {
+        let c: Int = byte_at(text, ti);
+        if c == 9 || c == 10 || c == 92 {
+            need = true;
+            ti = tn;
+        } else {
+            ti = ti + 1;
+        }
+    }
+    let ls: String = line.to_string();
+    let cs: String = col.to_string();
+    if !need { return kind + "\t" + ls + "\t" + cs + "\t" + text; }
+    let mut enc: String = "";
+    ti = 0;
+    while ti < tn {
+        let c: Int = byte_at(text, ti);
+        if c == 9 {
+            enc = enc + "\\t";
+        } else if c == 10 {
+            enc = enc + "\\n";
+        } else if c == 92 {
+            enc = enc + "\\\\";
+        } else {
+            enc = enc + byte_slice(text, ti, ti + 1);
+        }
+        ti = ti + 1;
+    }
+    return kind + "\t" + ls + "\t" + cs + "\t" + enc;
+}
+
+
 
 pub fn collect_tokens(src: String) -> List[String] {
     let mut out: List[String] = list_new();

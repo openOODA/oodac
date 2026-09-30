@@ -9,6 +9,8 @@
 //   2. Extract a struct's field blob or one field's type from the table.
 //   3. Report whether a field or type name is known.
 
+import "lex/token_fmt.oo";
+
 pub fn build_struct_field_table(toks: List[String]) -> String {
     let n = list_len(toks);
 if n > 1000000 { return "";

@@ -10,6 +10,7 @@
 //   3. If the bind name never appears as a use, print unused let and exit.
 
 import "tc_diag.oo";
+import "lex/token_fmt.oo";
 
 
 pub fn typecheck_unused_lets(toks: List[String]) {

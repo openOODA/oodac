@@ -11,6 +11,7 @@
 import "lex/token_parse_int.oo";
 import "smt_poly_interval.oo";
 import "smt_poly_sign.oo";
+import "lex/token_fmt.oo";
 pub type PolyVal = struct {
     pos: Int,
     inv: Interval,

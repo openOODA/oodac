@@ -11,6 +11,7 @@
 import "token_parse_int.oo";
 import "lex.oo";
 import "token_ident.oo";
+import "token_next.oo";
 
 
 pub fn dump_tokens(src: String) {

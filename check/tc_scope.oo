@@ -9,6 +9,8 @@
 //   2. Scope walk finds the live binding.
 //   3. Types come from the env string.
 
+import "lex/token_fmt.oo";
+
 pub fn binds_has(binds: String, name: String) -> Bool {
     let needle = "\t" + name + "\t";
 return binds.contains(needle);

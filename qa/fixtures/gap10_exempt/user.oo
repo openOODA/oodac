@@ -1,0 +1,9 @@
+// # Gap 10 fixture: isolated target using an ambient anchor name
+//
+// Logline: user.oo imports nothing but calls gap10_exempt_fn from the
+// sibling anchor. check of this file stays OK: the anchor exemption
+// preserves isolated-TU iteration.
+
+pub fn main() {
+    println(gap10_exempt_fn().to_string());
+}

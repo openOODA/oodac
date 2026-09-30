@@ -17,7 +17,11 @@ import "wasm_op.oo";
 import "wasm_tok.oo";
 import "wasm_data.oo";
 import "wasm_fn.oo";
+import "wasm_util.oo";
 import "lex/token_parse_int.oo";
+import "wasm_expr.oo";
+import "wasm_stmt.oo";
+import "wasm_store.oo";
 
 pub fn ws_arm_field(arm: String, idx: Int) -> String {
     let mut rest: String = arm;

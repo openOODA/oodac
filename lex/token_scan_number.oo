@@ -9,6 +9,8 @@
 //   2. Eat digits, then a single "." only when the next character is a digit (not "..").
 //   3. Pack FLOAT after a fractional loop, otherwise pack INT.
 
+import "token_scan_whitespace.oo";
+
 pub fn try_scan_number(src: String, i0: Int, line0: Int, col0: Int) -> List[String] {
     let n = chars_len(src);
     if i0 >= n { return list_new();

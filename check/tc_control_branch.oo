@@ -9,6 +9,11 @@
 //   2. Type each branch.
 //   3. Fail closed on a mismatch.
 
+import "ast/parse_drive.oo";
+import "lex/token_fmt.oo";
+import "tc_diag.oo";
+import "tc_infer.oo";
+import "tc_tables.oo";
 pub fn typecheck_control_flow_branches(toks: List[String]) {
     let n = list_len(toks);
     let lit_env: String = build_pure_lit_env(toks);

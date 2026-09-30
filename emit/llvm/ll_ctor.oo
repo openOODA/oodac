@@ -9,7 +9,7 @@
 import "ll_tok.oo";
 import "ll_ty.oo";
 import "ll_int.oo";
-import "ll_struct.oo";
+import "ll_struct_kind.oo";
 import "ll_slot.oo";
 import "ll_ir.oo";
 import "ll_niche.oo";

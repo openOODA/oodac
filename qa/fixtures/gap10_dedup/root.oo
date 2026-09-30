@@ -1,0 +1,10 @@
+// # Gap 10 fixture root: imports two identical protos
+//
+// Logline: check stays OK (dedup identical proto, first wins).
+
+import "a.oo";
+import "b.oo";
+
+pub fn main() {
+    println(gap10_same().to_string());
+}

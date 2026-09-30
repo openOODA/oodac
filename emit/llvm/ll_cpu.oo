@@ -11,6 +11,8 @@
 //   1. ll_cpu_use returns " #0" iff __cpu__ is set.
 //   2. ll_cpu_attr_def prints the attributes group iff set.
 
+import "ll_ir.oo";
+import "types/types_core.oo";
 pub fn ll_cpu_use(env: String) -> String {
     if type_env_get(env, "__cpu__") != "" { return " #0"; }
     return "";

@@ -22,6 +22,11 @@ import "ll_call.oo";
 import "ll_stmt.oo";
 import "types/types_core.oo";
 import "ll_ir.oo";
+import "lex/token_fmt.oo";
+import "lex/token_parse_int.oo";
+import "ll_exit.oo";
+import "ll_method.oo";
+import "ll_print.oo";
 
 pub fn ll_if_value_at(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String, ir: &mut IrBuf) -> String {
     let c: String = ll_expr(toks, pos + 1, n, ssa0, env, ir);

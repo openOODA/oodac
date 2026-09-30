@@ -10,6 +10,8 @@
 //   3. Return false when the name is none of those.
 
 import "tc_names_ext.oo";
+import "check_cap_util.oo";
+import "check_residual.oo";
 
 pub fn is_known_name(name: String) -> Bool {
     if is_known_ext_name(name) { return true; }
@@ -181,6 +183,14 @@ pub fn is_known_name(name: String) -> Bool {
     if name == "Int" || name == "String" || name == "Bool" || name == "Float" || name == "Void" || name == "WasmEnv"
         || name == "f32x8" || name == "f64x4" || name == "TyF32x8" || name == "TyF64x4" { return true;
         }
+    // Gap 10: primitive spellings the checker types itself (is_primitive_int,
+    // f64/i64 aliases, Vec8f/Vec4d). Type positions validate; these pass.
+    if name == "u8" || name == "i8" || name == "u16" || name == "i16"
+        || name == "u32" || name == "i32" || name == "u64" || name == "i64" { return true;
+        }
+    if name == "f32" || name == "f64" || name == "F32" || name == "F64"
+        || name == "Vec8f" || name == "Vec4d" { return true;
+        }
     if name == "f32x8_new" || name == "f32x8_zero" || name == "f32x8_splat"
         || name == "f32x8_get_lane" || name == "f32x8_insert_lane"
         || name == "f32x8_add" || name == "f32x8_sub" || name == "f32x8_mul" || name == "f32x8_div"
@@ -203,25 +213,22 @@ pub fn is_known_name(name: String) -> Bool {
     }
     if name == "EnvCap" || name == "SysCap" || name == "TimeCap" || name == "RandCap" || name == "AllocCap" || name == "ArenaCap" { return true;
     }
-    if name == "Option" { return true;
+    // Gap 10: remaining runtime cap types (check_caps vocabulary; none are
+    // .oo-defined, so allowlisting cannot mask a missing import).
+    if name == "ProcessCap" || name == "FsReadCap" || name == "FsWriteCap" || name == "CompilerReadCap" { return true;
     }
-    if name == "Result" { return true;
+    if name == "FfiCap" || name == "SignCap" || name == "TcpCap" || name == "UdpCap" { return true;
     }
-    if name == "List" { return true;
+    if name == "AudioCap" || name == "CameraCap" || name == "FrameCap" || name == "HidCap" { return true;
     }
-    if name == "list" { return true;
+    if name == "UsbCap" || name == "WindowCap" || name == "BindCap" || name == "MetricsCap" { return true;
     }
-    if name == "Ok" { return true;
+    if name == "Option" || name == "Result" || name == "List" || name == "list" { return true;
     }
-    if name == "Err" { return true;
+    // Gap 10: Box + Ty* builtins (borrow/sym-frame/ty-parse vocabulary).
+    if name == "Box" || name == "TyBox" || name == "TyStr" || name == "TyList" || name == "TyOption" || name == "TyResult" { return true;
     }
-    if name == "Some" { return true;
-    }
-    if name == "None" { return true;
-    }
-    if name == "true" { return true;
-    }
-    if name == "false" { return true;
+    if name == "Ok" || name == "Err" || name == "Some" || name == "None" || name == "true" || name == "false" { return true;
     }
     // Contract surface: ensures/requires may reference result / old
     if name == "result" { return true;

@@ -1,0 +1,10 @@
+// # Gap 10 fixture root: imports the type-freeloading dep only
+//
+// Logline: Old checker said OK (annotation positions were skipped);
+// fixed checker refuses the dep's ambient type name.
+
+import "mid.oo";
+
+pub fn main() {
+    println(gap10_t_mid().to_string());
+}

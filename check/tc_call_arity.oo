@@ -11,6 +11,8 @@
 //   4. Cross-module calls fall back to the import-arity table (scan_import_arity
 //      over the import graph); local table always wins. Unknown names still skip.
 
+import "lex/token_fmt.oo";
+import "tc_diag.oo";
 pub fn arity_get(table: String, fname: String) -> Int {
     let key = "\t" + fname + "=";
     let pos = str_index_of(table, key);

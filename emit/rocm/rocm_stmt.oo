@@ -224,14 +224,3 @@ fn rc_arm(toks: List[String], pos: Int, mend: Int, n: Int, env: String, fns: Str
     p = rc_skip_balanced(toks, p);
     return rc_s_pack(p, env, ctor + "\t" + decl + "\t" + rc_s_text(body));
 }
-
-pub fn rc_binder_env(env: String, sty: String, ctor: String, binder: String, toks: List[String], pos: Int) -> String {
-    if binder == "" { return env; }
-    if sty == "rss" { return rc_env_put(env, binder, "s"); }
-    if sty == "rli" && ctor == "Ok" { return rc_env_put(env, binder, "li"); }
-    if sty == "rli" { return rc_env_put(env, binder, "s"); }
-    if sty == "oi" { return rc_env_put(env, binder, "i"); }
-    if sty == "os" { return rc_env_put(env, binder, "s"); }
-    rc_fail(rc_line(toks, pos), "arm mismatch");
-    return env;
-}

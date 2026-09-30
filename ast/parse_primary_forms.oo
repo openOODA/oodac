@@ -7,6 +7,12 @@
 // Beats:
 //   1. Unified cohesive implementation.
 
+import "parse_skip.oo";
+import "lex/token_fmt.oo";
+import "parse_method.oo";
+import "parse_expr.oo";
+import "parse_stmt_nav.oo";
+
 pub fn parse_primary_try_lit(toks: List[String], pos0: Int, depth: Int) -> Int {
     let pos = pos0;
 let pad: String = indent(depth);

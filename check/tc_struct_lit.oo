@@ -9,6 +9,10 @@
 //   2. At depth 1, record each field name and compare a literal or nested struct type to the declared field type.
 //   3. After the close brace, require every name in the fields blob to be present.
 
+import "lex/token_fmt.oo";
+import "tc_diag.oo";
+import "tc_struct_field_table.oo";
+import "tc_types_core.oo";
 pub fn typecheck_struct_lit_inits(toks: List[String]) {
     let n = list_len(toks);
     let struct_table: String = build_struct_field_table(toks);

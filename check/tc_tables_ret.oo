@@ -10,6 +10,7 @@
 //   3. Append fname:ret to the table when a return type was found.
 
 import "tc_read_result.oo";
+import "lex/token_fmt.oo";
 
 
 pub fn build_fn_ret_table(toks: List[String]) -> String {

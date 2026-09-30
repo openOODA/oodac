@@ -9,6 +9,8 @@
 //   2. ts_skip_braces walks until depth returns to zero; ts_skip_semi walks to SEMI, jumping brace groups.
 //   3. ts_after_ident steps two tokens after LPAREN or four after DOT, else one.
 
+import "lex/token_fmt.oo";
+
 pub fn ts_tok_kind(toks: List[String], i: Int) -> String {
     return field_at(list_get(toks, i), 0);
 }

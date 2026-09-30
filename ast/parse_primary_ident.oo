@@ -9,6 +9,11 @@
 //   2. On LBRACE that looks like a struct lit, print EXPR STRUCTLIT and dump each field.
 //   3. On DOT without a call, parse_method_from_var; else print EXPR VAR.
 
+import "parse_skip.oo";
+import "parse_method.oo";
+import "lex/token_fmt.oo";
+import "parse_expr.oo";
+
 pub fn parse_primary_ident(toks: List[String], pos0: Int, depth: Int) -> Int {
     let n = list_len(toks);
 let mut pos = pos0;

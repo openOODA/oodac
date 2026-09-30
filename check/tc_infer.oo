@@ -9,6 +9,12 @@
 //   2. infer_typed_expr_type walks binops, flags / and % by 0 as ERR_DIV0, and combines types.
 //   3. infer_typed_expr_type_exact does the same inside [start, end). get_cur_fn_at walks backward to KW_FN.
 
+import "lex/token_fmt.oo";
+import "tc_method.oo";
+import "tc_types_core.oo";
+import "tc_struct_field_table.oo";
+import "tc_struct_chain.oo";
+
 pub fn infer_pure_lit_expr_type(toks: List[String], pos0: Int) -> String {
     return infer_typed_expr_type(toks, pos0, "\t");
 }

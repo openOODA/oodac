@@ -20,6 +20,8 @@ import "emit/elf/elf_emit.oo";
 import "emit/wasm/anchor.oo";
 import "emit/rocm/anchor.oo";
 import "cli_build_cuda.oo";
+import "emit/rocm/rocm_emit.oo";
+import "emit/wasm/wasm_emit.oo";
 
 // Probe mirrors the link invocation: --no-default-config keeps distro
 // /etc configs (unreadable under the jail) from failing the version check.

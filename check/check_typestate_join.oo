@@ -9,6 +9,11 @@
 //   2. A loop body must leave every pre-loop name in the same state; missing else keeps pre-if.
 //   3. Walk return, match, if, while/for, let, and ident; divergent exit marks __tsdiv__.
 
+import "c_emit_env.oo";
+import "check_typestate_tok.oo";
+import "check_typestate_match.oo";
+import "check_typestate_fn.oo";
+import "check_typestate_walk.oo";
 pub fn ts_bag_has(bag: String, name: String) -> Bool {
     let key = ";" + name + ";";
     let kn = chars_len(key);
@@ -198,7 +203,6 @@ process_exit(1);
     }
     return ts_merge_branch(binds, then_b, else_b, line);
 }
-
 pub fn ts_walk_span(toks: List[String], lo: Int, hi: Int, env: String, binds0: String) -> String {
     let mut binds: String = str_slice(binds0, 0, chars_len(binds0));
 let mut i = lo;

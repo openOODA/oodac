@@ -9,6 +9,11 @@
 //   2. On IDENT, return parse_primary_ident.
 //   3. Call parse_primary_try_form; return when form >= 0, else println EXPR VAR and return pos0 + 1.
 
+import "parse_skip.oo";
+import "parse_primary_forms.oo";
+import "parse_primary_ident.oo";
+import "lex/token_fmt.oo";
+
 pub fn parse_primary_dump(toks: List[String], pos0: Int, depth: Int) -> Int {
     let lit = 0 + parse_primary_try_lit(toks, pos0, depth);
 if lit >= 0 { return lit;

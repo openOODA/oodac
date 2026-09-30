@@ -17,6 +17,10 @@
 //      false positives near zero: a coincidental local with an export's
 //      name counts as use.
 
+import "ast/load_import_parse.oo";
+import "check_scan.oo";
+import "lex/token_fmt.oo";
+import "tc_diag.oo";
 fn tc_imp_ends(path: String, suf: String) -> Bool {
     let n: Int = chars_len(path);
     let m: Int = chars_len(suf);
@@ -101,7 +105,7 @@ fn tc_imp_scan_idents_body(src: String) -> String {
     return out;
 }
 
-fn tc_imp_scan_type_names(src: String) -> String {
+pub fn tc_imp_scan_type_names(src: String) -> String {
     let n: Int = chars_len(src);
     let mut out: String = "\t";
     let mut i: Int = 0;

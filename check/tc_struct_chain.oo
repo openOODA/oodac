@@ -10,6 +10,9 @@
 //   3. Count depth-aware paren args and look up known method arities.
 
 import "tc_infer.oo";
+import "lex/token_fmt.oo";
+import "tc_struct_field_table.oo";
+import "tc_types_core.oo";
 
 
 pub fn field_chain_end(toks: List[String], start: Int) -> Int {

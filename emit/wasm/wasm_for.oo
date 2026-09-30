@@ -18,7 +18,11 @@ import "wasm_op.oo";
 import "wasm_tok.oo";
 import "wasm_data.oo";
 import "wasm_fn.oo";
+import "wasm_util.oo";
 import "lex/token_parse_int.oo";
+import "wasm_store.oo";
+import "wasm_expr.oo";
+import "wasm_stmt.oo";
 
 pub fn ws_stmt_for(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &WsG, env: String, lits: &mut WsLits, cx: &mut WsCx, ret: String) -> String {
     if pos + 1 >= n || ws_k(toks, pos + 1) != "IDENT" {

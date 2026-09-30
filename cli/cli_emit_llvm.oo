@@ -19,6 +19,8 @@ import "emit/llvm/ll_struct.oo";
 import "emit/llvm/ll_tok.oo";
 import "lex/token_parse_int.oo";
 import "cli_cpu.oo";
+import "check/check_mod.oo";
+import "emit/llvm/ll_reach.oo";
 
 fn parse_arena_id(res: Result[String, String]) -> Int {
     if res.is_err() { return 0 - 1; }

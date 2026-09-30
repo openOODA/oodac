@@ -1,0 +1,8 @@
+// # Gap 10 fixture: identical proto copy A (same name, same arity)
+//
+// Logline: First of two identical gap10_same protos. Same-arity dupes
+// keep first-wins silence (dedup); only arity mismatch refuses.
+
+pub fn gap10_same() -> Int {
+    return 1;
+}

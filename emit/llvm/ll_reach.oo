@@ -12,6 +12,9 @@
 import "ll_tok.oo";
 import "ll_decl.oo";
 import "ll_struct_imp.oo";
+import "ll_fn.oo";
+import "ll_ir.oo";
+import "types/types_core.oo";
 
 pub fn ll_in_set(set: String, name: String) -> Bool {
     return str_index_of(set, "\t" + name + "\t") >= 0;

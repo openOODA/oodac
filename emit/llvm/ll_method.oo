@@ -15,7 +15,7 @@
 import "ll_tok.oo";
 import "ll_ty.oo";
 import "ll_int.oo";
-import "ll_struct.oo";
+import "ll_struct_kind.oo";
 import "ll_struct_enrich.oo";
 import "ll_slot.oo";
 import "ll_ir.oo";
@@ -24,6 +24,7 @@ import "ll_field.oo";
 import "ll_print.oo";
 import "ll_arc.oo";
 import "ll_niche.oo";
+import "ll_struct_list.oo";
 
 pub fn ll_method(kind: String, ssa: Int, ptr: String, m: String, ssa0: Int, env: String, arg: String, ir: &mut IrBuf) -> String {
     if ll_is_struct(kind) {

@@ -9,6 +9,15 @@
 //   2. An if or while condition up to LBRACE that is a known non-Bool (not ERR_BINOP or ERR_DIV0) prints ERR and exits.
 //   3. Field-chain and zero-arg call conditions must also be Bool; a mismatched compare in the chain is ERR_BINOP.
 
+import "ast/parse_drive.oo";
+import "lex/token_fmt.oo";
+import "tc_diag.oo";
+import "tc_infer.oo";
+import "tc_struct_chain.oo";
+import "tc_struct_field_table.oo";
+import "tc_tables.oo";
+import "tc_tables_ret.oo";
+import "tc_types_core.oo";
 pub fn typecheck_if_while_lit_cond(toks: List[String]) {
     let n = list_len(toks);
     if n > 1000000 { return;

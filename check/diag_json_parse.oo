@@ -2,13 +2,17 @@
 //
 // Logline: Turn a check capture string into a JSON array of diagnostic objects, or return empty for OK lines.
 //
-// Setup: diag_obj_json and diag_kind_to_code exist in diag_json.oo; path is the source path shown in each object.
+// Setup: diag_obj_json and diag_kind_to_code exist in diag_json_obj.oo; path is the source path shown in each object.
 //
 // Beats:
 //   1. diag_scan_digits and diag_find pull a number or a substring from a line.
 //   2. diag_extract_loc reads line and col from Type error at or at line text.
 //   3. diag_err_line_to_json classifies one line; diag_check_output_to_json joins those objects.
 //   4. An ERR head followed by --> owns its stanza: arrow, source echo, caret skip.
+
+import "lex/token_fmt.oo";
+import "diag_json_obj.oo";
+import "lex/token_parse_int.oo";
 
 fn diag_scan_digits(s: String, i0: Int) -> String {
     let n = chars_len(s);

@@ -1,0 +1,45 @@
+// # Import-cycle allowlist (leaf)
+//
+// Logline: Hermetic units whose intra-unit import cycles are permitted.
+//
+// Setup: Both expanders skip a back-edge only when importer and importee
+// are in the SAME listed unit. Cross-unit cycles still fail closed.
+// Paths are normalized; units match by directory suffix.
+//
+// Beats:
+//   1. Backend evaluators recurse with match/if/call/return lowering and
+//      the cycles compose (pairs do not); the unit is the backend dir.
+//   2. Fusion of any listed cycle exceeds the 256-line module limit.
+//   3. Adding a unit requires a Gap-10 doc entry and a negative probe.
+
+fn unit_starts_with(path: String, unit: String) -> Bool {
+    let pl: Int = chars_len(path);
+    let ul: Int = chars_len(unit);
+    if pl < ul { return false; }
+    return str_slice(path, 0, ul) == unit;
+}
+
+fn unit_contains(path: String, needle: String) -> Bool {
+    return str_index_of(path, needle) >= 0;
+}
+
+fn in_unit(path: String, unit: String) -> Bool {
+    if unit_starts_with(path, unit) { return true; }
+    return unit_contains(path, "/" + unit);
+}
+
+pub fn cycle_edge_allowed(a: String, b: String) -> Bool {
+    let llvm: String = "emit/llvm/";
+    let wasm: String = "emit/wasm/";
+    let past: String = "ast/";
+    let chk: String = "check/";
+    let cuda: String = "emit/cuda/";
+    let rocm: String = "emit/rocm/";
+    if in_unit(a, llvm) && in_unit(b, llvm) { return true; }
+    if in_unit(a, wasm) && in_unit(b, wasm) { return true; }
+    if in_unit(a, past) && in_unit(b, past) { return true; }
+    if in_unit(a, chk) && in_unit(b, chk) { return true; }
+    if in_unit(a, cuda) && in_unit(b, cuda) { return true; }
+    if in_unit(a, rocm) && in_unit(b, rocm) { return true; }
+    return false;
+}

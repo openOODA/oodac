@@ -16,6 +16,7 @@ import "smt_poly_interval.oo";
 import "smt_poly_sign.oo";
 
 import "smt_poly_eval.oo";
+import "lex/token_fmt.oo";
 
 
 pub fn smt_env_new() -> List[String] {

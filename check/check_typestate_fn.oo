@@ -9,6 +9,9 @@
 //   2. Root aliases, get and set states, and bind dest as an alias or a fresh state.
 //   3. Refuse param rebind; if the body composes, require To at each exit; at main end, check __tsend__ types.
 
+import "c_emit_env.oo";
+import "check_typestate_tok.oo";
+import "check_typestate_join.oo";
 pub fn ts_fn_name(toks: List[String], fn_pos: Int) -> String {
     let n = list_len(toks);
     let mut i = fn_pos;

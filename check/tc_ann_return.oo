@@ -12,6 +12,10 @@
 import "tc_infer.oo";
 import "tc_read_result.oo";
 import "tc_ok_err.oo";
+import "lex/token_fmt.oo";
+import "tc_diag.oo";
+import "tc_struct_chain.oo";
+import "tc_types_core.oo";
 
 
 pub fn ann_check_return(toks: List[String], i: Int, n: Int, in_fn: Bool, expected_ret: String, lit_env: String, struct_table: String, line: String, col: String) {

@@ -18,6 +18,9 @@
 // OPEN-89..92: macro_expand/ast_macro, hot_reload/live_reload,
 //   emit_ptx/emit_spirv, bare_metal_init are product (not residual).
 // OPEN-75: lsp_serve is product (not residual).
+
+import "lex/token_fmt.oo";
+
 pub fn residual_feature_of(name: String) -> String {
     if name == "snapshot_state" { return "TEMPORAL";
     }

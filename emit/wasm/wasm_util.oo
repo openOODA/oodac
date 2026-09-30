@@ -1,0 +1,26 @@
+// # WASM small pure helpers (cycle leaf)
+//
+// Logline: Pack end+code rows and index locals by name. Pure fns shared
+// by wasm_expr.oo and wasm_bop.oo, which are mutually recursive through
+// ws_climb/ws_logic and cannot import each other (Gap 10).
+
+pub fn ws_local_idx(order: String, arity: Int, name: String) -> Int {
+    let mut rest: String = order;
+    let mut c: Int = 0;
+    while rest != "" {
+        if str_slice(rest, 0, 1) == "\n" {
+            rest = str_slice(rest, 1, chars_len(rest));
+            continue;
+        }
+        let at: Int = str_index_of(rest, "\n");
+        let nm: String = if at < 0 { rest } else { str_slice(rest, 0, at) };
+        if nm == name { return arity + c; }
+        c = c + 1;
+        if at < 0 { return 0 - 1; }
+        rest = str_slice(rest, at + 1, chars_len(rest));
+    }
+    return 0 - 1;
+}
+pub fn ws_pack(end: Int, code: String) -> String {
+    return end.to_string() + "\t" + code;
+}

@@ -9,6 +9,9 @@
 //   2. .to_string is allowed on Int, Bool, Float, and String, and is rejected on a known struct, list, or Result.
 //   3. .is_ok, .is_err, and .unwrap require Result; any other method on a known primitive or struct fails closed.
 
+import "tc_diag.oo";
+import "tc_struct_chain.oo";
+import "tc_struct_field_table.oo";
 pub fn check_method_on_recv(
     mname: String,
     rty: String,

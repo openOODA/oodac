@@ -16,7 +16,7 @@ import "ll_expr.oo";
 import "ll_call.oo";
 import "ll_di.oo";
 import "ll_match.oo";
-import "ll_struct.oo";
+import "ll_struct_kind.oo";
 import "ll_field.oo";
 import "ll_stmt_for.oo";
 import "ll_exit.oo";

@@ -6,7 +6,7 @@
 //
 // Beats:
 //   1. tokenize_lines collects tokens once (lex ERR is fail-closed there) and caps at 1048576 rows.
-//   2. tok_line escapes tab, newline, and backslash in the text field.
+//   2. tok_line lives in token_stream.oo (fmt imports stream, not vice versa).
 //   3. field_at slices the which-th field; field 3 runs field_decode3.
 
 import "token_stream.oo";
@@ -20,41 +20,6 @@ pub fn tokenize_lines(src: String) -> List[String] {
     process_exit(1);
     }
     return toks;
-}
-
-// Encode tab/newline so TSV token lines stay 4 fields.
-pub fn tok_line(kind: String, line: Int, col: Int, text: String) -> String {
-    let tn: Int = bytes_len(text);
-    let mut need: Bool = false;
-    let mut ti: Int = 0;
-    while ti < tn {
-        let c: Int = byte_at(text, ti);
-        if c == 9 || c == 10 || c == 92 {
-            need = true;
-            ti = tn;
-        } else {
-            ti = ti + 1;
-        }
-    }
-    let ls: String = line.to_string();
-    let cs: String = col.to_string();
-    if !need { return kind + "\t" + ls + "\t" + cs + "\t" + text; }
-    let mut enc: String = "";
-    ti = 0;
-    while ti < tn {
-        let c: Int = byte_at(text, ti);
-        if c == 9 {
-            enc = enc + "\\t";
-        } else if c == 10 {
-            enc = enc + "\\n";
-        } else if c == 92 {
-            enc = enc + "\\\\";
-        } else {
-            enc = enc + byte_slice(text, ti, ti + 1);
-        }
-        ti = ti + 1;
-    }
-    return kind + "\t" + ls + "\t" + cs + "\t" + enc;
 }
 
 // Decode field 3 escapes produced by tok_line.

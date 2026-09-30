@@ -9,6 +9,7 @@
 //   2. typestate_assert(have, need) does the same compare.
 //   3. Non-const args stay for runtime; mismatch prints ERR typestate.
 
+import "lex/token_fmt.oo";
 fn ts_prod_str_lit(toks: List[String], i: Int) -> String {
     if i >= list_len(toks) { return "";
     }

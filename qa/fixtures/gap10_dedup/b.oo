@@ -1,0 +1,7 @@
+// # Gap 10 fixture: identical proto copy B (same name, same arity)
+//
+// Logline: Second of two identical gap10_same protos. check stays OK.
+
+pub fn gap10_same() -> Int {
+    return 2;
+}

@@ -13,6 +13,37 @@ import "tc_unused_let.oo";
 import "tc_struct_cycle.oo";
 import "check_secret.oo";
 import "check_borrow.oo";
+import "ast/parse_drive.oo";
+import "ast/parse_item.oo";
+import "check_caps.oo";
+import "check_residual.oo";
+import "check_typestate.oo";
+import "lex/token_fmt.oo";
+import "tc_ann.oo";
+import "tc_assign_immut.oo";
+import "tc_assign_mut.oo";
+import "tc_call_arg_lits.oo";
+import "tc_call_arity.oo";
+import "tc_call_binop.oo";
+import "tc_call_eq.oo";
+import "tc_call_let.oo";
+import "tc_call_logic.oo";
+import "tc_call_order.oo";
+import "tc_call_ret.oo";
+import "tc_control_branch.oo";
+import "tc_control_cond.oo";
+import "tc_diag.oo";
+import "tc_effects.oo";
+import "tc_match_exh.oo";
+import "tc_must_use_call.oo";
+import "tc_names.oo";
+import "tc_ops_cmp.oo";
+import "tc_ops_logic.oo";
+import "tc_ops_unary.oo";
+import "tc_refine.oo";
+import "tc_struct_assign.oo";
+import "tc_struct_lit.oo";
+import "tc_struct_method.oo";
 
 
 // OPEN-12: np>1 checks each file body with import lines kept as blanks so LINE:COL is per source file.

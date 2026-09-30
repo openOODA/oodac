@@ -9,6 +9,10 @@
 //   2. A following LPAREN counts extra args via parse_expr_dump until RPAREN; no paren still dumps argc=1.
 //   3. escape_dump copies the string with newline and tab written as \\n and \\t.
 
+import "parse_skip.oo";
+import "lex/token_fmt.oo";
+import "parse_expr.oo";
+
 pub fn parse_method_from_var(toks: List[String], pos0: Int, depth: Int) -> Int {
     let pad: String = indent(depth);
 let name: String = field_at(list_get(toks, pos0), 3);

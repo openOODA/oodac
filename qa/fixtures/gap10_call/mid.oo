@@ -1,0 +1,9 @@
+// # Gap 10 fixture victim: dep calls an ambient-only fn without importing it
+//
+// Logline: mid.oo imports nothing but calls gap10_ambient_fn, which lives
+// outside its import closure. check of root.oo must ERR (undefined
+// variable) instead of passing check and failing emit.
+
+pub fn gap10_mid_fn() -> Int {
+    return gap10_ambient_fn();
+}

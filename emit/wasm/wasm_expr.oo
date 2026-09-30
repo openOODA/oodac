@@ -16,32 +16,13 @@ import "wasm_tok.oo";
 import "wasm_data.oo";
 import "wasm_fn.oo";
 import "wasm_bop.oo";
-import "wasm_ctor.oo";
 import "wasm_slice.oo";
 import "wasm_match.oo";
+import "wasm_util.oo";
 import "lex/token_parse_int.oo";
+import "wasm_call_dispatch.oo";
 
 
-pub fn ws_local_idx(order: String, arity: Int, name: String) -> Int {
-    let mut rest: String = order;
-    let mut c: Int = 0;
-    while rest != "" {
-        if str_slice(rest, 0, 1) == "\n" {
-            rest = str_slice(rest, 1, chars_len(rest));
-            continue;
-        }
-        let at: Int = str_index_of(rest, "\n");
-        let nm: String = if at < 0 { rest } else { str_slice(rest, 0, at) };
-        if nm == name { return arity + c; }
-        c = c + 1;
-        if at < 0 { return 0 - 1; }
-        rest = str_slice(rest, at + 1, chars_len(rest));
-    }
-    return 0 - 1;
-}
-pub fn ws_pack(end: Int, code: String) -> String {
-    return end.to_string() + "\t" + code;
-}
 pub fn ws_expr(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &WsG, lits: &mut WsLits, cx: &mut WsCx) -> String { return ws_climb(b, toks, pos, n, g, lits, cx, 0); }
 pub fn ws_climb(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &WsG, lits: &mut WsLits, cx: &mut WsCx, minp: Int) -> String {
     let a: String = ws_unary(b, toks, pos, n, g, lits, cx);
@@ -65,6 +46,33 @@ pub fn ws_climb(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &WsG, 
     }
     return ws_pack(p, ty);
 }
+
+pub fn ws_logic(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &WsG, lits: &mut WsLits, cx: &mut WsCx, op: String, lhs: String, pr: Int) -> String {
+    if lhs != "i" {
+        ws_fail(ws_line(toks, pos), "logic type");
+    }
+    if op == "ANDAND" {
+        ws_if_v(b);
+        let r: String = ws_climb(b, toks, pos + 1, n, g, lits, cx, pr + 1);
+        if ws_un_ty(r) != "i" {
+            ws_fail(ws_line(toks, pos), "logic type");
+        }
+        ws_else(b);
+        ws_const(b, 0);
+        ws_end(b);
+        return ws_pack(ws_un_pos(r), "i");
+    }
+    ws_if_v(b);
+    ws_const(b, 1);
+    ws_else(b);
+    let r2: String = ws_climb(b, toks, pos + 1, n, g, lits, cx, pr + 1);
+    if ws_un_ty(r2) != "i" {
+        ws_fail(ws_line(toks, pos), "logic type");
+    }
+    ws_end(b);
+    return ws_pack(ws_un_pos(r2), "i");
+}
+
 pub fn ws_unary(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &WsG, lits: &mut WsLits, cx: &mut WsCx) -> String {
     if pos < n && ws_k(toks, pos) == "MINUS" {
         ws_const(b, 0);
@@ -169,79 +177,63 @@ pub fn ws_call_global(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: 
     if p >= n {
         ws_fail(ws_line(toks, pos), "close call");
     }
-    let end: Int = p + 1;
-    if name == "str_slice" {
-        if nargs != 3 {
-            ws_fail(ws_line(toks, pos), "slice arity");
-        }
-        if c0 != "s" || c1 != "i" || c2 != "i" {
-            ws_fail(ws_line(toks, pos), "slice type");
-        }
-        ws_slice_emit(b, g.scratch + cx.depth * 2, cx.depth, toks, pos);
-        return ws_pack(end, "s");
+    return ws_call_global_dispatch(b, toks, pos, n, g, lits, cx, name, nargs, c0, c1, c2, p);
+}
+
+pub fn ws_result_new(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &WsG, lits: &mut WsLits, cx: &mut WsCx, tag: Int) -> String {
+    let s0: Int = ws_scratch2(g, cx, toks, pos);
+    let s1: Int = s0 + 1;
+    cx.depth = cx.depth + 1;
+    let r: String = ws_expr(b, toks, pos + 2, n, g, lits, cx);
+    let p: Int = ws_un_pos(r);
+    if p >= n || ws_k(toks, p) != "RPAREN" {
+        ws_fail(ws_line(toks, pos), "close result");
     }
-    if name == "char_at" {
-        if nargs != 2 {
-            ws_fail(ws_line(toks, pos), "char arity");
-        }
-        if c0 != "s" || c1 != "i" {
-            ws_fail(ws_line(toks, pos), "char type");
-        }
-        ws_char_emit(b, g.scratch + cx.depth * 2, cx.depth, toks, pos);
-        return ws_pack(end, "s");
+    let pay: String = ws_un_ty(r);
+    ws_set(b, s1);
+    ws_const(b, 8);
+    ws_call(b, 2);
+    ws_set(b, s0);
+    ws_get(b, s0);
+    ws_const(b, tag);
+    ws_store(b, 0);
+    ws_get(b, s0);
+    ws_get(b, s1);
+    ws_store(b, 4);
+    ws_get(b, s0);
+    cx.depth = cx.depth - 1;
+    if tag == 0 {
+        return ws_pack(p + 1, "r[" + pay + ",?]");
     }
-    if name == "println" {
-        if nargs != 1 {
-            ws_fail(ws_line(toks, pos), "println arity");
+    return ws_pack(p + 1, "r[?," + pay + "]");
+}
+
+pub fn ws_struct_new(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &WsG, lits: &mut WsLits, cx: &mut WsCx, sname: String) -> String {
+    let s0: Int = ws_scratch2(g, cx, toks, pos);
+    cx.depth = cx.depth + 1;
+    ws_const(b, ws_struct_size(g.structs, sname));
+    ws_call(b, 2);
+    ws_set(b, s0);
+    let mut p: Int = pos + 2;
+    while p < n && ws_k(toks, p) != "RBRACE" {
+        if ws_k(toks, p) != "IDENT" || ws_k(toks, p + 1) != "COLON" {
+            ws_fail(ws_line(toks, p), "struct field");
         }
-        if c0 != "i" && c0 != "s" {
-            ws_fail(ws_line(toks, pos), "println type");
+        let row: String = ws_struct_field(g.structs, sname, ws_t(toks, p));
+        if row == "" {
+            ws_fail(ws_line(toks, p), "unknown field");
         }
-        if c0 == "i" { ws_call(b, 4); } else { ws_call(b, 3); }
-        return ws_pack(end, "v");
-    }
-    if name == "list_new" {
-        ws_call(b, 7);
-        return ws_pack(end, "l[?]");
-    }
-    if name == "list_push" {
-        ws_call(b, 8);
-        let mut e: String = ws_elem(c0);
-        if e == "?" {
-            e = c1;
-        }
-        return ws_pack(end, "l[" + e + "]");
-    }
-    if name == "list_get" {
-        let s0: Int = g.scratch + cx.depth * 2;
-        let s1: Int = s0 + 1;
-        ws_set(b, s1);
-        ws_set(b, s0);
         ws_get(b, s0);
-        ws_load(b, 0);
-        ws_get(b, s1);
-        ws_const(b, 4);
-        ws_mul(b);
-        ws_add(b);
-        ws_load(b, 0);
-        return ws_pack(end, ws_elem(c0));
+        let r: String = ws_expr(b, toks, p + 2, n, g, lits, cx);
+        ws_store(b, parse_int(field_at(row, 2)));
+        p = ws_un_pos(r);
+        if p < n && ws_k(toks, p) == "COMMA" { p = p + 1; }
     }
-    if name == "list_len" {
-        ws_load(b, 4);
-        return ws_pack(end, "i");
+    if p >= n {
+        ws_fail(ws_line(toks, pos), "close struct");
     }
-    if name == "chars_len" {
-        ws_load(b, 4);
-        return ws_pack(end, "i");
-    }
-    let row: String = ws_fn_row(g.fns, name);
-    if row == "" {
-        ws_fail(ws_line(toks, pos), "call " + name);
-    }
-    if parse_int(field_at(row, 1)) != nargs {
-        ws_fail(ws_line(toks, pos), "arity " + name);
-    }
-    ws_call(b, parse_int(field_at(row, 3)));
-    return ws_pack(end, field_at(row, 2));
+    ws_get(b, s0);
+    cx.depth = cx.depth - 1;
+    return ws_pack(p + 1, "t:" + sname);
 }
 

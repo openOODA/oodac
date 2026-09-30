@@ -11,6 +11,7 @@
 import "cuda_tok.oo";
 import "cuda_ty.oo";
 import "lex/token_parse_int.oo";
+import "cuda_expr.oo";
 
 pub fn cu_match_head(sty: String, top: String, sc: String, ind: String) -> String {
     let v: String = cu_var(sc);

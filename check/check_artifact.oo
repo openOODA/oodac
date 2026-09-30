@@ -12,6 +12,7 @@
 import "types/typed_artifact.oo";
 import "check/tc_struct_field_table.oo";
 import "check/smt_verify.oo";
+import "lex/token_fmt.oo";
 
 
 pub fn artifact_ensure_dir(sys: &ProcessCap) {

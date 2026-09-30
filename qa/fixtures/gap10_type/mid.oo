@@ -1,0 +1,12 @@
+// # Gap 10 fixture victim: dep names an ambient-only type, imports nothing
+//
+// Logline: gap10_t_use takes a Gap10AmbientTy param but mid.oo never
+// imports ambient.oo. check of root.oo must ERR (undefined name).
+
+fn gap10_t_use(p: Gap10AmbientTy) -> Int {
+    return 1;
+}
+
+pub fn gap10_t_mid() -> Int {
+    return 2;
+}

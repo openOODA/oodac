@@ -2,13 +2,14 @@
 //
 // Logline: Tokenize source, print PROGRAM and each top-level item, or fail on an unexpected token.
 //
-// Setup: tokenize_lines and parse_fn_item exist. n_toks is list length. skip_balanced starts at LBRACE.
+// Setup: tokenize_lines and parse_fn_item exist. n_toks (in parse_skip.oo) is list length. skip_balanced starts at LBRACE.
 //
 // Beats:
 //   1. dump_ast_from_src and parse_and_print_ast walk tokens and print TYPEALIAS, IMPORT, or function items.
-//   2. n_toks returns the token list length.
+//   2. n_toks (in parse_skip.oo) returns the token list length.
 //   3. skip_balanced walks nested braces and fails closed on an unclosed block.
 import "parse_item.oo";
+import "lex/token_fmt.oo";
 
 
 pub fn dump_ast_from_src(src: String) {
@@ -108,10 +109,6 @@ pub fn parse_and_print_ast(src: String) {
 }
 
 // Returns new pos after function item (including optional verify block skip)
-pub fn n_toks(toks: List[String]) -> Int {
-    return list_len(toks);
-}
-
 fn parse_unclosed_brace() {
     println("ERR\tparse\tunclosed brace");
     process_exit(1);

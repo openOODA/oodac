@@ -1,14 +1,15 @@
-// # ROCm call and println statements
+// # ROCm call dispatch on pre-evaluated args
 //
-// Logline: User, list, constructor, gpu, device, and string calls plus println.
+// Logline: User, list, constructor, gpu, device, and string calls.
 //
-// Setup: Args arrive pre-lowered as tab packs. Hints thread let annotations
-//   into nested constructors. String ops lower through std::string.
+// Setup: Args arrive pre-lowered as tab packs (rc_call_args in
+// rocm_expr.oo evaluates them; the entry wrapper keeps evaluation
+// order). Hints thread let annotations into nested constructors.
+// String ops lower through std::string. println lives in rocm_expr.oo.
 //
 // Beats:
-//   1. rc_call routes nine call kinds with fail-closed arity and types.
+//   1. rc_call_with_args routes nine call kinds with fail-closed arity and types.
 //   2. Constructor hints derive from the outer result or option annotation.
-//   3. rc_println covers int, float, string, and bool payloads.
 
 import "rocm_tok.oo";
 import "rocm_ty.oo";
@@ -19,10 +20,7 @@ import "rocm_device.oo";
 import "rocm_str.oo";
 import "lex/token_parse_int.oo";
 
-pub fn rc_call(toks: List[String], pos: Int, n: Int, env: String, fns: String, hint: String, capv: String) -> String {
-    let name: String = rc_t(toks, pos);
-    let line: Int = rc_line(toks, pos);
-    let info: String = rc_arg_spans(toks, pos, n);
+pub fn rc_call_with_args(toks: List[String], name: String, info: String, argstr: String, env: String, fns: String, hint: String, capv: String, line: Int) -> String {
     let endp: Int = rc_span_end(info);
     let nargs: Int = rc_span_nargs(info);
     let kind: Int = rc_call_kind(name);
@@ -35,20 +33,6 @@ pub fn rc_call(toks: List[String], pos: Int, n: Int, env: String, fns: String, h
     if kind == 2 {
         rc_fail(line, "push is a statement");
         return "0\t?\t";
-    }
-    let mut argstr: String = "";
-    let mut i: Int = 0;
-    while i < nargs {
-        let mut h: String = rc_arg_hint(name, i, fns);
-        if name == "Ok" && hint == "rss" { h = "s"; }
-        if name == "Ok" && hint == "rli" { h = "li"; }
-        if name == "Err" { h = "s"; }
-        if name == "Some" && hint == "oi" { h = "i"; }
-        if name == "Some" && hint == "os" { h = "s"; }
-        let a: String = rc_expr(toks, rc_span_start(info, i), n, env, fns, h, capv);
-        if i > 0 { argstr = argstr + "\t"; }
-        argstr = argstr + rc_e_pos(a).to_string() + "\t" + rc_e_ty(a) + "\t" + rc_e_code(a);
-        i = i + 1;
     }
     if kind == 3 {
         let r: String = rc_apply_list(name, argstr, nargs, line);
@@ -82,21 +66,4 @@ pub fn rc_call(toks: List[String], pos: Int, n: Int, env: String, fns: String, h
     return rc_e_pack(endp + 1, rc_e_ty(r6), rc_e_code(r6));
 }
 
-pub fn rc_println(toks: List[String], pos: Int, n: Int, env: String, fns: String, capv: String, ind: String) -> String {
-    let info: String = rc_arg_spans(toks, pos, n);
-    if rc_span_nargs(info) != 1 {
-        rc_fail(rc_line(toks, pos), "println takes one arg");
-        return rc_s_pack(pos + 1, env, "");
-    }
-    let a: String = rc_expr(toks, rc_span_start(info, 0), n, env, fns, "", capv);
-    let q: Int = rc_span_end(info) + 1;
-    let qq: Int = if q < n && rc_k(toks, q) == "SEMI" { q + 1 } else { q };
-    let at: String = rc_e_ty(a);
-    let ac: String = rc_e_code(a);
-    if at == "i" { return rc_s_pack(qq, env, ind + "printf(\"%lld\\n\", (long long)(" + ac + "));\n"); }
-    if at == "f" { return rc_s_pack(qq, env, ind + "printf(\"%g\\n\", (double)(" + ac + "));\n"); }
-    if at == "s" { return rc_s_pack(qq, env, ind + "{ std::string oo_t = (" + ac + "); fwrite(oo_t.data(), 1, oo_t.size(), stdout); putchar(10); }\n"); }
-    if at == "b" { return rc_s_pack(qq, env, ind + "printf(\"%lld\\n\", (long long)(" + ac + "));\n"); }
-    rc_fail(rc_line(toks, pos), "println type unsupported");
-    return rc_s_pack(qq, env, "");
-}
+

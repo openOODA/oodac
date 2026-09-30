@@ -17,9 +17,16 @@ import "ll_method.oo";
 import "ll_match_expr.oo";
 import "ll_builtin.oo";
 import "ll_ctor.oo";
-import "ll_struct.oo";
+import "ll_struct_kind.oo";
+import "ll_slot.oo";
+import "ll_arc.oo";
+import "ll_struct_list.oo";
 import "ll_float.oo";
 import "ll_ir.oo";
+import "ll_expr_util.oo";
+import "ll_exit.oo";
+import "ll_ifexpr.oo";
+import "ll_user_call.oo";
 pub fn ll_expr(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String, ir: &mut IrBuf) -> String {
     if pos < n { ll_ir_set_loc(ir, ll_line(toks, pos), ll_col(toks, pos)); }
     return ll_bin_climb(toks, pos, n, 2, ssa0, env, ir);
@@ -30,42 +37,11 @@ fn ll_unary(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String, ir: &m
     }
     if pos < n && ll_k(toks, pos) == "STAR" {
         let r: String = ll_unary(toks, pos + 1, n, ssa0, env, ir);
-        if ll_is_agg(ll_pk(r)) {
-            println("ERR\tllvm\tderef of aggregate ref");
-            process_exit(1);
-        }
-        if ll_is_refk(ll_pk(r)) {
-            let mut lk: String = "i64";
-            let mut ret_k: String = "i64";
-            if ll_pk(r) == "ri32" || ll_pk(r) == "ru32" { lk = "i32"; ret_k = "i32"; }
-            else if ll_pk(r) == "rf64" { lk = "double"; ret_k = "f64"; }
-            else if ll_pk(r) == "ri1" { lk = "i1"; ret_k = "i1"; }
-            let ptr_val: String = ll_pptr(r);
-            let mut cur_s: Int = ll_pssa(r);
-            let mut target_ptr: String = "";
-            if chars_len(ptr_val) < 3 || str_slice(ptr_val, 0, 3) != "%p_" {
-                cur_s = cur_s + 1;
-                ll_ir_inst(ir, "load", "ptr", ll_ssa(cur_s), "ptr " + ptr_val + ", align 8", 1, 1);
-                target_ptr = ll_ssa(cur_s);
-            } else {
-                target_ptr = ptr_val;
-            }
-            cur_s = cur_s + 1;
-            ll_ir_inst(ir, "load", lk, ll_ssa(cur_s), "ptr " + target_ptr + ", align 8", 1, 1);
-            return ll_pack(ll_ppos(r), cur_s, ret_k, "");
-        }
-        let s1: Int = ll_pssa(r) + 1;
-        ll_ir_inst(ir, "inttoptr", ll_ir_val(ll_pk(r)), ll_ssa(s1), ll_opnd(r) + " to ptr", 1, 1);
-        let s2: Int = s1 + 1;
-        ll_ir_inst(ir, "load", ll_ir_val(ll_pk(r)), ll_ssa(s2), "ptr " + ll_ssa(s1) + ", align 8", 1, 1);
-        return ll_pack(ll_ppos(r), s2, ll_pk(r), "");
+        return ll_deref_load(r, ir);
     }
     if pos < n && ll_k(toks, pos) == "BANG" {
         let r: String = ll_unary(toks, pos + 1, n, ssa0, env, ir);
-        ll_guard_i1(ll_pk(r), "not", "operand");
-        let s: Int = ll_pssa(r) + 1;
-        ll_ir_inst(ir, "xor", "i1", ll_ssa(s), ll_opnd(r) + ", true", 1, 1);
-        return ll_pack(ll_ppos(r), s, "i1", "");
+        return ll_not_i1(r, ir);
     }
     if pos < n && ll_k(toks, pos) == "MINUS" {
         let r: String = ll_unary(toks, pos + 1, n, ssa0, env, ir);
@@ -110,33 +86,12 @@ fn ll_postfix(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String, ir: 
     return r;
 }
 
-fn bin_bp(k: String) -> Int {
-    if k == "OROR" { return 2; }
-    if k == "ANDAND" { return 3; }
-    if k == "PIPE" { return 4; }
-    if k == "CARET" || k == "BXOR" { return 5; }
-    if k == "AMP" { return 6; }
-    if k == "EQEQ" || k == "NEQ" { return 7; }
-    if k == "LT" || k == "LTE" || k == "GT" || k == "GTE" { return 8; }
-    if k == "LSHIFT" || k == "RSHIFT" { return 9; }
-    if k == "PLUS" || k == "MINUS" { return 10; }
-    if k == "STAR" || k == "SLASH" || k == "PERCENT" { return 11; }
-    return 0;
-}
-
-fn ll_guard_i1(kind: String, op: String, side: String) {
-    if kind != "i1" {
-        println("ERR\tllvm\tlogical " + op + " " + side + " requires i1, got " + kind);
-        process_exit(1);
-    }
-}
-
 fn ll_bin_climb(toks: List[String], pos: Int, n: Int, min_bp: Int, ssa0: Int, env: String, ir: &mut IrBuf) -> String {
     let mut r: String = ll_unary(toks, pos, n, ssa0, env, ir);
     let mut p: Int = ll_ppos(r);
     while p < n {
         let op: String = ll_k(toks, p);
-        let bp: Int = bin_bp(op);
+        let bp: Int = ll_bin_bp(op);
         if bp < min_bp || bp == 0 {
             return r;
         }
@@ -241,4 +196,52 @@ fn ll_primary(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String, ir: 
     println("ERR\tllvm\tunsupported expr " + k);
     process_exit(1);
     return ll_pack(pos, ssa0, "i64", "");
+}
+pub fn ll_struct_lit_at(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String, ir: &mut IrBuf) -> String {
+    let nm: String = ll_t(toks, pos);
+    if type_env_get(env, "__st__" + nm) == "" { println("ERR\tllvm\tunknown struct " + nm); process_exit(1); }
+    if pos + 1 >= n || ll_k(toks, pos + 1) != "LBRACE" { println("ERR\tllvm\tstruct lit"); process_exit(1); }
+    let a: String = ll_tmpa(ssa0 + 1); let mut s: Int = ssa0 + 1;
+    ll_slot_ty(a, "%St_" + nm, ir);
+    let rich: String = ll_struct_rich_scan(env, nm);
+    let mut p: Int = pos + 2;
+    while p < n && ll_k(toks, p) != "RBRACE" {
+        if ll_k(toks, p) == "COMMA" { p = p + 1; continue; }
+        if ll_k(toks, p) != "IDENT" { println("ERR\tllvm\tstruct lit field"); process_exit(1); }
+        let fld2: String = ll_t(toks, p); let fe2: String = type_env_get(env, "__stf__" + nm + "." + fld2);
+        if fe2 == "" { println("ERR\tllvm\tunknown field " + fld2); process_exit(1); }
+        let cj2: Int = str_index_of(fe2, ":");
+        let fk: String = ll_st_map(str_slice(fe2, cj2 + 1, chars_len(fe2)), ",", "|"); p = p + 1;
+        if p >= n || ll_k(toks, p) != "COLON" { println("ERR\tllvm\tstruct lit colon"); process_exit(1); }
+        p = p + 1; let lrhs0: Int = p; let v0: String = ll_expr(toks, p, n, s, type_env_put(env, "__e__", fk), ir); p = ll_ppos(v0); s = ll_pssa(v0);
+        let mut v: String = ll_int_convert(v0, s, fk, ir);
+        s = ll_pssa(v);
+        let mut pk: String = ll_pk(v);
+        if pk == "slist" && chars_len(fk) >= 6 && str_slice(fk, 0, 6) == "olist_" {
+            v = ll_olist_new(fk, s, ir);
+            s = ll_pssa(v);
+            pk = ll_pk(v);
+        }
+        if pk != fk {
+            let mut same: Bool = false;
+            if ll_is_struct(pk) && ll_is_struct(fk) {
+                if ll_st_basek(pk) == ll_st_basek(fk) { same = true; }
+            }
+            if !same { println("ERR\tllvm\tfield type " + fld2); process_exit(1); }
+        }
+        let fi: String = ll_struct_field(rich, fld2); let idx: String = str_slice(fi, 0, str_index_of(fi, ":"));
+        s = s + 1;
+        ll_ir_inst(ir, "getelementptr inbounds", "%St_" + nm, ll_ssa(s), "ptr " + a + ", i32 0, i32 " + idx, 1, 1);
+        let fk_ty: String = ll_ir_val(fk);
+        if ll_has_slot(v) {
+            s = s + 1;
+            ll_ir_inst(ir, "load", fk_ty, ll_ssa(s), "ptr " + ll_pptr(v) + ", align 8", 1, 1);
+            ll_ir_inst(ir, "store", fk_ty, "", ll_ssa(s) + ", ptr " + ll_ssa(s - 1) + ", align 8", 1, 1);
+        } else {
+            ll_ir_inst(ir, "store", fk_ty, "", ll_opnd(v) + ", ptr " + ll_ssa(s) + ", align 8", 1, 1);
+        }
+        if ll_arc_owned(fk) && (ll_is_var(ll_pptr(v)) || (ll_pptr(v) != "" && ll_slot_borrowed(toks, lrhs0, n))) { s = ll_arc_keep_ptr(fk, ll_pptr(v), s, ir); }
+    }
+    if p >= n || ll_k(toks, p) != "RBRACE" { println("ERR\tllvm\tstruct lit rbrace"); process_exit(1); }
+    return ll_pack(p + 1, s, rich, a);
 }

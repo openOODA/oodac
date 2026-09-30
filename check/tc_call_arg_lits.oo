@@ -13,6 +13,12 @@ import "tc_list_int_name.oo";
 
 import "tc_infer.oo";
 import "tc_ok_err.oo";
+import "lex/token_fmt.oo";
+import "tc_call_arg_prep.oo";
+import "tc_call_util.oo";
+import "tc_diag.oo";
+import "tc_tables_ret.oo";
+import "tc_types_core.oo";
 
 
 // Call args: two parameterized Result/Option forms must match T/E. Bare vs

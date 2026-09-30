@@ -9,6 +9,7 @@
 //   2. cu_env rows map variable names to type codes with shadowing.
 //   3. cu_ctype and cu_default map codes to C++ types and fallbacks.
 
+import "cuda_tok.oo";
 import "lex/token_parse_int.oo";
 
 pub fn cu_e_pack(pos: Int, ty: String, code: String) -> String {
@@ -142,3 +143,35 @@ pub fn cu_default(ty: String) -> String {
     if ty == "cap" { return "0"; }
     return "";
 }
+
+pub fn cu_cmp_sym(k: String) -> String {
+    if k == "EQEQ" { return "=="; }
+    if k == "NEQ" { return "!="; }
+    if k == "LT" { return "<"; }
+    if k == "GT" { return ">"; }
+    if k == "LTE" { return "<="; }
+    return ">=";
+}
+
+pub fn cu_div_code(lz: String, rz: String, want: String, line: Int) -> String {
+    if want == "f" { return "(" + lz + " / " + rz + ")"; }
+    let bad: String = "(fprintf(stderr, \"ERR\\tcuda\\tdiv zero at line " + line.to_string() + "\\n\"), exit(1), (long long)0)";
+    return "((" + rz + " == 0) ? " + bad + " : (" + lz + " / " + rz + "))";
+}
+
+pub fn cu_mod_code(lz: String, rz: String, line: Int) -> String {
+    let bad: String = "(fprintf(stderr, \"ERR\\tcuda\\tdiv zero at line " + line.to_string() + "\\n\"), exit(1), (long long)0)";
+    return "((" + rz + " == 0) ? " + bad + " : (" + lz + " % " + rz + "))";
+}
+
+pub fn cu_binder_env(env: String, sty: String, ctor: String, binder: String, toks: List[String], pos: Int) -> String {
+    if binder == "" { return env; }
+    if sty == "rss" { return cu_env_put(env, binder, "s"); }
+    if sty == "rli" && ctor == "Ok" { return cu_env_put(env, binder, "li"); }
+    if sty == "rli" { return cu_env_put(env, binder, "s"); }
+    if sty == "oi" { return cu_env_put(env, binder, "i"); }
+    if sty == "os" { return cu_env_put(env, binder, "s"); }
+    cu_fail(cu_line(toks, pos), "arm mismatch");
+    return env;
+}
+

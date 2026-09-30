@@ -9,6 +9,7 @@
 //   2. Walk tokens: print pub fn outlines, skip private fns after walking them, and skip verify, type, and import.
 //   3. Fail if no pub fn was seen. ast_emit_outline_json prints a functions and verifies JSON object instead.
 import "parse_drive.oo";
+import "lex/token_fmt.oo";
 
 
 pub fn ast_emit_outline(src: String) {
