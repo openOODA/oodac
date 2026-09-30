@@ -10,6 +10,7 @@
 //   2. cycle_edge_allowed is false across units and outside units.
 //   3. check of the real listed match files is OK.
 //   4. check of gap10_cyc_bad/a.oo is Err (unlisted cycle).
+//   5. intra-hw/silicon allows; listed xarith check is OK.
 
 import "ast/cycle_allow.oo";
 
@@ -62,6 +63,18 @@ pub fn main(p: &ProcessCap, env: &EnvCap) {
         println("ERR\tcycle allow: cuda-to-rocm must deny");
         process_exit(1);
     }
+    if !cycle_edge_allowed("hw/silicon/aarch64_xarith.oo", "hw/silicon/aarch64_xcond.oo") {
+        println("ERR\tcycle allow: intra-hwsil relative must allow");
+        process_exit(1);
+    }
+    if !cycle_edge_allowed("/r/std/hw/silicon/aarch64_xcond.oo", "/r/std/hw/silicon/aarch64_xarith.oo") {
+        println("ERR\tcycle allow: intra-hwsil absolute must allow");
+        process_exit(1);
+    }
+    if cycle_edge_allowed("/r/std/hw/silicon/aarch64_xarith.oo", "/r/oodac/emit/llvm/ll_expr.oo") {
+        println("ERR\tcycle allow: hwsil-to-llvm must deny");
+        process_exit(1);
+    }
     let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
     let host: String = match hr { Ok(s) => s, Err(_) => "" };
     if host == "" {
@@ -81,6 +94,11 @@ pub fn main(p: &ProcessCap, env: &EnvCap) {
     let b: Result[String, String] = sys_exec(p, host, "check", "oodac/qa/fixtures/gap10_cyc_bad/a.oo");
     if b.is_ok() {
         println("ERR\tcycle allow: unlisted cycle check must fail");
+        process_exit(1);
+    }
+    let h: Result[String, String] = sys_exec(p, host, "check", "std/hw/silicon/aarch64_xarith.oo");
+    if h.is_err() {
+        println("ERR\tcycle allow: listed hwsil xarith check must pass");
         process_exit(1);
     }
     println("OK");

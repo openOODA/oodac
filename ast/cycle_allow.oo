@@ -35,11 +35,13 @@ pub fn cycle_edge_allowed(a: String, b: String) -> Bool {
     let chk: String = "check/";
     let cuda: String = "emit/cuda/";
     let rocm: String = "emit/rocm/";
+    let hwsil: String = "hw/silicon/";
     if in_unit(a, llvm) && in_unit(b, llvm) { return true; }
     if in_unit(a, wasm) && in_unit(b, wasm) { return true; }
     if in_unit(a, past) && in_unit(b, past) { return true; }
     if in_unit(a, chk) && in_unit(b, chk) { return true; }
     if in_unit(a, cuda) && in_unit(b, cuda) { return true; }
     if in_unit(a, rocm) && in_unit(b, rocm) { return true; }
+    if in_unit(a, hwsil) && in_unit(b, hwsil) { return true; }
     return false;
 }

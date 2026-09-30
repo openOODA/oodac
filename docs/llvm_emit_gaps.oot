@@ -215,6 +215,13 @@ oodac/bin/oodac and jail dirs set to the workspace, run
   deny preserved; cross-unit and unlisted cycles still error.
 - Proofs: qa/probe_cycle_allow.oo (predicate unit-tests + listed-OK /
   unlisted-ERR integration) + qa/fixtures/gap10_cyc_bad/ (backstop).
+- Follow-up (done 2026-09-30): seventh unit hw/silicon. std's
+  AArch64 backend is recursive-descent: a64x_expr (xarith) dispatches
+  match/if arms into a64x_match_core/a64x_if_expr (xcond) whose arm
+  bodies call back into a64x_expr. Neither direction inlines (both
+  sides are large) and fusion exceeds the 256-line module limit
+  (123 + 235), so the mutual edge is irreducible. Unit-scoped
+  back-edge skip covers it; cross-unit and unlisted cycles still fail.
 
 ## Notes for the fixer
 
