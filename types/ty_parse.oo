@@ -111,6 +111,25 @@ pub fn ty_parse_at(toks: List[String], pos: Int, n: Int) -> List[String] {
             return ty_pack2(p.to_string(), ty_box(elem_ty));
         }
         if is_cap_type(t) { return ty_pack2(p.to_string(), ty_cap(t)); }
+        if p < n && (c_tokk(toks, p) == "LBRACKET" || c_tokk(toks, p) == "LT") {
+            p = p + 1;
+            let mut inner_args = "";
+            let mut cont_gen = true;
+            while cont_gen && p < n {
+                if c_tokk(toks, p) == "RBRACKET" || c_tokk(toks, p) == "GT" {
+                    cont_gen = false;
+                    p = p + 1;
+                } else if c_tokk(toks, p) == "COMMA" {
+                    p = p + 1;
+                } else {
+                    let sub: List[String] = ty_parse_at(toks, p, n);
+                    p = parse_int(list_get(sub, 0));
+                    let a_ty: String = list_get(sub, 1);
+                    if inner_args == "" { inner_args = a_ty; } else { inner_args = inner_args + "," + a_ty; }
+                }
+            }
+            return ty_pack2(p.to_string(), ty_name(t + "[" + inner_args + "]"));
+        }
         return ty_pack2(p.to_string(), ty_name(t));
     }
 

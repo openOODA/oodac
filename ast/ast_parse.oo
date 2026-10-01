@@ -13,7 +13,7 @@ import "lex/token_fmt.oo";
 import "lex/token_parse_int.oo";
 fn pa_pos(r: String) -> Int { let n: Int = chars_len(r); let mut idx: Int = 0; while idx < n && char_at(r, idx) != "\t" { idx = idx + 1; } return parse_int(str_slice(r, 0, idx)); }
 fn pa_val(r: String) -> String { let n: Int = chars_len(r); let mut idx: Int = 0; while idx < n && char_at(r, idx) != "\t" { idx = idx + 1; } return str_slice(r, idx + 1, n); }
-fn pa_pack(p: Int, v: String) -> String { return p.to_string() + "  " + v; }
+fn pa_pack(p: Int, v: String) -> String { return p.to_string() + "\t" + v; }
 fn pa_binop_lbp(k: String) -> Int {
     if k == "EQ" { return 1; } if k == "OROR" { return 2; } if k == "ANDAND" || k == "PIPE" || k == "CARET" { return 3; } if k == "AMP" { return 4; }
     if k == "EQEQ" || k == "NEQ" || k == "NE" { return 4; } if k == "LT" || k == "GT" || k == "LTE" || k == "GTE" || k == "LSHIFT" || k == "RSHIFT" { return 5; }
@@ -68,6 +68,7 @@ fn pa_parse_item(p0: Int, n: Int, toks: List[String]) -> String {
     }
     if k == "KW_TYPE" {
         p = p + 1; let nm: String = if p < n { c_tokt(toks, p) } else { "" }; if p < n { p = p + 1; }
+        if p < n && c_tokk(toks, p) == "LBRACKET" { p = p + 1; let mut depth: Int = 1; while p < n && depth > 0 { let k2: String = c_tokk(toks, p); if k2 == "LBRACKET" { depth = depth + 1; } if k2 == "RBRACKET" { depth = depth - 1; } p = p + 1; } }
         let mut fld: String = ""; while p < n && (c_tokk(toks, p) == "EQ" || c_tokt(toks, p) == "struct") { p = p + 1; }
         if p < n && c_tokk(toks, p) == "LBRACE" {
             p = p + 1;
@@ -75,8 +76,7 @@ fn pa_parse_item(p0: Int, n: Int, toks: List[String]) -> String {
                 if c_tokk(toks, p) == "COMMA" { p = p + 1; }
                 if p < n && c_tokk(toks, p) != "RBRACE" {
                     let fnm: String = c_tokt(toks, p); p = p + 1; if p < n && c_tokk(toks, p) == "COLON" { p = p + 1; }
-                    let pt: String = pa_parse_ty(p, n, toks); p = (0 + pa_pos(pt)); let fe: String = mk_field(fnm, pa_val(pt));
-                    if fld == "" { fld = fe; } else { fld = fld + "," + fe; }
+                    let pt: String = pa_parse_ty(p, n, toks); p = (0 + pa_pos(pt)); if fld == "" { fld = mk_field(fnm, pa_val(pt)); } else { fld = fld + "," + mk_field(fnm, pa_val(pt)); }
                 }
             }
             if p < n && c_tokk(toks, p) == "RBRACE" { p = p + 1; }
@@ -98,15 +98,16 @@ fn pa_parse_item(p0: Int, n: Int, toks: List[String]) -> String {
 }
 fn pa_parse_fn_item_ast(p0: Int, n: Int, toks: List[String]) -> String {
     let mut p: Int = p0; if p >= n { return pa_pack(p, mk_fn("_err_", "", mk_ty_unit(), "", mk_block("", mk_sempty()))); }
-    let fnm: String = c_tokt(toks, p); p = p + 1; if p < n && c_tokk(toks, p) == "LPAREN" { p = p + 1; }
+    let fnm: String = c_tokt(toks, p); p = p + 1;
+    if p < n && c_tokk(toks, p) == "LBRACKET" { p = p + 1; let mut depth: Int = 1; while p < n && depth > 0 { let k2: String = c_tokk(toks, p); if k2 == "LBRACKET" { depth = depth + 1; } if k2 == "RBRACKET" { depth = depth - 1; } p = p + 1; } }
+    if p < n && c_tokk(toks, p) == "LPAREN" { p = p + 1; }
     let mut params: String = "";
     while p < n && c_tokk(toks, p) != "RPAREN" {
         if c_tokk(toks, p) == "COMMA" { p = p + 1; }
         if p < n && c_tokk(toks, p) != "RPAREN" {
             if c_tokk(toks, p) == "AMP" { p = p + 1; } if c_tokk(toks, p) == "KW_MUT" { p = p + 1; }
             let pname: String = if p < n { c_tokt(toks, p) } else { "" }; if p < n { p = p + 1; } if p < n && c_tokk(toks, p) == "COLON" { p = p + 1; }
-            let pt: String = pa_parse_ty(p, n, toks); p = (0 + pa_pos(pt)); let pe: String = mk_param(pname, pa_val(pt));
-            if params == "" { params = pe; } else { params = params + "," + pe; }
+            let pt: String = pa_parse_ty(p, n, toks); p = (0 + pa_pos(pt)); if params == "" { params = mk_param(pname, pa_val(pt)); } else { params = params + "," + mk_param(pname, pa_val(pt)); }
         }
     }
     if p < n && c_tokk(toks, p) == "RPAREN" { p = p + 1; }
@@ -232,8 +233,7 @@ fn pa_parse_atom(p0: Int, n: Int, toks: List[String]) -> String {
                 if c_tokk(toks, p) == "COMMA" { p = p + 1; }
                 if p < n && c_tokk(toks, p) != "RBRACE" {
                     let fnm: String = if c_tokk(toks, p) == "IDENT" { c_tokt(toks, p) } else { "" }; if p < n && c_tokk(toks, p) == "IDENT" { p = p + 1; } if p < n && c_tokk(toks, p) == "COLON" { p = p + 1; }
-                    let pe: String = pa_parse_expr(p, n, toks, 0); p = (0 + pa_pos(pe)); let fnode: String = mk_field(fnm, pa_val(pe));
-                    if f_list == "" { f_list = fnode; } else { f_list = f_list + "," + fnode; }
+                    let pe: String = pa_parse_expr(p, n, toks, 0); p = (0 + pa_pos(pe)); if f_list == "" { f_list = mk_field(fnm, pa_val(pe)); } else { f_list = f_list + "," + mk_field(fnm, pa_val(pe)); }
                 }
             }
             if p < n && c_tokk(toks, p) == "RBRACE" { p = p + 1; }

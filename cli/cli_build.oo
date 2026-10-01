@@ -98,9 +98,9 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
         println("ERR\tbuild\tmkdir failed");
         process_exit(1);
     }
-    // Dormant while the unique_fns refusal above stands (pure_build rebuilds).
-    let is_multi: Bool = path_is_compiler_main(path);
-    if backend != "elf" && is_multi {
+    let cb: Result[String, String] = env_get(env, "OODA_BUILD_CONCAT");
+    let want_concat: Bool = match cb { Ok(s) => s == "1", Err(_) => false };
+    if (backend == "llvm" || backend == "") && !want_concat {
         build_multi(fs_r, fs_w, sys, env, ar, host, od, tmp_dir, path, out, is_shared);
         return;
     }

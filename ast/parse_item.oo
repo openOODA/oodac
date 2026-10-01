@@ -38,8 +38,21 @@ pub fn parse_fn_item(toks: List[String], pos0: Int, item_idx: Int) -> Int {
     // name
     let name: String = field_at(list_get(toks, pos), 3);
     pos = pos + 1;
+    // optional [T, U]
+    if pos < n && field_at(list_get(toks, pos), 0) == "LBRACKET" {
+        pos = pos + 1;
+        let mut depth = 1;
+        while depth > 0 && pos < n {
+            let bk: String = field_at(list_get(toks, pos), 0);
+            if bk == "LBRACKET" { depth = depth + 1; }
+            if bk == "RBRACKET" { depth = depth - 1; }
+            pos = pos + 1;
+        }
+    }
     // (
-    pos = pos + 1;
+    if pos < n && field_at(list_get(toks, pos), 0) == "LPAREN" {
+        pos = pos + 1;
+    }
     // params
     let mut params: List[String] = list_new();
     // name/ty/ref

@@ -53,7 +53,7 @@ pub fn ll_builtin_ext_sym(sym: String) -> String {
     if n >= 8 && str_slice(s, 0, 8) == "channel_" { return "oo_" + s; }
     if n >= 7 && str_slice(s, 0, 7) == "thread_" { return "oo_" + s; }
     if s == "otp_supervise" { return "oo_otp_supervise"; }
-    if s == "dlopen" || s == "dlsym" || s == "dlclose" { return "oo_" + s; }
+    if s == "dlopen" || s == "dlsym" || s == "dlclose" || s == "ffi_call" { return "oo_" + s; }
     if s == "sqrt" || s == "sin" || s == "cos" || s == "exp" || s == "pow" || s == "ln" { return "oo_" + s; }
     return s;
 }
@@ -167,6 +167,7 @@ fn ll_ext_sig_ffi(sym: String) -> String {
     if sym == "oo_dlopen" || sym == "dlopen" { return "i64,str>ress"; }
     if sym == "oo_dlsym" || sym == "dlsym" { return "i64,str,str>ress"; }
     if sym == "oo_dlclose" || sym == "dlclose" { return "i64,str>ress"; }
+    if sym == "oo_ffi_call" || sym == "ffi_call" { return "i64,str,str,str,str>ress"; }
     return "";
 }
 

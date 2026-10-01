@@ -32,7 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     env:
-      OO_LIST_AMBIENT_QUOTA: "8589934592"
+      OO_LIST_AMBIENT_QUOTA: "67108864"
     defaults:
       run:
         working-directory: ${{ github.workspace }}

@@ -46,24 +46,39 @@ pub fn ll_need_emit_referenced(need: String) {
     }
 }
 
+fn ll_need_call_ext(need: String, nm: String) -> String {
+    let mut n: String = need;
+    if nm == "free_bytes" || nm == "tcp_connect" || nm == "tcp_write" || nm == "tcp_read" || nm == "tcp_close" || nm == "tcp_accept" || nm == "dlopen" || nm == "dlsym" || nm == "dlclose" || nm == "ffi_call" || nm == "file_append_sync" || nm == "landlock_restrict" || nm == "landlock_is_available" { return ll_need_add(n, "oo_" + nm); }
+    if nm == "ord" { return ll_need_add(n, "oo_byte_at"); }
+    if nm == "sqrt" || nm == "sin" || nm == "cos" || nm == "exp" || nm == "pow" || nm == "ln" { return ll_need_add(n, "oo_" + nm); }
+    if nm == "sleep_ms" || nm == "now_ms" || nm == "monotonic_us" || nm == "random" { return ll_need_add(n, "oo_" + nm); }
+    if nm == "hot_reload" || nm == "alloc_bytes" { return ll_need_add(n, "oo_" + nm); }
+    if chars_len(nm) >= 3 && str_slice(nm, 0, 3) == "oo_" { return ll_need_add(n, nm); }
+    if chars_len(nm) >= 4 && str_slice(nm, 0, 4) == "sys_" { return ll_need_add(n, "oo_" + nm); }
+    if chars_len(nm) >= 3 && str_slice(nm, 0, 3) == "fs_" { return ll_need_add(n, "oo_" + nm); }
+    if chars_len(nm) >= 4 && str_slice(nm, 0, 4) == "tui_" { return ll_need_add(n, "oo_" + nm); }
+    if chars_len(nm) >= 6 && str_slice(nm, 0, 6) == "bytes_" { return ll_need_add(n, "oo_" + nm); }
+    if chars_len(nm) >= 7 && str_slice(nm, 0, 7) == "crypto_" { return ll_need_add(n, nm); }
+    if nm == "arena_reset" { return ll_need_add(n, "oo_arena_reset"); }
+    if chars_len(nm) >= 6 && str_slice(nm, 0, 6) == "arena_" { return ll_need_add(n, "oo_" + nm); }
+    if nm == "gpu_cuda_vec_add" || nm == "gpu_cuda_sgemm" || nm == "gpu_cuda_rmsnorm" || nm == "gpu_cuda_attention" || nm == "gpu_cuda_reduce_sum" { return ll_need_add(n, "oo_" + nm + "_flist"); }
+    if chars_len(nm) >= 4 && str_slice(nm, 0, 4) == "gpu_" { return ll_need_add(n, "oo_" + nm); }
+    if chars_len(nm) >= 6 && str_slice(nm, 0, 6) == "actor_" { return ll_need_add(n, "oo_" + nm); }
+    if chars_len(nm) >= 6 && str_slice(nm, 0, 6) == "audio_" { return ll_need_add(n, "oo_" + nm); }
+    if chars_len(nm) >= 8 && str_slice(nm, 0, 8) == "channel_" { return ll_need_add(n, "oo_" + nm); }
+    if chars_len(nm) >= 7 && str_slice(nm, 0, 7) == "thread_" { return ll_need_add(n, "oo_" + nm); }
+    if nm == "otp_supervise" { return ll_need_add(n, "oo_otp_supervise"); }
+    return n;
+}
+
 fn ll_need_call(need: String, nm: String) -> String {
     let mut n: String = need;
     if nm == "println" {
-        n = ll_need_add(n, "oo_println");
-        n = ll_need_add(n, "oo_print_int");
-        return n;
+        return ll_need_add(ll_need_add(n, "oo_println"), "oo_print_int");
     }
-    if nm == "print" {
-        n = ll_need_add(n, "oo_print_str");
-        return n;
-    }
+    if nm == "print" { return ll_need_add(n, "oo_print_str"); }
     if nm == "unwrap" || nm == "unwrap_or" {
-        n = ll_need_add(n, "oo_unwrap_msg");
-        n = ll_need_add(n, "oo_str_lit");
-        n = ll_need_add(n, "oo_print_str");
-        n = ll_need_add(n, "oo_println");
-        n = ll_need_add(n, "oo_process_exit");
-        return n;
+        return ll_need_add(ll_need_add(ll_need_add(ll_need_add(ll_need_add(n, "oo_unwrap_msg"), "oo_str_lit"), "oo_print_str"), "oo_println"), "oo_process_exit");
     }
     if nm == "list_new" {
         return ll_need_add(ll_need_add(ll_need_add(ll_need_add(ll_need_add(n, "oo_slist_new"), "oo_ilist_new"), "oo_flist_new"), "oo_ll_I_new"), "oo_ll_S_new");
@@ -108,27 +123,7 @@ fn ll_need_call(need: String, nm: String) -> String {
     if nm == "path_exists" || nm == "file_size" || nm == "file_stamp" { return ll_need_add(n, "oo_" + nm); }
     if nm == "read_file" || nm == "write_file" { return ll_need_add(n, "oo_" + nm); }
     if nm == "env_get" || nm == "sys_exec" || nm == "process_exit" { return ll_need_add(n, "oo_" + nm); }
-    if nm == "free_bytes" || nm == "tcp_connect" || nm == "tcp_write" || nm == "tcp_read" || nm == "tcp_close" || nm == "tcp_accept" || nm == "dlopen" || nm == "dlsym" || nm == "dlclose" || nm == "file_append_sync" || nm == "landlock_restrict" || nm == "landlock_is_available" { return ll_need_add(n, "oo_" + nm); }
-    if nm == "ord" { return ll_need_add(n, "oo_byte_at"); }
-    if nm == "sqrt" || nm == "sin" || nm == "cos" || nm == "exp" || nm == "pow" || nm == "ln" { return ll_need_add(n, "oo_" + nm); }
-    if nm == "sleep_ms" || nm == "now_ms" || nm == "monotonic_us" || nm == "random" { return ll_need_add(n, "oo_" + nm); }
-    if nm == "hot_reload" || nm == "alloc_bytes" { return ll_need_add(n, "oo_" + nm); }
-    if chars_len(nm) >= 3 && str_slice(nm, 0, 3) == "oo_" { return ll_need_add(n, nm); }
-    if chars_len(nm) >= 4 && str_slice(nm, 0, 4) == "sys_" { return ll_need_add(n, "oo_" + nm); }
-    if chars_len(nm) >= 3 && str_slice(nm, 0, 3) == "fs_" { return ll_need_add(n, "oo_" + nm); }
-    if chars_len(nm) >= 4 && str_slice(nm, 0, 4) == "tui_" { return ll_need_add(n, "oo_" + nm); }
-    if chars_len(nm) >= 6 && str_slice(nm, 0, 6) == "bytes_" { return ll_need_add(n, "oo_" + nm); }
-    if chars_len(nm) >= 7 && str_slice(nm, 0, 7) == "crypto_" { return ll_need_add(n, nm); }
-    if nm == "arena_reset" { return ll_need_add(n, "oo_arena_reset"); }
-    if chars_len(nm) >= 6 && str_slice(nm, 0, 6) == "arena_" { return ll_need_add(n, "oo_" + nm); }
-    if nm == "gpu_cuda_vec_add" || nm == "gpu_cuda_sgemm" || nm == "gpu_cuda_rmsnorm" || nm == "gpu_cuda_attention" || nm == "gpu_cuda_reduce_sum" { return ll_need_add(n, "oo_" + nm + "_flist"); }
-    if chars_len(nm) >= 4 && str_slice(nm, 0, 4) == "gpu_" { return ll_need_add(n, "oo_" + nm); }
-    if chars_len(nm) >= 6 && str_slice(nm, 0, 6) == "actor_" { return ll_need_add(n, "oo_" + nm); }
-    if chars_len(nm) >= 6 && str_slice(nm, 0, 6) == "audio_" { return ll_need_add(n, "oo_" + nm); }
-    if chars_len(nm) >= 8 && str_slice(nm, 0, 8) == "channel_" { return ll_need_add(n, "oo_" + nm); }
-    if chars_len(nm) >= 7 && str_slice(nm, 0, 7) == "thread_" { return ll_need_add(n, "oo_" + nm); }
-    if nm == "otp_supervise" { return ll_need_add(n, "oo_otp_supervise"); }
-    return n;
+    return ll_need_call_ext(n, nm);
 }
 
 fn ll_need_cap_sym(t: String) -> String {

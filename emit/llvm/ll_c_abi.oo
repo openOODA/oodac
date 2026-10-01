@@ -30,7 +30,7 @@ pub fn ll_is_c_abi_call(name: String) -> Bool {
     if n >= 3 && str_slice(name, 0, 3) == "oo_" { return true; }
     if n >= 7 && str_slice(name, 0, 7) == "crypto_" { return true; }
     if name == "malloc" || name == "free" || name == "realloc" { return true; }
-    if name == "dlopen" || name == "dlsym" || name == "dlclose" { return true; }
+    if name == "dlopen" || name == "dlsym" || name == "dlclose" || name == "ffi_call" { return true; }
     return false;
 }
 

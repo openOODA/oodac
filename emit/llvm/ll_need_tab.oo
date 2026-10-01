@@ -151,6 +151,7 @@ fn ll_need_proto_sys(sym: String) -> String {
     if sym == "oo_dlopen" { return "declare void @oo_dlopen(ptr noalias sret(%OoResS) align 8, i64, { ptr, i64 }) nounwind"; }
     if sym == "oo_dlsym" { return "declare void @oo_dlsym(ptr noalias sret(%OoResS) align 8, i64, { ptr, i64 }, { ptr, i64 }) nounwind"; }
     if sym == "oo_dlclose" { return "declare void @oo_dlclose(ptr noalias sret(%OoResS) align 8, i64, { ptr, i64 }) nounwind"; }
+    if sym == "oo_ffi_call" { return "declare void @oo_ffi_call(ptr noalias sret(%OoResS) align 8, i64, { ptr, i64 }, { ptr, i64 }, { ptr, i64 }, { ptr, i64 }) nounwind"; }
     if sym == "oo_sqrt" { return "declare double @oo_sqrt(double) nounwind"; }
     if sym == "oo_sin" { return "declare double @oo_sin(double) nounwind"; }
     if sym == "oo_cos" { return "declare double @oo_cos(double) nounwind"; }
