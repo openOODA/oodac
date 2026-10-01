@@ -1,5 +1,13 @@
 // # LLVM struct kind helpers (leaf)
+//
 // Logline: St kind strings, rich field tables, field GEP/load. No declare/emit/literal.
+//
+// Setup: Pure helper routines for LLVM struct type name and field layout transformations.
+//
+// Beats:
+//   1. Struct kind string formatting.
+//   2. Field layout and GEP index mapping.
+
 import "ll_tok.oo";
 import "ll_ty.oo";
 import "ll_ir.oo";

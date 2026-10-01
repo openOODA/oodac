@@ -1,5 +1,13 @@
 // # LLVM expr atoms (leaf)
+//
 // Logline: Precedence table, guards, and single-value lowerings. No recursion.
+//
+// Setup: Pure helper routines for expression parsing precedence and operators.
+//
+// Beats:
+//   1. Binary operator precedence mapping.
+//   2. Type conversion and atom value evaluation.
+
 
 import "ll_tok.oo";
 import "ll_ty.oo";

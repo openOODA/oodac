@@ -1,10 +1,7 @@
-// # JSON diagnostic object builders (cycle leaf)
-//
+// # diag_json_obj.oo — JSON diagnostic object builders
 // Logline: Escape strings, map codes to fix hints, and pack one JSON diagnostic object.
-//
-// Setup: str_escape_json lives in types/str_escape.oo. Both diag_json.oo
-// and diag_json_parse.oo import this leaf; neither imports the other for
-// these builders (Gap 10: the pair is mutually recursive otherwise).
+// Setup: str_escape_json in types/str_escape.oo. Imported by diag_json and diag_json_parse.
+// Beats: Escape strings, map codes to fix hints, and pack one JSON diagnostic object.
 
 import "types/str_escape.oo";
 

@@ -1,8 +1,12 @@
 // # WASM small pure helpers (cycle leaf)
 //
-// Logline: Pack end+code rows and index locals by name. Pure fns shared
-// by wasm_expr.oo and wasm_bop.oo, which are mutually recursive through
-// ws_climb/ws_logic and cannot import each other (Gap 10).
+// Logline: Pack end+code rows and index locals by name.
+//
+// Setup: Pure helper routines shared between wasm_expr and wasm_bop.
+//
+// Beats:
+//   1. Index local variables by name.
+//   2. Encode LEB128 and row structures.
 
 pub fn ws_local_idx(order: String, arity: Int, name: String) -> Int {
     let mut rest: String = order;

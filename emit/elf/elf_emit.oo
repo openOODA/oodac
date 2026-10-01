@@ -25,3 +25,9 @@ pub fn elf_emit_program(src: String) -> String {
     }
     return bytes_to_str(all);
 }
+
+pub fn elf_eval_println_add(src: String) -> Int {
+    return elf_eval_main(src);
+}
+
+

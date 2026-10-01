@@ -1,5 +1,13 @@
 // # LLVM match arms (leaf of ll_match)
+//
 // Logline: Statement-match arm parsing, binding, and lowering.
+//
+// Setup: Pure helper routines for match statement arm destructuring.
+//
+// Beats:
+//   1. Arm head token parsing.
+//   2. Pattern arm variable binding and emission.
+
 
 import "ll_tok.oo";
 import "ll_ty.oo";

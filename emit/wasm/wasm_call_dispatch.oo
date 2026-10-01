@@ -1,7 +1,7 @@
 // # WASM call dispatch table (leaf)
 // Logline: Lowered-arg call dispatch by callee name. No expression recursion.
-//
 // Setup: Caller lowers args to type codes first; end is derived from p.
+// Beats: Dispatch lowered function calls by name across global builtin handlers.
 
 import "lex/token_fmt.oo";
 import "lex/token_parse_int.oo";
