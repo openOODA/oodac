@@ -11,7 +11,6 @@
 //   4. Exit 0 only when all compiler probes pass both runs.
 
 import "std/fs/process/env.oo";
-import "std/fs/file/path.oo";
 
 fn run_probe_once(p: &ProcessCap, oodac: String, path: String) -> Result[Int, String] {
     let tmp_bin: String = path + ".tmp.bin";
