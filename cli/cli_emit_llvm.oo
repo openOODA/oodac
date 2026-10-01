@@ -211,7 +211,6 @@ fn run_emit_llvm_multi(fs: &FsReadCap, env: &EnvCap, ar: &ArenaCap, path: String
         }
         if ar_id >= 0 {
             let _: Result[String, String] = arena_detach(ar);
-            let _: Result[String, String] = arena_reset(ar, ar_id);
         }
         i = i + 1;
     }

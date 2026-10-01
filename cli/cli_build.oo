@@ -100,7 +100,9 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
     }
     let cb: Result[String, String] = env_get(env, "OODA_BUILD_CONCAT");
     let want_concat: Bool = match cb { Ok(s) => s == "1", Err(_) => false };
-    if (backend == "llvm" || backend == "") && !want_concat {
+    let mb: Result[String, String] = env_get(env, "OODA_BUILD_MULTI");
+    let want_multi: Bool = match mb { Ok(s) => s == "1", Err(_) => false };
+    if (backend == "llvm" || backend == "") && (want_multi || path_is_compiler_main(path)) && !want_concat {
         build_multi(fs_r, fs_w, sys, env, ar, host, od, tmp_dir, path, out, is_shared);
         return;
     }

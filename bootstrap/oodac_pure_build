@@ -10,7 +10,7 @@ WS_ROOT="$(cd "$ROOT/.." && pwd)"
 # Hermetic FS jail: default to WS_ROOT if not set, so new binary can read both ooda and std sources
 export OODA_FS_READDIR="$WS_ROOT"
 export OODA_FS_WRITEDIR="$WS_ROOT"
-export OO_LIST_AMBIENT_QUOTA="${OO_LIST_AMBIENT_QUOTA:-67108864}"
+export OO_LIST_AMBIENT_QUOTA="${OO_LIST_AMBIENT_QUOTA:-8589934592}"
 oodac_abs() {
   local p="$1"
   if [[ -e "$p" ]]; then
