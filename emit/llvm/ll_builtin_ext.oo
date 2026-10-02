@@ -31,7 +31,23 @@ pub fn ll_builtin_ext_sig(sym: String) -> String {
     if s5 != "" { return s5; }
     let s6: String = ll_ext_sig_ffi(s);
     if s6 != "" { return s6; }
+    let s7: String = ll_ext_sig_unix(s);
+    if s7 != "" { return s7; }
     return ll_ext_sig_math(s);
+}
+
+// AF_UNIX stream transport. Capability tokens lower to i64 bitmasks and every
+// call returns an OoResS, which lowers to the ress result struct.
+fn ll_ext_sig_unix(sym: String) -> String {
+    if sym == "unix_bind" || sym == "oo_unix_bind" { return "i64,i64,str>ress"; }
+    if sym == "unix_accept" || sym == "oo_unix_accept" { return "i64,i64>ress"; }
+    if sym == "unix_connect" || sym == "oo_unix_connect" { return "i64,i64,str>ress"; }
+    if sym == "unix_write" || sym == "oo_unix_write" { return "i64,i64,str>ress"; }
+    if sym == "unix_read" || sym == "oo_unix_read" { return "i64,i64,i64>ress"; }
+    if sym == "unix_read_timeout" || sym == "oo_unix_read_timeout" { return "i64,i64,i64,i64>ress"; }
+    if sym == "unix_close" || sym == "oo_unix_close" { return "i64,i64>ress"; }
+    if sym == "unix_unlink" || sym == "oo_unix_unlink" { return "i64,str>ress"; }
+    return "";
 }
 
 pub fn ll_builtin_ext_sym(sym: String) -> String {
@@ -48,6 +64,7 @@ pub fn ll_builtin_ext_sym(sym: String) -> String {
     if s == "gpu_cuda_attention" { return "oo_gpu_cuda_attention_flist"; }
     if s == "gpu_cuda_reduce_sum" { return "oo_gpu_cuda_reduce_sum_flist"; }
     if n >= 4 && str_slice(s, 0, 4) == "gpu_" { return "oo_" + s; }
+    if n >= 5 && str_slice(s, 0, 5) == "unix_" { return "oo_" + s; }
     if n >= 6 && str_slice(s, 0, 6) == "actor_" { return "oo_" + s; }
     if n >= 6 && str_slice(s, 0, 6) == "audio_" { return "oo_" + s; }
     if n >= 8 && str_slice(s, 0, 8) == "channel_" { return "oo_" + s; }

@@ -74,18 +74,7 @@ fn scan_graph_type_names(fs_r: &FsReadCap, paths: List[String]) -> String {
 }
 
 fn anchor_extra_names(fs_r: &FsReadCap, path: String) -> String {
-    if path_is_main_oo(path) {
-        return "\t";
-    }
-    let anc: String = sibling_anchor(fs_r, path);
-    if anc == path {
-        return "\t";
-    }
-    if !path_exists(fs_r, anc) {
-        return "\t";
-    }
-    let ap: List[String] = collect_module_paths(fs_r, anc);
-    return scan_graph_names(fs_r, ap);
+    return "\t";
 }
 
 fn persist_graph(fs_r: &FsReadCap, fs: &FsWriteCap, sys: &ProcessCap, root: String, listing: String) {
@@ -198,8 +187,13 @@ fn check_modules(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, ar: &Are
 pub fn run_check_path(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, ar: &ArenaCap, path: String) {
     check_cache_ensure(fs_r, sys);
     let paths: List[String] = collect_module_paths(fs_r, path);
-    let extra: String = anchor_extra_names(fs_r, path);
     let roll: String = check_paths_listing(fs_r, paths);
+    let tk: String = check_cache_tree_key(fs_r, content_hash("dw1\n" + roll));
+    if check_cache_hit(fs_r, tk) {
+        println("OK");
+        return;
+    }
+    let extra: String = anchor_extra_names(fs_r, path);
     check_modules(fs_r, fs_w, sys, ar, paths, extra);
     persist_graph(fs_r, fs_w, sys, path, roll);
     println("OK");

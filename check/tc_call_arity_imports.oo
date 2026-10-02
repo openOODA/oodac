@@ -51,7 +51,8 @@ fn dup_proto_num(table: String, p: Int) -> Int {
 }
 
 pub fn check_dup_proto(table: String) {
-    let mut seen: String = "\t";
+    let mut names: List[String] = list_new();
+    let mut arities: List[Int] = list_new();
     let n: Int = chars_len(table);
     let mut i: Int = 0;
     while i < n {
@@ -69,16 +70,25 @@ pub fn check_dup_proto(table: String) {
                 let argc: Int = dup_proto_num(table, i);
                 while i < n && char_at(table, i) != "\t" { i = i + 1; }
                 if name != "" {
-                    let key: String = "\t" + name + "=";
-                    let pos: Int = str_index_of(seen, key);
-                    if pos < 0 {
-                        seen = seen + name + "=" + argc.to_string() + "\t";
-                    } else {
-                        let old: Int = dup_proto_num(seen, pos + chars_len(key));
-                        if old != argc {
-                            println("ERR\tcheck\tdup proto '" + name + "': arity " + old.to_string() + " vs " + argc.to_string());
-                            process_exit(1);
+                    let mut found: Bool = false;
+                    let mut k: Int = 0;
+                    let count: Int = list_len(names);
+                    while k < count {
+                        if list_get(names, k) == name {
+                            found = true;
+                            let old: Int = list_get(arities, k);
+                            if old != argc {
+                                println("ERR\tcheck\tdup proto '" + name + "': arity " + old.to_string() + " vs " + argc.to_string());
+                                process_exit(1);
+                            }
+                            k = count;
+                        } else {
+                            k = k + 1;
                         }
+                    }
+                    if !found {
+                        names = list_push(names, name);
+                        arities = list_push(arities, argc);
                     }
                 }
             }

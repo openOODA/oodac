@@ -20,14 +20,17 @@ return binds.contains(needle);
 // Fixes nested `if { let x = 1; } println(x);` silent OK (stage-0 fails).
 pub fn scope_has(binds: List[String], name: String, max_depth: Int) -> Bool {
     let n = list_len(binds);
-let mut d = 0;
-while d <= max_depth { let needle = name + "@" + d.to_string();
-let mut i = 0;
-while i < n { if list_get(binds, i) == needle { return true;
-}
+    let mut d = max_depth;
+    while d >= 0 {
+        let needle = name + "@" + d.to_string();
+        let mut i = 0;
+        while i < n {
+            if list_get(binds, i) == needle {
+                return true;
+            }
             i = i + 1;
         }
-        d = d + 1;
+        d = d - 1;
     }
     return false;
 }
