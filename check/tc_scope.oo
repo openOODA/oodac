@@ -19,18 +19,34 @@ return binds.contains(needle);
 // Scope-aware undefined-var: binds entries are "name@depth". RBRACE drops deeper binds.
 // Fixes nested `if { let x = 1; } println(x);` silent OK (stage-0 fails).
 pub fn scope_has(binds: List[String], name: String, max_depth: Int) -> Bool {
-    let n = list_len(binds);
-    let mut d = max_depth;
-    while d >= 0 {
-        let needle = name + "@" + d.to_string();
-        let mut i = 0;
-        while i < n {
-            if list_get(binds, i) == needle {
+    let prefix: String = name + "@";
+    let plen: Int = chars_len(prefix);
+    let mut i: Int = list_len(binds) - 1;
+    while i >= 0 {
+        let e: String = list_get(binds, i);
+        if str_starts_with(e, prefix) {
+            let elen: Int = chars_len(e);
+            let mut d: Int = 0;
+            let mut j: Int = plen;
+            while j < elen {
+                let c: String = char_at(e, j);
+                if c == "0" { d = d * 10; }
+                else if c == "1" { d = d * 10 + 1; }
+                else if c == "2" { d = d * 10 + 2; }
+                else if c == "3" { d = d * 10 + 3; }
+                else if c == "4" { d = d * 10 + 4; }
+                else if c == "5" { d = d * 10 + 5; }
+                else if c == "6" { d = d * 10 + 6; }
+                else if c == "7" { d = d * 10 + 7; }
+                else if c == "8" { d = d * 10 + 8; }
+                else if c == "9" { d = d * 10 + 9; }
+                j = j + 1;
+            }
+            if d <= max_depth {
                 return true;
             }
-            i = i + 1;
         }
-        d = d - 1;
+        i = i - 1;
     }
     return false;
 }
