@@ -75,10 +75,10 @@ if [[ -z "$SOVEREIGN_BACKEND" ]]; then
   # Product sovereign backend is llvm (clang -O2). C is --gcc. x86/aarch64/wasm are residual.
   SOVEREIGN_BACKEND="llvm"
 fi
-OODAC_BIN="${OODAC_BIN:-$ROOT/bin/oodac_bin.core}"
+OODAC_BIN="${OODAC_BIN:-$ROOT/bin/oodac}"
 if [[ ! -x "$OODAC_BIN" ]]; then
-  if [[ -x "$ROOT/bin/oodac_bin.core" ]]; then OODAC_BIN="$ROOT/bin/oodac_bin.core"
-  elif [[ -x "$ROOT/bin/oodac" ]]; then OODAC_BIN="$ROOT/bin/oodac"
+  if [[ -x "$ROOT/bin/oodac" ]]; then OODAC_BIN="$ROOT/bin/oodac"
+  elif [[ -x "$ROOT/bin/oodac_bin.core" ]]; then OODAC_BIN="$ROOT/bin/oodac_bin.core"
   elif [[ -x "$ROOT/bootstrap/seed/oodac" ]]; then OODAC_BIN="$ROOT/bootstrap/seed/oodac"
   else echo "ERR_NO_OODAC" >&2; exit 1; fi
 fi
@@ -244,6 +244,7 @@ if [[ "${PURE_SKIP_CHECK:-}" != "1" ]]; then
     # Drop leftover art files so seed vs OODAART2 hosts cannot mix magics.
     rm -f "$ROOT/.ooda-cache/ooda-tmp/art_"*.art
     rm -f "$WS_ROOT/.ooda-cache/ooda-tmp/art_"*.art
+    rm -rf "$ROOT/.ooda-cache/check" "$WS_ROOT/.ooda-cache/check"
     set +e
     MAIN_REL="${MAIN_ABS#"$ROOT"/}"
     (cd "$ROOT" && timeout "$ck_to" "$OODAC_BIN" check "$MAIN_REL") >"$TMP/main_check.out" 2>"$TMP/main_check.err"

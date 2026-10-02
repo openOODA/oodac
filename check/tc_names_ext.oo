@@ -22,6 +22,9 @@ pub fn is_known_ext_name(name: String) -> Bool {
     if n >= 9 && str_slice(s, 0, 9) == "oo_audio_" { return true; }
     if n >= 11 && str_slice(s, 0, 11) == "oo_channel_" { return true; }
     if n >= 10 && str_slice(s, 0, 10) == "oo_thread_" { return true; }
+    if n >= 7 && str_slice(s, 0, 7) == "oo_shm_" { return true; }
+    if n >= 7 && str_slice(s, 0, 7) == "oo_sys_" { return true; }
+    if s == "oo_memfd_create" || s == "oo_ftruncate" || s == "oo_mmap" || s == "oo_munmap" || s == "oo_close_fd" { return true; }
     if s == "oo_otp_supervise" { return true; }
     if s == "oo_shake256" || s == "oo_shake128" { return true; }
     if s == "oo_sha3_256_bytes" || s == "oo_sha3_512_bytes" { return true; }
@@ -30,6 +33,7 @@ pub fn is_known_ext_name(name: String) -> Bool {
     if n >= 6 && str_slice(s, 0, 6) == "audio_" { return true; }
     if n >= 8 && str_slice(s, 0, 8) == "channel_" { return true; }
     if n >= 7 && str_slice(s, 0, 7) == "thread_" { return true; }
+    if n >= 4 && str_slice(s, 0, 4) == "shm_" { return true; }
     if s == "otp_supervise" { return true; }
     return false;
 }

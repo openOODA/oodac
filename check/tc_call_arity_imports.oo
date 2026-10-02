@@ -50,6 +50,22 @@ fn dup_proto_num(table: String, p: Int) -> Int {
     return num;
 }
 
+fn check_dup_proto_entry(names: List[String], arities: List[Int], name: String, argc: Int) {
+    let mut k: Int = 0;
+    let count: Int = list_len(names);
+    while k < count {
+        if list_get(names, k) == name {
+            let old: Int = list_get(arities, k);
+            if old != argc {
+                println("ERR\tcheck\tdup proto '" + name + "': arity " + old.to_string() + " vs " + argc.to_string());
+                process_exit(1);
+            }
+            return;
+        }
+        k = k + 1;
+    }
+}
+
 pub fn check_dup_proto(table: String) {
     let mut names: List[String] = list_new();
     let mut arities: List[Int] = list_new();
@@ -70,31 +86,37 @@ pub fn check_dup_proto(table: String) {
                 let argc: Int = dup_proto_num(table, i);
                 while i < n && char_at(table, i) != "\t" { i = i + 1; }
                 if name != "" {
-                    let mut found: Bool = false;
-                    let mut k: Int = 0;
-                    let count: Int = list_len(names);
-                    while k < count {
-                        if list_get(names, k) == name {
-                            found = true;
-                            let old: Int = list_get(arities, k);
-                            if old != argc {
-                                println("ERR\tcheck\tdup proto '" + name + "': arity " + old.to_string() + " vs " + argc.to_string());
-                                process_exit(1);
-                            }
-                            k = count;
-                        } else {
-                            k = k + 1;
-                        }
-                    }
-                    if !found {
-                        names = list_push(names, name);
-                        arities = list_push(arities, argc);
-                    }
+                    check_dup_proto_entry(names, arities, name, argc);
+                    names = list_push(names, name);
+                    arities = list_push(arities, argc);
                 }
             }
         }
     }
 }
+
+fn scan_fn_is_pub(src: String, fn_pos: Int) -> Bool {
+    let mut bp: Int = fn_pos - 1;
+    while bp >= 0 && (char_at(src, bp) == " " || char_at(src, bp) == "\t" || char_at(src, bp) == "\n" || char_at(src, bp) == "\r") {
+        bp = bp - 1;
+    }
+    if bp >= 2 && char_at(src, bp - 2) == "p" && char_at(src, bp - 1) == "u" && char_at(src, bp) == "b" {
+        if bp >= 3 {
+            let bpc: String = char_at(src, bp - 3);
+            if char_is_alpha(bpc) || char_is_digit(bpc) || bpc == "_" { return false; }
+        }
+        return true;
+    }
+    if bp >= 5 && char_at(src, bp - 5) == "e" && char_at(src, bp - 4) == "x" && char_at(src, bp - 3) == "p" && char_at(src, bp - 2) == "o" && char_at(src, bp - 1) == "r" && char_at(src, bp) == "t" {
+        if bp >= 6 {
+            let bpc2: String = char_at(src, bp - 6);
+            if char_is_alpha(bpc2) || char_is_digit(bpc2) || bpc2 == "_" { return false; }
+        }
+        return true;
+    }
+    return false;
+}
+
 pub fn scan_import_arity(src: String) -> String {
     let mut table = "\t";
     let n = chars_len(src);
@@ -126,7 +148,7 @@ pub fn scan_import_arity(src: String) -> String {
                 let nc: String = char_at(src, i + 2);
                 if char_is_alpha(nc) || char_is_digit(nc) || nc == "_" { next_ok = false; }
             }
-            if !prev_ok || !next_ok {
+            if !prev_ok || !next_ok || !scan_fn_is_pub(src, i) {
                 i = i + 1;
             } else {
                 let mut j = i + 2;

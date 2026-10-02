@@ -13,14 +13,14 @@
     "operation": "oo_process_exit"
   },
   "call_stack": [
-    {"frame": 0, "address": "0x4108b4"}
+    {"frame": 0, "address": "0x403777"}
   ],
   "flight_events": [
-    {"seq": 1, "timestamp_us": 1790824111712919, "category": "core", "action": "init", "detail": "flight_sensor_active"},
-    {"seq": 2, "timestamp_us": 1790824111713718, "category": "capability", "action": "violation", "detail": "ProcessCap"}
+    {"seq": 1, "timestamp_us": 1790947165598955, "category": "core", "action": "init", "detail": "flight_sensor_active"},
+    {"seq": 2, "timestamp_us": 1790947165599012, "category": "capability", "action": "violation", "detail": "ProcessCap"}
   ],
   "flight_log": [
-    {"seq": 1, "timestamp_us": 1790824111712919, "category": "core", "action": "init", "detail": "flight_sensor_active"},
-    {"seq": 2, "timestamp_us": 1790824111713718, "category": "capability", "action": "violation", "detail": "ProcessCap"}
+    {"seq": 1, "timestamp_us": 1790947165598955, "category": "core", "action": "init", "detail": "flight_sensor_active"},
+    {"seq": 2, "timestamp_us": 1790947165599012, "category": "capability", "action": "violation", "detail": "ProcessCap"}
   ]
 }

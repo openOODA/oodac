@@ -73,6 +73,18 @@ fn scan_graph_type_names(fs_r: &FsReadCap, paths: List[String]) -> String {
     return names;
 }
 
+fn scan_graph_arity(fs_r: &FsReadCap, paths: List[String]) -> String {
+    let np: Int = list_len(paths);
+    let mut arities: String = "\t";
+    let mut i: Int = 0;
+    while i < np {
+        let rr: Result[String, String] = read_file(fs_r, list_get(paths, i));
+        if !rr.is_err() { arities = arities + scan_import_arity(match rr { Ok(s) => s, Err(_) => "" }); }
+        i = i + 1;
+    }
+    return arities;
+}
+
 fn anchor_extra_names(fs_r: &FsReadCap, path: String) -> String {
     return "\t";
 }
@@ -125,7 +137,7 @@ fn mod_strip_imports(src: String) -> String {
     return fold_toks(lines, 0, list_len(lines));
 }
 
-fn check_one_module(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, ar: &ArenaCap, ar_id: Int, pth2: String, is_last: Bool, arity_all: String, extra_names: String) {
+fn check_one_module(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, ar: &ArenaCap, ar_id: Int, pth2: String, is_last: Bool, extra_names: String) {
     if ar_id >= 0 {
         let _: Result[String, String] = arena_attach(ar, ar_id);
     }
@@ -139,7 +151,8 @@ fn check_one_module(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, ar: &
         let mut tu_names: String = scan_graph_names(fs_r, closure) + scan_graph_type_names(fs_r, closure);
         if is_last { tu_names = tu_names + extra_names; }
         let binds: String = names_to_depth0_binds(tu_names);
-        let toks: List[String] = run_check_core_binds_at(sys, body, binds, pth2, arity_all);
+        let tu_arity: String = scan_graph_arity(fs_r, closure);
+        let toks: List[String] = run_check_core_binds_at(sys, body, binds, pth2, tu_arity);
         typecheck_unused_imports_graph(fs_r, pth2, toks);
         let _: String = mod_artifact_write_toks(fs_w, sys, pth2, raw2, toks);
     }
@@ -151,9 +164,6 @@ fn check_one_module(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, ar: &
 
 fn check_modules(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, ar: &ArenaCap, paths: List[String], extra_names: String) {
     let np = list_len(paths);
-    // E_CAP: graph-wide fn-arity table so cross-module calls cannot dodge
-    // the arity check (capless net calls used to silent-OK via imports).
-    let mut arity_all: String = "\t";
     let mut i = 0;
     while i < np {
         let pth: String = list_get(paths, i);
@@ -167,16 +177,16 @@ fn check_modules(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, ar: &Are
             println("ERR\tcheck\toversized " + pth + " " + count_lines(raw).to_string() + " > 256");
             process_exit(1);
         }
-        arity_all = arity_all + scan_import_arity(raw);
+        let arity_cur: String = scan_import_arity(raw);
+        check_dup_proto(arity_cur);
         i = i + 1;
     }
-    check_dup_proto(arity_all);
     let ar_res: Result[String, String] = arena_create(ar, 62914560);
     let ar_id: Int = parse_arena_id(ar_res);
     i = 0;
     while i < np {
         let pth2: String = list_get(paths, i);
-        check_one_module(fs_r, fs_w, sys, ar, ar_id, pth2, i + 1 == np, arity_all, extra_names);
+        check_one_module(fs_r, fs_w, sys, ar, ar_id, pth2, i + 1 == np, extra_names);
         i = i + 1;
     }
     if ar_id >= 0 {
@@ -184,12 +194,27 @@ fn check_modules(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, ar: &Are
     }
 }
 
+fn check_cache_arts_ok(fs_r: &FsReadCap, paths: List[String]) -> Bool {
+    let n: Int = list_len(paths);
+    let mut i: Int = 0;
+    while i < n {
+        let p: String = list_get(paths, i);
+        let rr: Result[String, String] = read_file(fs_r, p);
+        if rr.is_err() { return false; }
+        let src: String = match rr { Ok(s) => s, Err(_) => "" };
+        let art: String = artifact_cache_path(artifact_sha(p, src));
+        if !path_exists(fs_r, art) { return false; }
+        i = i + 1;
+    }
+    return true;
+}
+
 pub fn run_check_path(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, ar: &ArenaCap, path: String) {
     check_cache_ensure(fs_r, sys);
     let paths: List[String] = collect_module_paths(fs_r, path);
     let roll: String = check_paths_listing(fs_r, paths);
     let tk: String = check_cache_tree_key(fs_r, content_hash("dw1\n" + roll));
-    if check_cache_hit(fs_r, tk) {
+    if check_cache_hit(fs_r, tk) && check_cache_arts_ok(fs_r, paths) {
         println("OK");
         return;
     }

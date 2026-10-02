@@ -39,9 +39,14 @@ pub fn typecheck_field_assign(toks: List[String]) {
                                 if end + 1 < n { let mut rty: String = lit_token_type( field_at(list_get(toks, end + 1), 0) );
                                 if rty == "" { rty = field_access_type_at( toks, end + 1, lit_env, struct_table );
                                 }
-                                    if rty == "" {
-                                        rty = atom_type_with_env(toks, end + 1, lit_env);
+                                if rty == "" {
+                                    let mut is_atom: Bool = true;
+                                    if end + 2 < n {
+                                        let nxt: String = field_at(list_get(toks, end + 2), 0);
+                                        if nxt == "DOT" || nxt == "LPAREN" || nxt == "LBRACK" { is_atom = false; }
                                     }
+                                    if is_atom { rty = atom_type_with_env(toks, end + 1, lit_env); }
+                                }
                                     if rty != "" {
                                         if !types_compatible(lty, rty) {
                                             tc_err_at(
