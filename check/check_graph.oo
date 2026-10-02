@@ -1,0 +1,139 @@
+// # Graph Scanning & Anchor Resolution
+//
+// Logline: Scans import graph signatures, resolves target anchor exemptions, and persists graph listings.
+//
+// Setup: Needs FsReadCap, FsWriteCap, and ProcessCap; check_scan, tc_unused_import, tc_call_arity_imports, and check_cache in scope.
+//
+// Beats:
+//   1. Scan graph function names, type names, and import arities across module path closures.
+//   2. Resolve sibling anchor path and extract target anchor extra names.
+//   3. Persist verified graph listings to check cache.
+
+import "check_scan.oo";
+import "tc_unused_import.oo";
+import "tc_call_arity_imports.oo";
+import "check_collect.oo";
+import "check_cache.oo";
+import "check_hash.oo";
+import "ast/load_import_parse.oo";
+
+pub fn scan_graph_names(fs_r: &FsReadCap, paths: List[String]) -> String {
+    return scan_graph_names_for(fs_r, paths, "\t");
+}
+
+pub fn scan_graph_names_for(fs_r: &FsReadCap, paths: List[String], direct: String) -> String {
+    let np: Int = list_len(paths);
+    let mut names: String = "\t";
+    let mut i: Int = 0;
+    while i < np {
+        let mut pth: String = list_get(paths, i);
+        if chars_len(pth) >= 2 && str_slice(pth, 0, 2) == "./" {
+            pth = str_slice(pth, 2, chars_len(pth));
+        }
+        let rr: Result[String, String] = read_file(fs_r, pth);
+        if !rr.is_err() {
+            let raw: String = match rr { Ok(s) => s, Err(_) => "" };
+            if direct.contains("\t" + pth + "\t") {
+                names = names + scan_fn_names(raw);
+            } else {
+                names = names + scan_fn_names_pub(raw);
+            }
+        }
+        i = i + 1;
+    }
+    return names;
+}
+
+pub fn direct_imports_set(fs_r: &FsReadCap, path: String) -> String {
+    let rr: Result[String, String] = read_file(fs_r, path);
+    if rr.is_err() { return "\t"; }
+    let src: String = match rr { Ok(s) => s, Err(_) => "" };
+    let dir: String = path_dirname(path);
+    let n: Int = bytes_len(src);
+    let mut i: Int = 0;
+    let mut start: Int = 0;
+    let mut norm_self: String = path;
+    if chars_len(norm_self) >= 2 && str_slice(norm_self, 0, 2) == "./" {
+        norm_self = str_slice(norm_self, 2, chars_len(norm_self));
+    }
+    let mut set: String = "\t" + norm_self + "\t";
+    while i <= n {
+        let at_end: Bool = i == n;
+        let mut nl: Bool = at_end;
+        if !at_end { if byte_at(src, i) == 10 { nl = true; } }
+        if nl {
+            let line: String = str_slice(src, start, i);
+            let imp: String = parse_import_line(line);
+            if imp != "" {
+                let mut ipath: String = resolve_import_path(fs_r, dir, imp);
+                if chars_len(ipath) >= 2 && str_slice(ipath, 0, 2) == "./" {
+                    ipath = str_slice(ipath, 2, chars_len(ipath));
+                }
+                if ipath != "" { set = set + ipath + "\t"; }
+            }
+            if at_end { i = n + 1; }
+            else { i = i + 1; start = i; }
+        } else { i = i + 1; }
+    }
+    return set;
+}
+
+pub fn scan_graph_type_names(fs_r: &FsReadCap, paths: List[String]) -> String {
+    let np: Int = list_len(paths);
+    let mut names: String = "\t";
+    let mut i: Int = 0;
+    while i < np {
+        let rr: Result[String, String] = read_file(fs_r, list_get(paths, i));
+        if !rr.is_err() { names = names + tc_imp_scan_type_names(match rr { Ok(s) => s, Err(_) => "" }); }
+        i = i + 1;
+    }
+    return names;
+}
+
+pub fn scan_graph_arity(fs_r: &FsReadCap, paths: List[String]) -> String {
+    let np: Int = list_len(paths);
+    let mut arities: String = "\t";
+    let mut i: Int = 0;
+    while i < np {
+        let rr: Result[String, String] = read_file(fs_r, list_get(paths, i));
+        if !rr.is_err() { arities = arities + scan_import_arity(match rr { Ok(s) => s, Err(_) => "" }); }
+        i = i + 1;
+    }
+    return arities;
+}
+
+pub fn sibling_anchor(fs_r: &FsReadCap, path: String) -> String {
+    let n: Int = bytes_len(path);
+    let mut i: Int = n;
+    let mut dir: String = "";
+    while i > 0 {
+        i = i - 1;
+        if byte_at(path, i) == 47 {
+            dir = str_slice(path, 0, i + 1);
+            i = 0;
+        }
+    }
+    let lower: String = dir + "anchor.oo";
+    if path_exists(fs_r, lower) {
+        return lower;
+    }
+    return dir + "ANCHOR.oo";
+}
+
+pub fn anchor_extra_names(fs_r: &FsReadCap, path: String) -> String {
+    if path_is_main_oo(path) {
+        return "\t";
+    }
+    let anc: String = sibling_anchor(fs_r, path);
+    if anc == path || !path_exists(fs_r, anc) {
+        return "\t";
+    }
+    let ap: List[String] = collect_module_paths(fs_r, anc);
+    return scan_graph_names(fs_r, ap);
+}
+
+pub fn persist_graph(fs_r: &FsReadCap, fs: &FsWriteCap, sys: &ProcessCap, root: String, listing: String) {
+    let tk: String = check_cache_tree_key(fs_r, content_hash("dw1\n" + listing));
+    check_cache_put(fs, sys, tk);
+    check_cache_put_body(fs, sys, check_cache_graph_key(fs_r, root), listing);
+}

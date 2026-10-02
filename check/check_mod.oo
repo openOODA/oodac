@@ -1,17 +1,13 @@
-// # Modular cached check driver
+// # Modular Cached Check Driver
 //
 // Logline: Checks every module on the import graph and prints OK. Fast check cache hit skips typecheck.
 //
-// Setup: Needs FsReadCap, FsWriteCap, and ProcessCap; collect_module_paths, scan_fn_names, run_check_core_binds, oo_file_stamp, and the check_cache_* helpers are in scope.
+// Setup: Needs FsReadCap, FsWriteCap, ProcessCap, and ArenaCap; check_graph and check_cache helpers in scope.
 //
 // Beats:
-//   1. Collect the import graph.
-//   2. Typecheck every module and write a per-file artifact.
-//   3. Persist the graph listing after a real check.
-//   Severed ambient crawling (isolated TUs do not crawl sibling anchors).
-//   Entry (last path) keeps import lines so unused-import can see KW_IMPORT.
-//
-// residual: RAM-cold typecheck stays ~523s; disk-warm new-process uses g_ stamp snapshot.
+//   1. Collect import graph paths and test tree key cache hit.
+//   2. Typecheck every module in graph and write per-file typed artifacts.
+//   3. Provide arena attach and detach hooks for compiler driver stages.
 
 import "check_cache.oo";
 import "check_artifact.oo";
@@ -26,82 +22,7 @@ import "check_collect.oo";
 import "check_drive.oo";
 import "check_hash.oo";
 import "tc_call_arity_imports.oo";
-
-fn scan_graph_names(fs_r: &FsReadCap, paths: List[String]) -> String {
-    let np: Int = list_len(paths);
-    let mut names: String = "\t";
-    let mut i: Int = 0;
-    while i < np {
-        let pth: String = list_get(paths, i);
-        let rr: Result[String, String] = read_file(fs_r, pth);
-        if !rr.is_err() {
-            let raw: String = match rr { Ok(s) => s, Err(_) => "" };
-            names = names + scan_fn_names(raw);
-        }
-        i = i + 1;
-    }
-    return names;
-}
-
-fn scan_graph_type_names(fs_r: &FsReadCap, paths: List[String]) -> String {
-    let np: Int = list_len(paths);
-    let mut names: String = "\t";
-    let mut i: Int = 0;
-    while i < np {
-        let rr: Result[String, String] = read_file(fs_r, list_get(paths, i));
-        if !rr.is_err() { names = names + tc_imp_scan_type_names(match rr { Ok(s) => s, Err(_) => "" }); }
-        i = i + 1;
-    }
-    return names;
-}
-
-fn scan_graph_arity(fs_r: &FsReadCap, paths: List[String]) -> String {
-    let np: Int = list_len(paths);
-    let mut arities: String = "\t";
-    let mut i: Int = 0;
-    while i < np {
-        let rr: Result[String, String] = read_file(fs_r, list_get(paths, i));
-        if !rr.is_err() { arities = arities + scan_import_arity(match rr { Ok(s) => s, Err(_) => "" }); }
-        i = i + 1;
-    }
-    return arities;
-}
-
-fn sibling_anchor(fs_r: &FsReadCap, path: String) -> String {
-    let n: Int = chars_len(path);
-    let mut i: Int = n;
-    let mut dir: String = "";
-    while i > 0 {
-        i = i - 1;
-        if char_at(path, i) == "/" {
-            dir = str_slice(path, 0, i + 1);
-            i = 0;
-        }
-    }
-    let lower: String = dir + "anchor.oo";
-    if path_exists(fs_r, lower) {
-        return lower;
-    }
-    return dir + "ANCHOR.oo";
-}
-
-fn anchor_extra_names(fs_r: &FsReadCap, path: String) -> String {
-    if path_is_main_oo(path) {
-        return "\t";
-    }
-    let anc: String = sibling_anchor(fs_r, path);
-    if anc == path || !path_exists(fs_r, anc) {
-        return "\t";
-    }
-    let ap: List[String] = collect_module_paths(fs_r, anc);
-    return scan_graph_names(fs_r, ap);
-}
-
-fn persist_graph(fs_r: &FsReadCap, fs: &FsWriteCap, sys: &ProcessCap, root: String, listing: String) {
-    let tk: String = check_cache_tree_key(fs_r, content_hash("dw1\n" + listing));
-    check_cache_put(fs, sys, tk);
-    check_cache_put_body(fs, sys, check_cache_graph_key(fs_r, root), listing);
-}
+import "check_graph.oo";
 
 fn mod_artifact_write_toks(fs_w: &FsWriteCap, sys: &ProcessCap, path: String, src: String, toks: List[String]) -> String {
     artifact_ensure_dir(sys);
@@ -122,24 +43,39 @@ fn mod_artifact_write_toks(fs_w: &FsWriteCap, sys: &ProcessCap, path: String, sr
     return dest;
 }
 
-fn mod_strip_imports(src: String) -> String {
+fn mod_strip_imports(src: String, strip_imp: Bool) -> String {
     let mut lines: List[String] = list_new();
-    let n: Int = chars_len(src);
+    let n: Int = bytes_len(src);
     let mut i: Int = 0;
     let mut start: Int = 0;
+    let mut in_str: Bool = false;
     while i <= n {
         let at_end: Bool = i == n;
         let mut nl: Bool = at_end;
-        if !at_end { if char_at(src, i) == "\n" { nl = true; } }
+        if !at_end { if byte_at(src, i) == 10 { nl = true; } }
         if nl {
-            let line: String = str_slice(src, start, i);
-            if parse_import_line(line) == "" {
-                lines = list_push(lines, line);
-            } else {
-                lines = list_push(lines, "");
+            let mut line: String = str_slice(src, start, i);
+            if !in_str {
+                let ln: Int = bytes_len(line);
+                let mut sp: Int = 0;
+                while sp < ln && (byte_at(line, sp) == 32 || byte_at(line, sp) == 9) { sp = sp + 1; }
+                if sp > 0 { line = str_slice(line, sp, ln); }
             }
-            if at_end { i = n + 1; }
-            else { i = i + 1; start = i; }
+            let mut li: Int = 0;
+            let ln2: Int = bytes_len(line);
+            while li < ln2 {
+                let b2: Int = byte_at(line, li);
+                if in_str {
+                    if b2 == 92 { li = li + 1; } else if b2 == 34 { in_str = false; }
+                } else {
+                    if b2 == 47 && li + 1 < ln2 && byte_at(line, li + 1) == 47 { li = ln2; }
+                    else if b2 == 34 { in_str = true; }
+                }
+                li = li + 1;
+            }
+            if strip_imp && parse_import_line(line) != "" { lines = list_push(lines, ""); }
+            else { lines = list_push(lines, line); }
+            if at_end { i = n + 1; } else { i = i + 1; start = i; }
         } else { i = i + 1; }
     }
     return fold_toks(lines, 0, list_len(lines));
@@ -151,12 +87,12 @@ fn check_one_module(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, ar: &
     }
     let rr2: Result[String, String] = read_file(fs_r, pth2);
     let raw2: String = match rr2 { Ok(s) => s, Err(_) => "" };
-    let mut body: String = str_slice(raw2, 0, chars_len(raw2));
-    if !is_last { body = mod_strip_imports(raw2); }
+    let body: String = mod_strip_imports(raw2, !is_last);
     if chars_len(body) > 0 {
         // Gap 10: per-TU closure binds (not graph union); target keeps anchor.
         let closure: List[String] = collect_module_paths(fs_r, pth2);
-        let mut tu_names: String = scan_graph_names(fs_r, closure) + scan_graph_type_names(fs_r, closure);
+        let direct: String = direct_imports_set(fs_r, pth2);
+        let mut tu_names: String = scan_graph_names_for(fs_r, closure, direct) + scan_graph_type_names(fs_r, closure);
         if is_last { tu_names = tu_names + extra_names; }
         let binds: String = names_to_depth0_binds(tu_names);
         let tu_arity: String = scan_graph_arity(fs_r, closure);
@@ -238,4 +174,3 @@ pub fn arena_attach(ar: &ArenaCap, id: Int) -> Result[String, String] {
 pub fn arena_detach(ar: &ArenaCap) -> Result[String, String] {
     return arena_alloc(ar, 0, 0 - 1);
 }
-

@@ -12,28 +12,24 @@
 
 pub fn is_known_ext_name(name: String) -> Bool {
     let mut s: String = name;
-    if chars_len(s) > 0 && str_slice(s, 0, 1) == "@" {
-        s = str_slice(s, 1, chars_len(s));
+    let n: Int = bytes_len(s);
+    if n == 0 { return false; }
+    if byte_at(s, 0) == 64 {
+        s = byte_slice(s, 1, n);
     }
-    let n: Int = chars_len(s);
-    if n >= 7 && str_slice(s, 0, 7) == "crypto_" { return true; }
-    if n >= 7 && str_slice(s, 0, 7) == "oo_gpu_" { return true; }
-    if n >= 9 && str_slice(s, 0, 9) == "oo_actor_" { return true; }
-    if n >= 9 && str_slice(s, 0, 9) == "oo_audio_" { return true; }
-    if n >= 11 && str_slice(s, 0, 11) == "oo_channel_" { return true; }
-    if n >= 10 && str_slice(s, 0, 10) == "oo_thread_" { return true; }
-    if n >= 7 && str_slice(s, 0, 7) == "oo_shm_" { return true; }
-    if n >= 7 && str_slice(s, 0, 7) == "oo_sys_" { return true; }
+    let b0: Int = byte_at(s, 0);
+    if b0 != 99 && b0 != 111 && b0 != 103 && b0 != 97 && b0 != 116 && b0 != 115 {
+        return false;
+    }
+    if str_starts_with(s, "crypto_") || str_starts_with(s, "oo_gpu_") { return true; }
+    if str_starts_with(s, "oo_actor_") || str_starts_with(s, "oo_audio_") { return true; }
+    if str_starts_with(s, "oo_channel_") || str_starts_with(s, "oo_thread_") { return true; }
+    if str_starts_with(s, "oo_shm_") || str_starts_with(s, "oo_sys_") { return true; }
     if s == "oo_memfd_create" || s == "oo_ftruncate" || s == "oo_mmap" || s == "oo_munmap" || s == "oo_close_fd" { return true; }
-    if s == "oo_otp_supervise" { return true; }
-    if s == "oo_shake256" || s == "oo_shake128" { return true; }
+    if s == "oo_otp_supervise" || s == "oo_shake256" || s == "oo_shake128" { return true; }
     if s == "oo_sha3_256_bytes" || s == "oo_sha3_512_bytes" { return true; }
-    if n >= 4 && str_slice(s, 0, 4) == "gpu_" { return true; }
-    if n >= 6 && str_slice(s, 0, 6) == "actor_" { return true; }
-    if n >= 6 && str_slice(s, 0, 6) == "audio_" { return true; }
-    if n >= 8 && str_slice(s, 0, 8) == "channel_" { return true; }
-    if n >= 7 && str_slice(s, 0, 7) == "thread_" { return true; }
-    if n >= 4 && str_slice(s, 0, 4) == "shm_" { return true; }
-    if s == "otp_supervise" { return true; }
+    if str_starts_with(s, "gpu_") || str_starts_with(s, "actor_") { return true; }
+    if str_starts_with(s, "audio_") || str_starts_with(s, "channel_") { return true; }
+    if str_starts_with(s, "thread_") || str_starts_with(s, "shm_") || s == "otp_supervise" { return true; }
     return false;
 }

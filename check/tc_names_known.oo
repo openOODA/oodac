@@ -126,11 +126,17 @@ fn is_known_simd(name: String) -> Bool {
 }
 
 pub fn is_known_name(name: String) -> Bool {
-    if is_known_ext_name(name) { return true; }
+    if is_known_lang_types(name) { return true; }
+    let n: Int = bytes_len(name);
+    if n == 0 { return false; }
+    let b: Int = byte_at(name, 0);
+    if b == 118 || b == 120 || b == 121 || b == 122 || b == 107 || b == 113 {
+        return false;
+    }
     if is_known_data(name) { return true; }
+    if is_known_ext_name(name) { return true; }
     if is_known_io_sys(name) { return true; }
     if is_known_net_crypto(name) { return true; }
-    if is_known_lang_types(name) { return true; }
     if is_known_simd(name) { return true; }
     return false;
 }
