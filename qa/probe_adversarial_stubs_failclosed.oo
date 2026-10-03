@@ -14,7 +14,7 @@
 import "std/science/phys/relativistic/astro_stubs.oo";
 import "std/science/phys/relativistic/astro_advanced_stubs.oo";
 import "std/science/phys/attitude/attitude_stubs.oo";
-import "std/sec/asymmetric/fhe_stubs.oo";
+import "std/sec/asymmetric/fhe/fhe_stubs.oo";
 import "std/app/data/graph/db_graph_stubs.oo";
 import "std/fs/archive/gzip.oo";
 import "std/fs/archive/tar.oo";
@@ -225,5 +225,4 @@ pub fn main() {
     }
 
     println("probe_adversarial_stubs_failclosed: PASSED");
-    process_exit(0);
 }

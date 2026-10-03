@@ -62,7 +62,7 @@ pub fn main(fs_r: &FsReadCap, fs_w: &FsWriteCap, p: &ProcessCap, env: &EnvCap, a
         println("FAIL smt unproven should deny");
         process_exit(1);
     }
-    let br: Result[String, String] = sys_exec(p, host, "build", p_main, "-o", "/tmp/lattice_main.bin");
+    let br: Result[String, String] = sys_exec(p, host, "build", "oodac/main.oo", "-o", "/tmp/lattice_main.bin");
     if br.is_ok() {
         println("FAIL unique_fns should deny compiler main build");
         process_exit(1);
