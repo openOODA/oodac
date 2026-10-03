@@ -9,31 +9,30 @@
 //   2. write_host_rt writes oodac_host_rt.c under the jail tmp dir.
 //   3. oodar_lib_core locates liboodar-core.a or fails closed.
 //   4. oodar_resolve_exts scans IR for symbol prefixes to auto-link extensions.
-//   5. oodar_link_rsp writes linker response files for clang invocations.
+//   5. oodar_link_rsp writes namespaced linker response files for clang invocations.
 
 import "cli_host_rt.oo";
-
-fn path_parent_oodar(p: String) -> String {
-    let n: Int = chars_len(p);
-    let mut i: Int = n;
-    while i > 0 {
-        i = i - 1;
-        if char_at(p, i) == "/" {
-            if i == 0 { return "/"; }
-            return str_slice(p, 0, i);
-        }
-    }
-    return ".";
-}
 
 pub fn oodar_root(fs_r: &FsReadCap, host: String) -> String {
     if path_exists(fs_r, "oodar/oodar.c") { return "oodar"; }
     if path_exists(fs_r, "../oodar/oodar.c") { return "../oodar"; }
-    let a: String = path_parent_oodar(host);
-    let b: String = path_parent_oodar(a);
-    let c: String = path_parent_oodar(b);
-    if path_exists(fs_r, b + "/oodar/oodar.c") { return b + "/oodar"; }
-    if path_exists(fs_r, c + "/oodar/oodar.c") { return c + "/oodar"; }
+    let mut cur: String = host;
+    let mut step: Int = 0;
+    while step < 3 {
+        let n: Int = chars_len(cur);
+        let mut i: Int = n;
+        let mut p: String = ".";
+        while i > 0 {
+            i = i - 1;
+            if char_at(cur, i) == "/" {
+                if i == 0 { p = "/"; } else { p = str_slice(cur, 0, i); }
+                i = 0;
+            }
+        }
+        cur = p;
+        if path_exists(fs_r, cur + "/oodar/oodar.c") { return cur + "/oodar"; }
+        step = step + 1;
+    }
     println("ERR\tbuild\toodar.c missing");
     process_exit(1);
     return "";
@@ -56,28 +55,6 @@ pub fn rsp_quote(p: String) -> String {
     return p;
 }
 
-fn list_has_str(l: List[String], item: String) -> Bool {
-    let n: Int = list_len(l);
-    let mut i: Int = 0;
-    while i < n {
-        if list_get(l, i) == item { return true; }
-        i = i + 1;
-    }
-    return false;
-}
-
-pub fn oodar_lib_core(fs_r: &FsReadCap, od: String) -> String {
-    if path_exists(fs_r, od + "/scripts/lib/liboodar-core.a") { return od + "/scripts/lib/liboodar-core.a"; }
-    if path_exists(fs_r, od + "/lib/liboodar-core.a") { return od + "/lib/liboodar-core.a"; }
-    if path_exists(fs_r, od + "/liboodar-core.a") { return od + "/liboodar-core.a"; }
-    if path_exists(fs_r, "oodar/scripts/lib/liboodar-core.a") { return "oodar/scripts/lib/liboodar-core.a"; }
-    if path_exists(fs_r, "oodar/lib/liboodar-core.a") { return "oodar/lib/liboodar-core.a"; }
-    if path_exists(fs_r, "../oodar/scripts/lib/liboodar-core.a") { return "../oodar/scripts/lib/liboodar-core.a"; }
-    println("ERR\tbuild\tliboodar-core.a missing");
-    process_exit(1);
-    return "";
-}
-
 fn ext_archive_path(fs_r: &FsReadCap, od: String, leaf: String) -> String {
     let p1: String = od + "/scripts/lib/" + leaf;
     if path_exists(fs_r, p1) { return p1; }
@@ -90,6 +67,14 @@ fn ext_archive_path(fs_r: &FsReadCap, od: String, leaf: String) -> String {
     let p5: String = "../oodar/scripts/lib/" + leaf;
     if path_exists(fs_r, p5) { return p5; }
     return p1;
+}
+
+pub fn oodar_lib_core(fs_r: &FsReadCap, od: String) -> String {
+    let p: String = ext_archive_path(fs_r, od, "liboodar-core.a");
+    if path_exists(fs_r, p) { return p; }
+    println("ERR\tbuild\tliboodar-core.a missing");
+    process_exit(1);
+    return "";
 }
 
 pub fn oodar_resolve_exts(fs_r: &FsReadCap, od: String, ir: String) -> List[String] {
@@ -117,20 +102,20 @@ pub fn oodar_resolve_exts(fs_r: &FsReadCap, od: String, ir: String) -> List[Stri
     return exts;
 }
 
-pub fn oodar_gpu_ext(fs_r: &FsReadCap, od: String) -> List[String] {
-    let mut exts: List[String] = list_new();
-    let p: String = ext_archive_path(fs_r, od, "liboodar-gpu.a");
-    if path_exists(fs_r, p) { exts = list_push(exts, p); }
-    return exts;
-}
-
 pub fn oodar_merge_exts(cur: List[String], newly: List[String]) -> List[String] {
     let mut out: List[String] = cur;
     let n: Int = list_len(newly);
     let mut i: Int = 0;
     while i < n {
         let item: String = list_get(newly, i);
-        if !list_has_str(out, item) {
+        let on: Int = list_len(out);
+        let mut j: Int = 0;
+        let mut has: Bool = false;
+        while j < on {
+            if list_get(out, j) == item { has = true; }
+            j = j + 1;
+        }
+        if !has {
             out = list_push(out, item);
         }
         i = i + 1;
@@ -138,7 +123,7 @@ pub fn oodar_merge_exts(cur: List[String], newly: List[String]) -> List[String] 
     return out;
 }
 
-pub fn oodar_link_rsp(fs_w: &FsWriteCap, tmp_dir: String, initial_path: String, exts: List[String]) -> String {
+pub fn oodar_link_rsp(fs_w: &FsWriteCap, tmp_dir: String, tmp_h: String, initial_path: String, exts: List[String]) -> String {
     let mut s: String = "";
     if initial_path != "" {
         s = s + rsp_quote(initial_path) + "\n";
@@ -149,7 +134,12 @@ pub fn oodar_link_rsp(fs_w: &FsWriteCap, tmp_dir: String, initial_path: String, 
         s = s + rsp_quote(list_get(exts, i)) + "\n";
         i = i + 1;
     }
-    let rsp_path: String = tmp_dir + "/link.rsp";
+    let mut rsp_name: String = "/link.rsp";
+    if tmp_h != "" {
+        let tag: String = if chars_len(tmp_h) >= 16 { str_slice(tmp_h, 0, 16) } else { tmp_h };
+        rsp_name = "/link_" + tag + ".rsp";
+    }
+    let rsp_path: String = tmp_dir + rsp_name;
     let wr: Result[Void, String] = write_file(fs_w, rsp_path, s);
     if wr.is_err() {
         println("ERR\tbuild\twrite link.rsp failed");

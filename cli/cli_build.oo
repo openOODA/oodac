@@ -162,8 +162,8 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
             process_exit(1);
         }
         let lib_a: String = oodar_lib_core(fs_r, od);
-        let gexts: List[String] = oodar_gpu_ext(fs_r, od);
-        let rsp_path: String = oodar_link_rsp(fs_w, tmp_dir, tmp_o, gexts);
+        let gexts: List[String] = oodar_resolve_exts(fs_r, od, "@oo_gpu_");
+        let rsp_path: String = oodar_link_rsp(fs_w, tmp_dir, tmp_h, tmp_o, gexts);
         let r: Result[String, String] = sys_exec(sys, "clang++", "--no-default-config", "-O2", "@" + rsp_path, lib_a, "-L/opt/rocm/lib", "-lamdhip64", "-lm", "-ldl", "-lpthread", "-o", out);
         let _: Result[String, String] = sys_exec(sys, "/usr/bin/rm", "-f", rsp_path);
         if !r.is_ok() {
@@ -196,7 +196,7 @@ pub fn run_build_san(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env:
         }
         let lib_a: String = oodar_lib_core(fs_r, od);
         let exts: List[String] = cpu_extend_exts(oodar_resolve_exts(fs_r, od, em.val), env);
-        let rsp_path: String = oodar_link_rsp(fs_w, tmp_dir, tmp_ll, exts);
+        let rsp_path: String = oodar_link_rsp(fs_w, tmp_dir, tmp_h, tmp_ll, exts);
         let cm: Int = clang_major(sys);
         if cm < 15 {
             println("ERR\tbuild\tclang >= 15 required for LLVM IR (opaque pointers); got major " + cm.to_string() + " via PATH");

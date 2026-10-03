@@ -63,8 +63,8 @@ pub fn run_build_cuda(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env
         process_exit(1);
     }
     let lib_a: String = oodar_lib_core(fs_r, od);
-    let gexts: List[String] = oodar_gpu_ext(fs_r, od);
-    let rsp_path: String = oodar_link_rsp(fs_w, tmp_dir, tmp_o, gexts);
+    let gexts: List[String] = oodar_resolve_exts(fs_r, od, "@oo_gpu_");
+    let rsp_path: String = oodar_link_rsp(fs_w, tmp_dir, tmp_h, tmp_o, gexts);
     let r: Result[String, String] = sys_exec(sys, nvcc, "-O2", "-optf", rsp_path, lib_a, "-o", out);
     let _: Result[String, String] = sys_exec(sys, "/usr/bin/rm", "-f", rsp_path);
     if !r.is_ok() {

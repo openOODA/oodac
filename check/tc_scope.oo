@@ -18,16 +18,18 @@ pub fn binds_has(binds: String, name: String) -> Bool {
 
 // Scope-aware undefined-var: single reverse-pass prefix check with zero-alloc byte scan.
 pub fn scope_has(binds: List[String], name: String, max_depth: Int) -> Bool {
-    let prefix: String = name + "@";
-    let plen: Int = bytes_len(prefix);
-    let p0: Int = byte_at(prefix, 0);
+    let nlen: Int = bytes_len(name);
+    if nlen == 0 {
+        return false;
+    }
+    let p0: Int = byte_at(name, 0);
     let mut i: Int = list_len(binds) - 1;
     while i >= 0 {
         let e: String = list_get(binds, i);
-        if bytes_len(e) >= plen && byte_at(e, 0) == p0 && str_starts_with(e, prefix) {
+        if bytes_len(e) > nlen && byte_at(e, 0) == p0 && byte_at(e, nlen) == 64 && str_starts_with(e, name) {
             let elen: Int = bytes_len(e);
             let mut d: Int = 0;
-            let mut j: Int = plen;
+            let mut j: Int = nlen + 1;
             while j < elen {
                 let b: Int = byte_at(e, j);
                 if b >= 48 && b <= 57 {
