@@ -17,6 +17,32 @@ fn art_sha16(path: String, src: String) -> String {
     return digest;
 }
 
+fn resolve_p(fs: &FsReadCap, p: String) -> String {
+    if path_exists(fs, p) { return p; }
+    if path_exists(fs, "oodac/" + p) { return "oodac/" + p; }
+    if chars_len(p) > 6 && str_slice(p, 0, 6) == "oodac/" {
+        let sub: String = str_slice(p, 6, chars_len(p));
+        if path_exists(fs, sub) { return sub; }
+    }
+    return p;
+}
+
+fn verify_emits(p: &ProcessCap, host: String, srcp: String, dest: String) -> Result[Int, String] {
+    let em: Result[String, String] = sys_exec(p, host, "emit-c", "--artifact", dest, srcp);
+    if em.is_ok() {
+        return Err("emit-c still lives");
+    }
+    let ll: Result[String, String] = sys_exec(p, host, "emit-llvm", srcp);
+    if ll.is_err() {
+        return Err("emit-llvm artifact");
+    }
+    let txt: String = match ll { Ok(s) => s, Err(_) => "" };
+    if str_index_of(txt, "@oo_slist_new") < 0 {
+        return Err("artifact emit missed slist xs");
+    }
+    return Ok(0);
+}
+
 pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
     let hr: Result[String, String] = env_get(env, "OODA_COMPILER");
     let host: String = match hr { Ok(s) => s, Err(_) => "" };
@@ -24,7 +50,7 @@ pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
         println("ERR\tOODA_COMPILER required");
         process_exit(1);
     }
-    let srcp: String = "oodac/qa/probe_artifact_list.oo";
+    let srcp: String = resolve_p(fs_r, "qa/probe_artifact_list.oo");
     let sr: Result[String, String] = read_file(fs_r, srcp);
     if sr.is_err() {
         println("ERR\tunreadable victim");
@@ -41,19 +67,10 @@ pub fn main(p: &ProcessCap, env: &EnvCap, fs_r: &FsReadCap) {
         println("ERR\tartifact missing");
         process_exit(1);
     }
-    let em: Result[String, String] = sys_exec(p, host, "emit-c", "--artifact", dest, srcp);
-    if em.is_ok() {
-        println("ERR\temit-c still lives");
-        process_exit(1);
-    }
-    let ll: Result[String, String] = sys_exec(p, host, "emit-llvm", srcp);
-    if ll.is_err() {
-        println("ERR\temit-llvm artifact");
-        process_exit(1);
-    }
-    let txt: String = match ll { Ok(s) => s, Err(_) => "" };
-    if str_index_of(txt, "@oo_slist_new") < 0 {
-        println("ERR\tartifact emit missed slist xs");
+    let vr: Result[Int, String] = verify_emits(p, host, srcp, dest);
+    if vr.is_err() {
+        let err_msg: String = match vr { Ok(_) => "", Err(m) => m };
+        println("ERR\t" + err_msg);
         process_exit(1);
     }
     println("OK");

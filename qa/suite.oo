@@ -78,6 +78,17 @@ pub fn main(p: &ProcessCap, fs_r: &FsReadCap, env: &EnvCap, args: List[String]) 
     ps = list_push(ps, resolve_probe(fs_r, "qa/probe_blackbox_autopsy.oo"));
     ps = list_push(ps, resolve_probe(fs_r, "qa/probe_adversarial_stubs_failclosed.oo"));
     ps = list_push(ps, resolve_probe(fs_r, "qa/probe_build_is_check.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_adversarial_struct_arc.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_adversarial_match_blocks.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_adversarial_str_equality.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_adversarial_unused_imports.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_artifact_mutate.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_attach_contract.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_borrow_copy_ops.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_dup_proto_build.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_llvm_arc_scope.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_match_err_temps.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_smt_prover_lia.oo"));
 
     let mut i: Int = 0;
     while i < list_len(ps) {
