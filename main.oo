@@ -51,8 +51,21 @@ pub fn main(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, env: &EnvCap,
         return;
     }
     if cmd == "check" {
-        if json_errors { run_check_json_errors(fs_r, fs_w, sys, env, path); return; }
+        if json_errors {
+            run_check_json_errors(fs_r, fs_w, sys, env, path);
+            let mut jk: Int = 9;
+            while jk < list_len(a) {
+                run_check_json_errors(fs_r, fs_w, sys, env, list_get(a, jk));
+                jk = jk + 1;
+            }
+            return;
+        }
         run_check_path(fs_r, fs_w, sys, ar, path);
+        let mut k: Int = 9;
+        while k < list_len(a) {
+            run_check_path(fs_r, fs_w, sys, ar, list_get(a, k));
+            k = k + 1;
+        }
         return;
     }
     if cmd == "tokens" {

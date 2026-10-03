@@ -5,22 +5,22 @@
   "signal_name": "NONE",
   "signal": "NONE",
   "fault_address": "0x0",
-  "failure_coordinate": "/home/ubermetroid/Projects/openOODA/oodar/fs/os/sys.c:143:0:oo_process_exit",
+  "failure_coordinate": "/home/ubermetroid/Projects/openOODA/oodar/sec/cap/cap_require.c:26:0:oo_cap_require",
   "root_cause": "CAPABILITY_TRAP_VIOLATION",
   "remediation": "Grant required capability token before invoking restricted operation.",
   "capability": {
-    "token_name": "ProcessCap",
-    "operation": "oo_process_exit"
+    "token_name": "hot_reload",
+    "operation": "oo_cap_require"
   },
   "call_stack": [
-    {"frame": 0, "address": "0x403777"}
+    {"frame": 0, "address": "0x40299b"}
   ],
   "flight_events": [
-    {"seq": 1, "timestamp_us": 1790947165598955, "category": "core", "action": "init", "detail": "flight_sensor_active"},
-    {"seq": 2, "timestamp_us": 1790947165599012, "category": "capability", "action": "violation", "detail": "ProcessCap"}
+    {"seq": 1, "timestamp_us": 1791064050607175, "category": "core", "action": "init", "detail": "flight_sensor_active"},
+    {"seq": 2, "timestamp_us": 1791064050607311, "category": "capability", "action": "violation", "detail": "hot_reload"}
   ],
   "flight_log": [
-    {"seq": 1, "timestamp_us": 1790947165598955, "category": "core", "action": "init", "detail": "flight_sensor_active"},
-    {"seq": 2, "timestamp_us": 1790947165599012, "category": "capability", "action": "violation", "detail": "ProcessCap"}
+    {"seq": 1, "timestamp_us": 1791064050607175, "category": "core", "action": "init", "detail": "flight_sensor_active"},
+    {"seq": 2, "timestamp_us": 1791064050607311, "category": "capability", "action": "violation", "detail": "hot_reload"}
   ]
 }

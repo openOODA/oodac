@@ -89,6 +89,33 @@ pub fn main(p: &ProcessCap, fs_r: &FsReadCap, env: &EnvCap, args: List[String]) 
     ps = list_push(ps, resolve_probe(fs_r, "qa/probe_llvm_arc_scope.oo"));
     ps = list_push(ps, resolve_probe(fs_r, "qa/probe_match_err_temps.oo"));
     ps = list_push(ps, resolve_probe(fs_r, "qa/probe_smt_prover_lia.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_adversarial_param_names.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_adversarial_str_byte_at.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_artifact_list.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_bare_struct_list.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_borrow_shared.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_build_std_import.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_emit_math.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_exec_wait.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_field_str_eq.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_flags_only.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_list_new_call.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_list_ok.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_list_slice.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_llvm_argc.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_llvm_listops.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_match_prim_list.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_match_struct_list.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_ok_field.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_one_tu_emit.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_option_str.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_result_arg.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_result_arg_ok.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_result_let.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_result_let_ok.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_result_unknown_kind.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_smt_vc_gen.oo"));
+    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_struct_field_arc.oo"));
 
     let mut i: Int = 0;
     while i < list_len(ps) {

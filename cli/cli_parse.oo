@@ -18,6 +18,7 @@ pub fn parse_cli_argv(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, arg
     let mut cmd: String = "";
     let mut path: String = "";
     let mut out_arg: String = "";
+    let mut extra_paths: List[String] = list_new();
     let mut backend: String = "llvm";
     let mut json_errors: Bool = false;
     let mut is_plain: Bool = false;
@@ -80,10 +81,19 @@ pub fn parse_cli_argv(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, arg
         } else {
             if npos == 0 { cmd = a; }
             else if npos == 1 { path = a; }
-            else if npos == 2 { out_arg = a; }
-            else {
-                println("oodac: too many arguments");
-                process_exit(2);
+            else if npos == 2 {
+                if cmd == "check" {
+                    extra_paths = list_push(extra_paths, a);
+                } else {
+                    out_arg = a;
+                }
+            } else {
+                if cmd == "check" {
+                    extra_paths = list_push(extra_paths, a);
+                } else {
+                    println("oodac: too many arguments");
+                    process_exit(2);
+                }
             }
             npos = npos + 1;
             i = i + 1;
@@ -110,6 +120,20 @@ pub fn parse_cli_argv(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, arg
         println("ERR\tload\tsource exceeds 64KiB per-file limit");
         process_exit(1);
     }
+    let mut ep_i: Int = 0;
+    while ep_i < list_len(extra_paths) {
+        let ep: String = list_get(extra_paths, ep_i);
+        if !path_exists(fs_r, ep) {
+            println("ERR\t" + cmd + "\tunreadable file: " + ep);
+            process_exit(2);
+        }
+        let epsz: Int = file_size(fs_r, ep);
+        if epsz > 65536 {
+            println("ERR\tload\tsource exceeds 64KiB per-file limit");
+            process_exit(1);
+        }
+        ep_i = ep_i + 1;
+    }
     let mut packed: List[String] = list_new();
     packed = list_push(packed, cmd);
     packed = list_push(packed, path);
@@ -128,5 +152,10 @@ pub fn parse_cli_argv(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, arg
     let mut f_sh: String = "0";
     if is_shared { f_sh = "1"; }
     packed = list_push(packed, f_sh);
+    let mut ep_k: Int = 0;
+    while ep_k < list_len(extra_paths) {
+        packed = list_push(packed, list_get(extra_paths, ep_k));
+        ep_k = ep_k + 1;
+    }
     return packed;
 }

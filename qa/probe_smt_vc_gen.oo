@@ -10,9 +10,6 @@
 //   3. Test while loop dynamic fallback.
 // RULES.oot 1.7: Under 256 lines.
 
-import "check/smt_contract_parse.oo";
-import "check/smt_wp_calc.oo";
-import "check/smt_prover_lia.oo";
 import "check/smt_vc_gen.oo";
 
 fn mk_tok(k: String, l: Int, c: Int, t: String) -> String {
