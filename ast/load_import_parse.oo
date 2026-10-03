@@ -9,7 +9,7 @@
 //   2. path_dirname and path_join build relative paths; parse_import_line extracts the quoted name and fails on empty.
 //   3. reject_bad_import_name rejects /, ~, .., and backslash.
 
-// String-set helpers (tab-delimited) — still used by check_collect.oo path walk.
+// String-set helpers (tab-delimited) -- still used by check_collect.oo path walk.
 fn path_marker(path: String) -> String {
     return "\t" + path + "\t";
 }
@@ -144,7 +144,7 @@ pub fn reject_bad_import_name(imp: String) {
     }
     // R2 path-A: do NOT scan for "\0". token_scan_string only escapes \n/\t,
     // so "\0" lexes as digit '0' and any prior char_at=="\0" check false-rejected
-    // import names containing '0' (f0.oo, mod10.oo). OO String is C-backed —
+    // import names containing '0' (f0.oo, mod10.oo). OO String is C-backed --
     // embedded NUL cannot appear mid-name. See corpus/import/pass/multi_digit0.oo.
 }
 

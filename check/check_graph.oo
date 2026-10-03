@@ -62,7 +62,7 @@ pub fn direct_imports_set(fs_r: &FsReadCap, path: String) -> String {
         let mut nl: Bool = at_end;
         if !at_end { if byte_at(src, i) == 10 { nl = true; } }
         if nl {
-            let line: String = str_slice(src, start, i);
+            let line: String = byte_slice(src, start, i);
             let imp: String = parse_import_line(line);
             if imp != "" {
                 let mut ipath: String = resolve_import_path(fs_r, dir, imp);
