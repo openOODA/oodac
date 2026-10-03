@@ -74,6 +74,15 @@ fn check_one_module(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, ar: &
     let raw2: String = match rr2 { Ok(s) => s, Err(_) => "" };
     let body: String = mod_strip_imports(raw2, !is_last);
     if chars_len(body) > 0 {
+        let sha2: String = artifact_sha(pth2, raw2);
+        let art2: String = artifact_cache_path(sha2);
+        if !is_last && path_exists(fs_r, art2) {
+            if ar_id >= 0 {
+                let _: Result[String, String] = arena_detach(ar);
+                let _: Result[String, String] = arena_reset(ar, ar_id);
+            }
+            return;
+        }
         // Gap 10: per-TU closure binds (not graph union); target keeps anchor.
         let closure: List[String] = collect_module_paths(fs_r, pth2);
         let direct: String = direct_imports_set(fs_r, pth2);
