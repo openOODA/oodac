@@ -2,26 +2,26 @@
 //
 // Logline: Run core compiler QA probes twice in fresh processes under the primary compiler. Fail closed on miss.
 //
-// Setup: Double-run identity law for compiler verification. Compiler resolves with zero user config.
+// Setup: Double-run identity law for compiler verification. Dynamic runner tag isolates probe binaries.
 //
 // Beats:
-//   1. Resolve primary compiler binary (OODA_COMPILER, OODA_TOOLCHAIN, HOME).
-//   2. Compile and execute each compiler probe twice in fresh processes.
-//   3. Clean up temporary probe binaries immediately.
+//   1. Resolve primary compiler binary and dynamic runner tag (OODA_QA_TAG or shell PID).
+//   2. Compile and execute each compiler probe twice in fresh processes with unique binary paths.
+//   3. Clean up temporary probe binaries immediately without race hazards.
 //   4. Exit 0 only when all compiler probes pass both runs.
 
 import "std/fs/process/env.oo";
 
-fn run_probe_once(p: &ProcessCap, oodac: String, path: String) -> Result[Int, String] {
-    let tmp_bin: String = path + ".tmp.bin";
+fn run_probe_once(p: &ProcessCap, oodac: String, path: String, tag: String) -> Result[Int, String] {
+    let tmp_bin: String = if tag != "" { path + "." + tag + ".tmp.bin" } else { path + ".tmp.bin" };
     let b: Result[String, String] = sys_exec(p, oodac, "build", "--backend", "llvm", path, "-o", tmp_bin);
     if b.is_err() {
-        let _del: Result[String, String] = sys_exec(p, "rm", "-f", tmp_bin); // rm .tmp.bin
+        let _del: Result[String, String] = sys_exec(p, "rm", "-f", tmp_bin);
         let e: String = match b { Ok(_) => "", Err(m) => m };
         return Err("compile fail " + path + ": " + e);
     }
     let r: Result[String, String] = sys_exec(p, "env", "OODA_COMPILER=" + oodac, tmp_bin);
-    let _del: Result[String, String] = sys_exec(p, "rm", "-f", tmp_bin); // rm .tmp.bin
+    let _del: Result[String, String] = sys_exec(p, "rm", "-f", tmp_bin);
     if r.is_err() {
         let e: String = match r { Ok(_) => "", Err(m) => m };
         return Err("exec fail " + path + ": " + e);
@@ -29,10 +29,10 @@ fn run_probe_once(p: &ProcessCap, oodac: String, path: String) -> Result[Int, St
     return Ok(0);
 }
 
-fn run_probe_twice(p: &ProcessCap, oodac: String, path: String) -> Result[Int, String] {
-    let r1: Result[Int, String] = run_probe_once(p, oodac, path);
+fn run_probe_twice(p: &ProcessCap, oodac: String, path: String, tag: String) -> Result[Int, String] {
+    let r1: Result[Int, String] = run_probe_once(p, oodac, path, tag);
     if r1.is_err() { return r1; }
-    let r2: Result[Int, String] = run_probe_once(p, oodac, path);
+    let r2: Result[Int, String] = run_probe_once(p, oodac, path, tag);
     if r2.is_err() { return r2; }
     return Ok(0);
 }
@@ -44,10 +44,15 @@ fn resolve_probe(fs: &FsReadCap, p: String) -> String {
     return p;
 }
 
-pub fn main(p: &ProcessCap, fs_r: &FsReadCap, env: &EnvCap, args: List[String]) -> Result[Int, String] {
-    let _sc1: Result[String, String] = sys_exec(p, "rm", "-rf", ".ooda-cache/ooda-tmp");
-    let _sc2: Result[String, String] = sys_exec(p, "rm", "-rf", "oodac/.ooda-cache/ooda-tmp");
+fn resolve_tag(p: &ProcessCap, env: &EnvCap) -> String {
+    let tr: Result[String, String] = env_get(env, "OODA_QA_TAG");
+    let t: String = match tr { Ok(s) => s, Err(_) => "" };
+    if t != "" { return t; }
+    let pr: Result[String, String] = sys_exec(p, "sh", "-c", "echo $$");
+    return match pr { Ok(s) => str_trim(s), Err(_) => "" };
+}
 
+fn resolve_compiler(fs_r: &FsReadCap, env: &EnvCap) -> Result[String, String] {
     let cr: Result[String, String] = env_get(env, "OODA_COMPILER");
     let mut oodac: String = match cr { Ok(s) => s, Err(_) => "" };
     if oodac == "" {
@@ -63,65 +68,82 @@ pub fn main(p: &ProcessCap, fs_r: &FsReadCap, env: &EnvCap, args: List[String]) 
     if oodac == "" || !path_exists(fs_r, oodac) {
         return Err("no compiler (OODA_COMPILER, OODA_TOOLCHAIN, or HOME layout)");
     }
+    return Ok(oodac);
+}
 
+fn load_probes_1(fs: &FsReadCap, mut ps: List[String]) -> List[String] {
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_api_surface.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_smt_false_kind.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_smt_unproven_kind.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_lattice_audit.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_landlock_jail.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_borrow_kind.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_result_kind.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_option_kind.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_list_kind.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_emit_graph.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_blackbox_autopsy.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_adversarial_stubs_failclosed.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_build_is_check.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_adversarial_struct_arc.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_adversarial_match_blocks.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_adversarial_str_equality.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_adversarial_unused_imports.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_artifact_mutate.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_attach_contract.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_borrow_copy_ops.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_dup_proto_build.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_llvm_arc_scope.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_match_err_temps.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_smt_prover_lia.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_adversarial_param_names.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_adversarial_str_byte_at.oo"));
+    return ps;
+}
+
+fn load_probes_2(fs: &FsReadCap, mut ps: List[String]) -> List[String] {
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_artifact_list.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_bare_struct_list.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_borrow_shared.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_build_std_import.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_emit_math.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_exec_wait.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_field_str_eq.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_flags_only.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_list_new_call.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_list_ok.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_list_slice.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_llvm_argc.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_llvm_listops.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_match_prim_list.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_match_struct_list.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_ok_field.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_one_tu_emit.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_option_str.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_result_arg.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_result_arg_ok.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_result_let.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_result_let_ok.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_result_unknown_kind.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_smt_vc_gen.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_struct_field_arc.oo"));
+    return ps;
+}
+
+pub fn main(p: &ProcessCap, fs_r: &FsReadCap, env: &EnvCap, args: List[String]) -> Result[Int, String] {
+    let _sc1: Result[String, String] = sys_exec(p, "rm", "-rf", ".ooda-cache/ooda-tmp");
+    let _sc2: Result[String, String] = sys_exec(p, "rm", "-rf", "oodac/.ooda-cache/ooda-tmp");
+    let oodac_res: Result[String, String] = resolve_compiler(fs_r, env);
+    let oodac: String = match oodac_res { Ok(s) => s, Err(e) => { return Err(e); } };
+    let tag: String = resolve_tag(p, env);
     let mut ps: List[String] = list_new();
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_api_surface.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_smt_false_kind.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_smt_unproven_kind.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_lattice_audit.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_landlock_jail.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_borrow_kind.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_result_kind.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_option_kind.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_list_kind.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_emit_graph.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_blackbox_autopsy.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_adversarial_stubs_failclosed.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_build_is_check.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_adversarial_struct_arc.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_adversarial_match_blocks.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_adversarial_str_equality.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_adversarial_unused_imports.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_artifact_mutate.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_attach_contract.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_borrow_copy_ops.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_dup_proto_build.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_llvm_arc_scope.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_match_err_temps.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_smt_prover_lia.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_adversarial_param_names.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_adversarial_str_byte_at.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_artifact_list.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_bare_struct_list.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_borrow_shared.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_build_std_import.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_emit_math.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_exec_wait.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_field_str_eq.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_flags_only.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_list_new_call.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_list_ok.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_list_slice.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_llvm_argc.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_llvm_listops.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_match_prim_list.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_match_struct_list.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_ok_field.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_one_tu_emit.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_option_str.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_result_arg.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_result_arg_ok.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_result_let.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_result_let_ok.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_result_unknown_kind.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_smt_vc_gen.oo"));
-    ps = list_push(ps, resolve_probe(fs_r, "qa/probe_struct_field_arc.oo"));
-
+    ps = load_probes_1(fs_r, ps);
+    ps = load_probes_2(fs_r, ps);
     let mut i: Int = 0;
     while i < list_len(ps) {
         let path: String = list_get(ps, i);
         println("  Running " + path);
-        let r: Result[Int, String] = run_probe_twice(p, oodac, path);
+        let r: Result[Int, String] = run_probe_twice(p, oodac, path, tag);
         if r.is_err() { return r; }
         i = i + 1;
     }
