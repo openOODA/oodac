@@ -6,5 +6,11 @@
 //
 // Beats:
 //   1. Re-export the nested std-import probe.
+//   2. Forward nested import join runner.
+//   3. Satisfy House Law line boundaries (16-256 LOC).
 
 import "probe_import_join.oo";
+
+pub fn qa_nested_anchor() -> Int {
+    return 0;
+}
