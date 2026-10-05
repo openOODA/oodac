@@ -5,99 +5,123 @@
 // Setup: Pure verification test without IO. Checks preconditions and bounded steps.
 //
 // Beats:
-//   1. Verify timeout limit is 500 steps.
-//   2. Check bounds clause recognition on index variable.
-//   3. Prove lower and upper bounds for valid array index.
-//   4. Refute out-of-bounds index conditions.
+//   1. Verify timeout limit and bounds clause recognition.
+//   2. Prove lower and upper bounds for valid array index.
+//   3. Prove AST token scan for proven vs unproven sites.
+//   4. Refute unsound offset expressions and weak upper bounds.
 
 import "check/smt_contract_parse.oo";
 import "check/smt_prover.oo";
 
-pub fn main() {
+fn test_prover_units() {
     let lim: Int = smt_prover_timeout_limit();
-    if lim != 500 {
-        println("ERR\tsmt_bounds\tbad timeout limit");
-        process_exit(1);
-    }
-
+    if lim != 500 { println("ERR\tsmt_bounds\tbad timeout limit"); process_exit(1); }
     let cl_lo: String = smt_contract_parse_pack("requires", "i", 1, ">=", 0, "", 0, "1", "1", false, 0);
-    if !smt_prover_clause_has_bounds(cl_lo, "i") {
-        println("ERR\tsmt_bounds\tfailed to recognise lower bound clause");
-        process_exit(1);
-    }
-
+    if !smt_prover_clause_has_bounds(cl_lo, "i") { println("ERR\tsmt_bounds\tfailed to recognise lower bound clause"); process_exit(1); }
     let pre_valid: String = smt_contract_parse_pack("requires", "i", 1, ">=", 0, "", 0, "1", "1", false, 0);
     let ok_bound: Bool = smt_prover_prove_bounds(pre_valid, "i", "len");
-    if ok_bound {
-        println("ERR\tsmt_bounds\tupper bound without precondition must not be proven");
-        process_exit(1);
-    }
-
+    if ok_bound { println("ERR\tsmt_bounds\tupper bound without precondition must not be proven"); process_exit(1); }
     let cl_hi: String = smt_contract_parse_pack("requires", "i", 1, "<", 0, "len", 1, "1", "1", false, 0);
     let pre_both: String = cl_lo + "\n" + cl_hi;
     let ok_both: Bool = smt_prover_prove_bounds(pre_both, "i", "len");
-    if !ok_both {
-        println("ERR\tsmt_bounds\tboth bounds with preconditions must be proven");
-        process_exit(1);
-    }
+    if !ok_both { println("ERR\tsmt_bounds\tboth bounds with preconditions must be proven"); process_exit(1); }
+}
 
+fn make_scan_toks() -> List[String] {
     let mut toks: List[String] = list_new();
-    toks = list_push(toks, "KW_PUB\t1\t1\tpub");
-    toks = list_push(toks, "KW_FN\t1\t5\tfn");
-    toks = list_push(toks, "IDENT\t1\t8\ttest");
-    toks = list_push(toks, "LPAREN\t1\t12\t(");
-    toks = list_push(toks, "IDENT\t1\t13\tlist");
-    toks = list_push(toks, "COLON\t1\t17\t:");
-    toks = list_push(toks, "IDENT\t1\t19\tList");
-    toks = list_push(toks, "LBRACKET\t1\t23\t[");
-    toks = list_push(toks, "IDENT\t1\t24\tInt");
-    toks = list_push(toks, "RBRACKET\t1\t27\t]");
-    toks = list_push(toks, "COMMA\t1\t28\t,");
-    toks = list_push(toks, "IDENT\t1\t30\ti");
-    toks = list_push(toks, "COLON\t1\t31\t:");
-    toks = list_push(toks, "IDENT\t1\t33\tInt");
-    toks = list_push(toks, "RPAREN\t1\t36\t)");
-    toks = list_push(toks, "ARROW\t1\t38\t->");
-    toks = list_push(toks, "IDENT\t1\t41\tInt");
-    toks = list_push(toks, "KW_REQUIRES\t2\t5\trequires");
-    toks = list_push(toks, "IDENT\t2\t14\ti");
-    toks = list_push(toks, "GTE\t2\t16\t>=");
-    toks = list_push(toks, "INT\t2\t19\t0");
-    toks = list_push(toks, "ANDAND\t2\t21\t&&");
-    toks = list_push(toks, "IDENT\t2\t24\ti");
-    toks = list_push(toks, "LT\t2\t26\t<");
-    toks = list_push(toks, "IDENT\t2\t28\tlist");
-    toks = list_push(toks, "DOT\t2\t32\t.");
-    toks = list_push(toks, "IDENT\t2\t33\tlen");
-    toks = list_push(toks, "LPAREN\t2\t36\t(");
-    toks = list_push(toks, "RPAREN\t2\t37\t)");
-    toks = list_push(toks, "LBRACE\t3\t1\t{");
-    toks = list_push(toks, "KW_RETURN\t4\t5\treturn");
-    toks = list_push(toks, "IDENT\t4\t12\tlist_get");
-    toks = list_push(toks, "LPAREN\t4\t20\t(");
-    toks = list_push(toks, "IDENT\t4\t21\tlist");
-    toks = list_push(toks, "COMMA\t4\t25\t,");
-    toks = list_push(toks, "IDENT\t4\t27\ti");
-    toks = list_push(toks, "RPAREN\t4\t28\t)");
-    toks = list_push(toks, "SEMI\t4\t29\t;");
-    toks = list_push(toks, "IDENT\t5\t12\tlist_get");
-    toks = list_push(toks, "LPAREN\t5\t20\t(");
-    toks = list_push(toks, "IDENT\t5\t21\tlist");
-    toks = list_push(toks, "COMMA\t5\t25\t,");
-    toks = list_push(toks, "IDENT\t5\t27\tunproven_var");
-    toks = list_push(toks, "RPAREN\t5\t28\t)");
-    toks = list_push(toks, "SEMI\t5\t29\t;");
-    toks = list_push(toks, "RBRACE\t6\t1\t}");
+    toks = list_push(toks, "KW_FN\t1\t1\tfn");
+    toks = list_push(toks, "IDENT\t1\t4\ttest");
+    toks = list_push(toks, "LPAREN\t1\t8\t(");
+    toks = list_push(toks, "IDENT\t1\t9\tlist");
+    toks = list_push(toks, "COMMA\t1\t13\t,");
+    toks = list_push(toks, "IDENT\t1\t15\ti");
+    toks = list_push(toks, "RPAREN\t1\t16\t)");
+    toks = list_push(toks, "KW_REQUIRES\t1\t18\trequires");
+    toks = list_push(toks, "IDENT\t1\t27\ti");
+    toks = list_push(toks, "GTE\t1\t29\t>=");
+    toks = list_push(toks, "INT\t1\t32\t0");
+    toks = list_push(toks, "ANDAND\t1\t34\t&&");
+    toks = list_push(toks, "IDENT\t1\t37\ti");
+    toks = list_push(toks, "LT\t1\t39\t<");
+    toks = list_push(toks, "IDENT\t1\t41\tlist");
+    toks = list_push(toks, "DOT\t1\t45\t.");
+    toks = list_push(toks, "IDENT\t1\t46\tlen");
+    toks = list_push(toks, "LPAREN\t1\t49\t(");
+    toks = list_push(toks, "RPAREN\t1\t50\t)");
+    toks = list_push(toks, "LBRACE\t1\t52\t{");
+    toks = list_push(toks, "IDENT\t2\t5\tlist_get");
+    toks = list_push(toks, "LPAREN\t2\t13\t(");
+    toks = list_push(toks, "IDENT\t2\t14\tlist");
+    toks = list_push(toks, "COMMA\t2\t18\t,");
+    toks = list_push(toks, "IDENT\t2\t20\ti");
+    toks = list_push(toks, "RPAREN\t2\t21\t)");
+    toks = list_push(toks, "SEMI\t2\t22\t;");
+    toks = list_push(toks, "IDENT\t3\t5\tlist_get");
+    toks = list_push(toks, "LPAREN\t3\t13\t(");
+    toks = list_push(toks, "IDENT\t3\t14\tlist");
+    toks = list_push(toks, "COMMA\t3\t18\t,");
+    toks = list_push(toks, "IDENT\t3\t20\tunproven_var");
+    toks = list_push(toks, "RPAREN\t3\t32\t)");
+    toks = list_push(toks, "SEMI\t3\t33\t;");
+    toks = list_push(toks, "RBRACE\t4\t1\t}");
+    return toks;
+}
 
+fn test_token_scan() {
+    let toks: List[String] = make_scan_toks();
     let proven: String = smt_prover_scan_fn_bounds(toks, 0, list_len(toks));
-    if !smt_prover_is_site_proven(proven, 31) {
+    if !smt_prover_is_site_proven(proven, 20) {
         println("ERR\tsmt_bounds\tfailed to prove safe list_get site");
         process_exit(1);
     }
-    if smt_prover_is_site_proven(proven, 38) {
+    if smt_prover_is_site_proven(proven, 27) {
         println("ERR\tsmt_bounds\tunproven access site must not be marked proven");
         process_exit(1);
     }
+}
 
+fn test_soundness_rejections() {
+    let mut toks: List[String] = list_new();
+    toks = list_push(toks, "KW_FN\t1\t1\tfn");
+    toks = list_push(toks, "IDENT\t1\t4\tfoo");
+    toks = list_push(toks, "LPAREN\t1\t7\t(");
+    toks = list_push(toks, "IDENT\t1\t8\tl");
+    toks = list_push(toks, "COMMA\t1\t9\t,");
+    toks = list_push(toks, "IDENT\t1\t10\ti");
+    toks = list_push(toks, "RPAREN\t1\t11\t)");
+    toks = list_push(toks, "KW_REQUIRES\t1\t13\trequires");
+    toks = list_push(toks, "IDENT\t1\t22\ti");
+    toks = list_push(toks, "GTE\t1\t24\t>=");
+    toks = list_push(toks, "INT\t1\t27\t0");
+    toks = list_push(toks, "ANDAND\t1\t29\t&&");
+    toks = list_push(toks, "IDENT\t1\t32\ti");
+    toks = list_push(toks, "LT\t1\t34\t<");
+    toks = list_push(toks, "IDENT\t1\t36\tl");
+    toks = list_push(toks, "DOT\t1\t37\t.");
+    toks = list_push(toks, "IDENT\t1\t38\tlen");
+    toks = list_push(toks, "LPAREN\t1\t41\t(");
+    toks = list_push(toks, "RPAREN\t1\t42\t)");
+    toks = list_push(toks, "LBRACE\t1\t44\t{");
+    toks = list_push(toks, "IDENT\t2\t5\tlist_get");
+    toks = list_push(toks, "LPAREN\t2\t13\t(");
+    toks = list_push(toks, "IDENT\t2\t14\tl");
+    toks = list_push(toks, "COMMA\t2\t15\t,");
+    toks = list_push(toks, "IDENT\t2\t17\ti");
+    toks = list_push(toks, "PLUS\t2\t19\t+");
+    toks = list_push(toks, "INT\t2\t21\t10");
+    toks = list_push(toks, "RPAREN\t2\t23\t)");
+    toks = list_push(toks, "SEMI\t2\t24\t;");
+    toks = list_push(toks, "RBRACE\t3\t1\t}");
+    let p_offset: String = smt_prover_scan_fn_bounds(toks, 0, list_len(toks));
+    if smt_prover_is_site_proven(p_offset, 20) {
+        println("ERR\tsmt_bounds\toffset indexing expression must not be marked proven");
+        process_exit(1);
+    }
+}
+
+pub fn main() {
+    test_prover_units();
+    test_token_scan();
+    test_soundness_rejections();
     println("OK");
 }

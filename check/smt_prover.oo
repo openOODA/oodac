@@ -80,9 +80,7 @@ fn smt_prover_extract_reqs(toks: List[String], start: Int, end: Int) -> String {
     let mut seg_start: Int = start;
     while seg_start < end {
         let mut seg_end: Int = seg_start;
-        while seg_end < end && smt_tok_k(toks, seg_end) != "ANDAND" {
-            seg_end = seg_end + 1;
-        }
+        while seg_end < end && smt_tok_k(toks, seg_end) != "ANDAND" { seg_end = seg_end + 1; }
         let slen: Int = seg_end - seg_start;
         if slen >= 3 {
             let k0: String = smt_tok_k(toks, seg_start);
@@ -92,22 +90,24 @@ fn smt_prover_extract_reqs(toks: List[String], start: Int, end: Int) -> String {
             let t2: String = smt_tok_t(toks, seg_start + 2);
             let mut cl: String = "";
             if k0 == "IDENT" && (k1 == "GTE" || k1 == "GT") && k2 == "INT" {
-                cl = smt_contract_parse_pack("requires", t0, 1, ">=", 0, "", 0, "1", "1", false, 0);
+                let c_val: Int = parse_int(t2) + if k1 == "GT" { 1 } else { 0 };
+                if c_val >= 0 { cl = smt_contract_parse_pack("requires", t0, 1, ">=", c_val, "", 0, "1", "1", false, 0); }
             } else if k0 == "INT" && (k1 == "LTE" || k1 == "LT") && k2 == "IDENT" {
-                cl = smt_contract_parse_pack("requires", t2, 1, ">=", 0, "", 0, "1", "1", false, 0);
-            } else if k0 == "IDENT" && (k1 == "LT" || k1 == "LTE") {
-                if slen >= 5 && k2 == "IDENT" && smt_tok_k(toks, seg_start + 3) == "DOT" && smt_tok_t(toks, seg_start + 4) == "len" {
-                    cl = smt_contract_parse_pack("requires", t0, 1, "<", 0, t2 + ".len", 1, "1", "1", false, 0);
-                } else if slen >= 5 && t2 == "list_len" && smt_tok_k(toks, seg_start + 3) == "LPAREN" && smt_tok_k(toks, seg_start + 4) == "IDENT" {
-                    let lvar: String = smt_tok_t(toks, seg_start + 4);
-                    cl = smt_contract_parse_pack("requires", t0, 1, "<", 0, lvar + ".len", 1, "1", "1", false, 0);
-                } else if k2 == "IDENT" {
-                    cl = smt_contract_parse_pack("requires", t0, 1, "<", 0, t2, 1, "1", "1", false, 0);
+                let c_val: Int = parse_int(t0) + if k1 == "LT" { 1 } else { 0 };
+                if c_val >= 0 { cl = smt_contract_parse_pack("requires", t2, 1, ">=", c_val, "", 0, "1", "1", false, 0); }
+            } else if k0 == "IDENT" && k1 == "LT" {
+                let mut rvar: String = "";
+                if slen >= 5 && smt_tok_k(toks, seg_start + 3) == "DOT" && smt_tok_t(toks, seg_start + 4) == "len" {
+                    rvar = t2 + ".len";
+                } else if slen >= 5 && t2 == "list_len" && smt_tok_k(toks, seg_start + 3) == "LPAREN" {
+                    rvar = smt_tok_t(toks, seg_start + 4) + ".len";
+                } else {
+                    rvar = t2;
                 }
+                cl = smt_contract_parse_pack("requires", t0, 1, "<", 0, rvar, 1, "1", "1", false, 0);
             }
             if cl != "" {
-                if out != "" { out = out + "\n"; }
-                out = out + cl;
+                if out != "" { out = out + "\n"; } out = out + cl;
             }
         }
         seg_start = seg_end + 1;
@@ -136,8 +136,8 @@ pub fn smt_prover_scan_fn_bounds(toks: List[String], fn_start: Int, fn_end: Int)
     }
     if pre_clauses == "" { return proven_sites; }
     while i < fn_end {
-        if smt_tok_k(toks, i) == "IDENT" && (smt_tok_t(toks, i) == "list_get" || smt_tok_t(toks, i) == "list_get_unchecked") && i + 4 < fn_end {
-            if smt_tok_k(toks, i + 1) == "LPAREN" && smt_tok_k(toks, i + 3) == "COMMA" {
+        if smt_tok_k(toks, i) == "IDENT" && (smt_tok_t(toks, i) == "list_get" || smt_tok_t(toks, i) == "list_get_unchecked") && i + 5 < fn_end {
+            if smt_tok_k(toks, i + 1) == "LPAREN" && smt_tok_k(toks, i + 2) == "IDENT" && smt_tok_k(toks, i + 3) == "COMMA" && smt_tok_k(toks, i + 4) == "IDENT" && smt_tok_k(toks, i + 5) == "RPAREN" {
                 let l_name: String = smt_tok_t(toks, i + 2);
                 let idx_name: String = smt_tok_t(toks, i + 4);
                 let mut ok: Bool = smt_prover_prove_bounds(pre_clauses, idx_name, l_name + ".len");
