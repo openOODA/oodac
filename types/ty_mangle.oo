@@ -28,7 +28,24 @@ pub fn ty_mangle(ty: String) -> String {
     if ty == "TyF32x8" || ty == "f32x8" { return "F32x8"; }
     if ty == "TyF64x4" || ty == "f64x4" { return "F64x4"; }
     let tag: String = ty_tag(ty);
-    if tag == "TyName" { return ty_arg(ty, 0); }
+    if tag == "TyName" {
+        let raw_nm: String = ty_arg(ty, 0);
+        if str_index_of(raw_nm, "[") >= 0 {
+            let mut res_nm: String = "";
+            let n_nm: Int = chars_len(raw_nm);
+            let mut i_nm: Int = 0;
+            while i_nm < n_nm {
+                let ch: String = char_at(raw_nm, i_nm);
+                if ch == "[" { res_nm = res_nm + "__"; }
+                else if ch == "]" || ch == " " { }
+                else if ch == "," { res_nm = res_nm + "_"; }
+                else { res_nm = res_nm + ch; }
+                i_nm = i_nm + 1;
+            }
+            return res_nm;
+        }
+        return raw_nm;
+    }
     if tag == "TyCap" { return "Cap_" + ty_arg(ty, 0); }
     if tag == "TyRef" { return "Ref_" + ty_mangle(ty_arg(ty, 0)); }
     if tag == "TyRefMut" { return "RefMut_" + ty_mangle(ty_arg(ty, 0)); }
@@ -84,7 +101,7 @@ pub fn ty_to_c_typedef(ty: String) -> String {
     if ty == "TyF32x8" || ty == "f32x8" { return "f32x8"; }
     if ty == "TyF64x4" || ty == "f64x4" { return "f64x4"; }
     let tag: String = ty_tag(ty);
-    if tag == "TyName" { return ty_arg(ty, 0); }
+    if tag == "TyName" { return ty_mangle(ty); }
     if tag == "TyCap" { return "long long"; }
     if tag == "TyRef" { return ty_to_c_typedef(ty_arg(ty, 0)) + "*"; }
     if tag == "TyRefMut" { return ty_to_c_typedef(ty_arg(ty, 0)) + "*"; }

@@ -126,6 +126,7 @@ fn load_probes_2(fs: &FsReadCap, mut ps: List[String]) -> List[String] {
     ps = list_push(ps, resolve_probe(fs, "qa/probe_result_let_ok.oo"));
     ps = list_push(ps, resolve_probe(fs, "qa/probe_result_unknown_kind.oo"));
     ps = list_push(ps, resolve_probe(fs, "qa/probe_smt_vc_gen.oo"));
+    ps = list_push(ps, resolve_probe(fs, "qa/probe_smt_bounds_elision.oo"));
     ps = list_push(ps, resolve_probe(fs, "qa/probe_struct_field_arc.oo"));
     return ps;
 }

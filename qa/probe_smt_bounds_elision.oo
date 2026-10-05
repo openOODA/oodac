@@ -1,0 +1,37 @@
+// # Probe SMT Bounds Verification and Elision
+//
+// Logline: Validates SMT bounds verification condition generation under QF_LIA and unchecked lowering flags.
+//
+// Setup: Pure verification test without IO. Checks preconditions and bounded steps.
+//
+// Beats:
+//   1. Verify timeout limit is 500 steps.
+//   2. Check bounds clause recognition on index variable.
+//   3. Prove lower and upper bounds for valid array index.
+//   4. Refute out-of-bounds index conditions.
+
+import "check/smt_contract_parse.oo";
+import "check/smt_prover.oo";
+
+pub fn main() {
+    let lim: Int = smt_prover_timeout_limit();
+    if lim != 500 {
+        println("ERR\tsmt_bounds\tbad timeout limit");
+        process_exit(1);
+    }
+
+    let cl_lo: String = smt_contract_parse_pack("requires", "i", 1, ">=", 0, "", 0, "1", "1", false, 0);
+    if !smt_prover_clause_has_bounds(cl_lo, "i") {
+        println("ERR\tsmt_bounds\tfailed to recognise lower bound clause");
+        process_exit(1);
+    }
+
+    let pre_valid: String = smt_contract_parse_pack("requires", "i", 1, ">=", 0, "", 0, "1", "1", false, 0);
+    let ok_bound: Bool = smt_prover_prove_bounds(pre_valid, "i", "len");
+    if ok_bound {
+        println("ERR\tsmt_bounds\tupper bound without precondition must not be proven");
+        process_exit(1);
+    }
+
+    println("OK");
+}

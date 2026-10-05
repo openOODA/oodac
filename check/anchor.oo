@@ -42,6 +42,7 @@ import "smt_poly_eval.oo";
 import "smt_poly_interval.oo";
 import "smt_poly_sign.oo";
 import "smt_prover_lia.oo";
+import "smt_prover.oo";
 import "smt_verify.oo";
 import "smt_wp_calc.oo";
 import "sym_frame.oo";
@@ -140,4 +141,8 @@ pub fn check_run_typestate(src: String) -> Int {
 pub fn check_run_smt(toks: List[String]) -> Int {
     if smt_verify_pass_run(toks) { return 0; }
     return 1;
+}
+
+pub fn check_run_bounds_smt(pre: String, idx_var: String, len_var: String) -> Bool {
+    return smt_prover_prove_bounds(pre, idx_var, len_var);
 }

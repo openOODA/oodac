@@ -60,9 +60,7 @@ fn borrow_die_move(name: String, line: String) { println("ERR\tmove\tuse after m
 fn borrow_die_alias(name: String, line: String) { println("ERR\tborrow\tmut alias " + name + " at " + line); process_exit(1); }
 
 fn borrow_skip_braces(toks: List[String], pos0: Int) -> Int {
-    let n: Int = list_len(toks);
-    let mut pos: Int = pos0;
-    let mut d: Int = 0;
+    let n: Int = list_len(toks); let mut pos: Int = pos0; let mut d: Int = 0;
     while pos < n {
         let k: String = bk(toks, pos);
         if k == "LBRACE" { d = d + 1; }
@@ -73,8 +71,7 @@ fn borrow_skip_braces(toks: List[String], pos0: Int) -> Int {
 }
 
 fn borrow_find_lbrace(toks: List[String], i0: Int, hi: Int) -> Int {
-    let mut j: Int = i0;
-    let mut d: Int = 0;
+    let mut j: Int = i0; let mut d: Int = 0;
     while j < hi {
         let k: String = bk(toks, j);
         if k == "LPAREN" { d = d + 1; }
@@ -90,9 +87,7 @@ fn borrow_walk_let(toks: List[String], i0: Int, n: Int, moved: String, shr: Stri
     let mut p: Int = i0 + 1;
     if p < n && bk(toks, p) == "KW_MUT" { p = p + 1; }
     if p >= n || bk(toks, p) != "IDENT" {
-        let mut r: List[String] = list_new();
-        r = list_push(r, p.to_string()); r = list_push(r, m); r = list_push(r, s); r = list_push(r, mb); r = list_push(r, o);
-        return r;
+        let mut r: List[String] = list_new(); r = list_push(r, p.to_string()); r = list_push(r, m); r = list_push(r, s); r = list_push(r, mb); r = list_push(r, o); return r;
     }
     let vname: String = bt(toks, p);
     let line: String = field_at(list_get(toks, p), 1);
@@ -142,9 +137,7 @@ fn borrow_walk_let(toks: List[String], i0: Int, n: Int, moved: String, shr: Stri
     if borrow_is_managed(ty) { o = bag_add(o, vname); }
     while p < n && bk(toks, p) != "SEMI" { p = p + 1; }
     if p < n { p = p + 1; }
-    let mut out: List[String] = list_new();
-    out = list_push(out, p.to_string()); out = list_push(out, m); out = list_push(out, s); out = list_push(out, mb); out = list_push(out, o);
-    return out;
+    let mut out: List[String] = list_new(); out = list_push(out, p.to_string()); out = list_push(out, m); out = list_push(out, s); out = list_push(out, mb); out = list_push(out, o); return out;
 }
 
 fn borrow_walk_if(toks: List[String], i: Int, hi: Int, moved: String, shr: String, mutb: String, owned: String) -> List[String] {
@@ -178,9 +171,7 @@ fn borrow_walk_if(toks: List[String], i: Int, hi: Int, moved: String, shr: Strin
     if !has_else {
         if td == "1" { out_m = moved; } else { out_m = bag_union(tm, moved); }
     } else if td == "1" && ed == "1" { } else if td == "1" { out_m = em; } else if ed == "1" { out_m = tm; } else { out_m = bag_union(tm, em); }
-    let mut r: List[String] = list_new();
-    r = list_push(r, out_m); r = list_push(r, nxt.to_string()); r = list_push(r, if td == "1" && ed == "1" { "1" } else { "0" });
-    return r;
+    let mut r: List[String] = list_new(); r = list_push(r, out_m); r = list_push(r, nxt.to_string()); r = list_push(r, if td == "1" && ed == "1" { "1" } else { "0" }); return r;
 }
 
 fn borrow_walk_span(toks: List[String], lo: Int, hi: Int, moved0: String, shr0: String, mutb0: String, owned0: String) -> List[String] {
@@ -225,12 +216,20 @@ fn borrow_walk_span(toks: List[String], lo: Int, hi: Int, moved0: String, shr0: 
             if prev != "DOT" && prev != "COLON" && prev != "KW_FN" && prev != "KW_LET" && prev != "KW_MUT" && prev != "AMP" {
                 if !borrow_is_ctor(name) && bag_has(moved, name) { borrow_die_move(name, field_at(list_get(toks, i), 1)); }
             }
+            if name == "channel_send" || name == "actor_send" {
+                let mut ci: Int = i + 1;
+                while ci < hi && bk(toks, ci) != "SEMI" {
+                    if bk(toks, ci) == "AMP" && ci + 1 < hi && bk(toks, ci + 1) == "KW_MUT" {
+                        println("ERR\tborrow\tforbidden shared &mut across channel boundary at " + field_at(list_get(toks, i), 1));
+                        process_exit(1);
+                    }
+                    ci = ci + 1;
+                }
+            }
             i = i + 1;
         } else { i = i + 1; }
     }
-    let mut out: List[String] = list_new();
-    out = list_push(out, moved); out = list_push(out, shr); out = list_push(out, mutb); out = list_push(out, owned); out = list_push(out, div);
-    return out;
+    let mut out: List[String] = list_new(); out = list_push(out, moved); out = list_push(out, shr); out = list_push(out, mutb); out = list_push(out, owned); out = list_push(out, div); return out;
 }
 
 fn borrow_walk_fn(toks: List[String], i0: Int, n: Int) -> Int {
