@@ -41,19 +41,17 @@ pub fn ws_uleb(b: &mut WasmBuf, n0: Int) {
 }
 
 pub fn ws_sleb(b: &mut WasmBuf, n0: Int) {
-    let mut u: Int = n0;
-    if n0 < 0 { u = 4294967296 + n0; }
-    let mut i: Int = 0;
-    while i < 4 {
-        let lo: Int = u - (u / 128) * 128;
-        b.bytes = elf_u8(b.bytes, lo + 128);
-        u = u / 128;
-        i = i + 1;
-    }
-    if n0 < 0 {
-        b.bytes = elf_u8(b.bytes, u + 112);
-    } else {
-        b.bytes = elf_u8(b.bytes, u);
+    let mut val: Int = n0;
+    let mut more: Bool = true;
+    while more {
+        let mut byte: Int = val & 127;
+        val = val >> 7;
+        if (val == 0 && (byte & 64) == 0) || (val == -1 && (byte & 64) != 0) {
+            more = false;
+        } else {
+            byte = byte | 128;
+        }
+        b.bytes = elf_u8(b.bytes, byte);
     }
 }
 

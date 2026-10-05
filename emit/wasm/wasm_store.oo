@@ -63,6 +63,7 @@ pub fn ws_assign(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &WsG,
         let offs: Int = ws_field_offs(g.structs, field_at(got, 1), fields, toks, pos);
         ws_get(b, parse_int(field_at(got, 0)));
         ws_field_loads(b, g.structs, field_at(got, 1), fields);
+        ws_wrap_i32(b);
         let r: String = ws_expr(b, toks, p + 1, n, gg, lits, cx);
         let q: Int = ws_semi(toks, ws_un_pos(r), n);
         ws_store(b, offs);

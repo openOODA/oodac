@@ -15,52 +15,48 @@ import "wasm_op.oo";
 import "wasm_tok.oo";
 import "wasm_rt.oo";
 
-pub fn ws_slice_emit(b: &mut WasmBuf, base: Int, depth: Int, toks: List[String], pos: Int) {
-    if depth > 6 {
-        ws_fail(ws_line(toks, pos), "nested too deep");
-    }
-    let t0: Int = base;
-    let t1: Int = base + 1;
-    let t2: Int = base + 2;
-    let t3: Int = base + 3;
-    ws_set(b, t2);
-    ws_set(b, t1);
-    ws_set(b, t0);
-    ws_get(b, t0);
-    ws_load(b, 4);
-    ws_set(b, t3);
+fn ws_slice_cond(b: &mut WasmBuf, t1: Int, t2: Int, t3: Int) {
     ws_get(b, t1);
     ws_const(b, 0);
     ws_lt_s(b);
+    ws_extend_i32(b);
     ws_get(b, t2);
     ws_get(b, t1);
     ws_lt_s(b);
+    ws_extend_i32(b);
     ws_or(b);
     ws_get(b, t1);
     ws_get(b, t3);
     ws_gt_s(b);
+    ws_extend_i32(b);
     ws_or(b);
     ws_get(b, t2);
     ws_get(b, t3);
     ws_gt_s(b);
+    ws_extend_i32(b);
     ws_or(b);
-    ws_if_v(b);
+    ws_wrap_i32(b);
+}
+
+fn ws_slice_empty(b: &mut WasmBuf, t0: Int, t3: Int) {
     ws_const(b, 0);
     ws_call(b, 2);
     ws_set(b, t0);
-    ws_const(b, 8);
+    ws_const(b, 16);
     ws_call(b, 2);
     ws_set(b, t3);
     ws_get(b, t3);
+    ws_wrap_i32(b);
     ws_get(b, t0);
     ws_store(b, 0);
     ws_get(b, t3);
-    ws_const(b, 4);
-    ws_add(b);
+    ws_wrap_i32(b);
     ws_const(b, 0);
-    ws_store(b, 0);
+    ws_store(b, 8);
     ws_get(b, t3);
-    ws_else(b);
+}
+
+fn ws_slice_body(b: &mut WasmBuf, t0: Int, t1: Int, t2: Int, t3: Int) {
     ws_get(b, t0);
     ws_load(b, 0);
     ws_set(b, t0);
@@ -76,18 +72,57 @@ pub fn ws_slice_emit(b: &mut WasmBuf, base: Int, depth: Int, toks: List[String],
     ws_call(b, 2);
     ws_set(b, t2);
     ws_copy(b, t2, t0, t3, t1);
-    ws_const(b, 8);
+    ws_const(b, 16);
     ws_call(b, 2);
     ws_set(b, t3);
     ws_get(b, t3);
+    ws_wrap_i32(b);
     ws_get(b, t2);
     ws_store(b, 0);
     ws_get(b, t3);
-    ws_const(b, 4);
-    ws_add(b);
+    ws_wrap_i32(b);
     ws_get(b, t1);
-    ws_store(b, 0);
+    ws_store(b, 8);
     ws_get(b, t3);
+}
+
+pub fn ws_slice_emit(b: &mut WasmBuf, base: Int, depth: Int, toks: List[String], pos: Int) {
+    if depth > 6 {
+        ws_fail(ws_line(toks, pos), "nested too deep");
+    }
+    let t0: Int = base;
+    let t1: Int = base + 1;
+    let t2: Int = base + 2;
+    let t3: Int = base + 3;
+    ws_set(b, t2);
+    ws_set(b, t1);
+    ws_set(b, t0);
+    ws_get(b, t0);
+    ws_load(b, 8);
+    ws_set(b, t3);
+    ws_slice_cond(b, t1, t2, t3);
+    ws_if_v(b);
+    ws_slice_empty(b, t0, t3);
+    ws_else(b);
+    ws_slice_body(b, t0, t1, t2, t3);
+    ws_end(b);
+}
+
+fn ws_char_check(b: &mut WasmBuf, t0: Int, t1: Int) {
+    ws_get(b, t1);
+    ws_const(b, 0);
+    ws_lt_s(b);
+    ws_extend_i32(b);
+    ws_get(b, t1);
+    ws_get(b, t0);
+    ws_load(b, 8);
+    ws_ge_s(b);
+    ws_extend_i32(b);
+    ws_or(b);
+    ws_wrap_i32(b);
+    ws_if(b);
+    ws_i32_const(b, 1);
+    ws_call(b, 1);
     ws_end(b);
 }
 
@@ -99,18 +134,7 @@ pub fn ws_char_emit(b: &mut WasmBuf, base: Int, depth: Int, toks: List[String], 
     let t1: Int = base + 1;
     ws_set(b, t1);
     ws_set(b, t0);
-    ws_get(b, t1);
-    ws_const(b, 0);
-    ws_lt_s(b);
-    ws_get(b, t1);
-    ws_get(b, t0);
-    ws_load(b, 4);
-    ws_ge_s(b);
-    ws_or(b);
-    ws_if(b);
-    ws_const(b, 1);
-    ws_call(b, 1);
-    ws_end(b);
+    ws_char_check(b, t0, t1);
     ws_get(b, t0);
     ws_load(b, 0);
     ws_get(b, t1);
@@ -121,18 +145,19 @@ pub fn ws_char_emit(b: &mut WasmBuf, base: Int, depth: Int, toks: List[String], 
     ws_call(b, 2);
     ws_set(b, t0);
     ws_get(b, t0);
+    ws_wrap_i32(b);
     ws_get(b, t1);
     ws_store8(b, 0);
-    ws_const(b, 8);
+    ws_const(b, 16);
     ws_call(b, 2);
     ws_set(b, t1);
     ws_get(b, t1);
+    ws_wrap_i32(b);
     ws_get(b, t0);
     ws_store(b, 0);
     ws_get(b, t1);
-    ws_const(b, 4);
-    ws_add(b);
+    ws_wrap_i32(b);
     ws_const(b, 1);
-    ws_store(b, 0);
+    ws_store(b, 8);
     ws_get(b, t1);
 }

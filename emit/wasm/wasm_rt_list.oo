@@ -5,7 +5,7 @@
 // Setup: Records hold ptr, len, and cap. Growth doubles capacity from four.
 //
 // Beats:
-//   1. ws_rt_list_new allocates a zeroed twelve-byte record.
+//   1. ws_rt_list_new allocates a zeroed twenty-four-byte record.
 //   2. ws_rt_list_push grows the backing store when length meets capacity.
 //   3. Append stores the value and bumps the recorded length.
 
@@ -13,51 +13,26 @@ import "wasm_buf.oo";
 import "wasm_op.oo";
 
 pub fn ws_rt_list_new(b: &mut WasmBuf) {
-    ws_const(b, 12);
+    ws_const(b, 24);
     ws_call(b, 2);
     ws_set(b, 0);
     ws_get(b, 0);
+    ws_wrap_i32(b);
     ws_const(b, 0);
     ws_store(b, 0);
     ws_get(b, 0);
-    ws_const(b, 0);
-    ws_store(b, 4);
-    ws_get(b, 0);
+    ws_wrap_i32(b);
     ws_const(b, 0);
     ws_store(b, 8);
+    ws_get(b, 0);
+    ws_wrap_i32(b);
+    ws_const(b, 0);
+    ws_store(b, 16);
     ws_get(b, 0);
     ws_end(b);
 }
 
-pub fn ws_rt_list_push(b: &mut WasmBuf) {
-    ws_get(b, 0);
-    ws_load(b, 4);
-    ws_set(b, 2);
-    ws_get(b, 0);
-    ws_load(b, 8);
-    ws_set(b, 3);
-    ws_get(b, 0);
-    ws_load(b, 0);
-    ws_set(b, 4);
-    ws_get(b, 2);
-    ws_get(b, 3);
-    ws_eq(b);
-    ws_if(b);
-    ws_get(b, 3);
-    ws_eqz(b);
-    ws_if_v(b);
-    ws_const(b, 4);
-    ws_else(b);
-    ws_get(b, 3);
-    ws_const(b, 2);
-    ws_mul(b);
-    ws_end(b);
-    ws_set(b, 5);
-    ws_get(b, 5);
-    ws_const(b, 4);
-    ws_mul(b);
-    ws_call(b, 2);
-    ws_set(b, 6);
+fn ws_rt_list_copy(b: &mut WasmBuf) {
     ws_const(b, 0);
     ws_set(b, 7);
     ws_block(b);
@@ -68,12 +43,13 @@ pub fn ws_rt_list_push(b: &mut WasmBuf) {
     ws_br_if(b, 1);
     ws_get(b, 6);
     ws_get(b, 7);
-    ws_const(b, 4);
+    ws_const(b, 8);
     ws_mul(b);
     ws_add(b);
+    ws_wrap_i32(b);
     ws_get(b, 4);
     ws_get(b, 7);
-    ws_const(b, 4);
+    ws_const(b, 8);
     ws_mul(b);
     ws_add(b);
     ws_load(b, 0);
@@ -85,32 +61,68 @@ pub fn ws_rt_list_push(b: &mut WasmBuf) {
     ws_br(b, 0);
     ws_end(b);
     ws_end(b);
+}
+
+fn ws_rt_list_grow(b: &mut WasmBuf) {
+    ws_get(b, 3);
+    ws_eqz(b);
+    ws_if_v(b);
+    ws_const(b, 4);
+    ws_else(b);
+    ws_get(b, 3);
+    ws_const(b, 2);
+    ws_mul(b);
+    ws_end(b);
+    ws_set(b, 5);
+    ws_get(b, 5);
+    ws_const(b, 8);
+    ws_mul(b);
+    ws_call(b, 2);
+    ws_set(b, 6);
+    ws_rt_list_copy(b);
     ws_get(b, 0);
+    ws_wrap_i32(b);
     ws_get(b, 6);
     ws_store(b, 0);
     ws_get(b, 0);
-    ws_const(b, 8);
-    ws_add(b);
+    ws_wrap_i32(b);
     ws_get(b, 5);
-    ws_store(b, 0);
+    ws_store(b, 16);
+}
+
+pub fn ws_rt_list_push(b: &mut WasmBuf) {
+    ws_get(b, 0);
+    ws_load(b, 8);
+    ws_set(b, 2);
+    ws_get(b, 0);
+    ws_load(b, 16);
+    ws_set(b, 3);
+    ws_get(b, 0);
+    ws_load(b, 0);
+    ws_set(b, 4);
+    ws_get(b, 2);
+    ws_get(b, 3);
+    ws_eq(b);
+    ws_if(b);
+    ws_rt_list_grow(b);
     ws_end(b);
     ws_get(b, 0);
     ws_load(b, 0);
     ws_set(b, 4);
     ws_get(b, 4);
     ws_get(b, 2);
-    ws_const(b, 4);
+    ws_const(b, 8);
     ws_mul(b);
     ws_add(b);
+    ws_wrap_i32(b);
     ws_get(b, 1);
     ws_store(b, 0);
     ws_get(b, 0);
-    ws_const(b, 4);
-    ws_add(b);
+    ws_wrap_i32(b);
     ws_get(b, 2);
     ws_const(b, 1);
     ws_add(b);
-    ws_store(b, 0);
+    ws_store(b, 8);
     ws_get(b, 0);
     ws_end(b);
 }

@@ -73,21 +73,27 @@ pub fn ws_bin(b: &mut WasmBuf, toks: List[String], at: Int, k: String, ty: Strin
     }
     if k == "EQEQ" {
         ws_eq(b);
+        ws_extend_i32(b);
     }
     if k == "NEQ" {
         ws_ne(b);
+        ws_extend_i32(b);
     }
     if k == "LT" {
         ws_lt_s(b);
+        ws_extend_i32(b);
     }
     if k == "LTE" {
         ws_le_s(b);
+        ws_extend_i32(b);
     }
     if k == "GT" {
         ws_gt_s(b);
+        ws_extend_i32(b);
     }
     if k == "GTE" {
         ws_ge_s(b);
+        ws_extend_i32(b);
     }
     return "i";
 }
@@ -95,24 +101,27 @@ pub fn ws_method(b: &mut WasmBuf, toks: List[String], at: Int, ty: String, m: St
     if m == "is_ok" && chars_len(ty) > 0 && char_at(ty, 0) == "r" {
         ws_load(b, 0);
         ws_eqz(b);
+        ws_extend_i32(b);
         return "i";
     }
     if m == "is_err" && chars_len(ty) > 0 && char_at(ty, 0) == "r" {
         ws_load(b, 0);
         ws_const(b, 0);
         ws_ne(b);
+        ws_extend_i32(b);
         return "i";
     }
     if m == "unwrap" && chars_len(ty) > 0 && char_at(ty, 0) == "r" {
         ws_set(b, s0);
         ws_get(b, s0);
         ws_load(b, 0);
+        ws_wrap_i32(b);
         ws_if(b);
-        ws_const(b, 1);
+        ws_i32_const(b, 1);
         ws_call(b, 1);
         ws_end(b);
         ws_get(b, s0);
-        ws_load(b, 4);
+        ws_load(b, 8);
         return ws_res_ok(ty);
     }
     if m == "unwrap" {
@@ -125,11 +134,11 @@ pub fn ws_method(b: &mut WasmBuf, toks: List[String], at: Int, ty: String, m: St
 pub fn ws_field(b: &mut WasmBuf, toks: List[String], at: Int, structs: String, ty: String, m: String) -> String {
     if chars_len(ty) > 0 && char_at(ty, 0) == "r" {
         if m == "val" {
-            ws_load(b, 4);
+            ws_load(b, 8);
             return ws_res_ok(ty);
         }
         if m == "err" {
-            ws_load(b, 4);
+            ws_load(b, 8);
             return ws_res_err(ty);
         }
     }

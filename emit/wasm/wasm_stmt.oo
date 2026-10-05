@@ -113,6 +113,7 @@ pub fn ws_stmt_if(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &WsG
     if then >= n || ws_k(toks, then) != "LBRACE" {
         ws_fail(ws_line(toks, pos), "if brace");
     }
+    ws_wrap_i32(b);
     ws_if(b);
     let t: String = ws_stmt_block(b, toks, then + 1, n, n, ws_g_new(env, g.fns, g.structs, g.order, g.arity, g.scratch), lits, cx, ret);
     let mut p: Int = ws_un_pos(t) + 1;

@@ -52,6 +52,7 @@ pub fn ws_logic(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &WsG, 
         ws_fail(ws_line(toks, pos), "logic type");
     }
     if op == "ANDAND" {
+        ws_wrap_i32(b);
         ws_if_v(b);
         let r: String = ws_climb(b, toks, pos + 1, n, g, lits, cx, pr + 1);
         if ws_un_ty(r) != "i" {
@@ -62,6 +63,7 @@ pub fn ws_logic(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &WsG, 
         ws_end(b);
         return ws_pack(ws_un_pos(r), "i");
     }
+    ws_wrap_i32(b);
     ws_if_v(b);
     ws_const(b, 1);
     ws_else(b);
@@ -89,6 +91,7 @@ pub fn ws_unary(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &WsG, 
             ws_fail(ws_line(toks, pos), "not type");
         }
         ws_eqz(b);
+        ws_extend_i32(b);
         return ws_pack(ws_un_pos(r2), "i");
     }
     return ws_postfix(b, toks, pos, n, g, lits, cx);
@@ -191,15 +194,17 @@ pub fn ws_result_new(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &
     }
     let pay: String = ws_un_ty(r);
     ws_set(b, s1);
-    ws_const(b, 8);
+    ws_const(b, 16);
     ws_call(b, 2);
     ws_set(b, s0);
     ws_get(b, s0);
+    ws_wrap_i32(b);
     ws_const(b, tag);
     ws_store(b, 0);
     ws_get(b, s0);
+    ws_wrap_i32(b);
     ws_get(b, s1);
-    ws_store(b, 4);
+    ws_store(b, 8);
     ws_get(b, s0);
     cx.depth = cx.depth - 1;
     if tag == 0 {
@@ -224,6 +229,7 @@ pub fn ws_struct_new(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &
             ws_fail(ws_line(toks, p), "unknown field");
         }
         ws_get(b, s0);
+        ws_wrap_i32(b);
         let r: String = ws_expr(b, toks, p + 2, n, g, lits, cx);
         ws_store(b, parse_int(field_at(row, 2)));
         p = ws_un_pos(r);

@@ -75,17 +75,17 @@ pub fn ws_data_base() -> Int {
     return 64;
 }
 
-pub fn ws_align4(x: Int) -> Int {
-    let r: Int = x - (x / 4) * 4;
-    return if r == 0 { x } else { x + 4 - r };
+pub fn ws_align8(x: Int) -> Int {
+    let r: Int = x - (x / 8) * 8;
+    return if r == 0 { x } else { x + 8 - r };
 }
 
 pub fn ws_rec_base(lits: &mut WsLits) -> Int {
-    return ws_align4(ws_data_base() + list_len(lits.bytes));
+    return ws_align8(ws_data_base() + list_len(lits.bytes));
 }
 
 pub fn ws_heap_base(lits: &mut WsLits) -> Int {
-    return ws_rec_base(lits) + 8 * lits.count;
+    return ws_rec_base(lits) + 16 * lits.count;
 }
 
 pub fn ws_lit_raw_addr(lits: &mut WsLits, idx: Int) -> Int {
@@ -93,5 +93,5 @@ pub fn ws_lit_raw_addr(lits: &mut WsLits, idx: Int) -> Int {
 }
 
 pub fn ws_lit_rec_addr(lits: &mut WsLits, idx: Int) -> Int {
-    return ws_rec_base(lits) + 8 * idx;
+    return ws_rec_base(lits) + 16 * idx;
 }

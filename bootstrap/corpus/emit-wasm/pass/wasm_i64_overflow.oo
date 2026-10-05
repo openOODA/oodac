@@ -1,0 +1,22 @@
+// # WASM 64-bit integer overflow proof
+//
+// Logline: 10M iteration loop accumulating to 10 Billion without 32-bit wrap.
+//
+// Setup: WASI Preview 1 wasm direct backend.
+//
+// Beats:
+//   1. Multiply 10,000,000 by 1,000 without 32-bit wrap.
+//   2. Loop 10,000,000 times adding 1000 each step yielding 10,000,000,000.
+//   3. Print sums directly via 64-bit WASM runtime.
+
+pub fn main() {
+    let a: Int = 10000000;
+    let b: Int = 1000;
+    let c: Int = a * b;
+    println(c);
+    let mut sum: Int = 0;
+    for i in 0..10000000 {
+        sum = sum + 1000;
+    }
+    println(sum);
+}

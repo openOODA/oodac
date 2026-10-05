@@ -133,7 +133,7 @@ fn ws_match_bind(b: &mut WasmBuf, toks: List[String], pos: Int, g: &WsG, env: St
     }
     let pty: String = if ctor == "Ok" { ws_res_ok(sty) } else { ws_res_err(sty) };
     ws_get(b, s0);
-    ws_load(b, 4);
+    ws_load(b, 8);
     ws_set(b, idx);
     return ws_env_put(env, binder, idx, pty);
 }
@@ -156,6 +156,7 @@ pub fn ws_match_expr(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &
     let ok_arm: String = if ws_arm_field(a1, 1) == "Ok" { a1 } else { a2 };
     ws_get(b, s0);
     ws_load(b, 0);
+    ws_wrap_i32(b);
     ws_if_v(b);
     cx.depth = cx.depth + 1;
     let ge: WsG = ws_g_new(ws_match_bind(b, toks, pos, g, g.env, sty, "Err", ws_arm_field(err_arm, 2), s0), g.fns, g.structs, g.order, g.arity, g.scratch);
@@ -188,6 +189,7 @@ pub fn ws_match_stmt(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &
     let ok_arm: String = if ws_arm_field(a1, 1) == "Ok" { a1 } else { a2 };
     ws_get(b, s0);
     ws_load(b, 0);
+    ws_wrap_i32(b);
     ws_if(b);
     cx.depth = cx.depth + 1;
     let ge: WsG = ws_g_new(ws_match_bind(b, toks, pos, gg, env, sty, "Err", ws_arm_field(err_arm, 2), s0), g.fns, g.structs, g.order, g.arity, g.scratch);

@@ -91,7 +91,7 @@ pub fn ws_code_pay(toks: List[String], n: Int, fns: String, params: String, bodi
     let main: Int = ws_fn_idx(fns, "main");
     let mut sb: WasmBuf = ws_buf_new();
     ws_call(sb, main);
-    ws_const(sb, 0);
+    ws_i32_const(sb, 0);
     ws_call(sb, 1);
     ws_end(sb);
     ws_wrap(pay, 0, sb.bytes);
@@ -194,29 +194,29 @@ pub fn ws_data_sec(m: &mut WasmBuf, lits: &mut WsLits) {
     let mut pay: WasmBuf = ws_buf_new();
     ws_uleb(pay, 2);
     ws_u8(pay, 0);
-    ws_const(pay, ws_data_base());
+    ws_i32_const(pay, ws_data_base());
     ws_end(pay);
     ws_uleb(pay, list_len(lits.bytes));
     ws_raw(pay, lits.bytes);
     let mut rec: WasmBuf = ws_buf_new();
     let mut i: Int = 0;
     while i < lits.count {
-        ws_u32le(rec, ws_lit_raw_addr(lits, i));
-        ws_u32le(rec, ws_lit_len(lits, i));
+        ws_u64le(rec, ws_lit_raw_addr(lits, i));
+        ws_u64le(rec, ws_lit_len(lits, i));
         i = i + 1;
     }
     ws_u8(pay, 0);
-    ws_const(pay, ws_rec_base(lits));
+    ws_i32_const(pay, ws_rec_base(lits));
     ws_end(pay);
     ws_uleb(pay, list_len(rec.bytes));
     ws_raw(pay, rec.bytes);
     ws_section(m, 11, pay.bytes);
 }
 
-pub fn ws_u32le(b: &mut WasmBuf, v: Int) {
+pub fn ws_u64le(b: &mut WasmBuf, v: Int) {
     let mut x: Int = v;
     let mut i: Int = 0;
-    while i < 4 {
+    while i < 8 {
         let lo: Int = x - (x / 256) * 256;
         ws_u8(b, lo);
         x = x / 256;

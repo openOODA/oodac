@@ -3,6 +3,7 @@
 # ==========================================
 .ooda-cache/
 *.oo.bin
+*.tmp.bin
 *.concat.oo
 *.oo.concat.oo
 

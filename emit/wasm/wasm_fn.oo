@@ -32,7 +32,7 @@ pub fn ws_scan_structs(toks: List[String]) -> String {
                         if ws_k(toks, p) == "IDENT" && p + 2 < n && ws_k(toks, p + 1) == "COLON" {
                             let pk: String = ws_read_ty(toks, p + 2, n);
                             out = out + sname + "\t" + ws_t(toks, p) + "\t" + off.to_string() + "\t" + ws_un_ty(pk) + "\n";
-                            off = off + 4;
+                            off = off + 8;
                             p = ws_un_pos(pk);
                         } else {
                             p = p + 1;
@@ -182,7 +182,7 @@ pub fn ws_struct_size(structs: String, sname: String) -> Int {
     while rest != "" {
         let at: Int = str_index_of(rest, "\n");
         let row: String = if at < 0 { rest } else { str_slice(rest, 0, at) };
-        if field_at(row, 0) == sname { max = max + 4; }
+        if field_at(row, 0) == sname { max = max + 8; }
         if at < 0 { rest = ""; } else { rest = str_slice(rest, at + 1, chars_len(rest)); }
     }
     return max;

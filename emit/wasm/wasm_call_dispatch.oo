@@ -65,18 +65,18 @@ pub fn ws_call_global_dispatch(b: &mut WasmBuf, toks: List[String], pos: Int, n:
         ws_get(b, s0);
         ws_load(b, 0);
         ws_get(b, s1);
-        ws_const(b, 4);
+        ws_const(b, 8);
         ws_mul(b);
         ws_add(b);
         ws_load(b, 0);
         return ws_pack(end, ws_elem(c0));
     }
     if name == "list_len" {
-        ws_load(b, 4);
+        ws_load(b, 8);
         return ws_pack(end, "i");
     }
     if name == "chars_len" {
-        ws_load(b, 4);
+        ws_load(b, 8);
         return ws_pack(end, "i");
     }
     let row: String = ws_fn_row(g.fns, name);

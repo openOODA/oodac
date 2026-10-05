@@ -65,8 +65,7 @@ pub fn ws_stmt_for(b: &mut WasmBuf, toks: List[String], pos: Int, n: Int, g: &Ws
     ws_loop(b);
     ws_get(b, idx);
     ws_get(b, eidx);
-    ws_lt_s(b);
-    ws_eqz(b);
+    ws_ge_s(b);
     ws_br_if(b, 1);
     let benv: String = ws_env_put(env, nm, idx, "i");
     let t: String = ws_stmt_block(b, toks, top + 1, n, n, ws_g_new(benv, g.fns, g.structs, g.order, g.arity, g.scratch), lits, cx, ret);

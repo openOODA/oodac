@@ -12,8 +12,21 @@
 import "wasm_buf.oo";
 
 pub fn ws_const(b: &mut WasmBuf, n: Int) {
+    ws_u8(b, 66);
+    ws_sleb(b, n);
+}
+
+pub fn ws_i32_const(b: &mut WasmBuf, n: Int) {
     ws_u8(b, 65);
     ws_sleb(b, n);
+}
+
+pub fn ws_wrap_i32(b: &mut WasmBuf) {
+    ws_u8(b, 167);
+}
+
+pub fn ws_extend_i32(b: &mut WasmBuf) {
+    ws_u8(b, 173);
 }
 
 pub fn ws_get(b: &mut WasmBuf, idx: Int) {
@@ -48,19 +61,25 @@ pub fn ws_mem(b: &mut WasmBuf, op: Int, align: Int, off: Int) {
 }
 
 pub fn ws_load(b: &mut WasmBuf, off: Int) {
-    ws_mem(b, 40, 2, off);
+    ws_wrap_i32(b);
+    ws_mem(b, 41, 3, off);
 }
 
 pub fn ws_load8(b: &mut WasmBuf, off: Int) {
-    ws_mem(b, 45, 0, off);
+    ws_wrap_i32(b);
+    ws_mem(b, 49, 0, off);
 }
 
 pub fn ws_store(b: &mut WasmBuf, off: Int) {
+    ws_mem(b, 55, 3, off);
+}
+
+pub fn ws_i32_store(b: &mut WasmBuf, off: Int) {
     ws_mem(b, 54, 2, off);
 }
 
 pub fn ws_store8(b: &mut WasmBuf, off: Int) {
-    ws_mem(b, 58, 0, off);
+    ws_mem(b, 60, 0, off);
 }
 
 pub fn ws_call(b: &mut WasmBuf, idx: Int) {
@@ -93,7 +112,7 @@ pub fn ws_if(b: &mut WasmBuf) {
 
 pub fn ws_if_v(b: &mut WasmBuf) {
     ws_u8(b, 4);
-    ws_u8(b, 127);
+    ws_u8(b, 126);
 }
 
 pub fn ws_else(b: &mut WasmBuf) {
@@ -119,65 +138,69 @@ pub fn ws_unreachable(b: &mut WasmBuf) {
 }
 
 pub fn ws_add(b: &mut WasmBuf) {
-    ws_u8(b, 106);
+    ws_u8(b, 124);
 }
 
 pub fn ws_sub(b: &mut WasmBuf) {
-    ws_u8(b, 107);
+    ws_u8(b, 125);
 }
 
 pub fn ws_mul(b: &mut WasmBuf) {
-    ws_u8(b, 108);
+    ws_u8(b, 126);
 }
 
 pub fn ws_div_s(b: &mut WasmBuf) {
-    ws_u8(b, 109);
+    ws_u8(b, 127);
 }
 
 pub fn ws_rem_s(b: &mut WasmBuf) {
-    ws_u8(b, 111);
+    ws_u8(b, 129);
 }
 
 pub fn ws_div_u(b: &mut WasmBuf) {
-    ws_u8(b, 110);
+    ws_u8(b, 128);
 }
 
 pub fn ws_rem_u(b: &mut WasmBuf) {
-    ws_u8(b, 112);
+    ws_u8(b, 130);
 }
 
 pub fn ws_eq(b: &mut WasmBuf) {
-    ws_u8(b, 70);
+    ws_u8(b, 81);
 }
 
 pub fn ws_ne(b: &mut WasmBuf) {
-    ws_u8(b, 71);
+    ws_u8(b, 82);
 }
 
 pub fn ws_lt_s(b: &mut WasmBuf) {
-    ws_u8(b, 72);
+    ws_u8(b, 83);
 }
 
 pub fn ws_gt_s(b: &mut WasmBuf) {
-    ws_u8(b, 74);
+    ws_u8(b, 85);
 }
 
 pub fn ws_le_s(b: &mut WasmBuf) {
-    ws_u8(b, 76);
+    ws_u8(b, 87);
 }
 
 pub fn ws_ge_s(b: &mut WasmBuf) {
-    ws_u8(b, 78);
+    ws_u8(b, 89);
 }
 
 pub fn ws_eqz(b: &mut WasmBuf) {
+    ws_u8(b, 80);
+}
+
+pub fn ws_i32_eqz(b: &mut WasmBuf) {
     ws_u8(b, 69);
 }
 
 pub fn ws_and(b: &mut WasmBuf) {
-    ws_u8(b, 113);
+    ws_u8(b, 131);
 }
 
 pub fn ws_or(b: &mut WasmBuf) {
-    ws_u8(b, 114);
+    ws_u8(b, 132);
 }

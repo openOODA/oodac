@@ -68,7 +68,7 @@ pub fn ws_type_idx(arity: Int, ret: String, dyn: String) -> Int {
         }
         pos = pos + 1;
     }
-    return 6 + idx;
+    return 7 + idx;
 }
 
 pub fn ws_dyn_types(fns: String) -> String {
@@ -94,31 +94,50 @@ pub fn ws_dyn_types(fns: String) -> String {
     return out;
 }
 
+pub fn ws_type_fd_write(b: &mut WasmBuf) {
+    ws_u8(b, 96);
+    ws_uleb(b, 4);
+    ws_u8(b, 127);
+    ws_u8(b, 127);
+    ws_u8(b, 127);
+    ws_u8(b, 127);
+    ws_uleb(b, 1);
+    ws_u8(b, 127);
+}
+
+pub fn ws_type_proc_exit(b: &mut WasmBuf) {
+    ws_u8(b, 96);
+    ws_uleb(b, 1);
+    ws_u8(b, 127);
+    ws_uleb(b, 0);
+}
+
 pub fn ws_type_entry(b: &mut WasmBuf, arity: Int, ret: String) {
     ws_u8(b, 96);
     ws_uleb(b, arity);
     let mut i: Int = 0;
     while i < arity {
-        ws_u8(b, 127);
+        ws_u8(b, 126);
         i = i + 1;
     }
     if ret == "v" {
         ws_uleb(b, 0);
     } else {
         ws_uleb(b, 1);
-        ws_u8(b, 127);
+        ws_u8(b, 126);
     }
 }
 
 pub fn ws_type_sec(m: &mut WasmBuf, dyn: String) {
     let mut pay: WasmBuf = ws_buf_new();
-    ws_uleb(pay, 6 + ws_dyn_count(dyn));
-    ws_type_entry(pay, 4, "i");
+    ws_uleb(pay, 7 + ws_dyn_count(dyn));
+    ws_type_fd_write(pay);
     ws_type_entry(pay, 0, "v");
     ws_type_entry(pay, 1, "i");
     ws_type_entry(pay, 1, "v");
     ws_type_entry(pay, 2, "i");
     ws_type_entry(pay, 0, "i");
+    ws_type_proc_exit(pay);
     let mut rest: String = dyn;
     while rest != "" {
         let at: Int = str_index_of(rest, "\n");
@@ -150,7 +169,7 @@ pub fn ws_wrap(pay: &mut WasmBuf, nloc: Int, code: List[Int]) {
     if nloc > 0 {
         ws_uleb(tmp, 1);
         ws_uleb(tmp, nloc);
-        ws_u8(tmp, 127);
+        ws_u8(tmp, 126);
     } else {
         ws_uleb(tmp, 0);
     }
@@ -169,7 +188,7 @@ pub fn ws_import_sec(m: &mut WasmBuf) {
     ws_name(pay, "wasi_snapshot_preview1");
     ws_name(pay, "proc_exit");
     ws_u8(pay, 0);
-    ws_uleb(pay, 3);
+    ws_uleb(pay, 6);
     ws_section(m, 2, pay.bytes);
 }
 
@@ -209,7 +228,7 @@ pub fn ws_mem_sec(m: &mut WasmBuf) {
 pub fn ws_global_sec(m: &mut WasmBuf, heap: Int) {
     let mut pay: WasmBuf = ws_buf_new();
     ws_uleb(pay, 1);
-    ws_u8(pay, 127);
+    ws_u8(pay, 126);
     ws_u8(pay, 1);
     ws_const(pay, heap);
     ws_end(pay);

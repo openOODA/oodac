@@ -14,10 +14,10 @@ import "wasm_rt.oo";
 
 pub fn ws_rt_str_cat(b: &mut WasmBuf) {
     ws_get(b, 0);
-    ws_load(b, 4);
+    ws_load(b, 8);
     ws_set(b, 2);
     ws_get(b, 1);
-    ws_load(b, 4);
+    ws_load(b, 8);
     ws_set(b, 3);
     ws_get(b, 2);
     ws_get(b, 3);
@@ -38,43 +38,22 @@ pub fn ws_rt_str_cat(b: &mut WasmBuf) {
     ws_load(b, 0);
     ws_set(b, 8);
     ws_copy(b, 9, 8, 7, 3);
-    ws_const(b, 8);
+    ws_const(b, 16);
     ws_call(b, 2);
     ws_set(b, 6);
     ws_get(b, 6);
+    ws_wrap_i32(b);
     ws_get(b, 5);
     ws_store(b, 0);
     ws_get(b, 6);
-    ws_const(b, 4);
-    ws_add(b);
+    ws_wrap_i32(b);
     ws_get(b, 4);
-    ws_store(b, 0);
+    ws_store(b, 8);
     ws_get(b, 6);
     ws_end(b);
 }
 
-pub fn ws_rt_str_eq(b: &mut WasmBuf) {
-    ws_get(b, 0);
-    ws_load(b, 4);
-    ws_set(b, 2);
-    ws_get(b, 1);
-    ws_load(b, 4);
-    ws_set(b, 3);
-    ws_get(b, 2);
-    ws_get(b, 3);
-    ws_ne(b);
-    ws_if(b);
-    ws_const(b, 0);
-    ws_return(b);
-    ws_end(b);
-    ws_get(b, 0);
-    ws_load(b, 0);
-    ws_set(b, 4);
-    ws_get(b, 1);
-    ws_load(b, 0);
-    ws_set(b, 5);
-    ws_const(b, 0);
-    ws_set(b, 6);
+fn ws_rt_str_eq_loop(b: &mut WasmBuf) {
     ws_block(b);
     ws_loop(b);
     ws_get(b, 6);
@@ -101,7 +80,31 @@ pub fn ws_rt_str_eq(b: &mut WasmBuf) {
     ws_br(b, 0);
     ws_end(b);
     ws_end(b);
+}
+
+pub fn ws_rt_str_eq(b: &mut WasmBuf) {
+    ws_get(b, 0);
+    ws_load(b, 8);
+    ws_set(b, 2);
+    ws_get(b, 1);
+    ws_load(b, 8);
+    ws_set(b, 3);
+    ws_get(b, 2);
+    ws_get(b, 3);
+    ws_ne(b);
+    ws_if(b);
+    ws_const(b, 0);
+    ws_return(b);
+    ws_end(b);
+    ws_get(b, 0);
+    ws_load(b, 0);
+    ws_set(b, 4);
+    ws_get(b, 1);
+    ws_load(b, 0);
+    ws_set(b, 5);
+    ws_const(b, 0);
+    ws_set(b, 6);
+    ws_rt_str_eq_loop(b);
     ws_const(b, 1);
     ws_end(b);
 }
-
