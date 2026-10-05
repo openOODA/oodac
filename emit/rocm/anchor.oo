@@ -6,5 +6,11 @@
 //
 // Beats:
 //   1. Import the direct emitter surface.
+//   2. Re-export rocm_emit_program wrapper for ROCm backend consumers.
+//   3. Lower source AST into HIP C++ translation unit.
 
 import "rocm_emit.oo";
+
+pub fn emit_rocm_program(src: String) -> String {
+    return rocm_emit_program(src);
+}

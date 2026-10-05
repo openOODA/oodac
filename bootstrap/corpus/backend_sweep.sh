@@ -95,8 +95,11 @@ for f in method_calls float_arith float_calls str_starts_with str_escapes str_ma
          multi_diamond ifexpr ifexpr_break ifexpr_multi ifexpr_strnest ifexpr_unit \
          width_ints width_struct_for cap_spread cap_spread2 export_fn for_int_bound; do closed wasm "$PASS/$f.oo"; done
 
+CACHE_BASE="${OODA_FS_WRITEDIR%%:*}"
+CACHE_DIR="${CACHE_BASE:+$CACHE_BASE/}.ooda-cache/ooda-tmp"
+
 echo "=== cuda emission (full exec needs nvcc; CI asserts emission) ==="
-rm -f .ooda-cache/ooda-tmp/cuda_*.cu
+rm -f "$CACHE_DIR"/cuda_*.cu .ooda-cache/ooda-tmp/cuda_*.cu
 if timeout 120 "$HOST" build --backend cuda "$PASS/fn_ret_int.oo" -o "$TMP/cuda_fn.bin" >/dev/null 2>&1; then
   got="$("$TMP/cuda_fn.bin" 2>/dev/null)"
   if [[ "$got" == "42" ]]; then echo "OK cuda-exec fn_ret_int (nvcc present, prints 42)";
@@ -105,7 +108,7 @@ else
   if command -v nvcc >/dev/null 2>&1; then
     echo "WRONG cuda build failed WITH nvcc present (broken .cu or link)"; fails=$((fails+1))
   else
-    cu=$(ls -t .ooda-cache/ooda-tmp/cuda_*.cu 2>/dev/null | head -1)
+    cu=$(ls -t "$CACHE_DIR"/cuda_*.cu .ooda-cache/ooda-tmp/cuda_*.cu 2>/dev/null | head -1)
     if [[ -n "${cu:-}" ]] && grep -q "int main" "$cu" && grep -q "cuda_runtime.h" "$cu"; then
       echo "OK cuda-emit fn_ret_int (no nvcc here; .cu with main + cuda_runtime)"
     else echo "WRONG cuda-emit: no .cu artifact"; fails=$((fails+1)); fi
@@ -113,10 +116,10 @@ else
 fi
 
 echo "=== rocm emission (no hipcc on CI hosts) ==="
-rm -f "$TMP"/rocm_*.hip
+rm -f "$CACHE_DIR"/rocm_*.hip "$TMP"/rocm_*.hip .ooda-cache/ooda-tmp/rocm_*.hip
 timeout 120 "$HOST" build --backend rocm "$PASS/fn_ret_int.oo" -o "$TMP/rocm.out" >/dev/null 2>&1
 rc=$?
-hip=$(ls -t .ooda-cache/ooda-tmp/rocm_*.hip 2>/dev/null | head -1)
+hip=$(ls -t "$CACHE_DIR"/rocm_*.hip .ooda-cache/ooda-tmp/rocm_*.hip 2>/dev/null | head -1)
 if [[ -n "${hip:-}" ]] && grep -q "int main" "$hip"; then
   echo "OK rocm-emit fn_ret_int (build rc=$rc, $(wc -l < "$hip")-line HIP with main)"
 else echo "WRONG rocm-emit: no HIP artifact"; fails=$((fails+1)); fi

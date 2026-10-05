@@ -7,6 +7,7 @@
 // Beats:
 //   1. Re-export ll_emit_stream_toks.
 //   2. Fail closed on empty toks.
+//   3. Dispatch emission to ll_emit pipeline.
 
 import "ll_emit.oo";
 

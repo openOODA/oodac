@@ -6,5 +6,11 @@
 //
 // Beats:
 //   1. Import elf_emit.oo.
+//   2. Re-export elf_emit_program wrapper for ELF backend consumers.
+//   3. Lower source string into ELF64 machine code.
 
 import "elf_emit.oo";
+
+pub fn emit_elf_program(src: String) -> String {
+    return elf_emit_program(src);
+}

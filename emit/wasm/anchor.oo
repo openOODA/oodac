@@ -6,5 +6,11 @@
 //
 // Beats:
 //   1. Import the direct emitter surface.
+//   2. Re-export wasm_emit_program wrapper for WASM backend consumers.
+//   3. Lower source AST into WebAssembly binary module.
 
 import "wasm_emit.oo";
+
+pub fn emit_wasm_program(src: String) -> String {
+    return wasm_emit_program(src);
+}

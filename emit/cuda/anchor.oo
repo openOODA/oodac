@@ -6,5 +6,11 @@
 //
 // Beats:
 //   1. Import the direct emitter surface.
+//   2. Re-export cuda_emit_program wrapper for CUDA backend consumers.
+//   3. Lower source AST into CUDA C++ translation unit.
 
 import "cuda_emit.oo";
+
+pub fn emit_cuda_program(src: String) -> String {
+    return cuda_emit_program(src);
+}
