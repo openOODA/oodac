@@ -33,5 +33,71 @@ pub fn main() {
         process_exit(1);
     }
 
+    let cl_hi: String = smt_contract_parse_pack("requires", "i", 1, "<", 0, "len", 1, "1", "1", false, 0);
+    let pre_both: String = cl_lo + "\n" + cl_hi;
+    let ok_both: Bool = smt_prover_prove_bounds(pre_both, "i", "len");
+    if !ok_both {
+        println("ERR\tsmt_bounds\tboth bounds with preconditions must be proven");
+        process_exit(1);
+    }
+
+    let mut toks: List[String] = list_new();
+    toks = list_push(toks, "KW_PUB\t1\t1\tpub");
+    toks = list_push(toks, "KW_FN\t1\t5\tfn");
+    toks = list_push(toks, "IDENT\t1\t8\ttest");
+    toks = list_push(toks, "LPAREN\t1\t12\t(");
+    toks = list_push(toks, "IDENT\t1\t13\tlist");
+    toks = list_push(toks, "COLON\t1\t17\t:");
+    toks = list_push(toks, "IDENT\t1\t19\tList");
+    toks = list_push(toks, "LBRACKET\t1\t23\t[");
+    toks = list_push(toks, "IDENT\t1\t24\tInt");
+    toks = list_push(toks, "RBRACKET\t1\t27\t]");
+    toks = list_push(toks, "COMMA\t1\t28\t,");
+    toks = list_push(toks, "IDENT\t1\t30\ti");
+    toks = list_push(toks, "COLON\t1\t31\t:");
+    toks = list_push(toks, "IDENT\t1\t33\tInt");
+    toks = list_push(toks, "RPAREN\t1\t36\t)");
+    toks = list_push(toks, "ARROW\t1\t38\t->");
+    toks = list_push(toks, "IDENT\t1\t41\tInt");
+    toks = list_push(toks, "KW_REQUIRES\t2\t5\trequires");
+    toks = list_push(toks, "IDENT\t2\t14\ti");
+    toks = list_push(toks, "GTE\t2\t16\t>=");
+    toks = list_push(toks, "INT\t2\t19\t0");
+    toks = list_push(toks, "ANDAND\t2\t21\t&&");
+    toks = list_push(toks, "IDENT\t2\t24\ti");
+    toks = list_push(toks, "LT\t2\t26\t<");
+    toks = list_push(toks, "IDENT\t2\t28\tlist");
+    toks = list_push(toks, "DOT\t2\t32\t.");
+    toks = list_push(toks, "IDENT\t2\t33\tlen");
+    toks = list_push(toks, "LPAREN\t2\t36\t(");
+    toks = list_push(toks, "RPAREN\t2\t37\t)");
+    toks = list_push(toks, "LBRACE\t3\t1\t{");
+    toks = list_push(toks, "KW_RETURN\t4\t5\treturn");
+    toks = list_push(toks, "IDENT\t4\t12\tlist_get");
+    toks = list_push(toks, "LPAREN\t4\t20\t(");
+    toks = list_push(toks, "IDENT\t4\t21\tlist");
+    toks = list_push(toks, "COMMA\t4\t25\t,");
+    toks = list_push(toks, "IDENT\t4\t27\ti");
+    toks = list_push(toks, "RPAREN\t4\t28\t)");
+    toks = list_push(toks, "SEMI\t4\t29\t;");
+    toks = list_push(toks, "IDENT\t5\t12\tlist_get");
+    toks = list_push(toks, "LPAREN\t5\t20\t(");
+    toks = list_push(toks, "IDENT\t5\t21\tlist");
+    toks = list_push(toks, "COMMA\t5\t25\t,");
+    toks = list_push(toks, "IDENT\t5\t27\tunproven_var");
+    toks = list_push(toks, "RPAREN\t5\t28\t)");
+    toks = list_push(toks, "SEMI\t5\t29\t;");
+    toks = list_push(toks, "RBRACE\t6\t1\t}");
+
+    let proven: String = smt_prover_scan_fn_bounds(toks, 0, list_len(toks));
+    if !smt_prover_is_site_proven(proven, 31) {
+        println("ERR\tsmt_bounds\tfailed to prove safe list_get site");
+        process_exit(1);
+    }
+    if smt_prover_is_site_proven(proven, 38) {
+        println("ERR\tsmt_bounds\tunproven access site must not be marked proven");
+        process_exit(1);
+    }
+
     println("OK");
 }

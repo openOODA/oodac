@@ -147,6 +147,10 @@ pub fn ll_call_at(toks: List[String], pos: Int, n: Int, ssa0: Int, env: String, 
     if nm == "list_new" && (expect == "" || expect == "i64" || expect == "void") {
         expect = ll_guess_list_kind(toks, pos, n);
     }
+    let proven_sites: String = type_env_get(env, "__smt_proven_sites__");
+    if proven_sites != "" && str_index_of(proven_sites, "," + pos.to_string() + ",") >= 0 {
+        expect = "smt_proven";
+    }
     let b: String = ll_builtin(nm, args, ssa, expect, ir);
     if b != "" {
         return ll_pack(p, ll_pssa(b), ll_pk(b), ll_pptr(b));

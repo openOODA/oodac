@@ -19,6 +19,7 @@ import "types/types_core.oo";
 import "lex/token_parse_int.oo";
 import "check/smt_clause_query.oo";
 import "check/smt_vc_gen.oo";
+import "check/smt_prover.oo";
 import "ll_slot.oo";
 import "ll_ir.oo";
 
@@ -91,6 +92,10 @@ pub fn ll_contract_collect(toks: List[String], p0: Int, n: Int, env0: String, na
     if enss != "" { env = type_env_put(env, "__cens__", enss); }
     if preqs != "" { env = type_env_put(env, "__preq__", preqs); }
     if penss != "" { env = type_env_put(env, "__pens__", penss); }
+    let fn_idx: Int = smt_find_enclosing_fn(toks, p0);
+    let fn_end: Int = ll_skip_fn(toks, fn_idx, n);
+    let b_sites: String = smt_prover_scan_fn_bounds(toks, fn_idx, fn_end);
+    if b_sites != "" && b_sites != "," { env = type_env_put(env, "__smt_proven_sites__", b_sites); }
     return ll_pack(p, 0, "", env);
 }
 

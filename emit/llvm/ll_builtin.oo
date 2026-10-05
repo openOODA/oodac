@@ -72,6 +72,13 @@ pub fn ll_builtin(name: String, args: List[String], ssa0: Int, expect: String, i
             return ll_pack(0, s, "i64", "");
         }
         if ll_pk(a0) == "flist" {
+            if name == "list_get_unchecked" || expect == "unchecked" || expect == "smt_proven" {
+                ll_ir_inst(ir, "getelementptr inbounds", "%OoFList", ll_ssa(s), "ptr " + ll_pptr(a0) + ", i32 0, i32 0", 1, 1);
+                ll_ir_inst(ir, "load", "ptr", ll_ssa(s + 1), "ptr " + ll_ssa(s) + ", align 8", 1, 1);
+                ll_ir_inst(ir, "getelementptr inbounds", "double", ll_ssa(s + 2), "ptr " + ll_ssa(s + 1) + ", i64 " + ll_opnd(ix), 1, 1);
+                ll_ir_inst(ir, "load", "double", ll_ssa(s + 3), "ptr " + ll_ssa(s + 2) + ", align 8", 1, 1);
+                return ll_pack(0, s + 3, "f64", "");
+            }
             ll_ir_inst(ir, "call", "double", ll_ssa(s), "@oo_flist_get(ptr byval(%OoFList) align 8 " + ll_pptr(a0) + ", i64 " + ll_opnd(ix) + ")", 1, 1);
             return ll_pack(0, s, "f64", "");
         }
