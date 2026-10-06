@@ -1,0 +1,56 @@
+// # CUDA GPU Kernel Launch lowering
+//
+// Logline: Lowers @gpu_launch(grid, block) kernel_fn(args) to CUDA triple-chevron syntax.
+//
+// Setup: Token stream positioned at AT token. Emits kernel<<<dim3(grid), dim3(block)>>>(args).
+//
+// Beats:
+//   1. Parse @gpu_launch configuration expressions for grid and block dimensions.
+//   2. Parse kernel function identifier and argument expressions.
+//   3. Emit formatted CUDA chevron launch statement with semicolons.
+// RULES.oot 1.7: Under 256 lines.
+
+import "cuda_tok.oo";
+import "cuda_ty.oo";
+import "cuda_expr.oo";
+import "cuda_call.oo";
+
+pub fn cu_gpu_launch_stmt(toks: List[String], pos: Int, n: Int, env: String, fns: String, capv: String, ind: String) -> String {
+    if pos + 2 >= n || cu_t(toks, pos + 1) != "gpu_launch" || cu_k(toks, pos + 2) != "LPAREN" {
+        cu_fail(cu_line(toks, pos), "malformed @gpu_launch");
+        return cu_s_pack(pos + 1, env, "");
+    }
+    let linfo: String = cu_arg_spans(toks, pos + 1, n);
+    let lnargs: Int = cu_span_nargs(linfo);
+    if lnargs != 2 {
+        cu_fail(cu_line(toks, pos), "@gpu_launch expects grid and block dimensions");
+        return cu_s_pack(cu_span_end(linfo) + 1, env, "");
+    }
+    let ge: String = cu_expr(toks, cu_span_start(linfo, 0), n, env, fns, "i", capv);
+    let be: String = cu_expr(toks, cu_span_start(linfo, 1), n, env, fns, "i", capv);
+    let kp: Int = cu_span_end(linfo) + 1;
+    if kp >= n || cu_k(toks, kp) != "IDENT" {
+        cu_fail(cu_line(toks, pos), "@gpu_launch expects kernel function name");
+        return cu_s_pack(kp, env, "");
+    }
+    let kname: String = cu_t(toks, kp);
+    if kp + 1 >= n || cu_k(toks, kp + 1) != "LPAREN" {
+        cu_fail(cu_line(toks, kp), "kernel launch missing arguments");
+        return cu_s_pack(kp + 1, env, "");
+    }
+    let kinfo: String = cu_arg_spans(toks, kp, n);
+    let knargs: Int = cu_span_nargs(kinfo);
+    let mut kargs_code: String = "";
+    let mut ai: Int = 0;
+    while ai < knargs {
+        let arg_pos: Int = cu_span_start(kinfo, ai);
+        let ae: String = cu_expr(toks, arg_pos, n, env, fns, "", capv);
+        if ai > 0 { kargs_code = kargs_code + ", "; }
+        kargs_code = kargs_code + cu_e_code(ae);
+        ai = ai + 1;
+    }
+    let mut next_p: Int = cu_span_end(kinfo) + 1;
+    if next_p < n && cu_k(toks, next_p) == "SEMI" { next_p = next_p + 1; }
+    let line: String = ind + kname + "<<<dim3(" + cu_e_code(ge) + "), dim3(" + cu_e_code(be) + ")>>>(" + kargs_code + ");\n";
+    return cu_s_pack(next_p, env, line);
+}

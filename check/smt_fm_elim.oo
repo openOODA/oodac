@@ -1,0 +1,174 @@
+// # Multi-Variable SMT Fourier-Motzkin Elimination Prover
+//
+// Logline: Decides multi-variable linear inequality systems via Fourier-Motzkin variable elimination.
+//
+// Setup: Encodes precondition clauses and negated postconditions into linear constraint matrices.
+//
+// Beats:
+//   1. Collect variables and encode relational clauses into coefficient rows.
+//   2. Pair upper and lower bounds on each variable and eliminate intermediate dimensions.
+//   3. Detect constant contradictions (0 <= -1) indicating unsatisfiability and proven contracts.
+// RULES.oot 1.7: Under 256 lines.
+
+import "smt_contract_parse.oo";
+import "lex/token_fmt.oo";
+import "lex/token_parse_int.oo";
+
+fn fm_var_pos(names: List[String], name: String) -> Int {
+    let n: Int = list_len(names);
+    let mut i: Int = 0;
+    while i < n {
+        if list_get(names, i) == name { return i; }
+        i = i + 1;
+    }
+    return 0 - 1;
+}
+
+fn fm_collect_var(names: List[String], v: String) -> List[String] {
+    if v == "" || v == "0" || fm_var_pos(names, v) >= 0 { return names; }
+    return list_push(names, v);
+}
+
+fn fm_encode_clause(m: Int, names: List[String], cl: String, is_neg: Bool) -> List[Int] {
+    let lhs: String = smt_contract_parse_lhs(cl);
+    let rhs_v: String = smt_contract_parse_rhs_var(cl);
+    let op: String = smt_contract_parse_op(cl);
+    let k: Int = 0 + smt_contract_parse_rhs_const(cl);
+    let u: Int = fm_var_pos(names, lhs);
+    let v: Int = fm_var_pos(names, rhs_v);
+    if u < 0 {
+        let mut empty_row: List[Int] = list_new();
+        let mut z: Int = 0;
+        while z < m + 1 { empty_row = list_push(empty_row, 0); z = z + 1; }
+        return empty_row;
+    }
+    let mut cu: Int = 0;
+    let mut cv: Int = 0;
+    let mut b: Int = 0;
+    if !is_neg {
+        if op == ">=" { cu = 0 - 1; cv = 1; b = 0 - k; }
+        else if op == ">" { cu = 0 - 1; cv = 1; b = 0 - k - 1; }
+        else if op == "<=" { cu = 1; cv = 0 - 1; b = k; }
+        else if op == "<" { cu = 1; cv = 0 - 1; b = k - 1; }
+    } else {
+        if op == ">=" { cu = 1; cv = 0 - 1; b = k - 1; }
+        else if op == ">" { cu = 1; cv = 0 - 1; b = k; }
+        else if op == "<=" { cu = 0 - 1; cv = 1; b = 0 - k - 1; }
+        else if op == "<" { cu = 0 - 1; cv = 1; b = 0 - k; }
+    }
+    let mut out: List[Int] = list_new();
+    let mut i: Int = 0;
+    while i < m + 1 {
+        if i == u { out = list_push(out, cu); }
+        else if v >= 0 && i == v { out = list_push(out, cv); }
+        else if i == m { out = list_push(out, b); }
+        else { out = list_push(out, 0); }
+        i = i + 1;
+    }
+    return out;
+}
+
+fn fm_combine_row(p: List[Int], q: List[Int], m: Int, k: Int) -> List[Int] {
+    let cp: Int = list_get(p, k);
+    let cq: Int = 0 - list_get(q, k);
+    let mut x: Int = if cp < 0 { 0 - cp } else { cp };
+    let mut y: Int = if cq < 0 { 0 - cq } else { cq };
+    while y != 0 { let t: Int = y; y = x % y; x = t; }
+    let g: Int = if x == 0 { 1 } else { x };
+    let sc_p: Int = cq / g;
+    let sc_q: Int = cp / g;
+    let mut comb: List[Int] = list_new();
+    let mut col: Int = 0;
+    while col < m + 1 {
+        comb = list_push(comb, sc_p * list_get(p, col) + sc_q * list_get(q, col));
+        col = col + 1;
+    }
+    return comb;
+}
+
+fn fm_is_contra(r: List[Int], m: Int) -> Bool {
+    let mut c: Int = 0;
+    while c < m {
+        if list_get(r, c) != 0 { return false; }
+        c = c + 1;
+    }
+    return list_get(r, m) < 0;
+}
+
+fn fm_elim_step(all_rows: List[List[Int]], m: Int, var_idx: Int) -> List[List[Int]] {
+    let mut pos_rows: List[List[Int]] = list_new();
+    let mut neg_rows: List[List[Int]] = list_new();
+    let mut next_rows: List[List[Int]] = list_new();
+    let nr: Int = list_len(all_rows);
+    let mut ri: Int = 0;
+    while ri < nr {
+        let row: List[Int] = list_get(all_rows, ri);
+        let coeff: Int = list_get(row, var_idx);
+        if coeff > 0 { pos_rows = list_push(pos_rows, row); }
+        else if coeff < 0 { neg_rows = list_push(neg_rows, row); }
+        else { next_rows = list_push(next_rows, row); }
+        ri = ri + 1;
+    }
+    let n_pos: Int = list_len(pos_rows);
+    let n_neg: Int = list_len(neg_rows);
+    let mut pi: Int = 0;
+    while pi < n_pos {
+        let mut qi: Int = 0;
+        while qi < n_neg {
+            let comb: List[Int] = fm_combine_row(list_get(pos_rows, pi), list_get(neg_rows, qi), m, var_idx);
+            if list_len(next_rows) < 128 { next_rows = list_push(next_rows, comb); }
+            qi = qi + 1;
+        }
+        pi = pi + 1;
+    }
+    return next_rows;
+}
+
+pub fn smt_fm_solve(clauses: List[String], wp: String) -> Bool {
+    let mut names: List[String] = list_new();
+    let nc: Int = list_len(clauses);
+    let mut ci: Int = 0;
+    while ci < nc {
+        let cl: String = list_get(clauses, ci);
+        if cl != "" {
+            names = fm_collect_var(fm_collect_var(names, smt_contract_parse_lhs(cl)), smt_contract_parse_rhs_var(cl));
+        }
+        ci = ci + 1;
+    }
+    if wp != "" {
+        names = fm_collect_var(fm_collect_var(names, smt_contract_parse_lhs(wp)), smt_contract_parse_rhs_var(wp));
+    }
+    let m: Int = list_len(names);
+    if m == 0 { return false; }
+    let mut rows: List[List[Int]] = list_new();
+    ci = 0;
+    while ci < nc {
+        let cl2: String = list_get(clauses, ci);
+        if cl2 != "" && !smt_contract_parse_is_const(cl2) { rows = list_push(rows, fm_encode_clause(m, names, cl2, false)); }
+        ci = ci + 1;
+    }
+    if wp != "" && !smt_contract_parse_is_const(wp) {
+        rows = list_push(rows, fm_encode_clause(m, names, wp, true));
+    }
+    let mut vi: Int = 0;
+    while vi < m {
+        rows = fm_elim_step(rows, m, vi);
+        let cur_nr: Int = list_len(rows);
+        let mut c_chk: Int = 0;
+        while c_chk < cur_nr {
+            if fm_is_contra(list_get(rows, c_chk), m) { return true; }
+            c_chk = c_chk + 1;
+        }
+        vi = vi + 1;
+    }
+    return false;
+}
+
+pub fn smt_fm_prove_bounds(pre: String, idx_var: String, len_var: String) -> Bool {
+    let lines: List[String] = str_split(pre, "\n");
+    let wp_lower: String = smt_contract_parse_pack("ensures", idx_var, 1, ">=", 0, "", 0, "0", "0", false, 1);
+    let wp_upper: String = smt_contract_parse_pack("ensures", idx_var, 1, "<", 0, len_var, 1, "0", "0", false, 1);
+    let ok_lo: Bool = smt_fm_solve(lines, wp_lower);
+    let ok_hi: Bool = smt_fm_solve(lines, wp_upper);
+    return ok_lo && ok_hi;
+}

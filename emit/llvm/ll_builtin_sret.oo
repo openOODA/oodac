@@ -18,8 +18,42 @@ import "ll_cap.oo";
 import "ll_slot.oo";
 import "ll_ir.oo";
 
+fn ll_builtin_bytes(name: String, args: List[String], ssa0: Int, na: Int, ir: &mut IrBuf) -> String {
+    if (name == "bytes_eq" || name == "oo_bytes_eq") && na >= 2 {
+        let a0: String = ll_as_val(list_get(args, 0), ssa0, ir);
+        let a1: String = ll_as_val(list_get(args, 1), ll_pssa(a0), ir);
+        let s: Int = ll_pssa(a1) + 1;
+        ll_ir_inst(ir, "call", "i32", ll_ssa(s), "@oo_bytes_eq({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ")", 1, 1);
+        ll_ir_inst(ir, "icmp ne", "i32", ll_ssa(s + 1), ll_ssa(s) + ", 0", 1, 1);
+        return ll_pack(0, s + 1, "i1", "");
+    }
+    if (name == "bytes_from_str" || name == "oo_bytes_from_str") && na >= 1 {
+        let a0: String = ll_as_val(list_get(args, 0), ssa0, ir);
+        let s: Int = ll_pssa(a0) + 1;
+        ll_ir_inst(ir, "call", "{ ptr, i64 }", ll_ssa(s), "@oo_bytes_from_str({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ")", 1, 1);
+        return ll_pack(0, s, "str", "");
+    }
+    if (name == "bytes_concat" || name == "oo_bytes_concat") && na >= 2 {
+        let a0: String = ll_as_val(list_get(args, 0), ssa0, ir);
+        let a1: String = ll_as_val(list_get(args, 1), ll_pssa(a0), ir);
+        let s: Int = ll_pssa(a1) + 1;
+        ll_ir_inst(ir, "call", "{ ptr, i64 }", ll_ssa(s), "@oo_bytes_concat({ ptr, i64 } " + ll_ssa(ll_pssa(a0)) + ", { ptr, i64 } " + ll_ssa(ll_pssa(a1)) + ")", 1, 1);
+        return ll_pack(0, s, "str", "");
+    }
+    if (name == "bytes_get" || name == "oo_bytes_get") && na >= 2 {
+        let a0: String = ll_ensure_ptr(list_get(args, 0), ssa0, ir);
+        let bp: String = ll_i64arg(args, 1, ll_pssa(a0), ir);
+        let s: Int = ll_hw(ll_pssa(a0), ll_pssa(bp)) + 1;
+        ll_ir_inst(ir, "call", "i64", ll_ssa(s), "@oo_bytes_get(ptr byval(%OoIList) align 8 " + ll_pptr(a0) + ", i64 " + ll_opnd(bp) + ")", 1, 1);
+        return ll_pack(0, s, "i64", "");
+    }
+    return "";
+}
+
 pub fn ll_builtin_sret(name: String, args: List[String], ssa0: Int, expect: String, ir: &mut IrBuf) -> String {
     let na: Int = list_len(args);
+    let by: String = ll_builtin_bytes(name, args, ssa0, na, ir);
+    if by != "" { return by; }
     if (name == "file_append_sync" || name == "oo_file_append_sync") && na >= 3 {
         let a1: String = ll_as_val(list_get(args, 1), ssa0, ir);
         let a2: String = ll_as_val(list_get(args, 2), ll_pssa(a1), ir);

@@ -198,17 +198,21 @@ pub fn resolve_import_path(fs: &FsReadCap, dir: String, imp: String) -> String {
     let mut hit: String = "";
     if !is_sibling {
         hit = probe_candidate(fs, path_join(dir, imp));
-        if chars_len(hit) > 0 { return hit; }
+        if chars_len(hit) > 0 { return path_normalize(hit); }
+    } else {
+        let sub: String = if is_std { str_slice(imp, 4, chars_len(imp)) } else { str_slice(imp, 6, chars_len(imp)) };
+        hit = probe_candidate(fs, sub);
+        if chars_len(hit) > 0 { return path_normalize(hit); }
     }
 
     hit = probe_candidate(fs, imp);
-    if chars_len(hit) > 0 { return hit; }
+    if chars_len(hit) > 0 { return path_normalize(hit); }
 
     hit = probe_parent_walk(fs, imp);
-    if chars_len(hit) > 0 { return hit; }
+    if chars_len(hit) > 0 { return path_normalize(hit); }
 
     hit = probe_sibling_walk(fs, dir, imp);
-    if chars_len(hit) > 0 { return hit; }
+    if chars_len(hit) > 0 { return path_normalize(hit); }
 
     return "";
 }

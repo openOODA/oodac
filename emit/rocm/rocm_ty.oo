@@ -74,6 +74,10 @@ pub fn rc_ctype(ty: String) -> String {
     if ty == "oi" { return "oo_rocm_OptI"; }
     if ty == "os" { return "oo_rocm_OptS"; }
     if ty == "cap" { return "long long"; }
+    if chars_len(ty) > 3 && str_slice(ty, 0, 3) == "st_" {
+        let sname: String = str_slice(ty, 3, chars_len(ty));
+        return "const __constant__ " + sname + "*";
+    }
     return "";
 }
 
@@ -141,6 +145,7 @@ pub fn rc_default(ty: String) -> String {
     if ty == "oi" { return "oo_rocm_OptI{0, 0}"; }
     if ty == "os" { return "oo_rocm_OptS{0, {}}"; }
     if ty == "cap" { return "0"; }
+    if chars_len(ty) > 3 && str_slice(ty, 0, 3) == "st_" { return "nullptr"; }
     return "";
 }
 

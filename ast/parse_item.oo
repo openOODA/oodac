@@ -13,6 +13,7 @@ import "parse_stmt_nav.oo";
 import "parse_skip.oo";
 import "lex/token_fmt.oo";
 import "parse_drive.oo";
+import "types/sym_intern.oo";
 
 
 pub fn parse_fn_item(toks: List[String], pos0: Int, item_idx: Int) -> Int {
@@ -36,7 +37,7 @@ pub fn parse_fn_item(toks: List[String], pos0: Int, item_idx: Int) -> Int {
     let fn_col: String = field_at(list_get(toks, pos), 2);
     pos = pos + 1;
     // name
-    let name: String = field_at(list_get(toks, pos), 3);
+    let name: String = sym_intern(field_at(list_get(toks, pos), 3));
     pos = pos + 1;
     // optional [T, U]
     if pos < n && field_at(list_get(toks, pos), 0) == "LBRACKET" {

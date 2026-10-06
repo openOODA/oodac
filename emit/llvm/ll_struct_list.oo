@@ -48,7 +48,7 @@ pub fn ll_olist_wanted(toks: List[String], nm: String) -> Bool {
 pub fn ll_st_wrap_emit(nm: String, toks: List[String], ir: &mut IrBuf) {
     ll_ir_text(ir, "%OoRes_St_" + nm + " = type { i32, %St_" + nm + ", %OoStr }");
     ll_ir_text(ir, "%OoOpt_St_" + nm + " = type { i32, %St_" + nm + " }");
-    if ll_olist_wanted(toks, nm) { ll_olist_emit_one(nm, ir); }
+    ll_olist_emit_one(nm, ir);
 }
 
 

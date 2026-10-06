@@ -25,8 +25,13 @@ import "typed_artifact.oo";
 import "artifact_scan.oo";
 import "str_escape.oo";
 import "token_search.oo";
+import "sym_intern.oo";
 
 // ──▓▓ Public Types Subsystem API ──▓▓──
+
+pub fn types_sym_intern(s: String) -> String {
+    return sym_intern(s);
+}
 
 pub fn types_is_cap(t: String) -> Bool {
     return is_cap_type(t);

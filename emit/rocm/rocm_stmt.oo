@@ -16,6 +16,7 @@ import "rocm_scan.oo";
 import "rocm_let.oo";
 import "rocm_branch.oo";
 import "rocm_match.oo";
+import "rocm_gpu_launch.oo";
 
 pub fn rc_stmts(toks: List[String], pos: Int, end: Int, n: Int, env: String, fns: String, capv: String, in_main: Bool, ret: String, ind: String) -> String {
     let mut p: Int = pos;
@@ -53,6 +54,10 @@ pub fn rc_stmts(toks: List[String], pos: Int, end: Int, n: Int, env: String, fns
             text = text + rc_s_text(r);
         } else if k == "KW_MATCH" {
             let r: String = rc_match(toks, p, n, cur, fns, capv, in_main, ret, ind);
+            p = rc_s_pos(r);
+            text = text + rc_s_text(r);
+        } else if k == "AT" {
+            let r: String = rocm_gpu_launch_stmt(toks, p, n, cur, fns, capv, ind);
             p = rc_s_pos(r);
             text = text + rc_s_text(r);
         } else {

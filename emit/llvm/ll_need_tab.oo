@@ -114,6 +114,10 @@ fn ll_need_proto_list(sym: String) -> String {
     if sym == "oo_bytes_new" { return "declare void @oo_bytes_new(ptr noalias sret(%OoIList) align 8) nounwind"; }
     if sym == "oo_bytes_push" { return "declare void @oo_bytes_push(ptr noalias sret(%OoIList) align 8, ptr byval(%OoIList) align 8, i64) nounwind"; }
     if sym == "oo_bytes_to_str" { return "declare { ptr, i64 } @oo_bytes_to_str(ptr byval(%OoIList) align 8) nounwind"; }
+    if sym == "oo_bytes_eq" { return "declare i32 @oo_bytes_eq({ ptr, i64 }, { ptr, i64 }) nounwind"; }
+    if sym == "oo_bytes_from_str" { return "declare { ptr, i64 } @oo_bytes_from_str({ ptr, i64 }) nounwind"; }
+    if sym == "oo_bytes_concat" { return "declare { ptr, i64 } @oo_bytes_concat({ ptr, i64 }, { ptr, i64 }) nounwind"; }
+    if sym == "oo_bytes_get" { return "declare i64 @oo_bytes_get(ptr byval(%OoIList) align 8, i64) nounwind"; }
     if sym == "oo_list_alloc_payload" { return "declare ptr @oo_list_alloc_payload(i64, i64) nounwind"; }
     if sym == "oo_list_quota_release_bytes" { return "declare void @oo_list_quota_release_bytes(i64, i64) nounwind"; }
     if sym == "oo_payload_free" { return "declare void @oo_payload_free(ptr) nounwind"; }

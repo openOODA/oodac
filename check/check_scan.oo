@@ -108,11 +108,9 @@ pub fn count_lines(s: String) -> Int {
 }
 
 pub fn fold_toks(toks: List[String], l: Int, r: Int) -> String {
-    let mut out: String = "";
-    let mut i: Int = l;
-    while i < r {
-        out = out + list_get(toks, i) + "\n";
-        i = i + 1;
-    }
-    return out;
+    let count: Int = r - l;
+    if count <= 0 { return ""; }
+    if count == 1 { return list_get(toks, l) + "\n"; }
+    let mid: Int = l + count / 2;
+    return fold_toks(toks, l, mid) + fold_toks(toks, mid, r);
 }

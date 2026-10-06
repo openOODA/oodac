@@ -12,6 +12,7 @@
 
 import "ty.oo";
 import "types_core.oo";
+import "sym_intern.oo";
 import "lex/token_fmt.oo";
 import "lex/token_parse_int.oo";
 
@@ -130,7 +131,7 @@ pub fn ty_parse_at(toks: List[String], pos: Int, n: Int) -> List[String] {
             }
             return ty_pack2(p.to_string(), ty_name(t + "[" + inner_args + "]"));
         }
-        return ty_pack2(p.to_string(), ty_name(t));
+        return ty_pack2(p.to_string(), ty_name(sym_intern(t)));
     }
 
     let next_p: Int = p + 1;

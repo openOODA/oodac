@@ -31,11 +31,32 @@ fn ll_need_drop_list(need: String, k: String) -> String {
     return n;
 }
 
+fn ll_need_scan_push(toks: List[String], i: Int, n: Int) -> String {
+    if i + 1 >= n || ll_k(toks, i + 1) != "LPAREN" { return ""; }
+    let mut d: Int = 1;
+    let mut j: Int = i + 2;
+    let mut commas: Int = 0;
+    while j < n && d > 0 {
+        let kk: String = ll_k(toks, j);
+        if kk == "LPAREN" { d = d + 1; }
+        if kk == "RPAREN" { d = d - 1; }
+        if kk == "COMMA" && d == 1 { commas = commas + 1; }
+        if commas == 1 && d == 1 && kk != "COMMA" {
+            if kk == "INT" { return "i"; }
+            if kk == "STRING" { return "s"; }
+            commas = 2;
+        }
+        j = j + 1;
+    }
+    return "";
+}
+
 fn ll_need_list_kind(toks: List[String]) -> String {
     let n: Int = list_len(toks);
     let mut i: Int = 0;
     let mut saw_i: Bool = false;
     let mut saw_s: Bool = false;
+    let mut saw_other: Bool = false;
     while i < n {
         if ll_k(toks, i) == "IDENT" {
             let nm: String = ll_t(toks, i);
@@ -43,28 +64,21 @@ fn ll_need_list_kind(toks: List[String]) -> String {
             if nm == "List" && i + 2 < n && ll_k(toks, i + 1) == "LBRACKET" && ll_k(toks, i + 2) == "IDENT" {
                 let e: String = ll_t(toks, i + 2);
                 if e == "Int" { saw_i = true; }
-                if e == "String" { saw_s = true; }
+                else if e == "String" { saw_s = true; }
+                else { saw_other = true; }
             }
-            if nm == "list_push" && i + 1 < n && ll_k(toks, i + 1) == "LPAREN" {
-                let mut d: Int = 1;
-                let mut j: Int = i + 2;
-                let mut commas: Int = 0;
-                while j < n && d > 0 {
-                    let kk: String = ll_k(toks, j);
-                    if kk == "LPAREN" { d = d + 1; }
-                    if kk == "RPAREN" { d = d - 1; }
-                    if kk == "COMMA" && d == 1 { commas = commas + 1; }
-                    if commas == 1 && d == 1 && kk != "COMMA" {
-                        if kk == "INT" { saw_i = true; }
-                        if kk == "STRING" { saw_s = true; }
-                        commas = 2;
-                    }
-                    j = j + 1;
-                }
+            if (nm == "Result" || nm == "Option") && i + 2 < n && (ll_k(toks, i + 1) == "LBRACKET" || ll_k(toks, i + 1) == "LT") && ll_t(toks, i + 2) == "List" {
+                saw_other = true;
+            }
+            if nm == "list_push" {
+                let pk: String = ll_need_scan_push(toks, i, n);
+                if pk == "i" { saw_i = true; }
+                if pk == "s" { saw_s = true; }
             }
         }
         i = i + 1;
     }
+    if saw_other { return "both"; }
     if saw_i && !saw_s { return "ilist"; }
     if saw_s && !saw_i { return "slist"; }
     return "both";

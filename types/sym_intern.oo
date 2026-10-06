@@ -1,0 +1,28 @@
+// # Symbol Table String Interning Arena
+//
+// Logline: Atomically interns symbol strings and identifier tokens to deduplicate AST and type representations.
+//
+// Setup: Pure runtime delegation; byte_slice invokes atomic string pool.
+//
+// Beats:
+//   1. Intern symbol slice into static table.
+//   2. Deduplicate identifier representations across compiler stages.
+// RULES.oot 1.7: Under 256 lines.
+
+pub fn sym_intern(s: String) -> String {
+    let n: Int = bytes_len(s);
+    if n == 0 { return ""; }
+    return byte_slice(s, 0, n);
+}
+
+pub fn sym_intern_ident(s: String) -> String {
+    return sym_intern(s);
+}
+
+pub fn sym_intern_type(s: String) -> String {
+    return sym_intern(s);
+}
+
+pub fn sym_intern_fn(s: String) -> String {
+    return sym_intern(s);
+}

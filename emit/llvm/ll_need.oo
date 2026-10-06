@@ -179,10 +179,12 @@ pub fn ll_need_scan(toks: List[String]) -> String {
     let mut has_args: Bool = false;
     let mut has_verify: Bool = false;
     let mut has_float: Bool = false;
+    let mut has_st: Bool = false;
     while i < n {
         let k: String = ll_k(toks, i);
         if k == "STRING" { has_str = true; }
         if k == "FLOAT" { has_float = true; }
+        if k == "KW_TYPE" { has_st = true; }
         if k == "KW_VERIFY" || k == "KW_ENSURES" || k == "KW_REQUIRES" { has_verify = true; }
         if k == "SLASH" || k == "PERCENT" {
             need = ll_need_add(need, "oo_process_exit");
@@ -210,26 +212,18 @@ pub fn ll_need_scan(toks: List[String]) -> String {
         i = i + 1;
     }
     if has_str {
-        need = ll_need_add(need, "oo_str_lit");
-        need = ll_need_add(need, "oo_str_retain");
-        need = ll_need_add(need, "oo_str_release");
-        need = ll_need_add(need, "oo_str_concat");
+        need = ll_need_add(ll_need_add(ll_need_add(ll_need_add(need, "oo_str_lit"), "oo_str_retain"), "oo_str_release"), "oo_str_concat");
         need = ll_need_add(need, "oo_str_eq");
         if ll_need_has(need, "oo_println") { need = ll_need_add(need, "oo_print_str"); }
     }
     if has_list {
-        need = ll_need_add(need, "oo_slist_retain");
-        need = ll_need_add(need, "oo_slist_release");
-        need = ll_need_add(need, "oo_ilist_retain");
-        need = ll_need_add(need, "oo_ilist_release");
-        need = ll_need_add(need, "oo_flist_retain");
-        need = ll_need_add(need, "oo_flist_release");
-        need = ll_need_add(need, "oo_ll_I_retain");
-        need = ll_need_add(need, "oo_ll_I_release");
-        need = ll_need_add(need, "oo_ll_S_retain");
-        need = ll_need_add(need, "oo_ll_S_release");
-        need = ll_need_add(ll_need_add(need, "oo_list_alloc_payload"), "oo_list_quota_release_bytes");
+        need = ll_need_add(ll_need_add(ll_need_add(ll_need_add(need, "oo_slist_retain"), "oo_slist_release"), "oo_ilist_retain"), "oo_ilist_release");
+        need = ll_need_add(ll_need_add(ll_need_add(ll_need_add(need, "oo_flist_retain"), "oo_flist_release"), "oo_ll_I_retain"), "oo_ll_I_release");
+        need = ll_need_add(ll_need_add(ll_need_add(ll_need_add(need, "oo_ll_S_retain"), "oo_ll_S_release"), "oo_list_alloc_payload"), "oo_list_quota_release_bytes");
         need = ll_need_add(need, "oo_payload_free");
+    }
+    if has_st {
+        need = ll_need_add(ll_need_add(ll_need_add(ll_need_add(need, "oo_process_exit"), "oo_list_alloc_payload"), "oo_list_quota_release_bytes"), "oo_payload_free");
     }
     if has_args {
         need = ll_need_add(need, "oo_slist_new");

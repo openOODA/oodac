@@ -89,15 +89,14 @@ pub fn str_escape_json(s: String) -> String {
     return out;
 }
 
+fn str_join_range(parts: List[String], l: Int, r: Int) -> String {
+    let count: Int = r - l;
+    if count <= 0 { return ""; }
+    if count == 1 { return list_get(parts, l); }
+    let mid: Int = l + count / 2;
+    return str_join_range(parts, l, mid) + str_join_range(parts, mid, r);
+}
+
 pub fn str_join_list(parts: List[String]) -> String {
-    let n: Int = list_len(parts);
-    if n == 0 { return ""; }
-    if n == 1 { return list_get(parts, 0); }
-    let mut res: String = "";
-    let mut i: Int = 0;
-    while i < n {
-        res = res + list_get(parts, i);
-        i = i + 1;
-    }
-    return res;
+    return str_join_range(parts, 0, list_len(parts));
 }

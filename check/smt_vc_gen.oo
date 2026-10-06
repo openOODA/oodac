@@ -14,6 +14,7 @@
 import "smt_contract_parse.oo";
 import "smt_wp_calc.oo";
 import "smt_prover_lia.oo";
+import "smt_fm_elim.oo";
 import "lex/token_fmt.oo";
 import "lex/token_parse_int.oo";
 
@@ -171,13 +172,14 @@ pub fn smt_vc_prove_function_clauses(toks: List[String], fn_idx: Int, fn_name: S
     if n_cl == 0 { return verdicts; }
 
     let mut pre_cl: String = "";
+    let mut req_clauses: List[String] = list_new();
     let mut has_pre: Bool = false;
     let mut has_ensures: Bool = false;
     let mut i: Int = 0;
     while i < n_cl {
         let cl: String = list_get(clauses, i);
         let ck: String = smt_contract_parse_kind(cl);
-        if ck == "requires" { pre_cl = cl; has_pre = true; }
+        if ck == "requires" { pre_cl = cl; req_clauses = list_push(req_clauses, cl); has_pre = true; }
         if ck == "ensures" { has_ensures = true; }
         i = i + 1;
     }
@@ -214,12 +216,14 @@ pub fn smt_vc_prove_function_clauses(toks: List[String], fn_idx: Int, fn_name: S
                 pre_arg = smt_contract_parse_pack("requires", "", 1, "==", 0, "", 0, "0", "0", true, 1);
             }
             let wp: String = smt_wp_calc_step(cl3, assign);
-            let res: String = smt_prover_lia_prove_clause(pre_arg, wp);
-            if smt_prover_lia_is_valid(res) {
-                verdicts = list_push(verdicts, fn_name + "\t" + i.to_string() + "\tPROVEN\t" + smt_contract_parse_lhs(cl3));
-            } else {
-                verdicts = list_push(verdicts, fn_name + "\t" + i.to_string() + "\tREFUTED\t" + smt_prover_lia_counterexample(res));
+            let mut proven: Bool = false;
+            if has_pre && smt_fm_solve(req_clauses, wp) { proven = true; }
+            if !proven {
+                let res: String = smt_prover_lia_prove_clause(pre_arg, wp);
+                if smt_prover_lia_is_valid(res) { proven = true; }
+                else { verdicts = list_push(verdicts, fn_name + "\t" + i.to_string() + "\tREFUTED\t" + smt_prover_lia_counterexample(res)); }
             }
+            if proven { verdicts = list_push(verdicts, fn_name + "\t" + i.to_string() + "\tPROVEN\t" + smt_contract_parse_lhs(cl3)); }
         }
         i = i + 1;
     }

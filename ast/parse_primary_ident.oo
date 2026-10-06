@@ -13,6 +13,7 @@ import "parse_skip.oo";
 import "parse_method.oo";
 import "lex/token_fmt.oo";
 import "parse_expr.oo";
+import "types/sym_intern.oo";
 
 pub fn parse_primary_ident(toks: List[String], pos0: Int, depth: Int) -> Int {
     let n = list_len(toks);
@@ -21,7 +22,7 @@ let pad: String = indent(depth);
 let text: String = field_at(list_get(toks, pos), 3);
 let line: String = field_at(list_get(toks, pos), 1);
 let col: String = field_at(list_get(toks, pos), 2);
-let name: String = str_slice(text, 0, chars_len(text));
+let name: String = sym_intern(text);
 let nl: String = str_slice(line, 0, chars_len(line));
 let nc: String = str_slice(col, 0, chars_len(col));
 pos = pos + 1;

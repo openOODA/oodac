@@ -11,6 +11,7 @@
 
 import "smt_contract_parse.oo";
 import "smt_prover_lia.oo";
+import "smt_fm_elim.oo";
 import "lex/token_fmt.oo";
 import "lex/token_parse_int.oo";
 
@@ -47,6 +48,8 @@ pub fn smt_prover_clause_has_bounds(cl: String, idx_name: String) -> Bool {
 }
 
 pub fn smt_prover_prove_bounds(pre: String, idx_var: String, len_var: String) -> Bool {
+    let fm_ok: Bool = smt_fm_prove_bounds(pre, idx_var, len_var);
+    if fm_ok { return true; }
     let mut steps: Int = 0;
     let max_steps: Int = smt_prover_timeout_limit();
     let wp_lower: String = smt_contract_parse_pack("ensures", idx_var, 1, ">=", 0, "", 0, "0", "0", false, 1);

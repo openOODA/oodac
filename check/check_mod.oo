@@ -109,7 +109,7 @@ fn check_modules(fs_r: &FsReadCap, fs_w: &FsWriteCap, sys: &ProcessCap, ar: &Are
         }
         i = i + 1;
     }
-    let ar_res: Result[String, String] = arena_create(ar, 62914560);
+    let ar_res: Result[String, String] = arena_create(ar, 67108864);
     let ar_id: Int = parse_arena_id(ar_res);
     i = 0;
     while i < np {

@@ -31,9 +31,14 @@ import "parse_skip.oo";
 import "parse_stmt.oo";
 import "parse_stmt_dump.oo";
 import "parse_stmt_nav.oo";
+import "types/sym_intern.oo";
 
 // ──▓▓ Sovereign Lattice ── AST ANCHOR ──▓▓──
 // :: public: parse_expr, parse_stmt, parse_file ::
+
+pub fn ast_sym_intern(s: String) -> String {
+    return sym_intern(s);
+}
 
 pub fn parse_expr(src: String) -> String {
     return parse_expr_inner(src);

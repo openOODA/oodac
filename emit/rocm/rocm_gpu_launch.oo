@@ -1,0 +1,56 @@
+// # ROCm GPU Kernel Launch lowering
+//
+// Logline: Lowers @gpu_launch(grid, block) kernel_fn(args) to HIP hipLaunchKernelGGL syntax.
+//
+// Setup: Token stream positioned at AT token. Emits hipLaunchKernelGGL(kernel, dim3(grid), dim3(block), 0, 0, args).
+//
+// Beats:
+//   1. Parse @gpu_launch configuration expressions for grid and block dimensions.
+//   2. Parse kernel function identifier and argument expressions.
+//   3. Emit formatted ROCm hipLaunchKernelGGL launch statement with semicolons.
+// RULES.oot 1.7: Under 256 lines.
+
+import "rocm_tok.oo";
+import "rocm_ty.oo";
+import "rocm_expr.oo";
+import "rocm_call.oo";
+
+pub fn rocm_gpu_launch_stmt(toks: List[String], pos: Int, n: Int, env: String, fns: String, capv: String, ind: String) -> String {
+    if pos + 2 >= n || rc_t(toks, pos + 1) != "gpu_launch" || rc_k(toks, pos + 2) != "LPAREN" {
+        rc_fail(rc_line(toks, pos), "malformed @gpu_launch");
+        return rc_s_pack(pos + 1, env, "");
+    }
+    let linfo: String = rc_arg_spans(toks, pos + 1, n);
+    let lnargs: Int = rc_span_nargs(linfo);
+    if lnargs != 2 {
+        rc_fail(rc_line(toks, pos), "@gpu_launch expects grid and block dimensions");
+        return rc_s_pack(rc_span_end(linfo) + 1, env, "");
+    }
+    let ge: String = rc_expr(toks, rc_span_start(linfo, 0), n, env, fns, "i", capv);
+    let be: String = rc_expr(toks, rc_span_start(linfo, 1), n, env, fns, "i", capv);
+    let kp: Int = rc_span_end(linfo) + 1;
+    if kp >= n || rc_k(toks, kp) != "IDENT" {
+        rc_fail(rc_line(toks, pos), "@gpu_launch expects kernel function name");
+        return rc_s_pack(kp, env, "");
+    }
+    let kname: String = rc_t(toks, kp);
+    if kp + 1 >= n || rc_k(toks, kp + 1) != "LPAREN" {
+        rc_fail(rc_line(toks, kp), "kernel launch missing arguments");
+        return rc_s_pack(kp + 1, env, "");
+    }
+    let kinfo: String = rc_arg_spans(toks, kp, n);
+    let knargs: Int = rc_span_nargs(kinfo);
+    let mut kargs_code: String = "";
+    let mut ai: Int = 0;
+    while ai < knargs {
+        let arg_pos: Int = rc_span_start(kinfo, ai);
+        let ae: String = rc_expr(toks, arg_pos, n, env, fns, "", capv);
+        if ai > 0 { kargs_code = kargs_code + ", "; }
+        kargs_code = kargs_code + rc_e_code(ae);
+        ai = ai + 1;
+    }
+    let mut next_p: Int = rc_span_end(kinfo) + 1;
+    if next_p < n && rc_k(toks, next_p) == "SEMI" { next_p = next_p + 1; }
+    let line: String = ind + "hipLaunchKernelGGL(" + kname + ", dim3(" + rc_e_code(ge) + "), dim3(" + rc_e_code(be) + "), 0, 0" + (if kargs_code != "" { ", " + kargs_code } else { "" }) + ");\n";
+    return rc_s_pack(next_p, env, line);
+}

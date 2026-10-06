@@ -16,6 +16,7 @@ import "cuda_scan.oo";
 import "cuda_let.oo";
 import "cuda_branch.oo";
 import "cuda_match.oo";
+import "cuda_gpu_launch.oo";
 
 pub fn cu_stmts(toks: List[String], pos: Int, end: Int, n: Int, env: String, fns: String, capv: String, in_main: Bool, ret: String, ind: String) -> String {
     let mut p: Int = pos;
@@ -53,6 +54,10 @@ pub fn cu_stmts(toks: List[String], pos: Int, end: Int, n: Int, env: String, fns
             text = text + cu_s_text(r);
         } else if k == "KW_MATCH" {
             let r: String = cu_match(toks, p, n, cur, fns, capv, in_main, ret, ind);
+            p = cu_s_pos(r);
+            text = text + cu_s_text(r);
+        } else if k == "AT" {
+            let r: String = cu_gpu_launch_stmt(toks, p, n, cur, fns, capv, ind);
             p = cu_s_pos(r);
             text = text + cu_s_text(r);
         } else {

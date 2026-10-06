@@ -120,6 +120,9 @@ pub fn cu_read_ty(toks: List[String], pos: Int, n: Int) -> String {
     if base == "List" || base == "Result" || base == "Option" {
         return cu_read_generic(toks, pos, n, p, base);
     }
+    if chars_len(base) > 0 {
+        return p.to_string() + "\tst_" + base;
+    }
     cu_fail(cu_line(toks, pos), "unsupported type " + base);
     return "0\t?";
 }

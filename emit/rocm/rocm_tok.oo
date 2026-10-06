@@ -120,6 +120,9 @@ pub fn rc_read_ty(toks: List[String], pos: Int, n: Int) -> String {
     if base == "List" || base == "Result" || base == "Option" {
         return rc_read_generic(toks, pos, n, p, base);
     }
+    if chars_len(base) > 0 {
+        return p.to_string() + "\tst_" + base;
+    }
     rc_fail(rc_line(toks, pos), "unsupported type " + base);
     return "0\t?";
 }
