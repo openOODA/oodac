@@ -16,6 +16,7 @@ import "check/anchor.oo";
 import "types/anchor.oo";
 import "emit/anchor.oo";
 import "cli/anchor.oo";
+import "mir/anchor.oo";
 // ──▓▓ Sovereign Lattice ── OODAC ANCHOR ──▓▓──
 // :: public: oodac_lex_all, oodac_parse_expr, oodac_parse_stmt, oodac_parse_file ::
 

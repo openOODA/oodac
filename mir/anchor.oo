@@ -1,0 +1,20 @@
+// # MIR Module Index
+//
+// Logline: Sovereign architecture-neutral Mid-level Intermediate Representation.
+//
+// Setup: Re-exports MIR operand, instruction, block, fn, and regalloc surfaces.
+//
+// Beats:
+//   1. Re-export typed operands and instructions.
+//   2. Re-export basic blocks and control flow graph.
+//   3. Re-export linear scan register allocator.
+
+import "mir_types.oo";
+import "mir_inst.oo";
+import "mir_block.oo";
+import "mir_fn.oo";
+import "mir_regalloc.oo";
+
+pub fn mir_anchor_active() -> Bool {
+    return true;
+}

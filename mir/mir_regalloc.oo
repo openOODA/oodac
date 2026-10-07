@@ -1,0 +1,160 @@
+// # Linear Scan Register Allocator for Sovereign MIR
+//
+// Logline: Deterministic interval-based register allocation and stack spill assignment.
+//
+// Setup: Maps virtual registers to physical register pool or stack spill slots.
+//
+// Beats:
+//   1. Collects live ranges [start_pc, end_pc] for virtual registers across instructions.
+//   2. Linear scan assigns free physical registers or allocates stack spill slots.
+//   3. Query routines report register assignment, spill slots, and total spill counts.
+
+import "mir_types.oo";
+
+pub type MirInterval = struct {
+    vreg: String,
+    start_pc: Int,
+    end_pc: Int,
+    phys: Int,
+    spill: Int
+};
+
+pub type MirRegAlloc = struct {
+    intervals: List[MirInterval],
+    num_spills: Int
+};
+
+pub fn mir_regalloc_new() -> MirRegAlloc {
+    let empty: List[MirInterval] = list_new();
+    return MirRegAlloc {
+        intervals: empty,
+        num_spills: 0
+    };
+}
+
+pub fn mir_regalloc_add(ra: &mut MirRegAlloc, vreg: String, start_pc: Int, end_pc: Int) {
+    let iv: MirInterval = MirInterval {
+        vreg: vreg,
+        start_pc: start_pc,
+        end_pc: end_pc,
+        phys: 0 - 1,
+        spill: 0 - 1
+    };
+    ra.intervals = list_push(ra.intervals, iv);
+}
+
+pub fn mir_regalloc_solve(ra: &mut MirRegAlloc, pool_size: Int) {
+    let mut free_until: List[Int] = list_new();
+    let mut p: Int = 0;
+    while p < pool_size {
+        free_until = list_push(free_until, 0 - 1);
+        p = p + 1;
+    }
+    let n: Int = list_len(ra.intervals);
+    let mut updated: List[MirInterval] = list_new();
+    let mut i: Int = 0;
+    while i < n {
+        let mut iv: MirInterval = list_get(ra.intervals, i);
+        let mut allocated: Bool = false;
+        let mut reg_idx: Int = 0;
+        while reg_idx < pool_size {
+            let busy_until: Int = list_get(free_until, reg_idx);
+            if busy_until < iv.start_pc {
+                iv.phys = reg_idx;
+                iv.spill = 0 - 1;
+                free_until = list_set(free_until, reg_idx, iv.end_pc);
+                allocated = true;
+                break;
+            }
+            reg_idx = reg_idx + 1;
+        }
+        if !allocated {
+            iv.phys = 0 - 1;
+            iv.spill = ra.num_spills;
+            ra.num_spills = ra.num_spills + 1;
+        }
+        updated = list_push(updated, iv);
+        i = i + 1;
+    }
+    ra.intervals = updated;
+}
+
+pub fn mir_regalloc_run(insts: List[MirInst], pool_size: Int) -> MirRegAlloc {
+    let mut ra: MirRegAlloc = mir_regalloc_new();
+    let mut vregs: List[String] = list_new();
+    let mut starts: List[Int] = list_new();
+    let mut ends: List[Int] = list_new();
+    let mut pc: Int = 0;
+    while pc < list_len(insts) {
+        let inst: MirInst = list_get(insts, pc);
+        let mut names: List[String] = list_new();
+        if inst.dst != "" { names = list_push(names, inst.dst); }
+        let mut a: Int = 0;
+        while a < list_len(inst.args) {
+            let opnd: MirOpnd = list_get(inst.args, a);
+            if opnd.is_reg && opnd.val != "" { names = list_push(names, opnd.val); }
+            a = a + 1;
+        }
+        let mut m: Int = 0;
+        while m < list_len(names) {
+            let nm: String = list_get(names, m);
+            let mut k: Int = 0;
+            let mut found: Int = 0 - 1;
+            while k < list_len(vregs) {
+                if list_get(vregs, k) == nm { found = k; break; }
+                k = k + 1;
+            }
+            if found < 0 {
+                vregs = list_push(vregs, nm); starts = list_push(starts, pc); ends = list_push(ends, pc);
+            } else { ends = list_set(ends, found, pc); }
+            m = m + 1;
+        }
+        pc = pc + 1;
+    }
+    let mut j: Int = 0;
+    while j < list_len(vregs) {
+        mir_regalloc_add(&mut ra, list_get(vregs, j), list_get(starts, j), list_get(ends, j));
+        j = j + 1; }
+    mir_regalloc_solve(&mut ra, pool_size);
+    return ra;
+}
+
+pub fn mir_regalloc_lookup_phys(ra: &MirRegAlloc, vreg: String) -> Int {
+    let n: Int = list_len(ra.intervals);
+    let mut i: Int = 0;
+    while i < n {
+        let iv: MirInterval = list_get(ra.intervals, i);
+        if iv.vreg == vreg { return iv.phys; }
+        i = i + 1;
+    }
+    return 0 - 1;
+}
+
+pub fn mir_regalloc_lookup_spill(ra: &MirRegAlloc, vreg: String) -> Int {
+    let n: Int = list_len(ra.intervals);
+    let mut i: Int = 0;
+    while i < n {
+        let iv: MirInterval = list_get(ra.intervals, i);
+        if iv.vreg == vreg { return iv.spill; }
+        i = i + 1;
+    }
+    return 0 - 1;
+}
+
+pub fn mir_regalloc_spill_count(ra: &MirRegAlloc) -> Int {
+    return ra.num_spills;
+}
+
+pub fn mir_reg_name(phys: Int) -> String {
+    if phys == 0 { return "rax"; }
+    if phys == 1 { return "rcx"; }
+    if phys == 2 { return "rdx"; }
+    if phys == 3 { return "rbx"; }
+    if phys == 4 { return "rsi"; }
+    if phys == 5 { return "rdi"; }
+    if phys == 6 { return "r8"; }
+    if phys == 7 { return "r9"; }
+    if phys == 8 { return "r10"; }
+    if phys == 9 { return "r11"; }
+    return "none";
+}

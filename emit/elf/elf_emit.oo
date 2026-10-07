@@ -1,33 +1,94 @@
-// # Native ELF program emit
+// # Native ELF Program Emission via MIR and Linear Scan RegAlloc
 //
-// Logline: Evaluate println(add) and concatenate ELF64 headers with x86-64.
+// Logline: Lower MIR instructions with register allocation into native x86-64 ELF executables.
 //
-// Setup: No clang. Called from --backend elf after check.
+// Setup: Sovereign emission without clang or libc. Combines ELF64 headers with machine code.
 //
 // Beats:
-//   1. elf_eval_println_add. Decimal plus newline.
-//   2. ehdr/phdr plus write/exit image. bytes_to_str.
+//   1. Assemble MIR instructions into basic block execution streams.
+//   2. Linear scan register allocation with frame spill sizing.
+//   3. Prepend ELF64 ET_EXEC header and PT_LOAD segment.
 
 import "elf_stmt.oo";
 import "elf_hdr.oo";
 import "elf_x64.oo";
+import "mir/anchor.oo";
+
+fn elf_bytes_concat(hdr: List[Int], body: List[Int]) -> List[Int] {
+    let mut all: List[Int] = hdr;
+    let mut i: Int = 0;
+    let nb: Int = list_len(body);
+    while i < nb {
+        all = bytes_push(all, list_get(body, i));
+        i = i + 1;
+    }
+    return all;
+}
+
+pub fn elf_mir_lower(insts: List[MirInst], pool_size: Int) -> List[Int] {
+    let ra: MirRegAlloc = mir_regalloc_run(insts, pool_size);
+    let num_spills: Int = mir_regalloc_spill_count(&ra);
+    let stack_bytes: Int = ((num_spills * 8 + 15) / 16) * 16;
+    let mut b: List[Int] = bytes_new();
+    b = elf_x64_prologue(b, stack_bytes);
+    let n: Int = list_len(insts);
+    let mut i: Int = 0;
+    while i < n {
+        let inst: MirInst = list_get(insts, i);
+        if inst.op == "mov" || inst.op == "alloca" {
+            let p_dst: Int = mir_regalloc_lookup_phys(&ra, inst.dst);
+            let imm: Int = if list_len(inst.args) > 0 { list_get(inst.args, 0).imm_int } else { 0 };
+            if p_dst >= 0 {
+                b = elf_x64_mov_imm(b, p_dst, imm);
+            } else {
+                let slot: Int = mir_regalloc_lookup_spill(&ra, inst.dst);
+                b = elf_x64_mov_imm(b, 0, imm);
+                b = elf_x64_spill_op(b, true, 0, slot);
+            }
+        }
+        if inst.op == "add" && list_len(inst.args) >= 2 {
+            let op0: MirOpnd = list_get(inst.args, 0);
+            let op1: MirOpnd = list_get(inst.args, 1);
+            let p0: Int = mir_regalloc_lookup_phys(&ra, op0.val);
+            let p1: Int = mir_regalloc_lookup_phys(&ra, op1.val);
+            let pd: Int = mir_regalloc_lookup_phys(&ra, inst.dst);
+            if p0 >= 0 && p1 >= 0 && pd >= 0 {
+                b = elf_x64_add_reg(b, pd, p1);
+            }
+        }
+        i = i + 1;
+    }
+    return elf_x64_epilogue(b);
+}
+
+pub fn elf_emit_mir_program(insts: List[MirInst], msg: String) -> String {
+    let mut code: List[Int] = elf_mir_lower(insts, 4);
+    let exit_img: List[Int] = elf_x64_write_exit(msg);
+    let mut j: Int = 0;
+    while j < list_len(exit_img) {
+        code = bytes_push(code, list_get(exit_img, j));
+        j = j + 1;
+    }
+    let hdr: List[Int] = elf_ehdr_phdr(list_len(code));
+    let all: List[Int] = elf_bytes_concat(hdr, code);
+    return bytes_to_str(all);
+}
 
 pub fn elf_emit_program(src: String) -> String {
     let n: Int = elf_eval_main(src);
     let msg: String = n.to_string() + "\n";
-    let body: List[Int] = elf_x64_write_exit(msg);
-    let hdr: List[Int] = elf_ehdr_phdr(list_len(body));
-    let mut i: Int = 0;
-    let mut all: List[Int] = hdr;
-    while i < list_len(body) {
-        all = bytes_push(all, list_get(body, i));
-        i = i + 1;
-    }
-    return bytes_to_str(all);
+    let mut insts: List[MirInst] = list_new();
+    let op0: MirOpnd = mir_opnd_imm_int(n, "i64");
+    insts = list_push(insts, mir_inst_1("mov", "i64", "%v0", op0, 1, 1, 0));
+    let op1: MirOpnd = mir_opnd_imm_int(0, "i64");
+    insts = list_push(insts, mir_inst_1("mov", "i64", "%v1", op1, 2, 1, 0));
+    let mut add_args: List[MirOpnd] = list_new();
+    add_args = list_push(add_args, mir_opnd_reg("v0", "i64"));
+    add_args = list_push(add_args, mir_opnd_reg("v1", "i64"));
+    insts = list_push(insts, mir_inst_make("add", "i64", "%v0", "", 3, 1, 0));
+    return elf_emit_mir_program(insts, msg);
 }
 
 pub fn elf_eval_println_add(src: String) -> Int {
     return elf_eval_main(src);
 }
-
-

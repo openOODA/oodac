@@ -1,12 +1,13 @@
-// # x86-64 sys_write + sys_exit image
+// # x86-64 Machine Code Instruction Lowering and Syscalls
 //
-// Logline: Write a decimal line to stdout then exit 0. No libc. No clang.
+// Logline: Low-level x86-64 byte encodings for prologue, epilogue, registers, spills, and exit.
 //
-// Setup: RIP-relative lea to the message immediately after the syscalls.
+// Setup: Emits raw machine bytes for ET_EXEC PT_LOAD execution without libc or clang.
 //
 // Beats:
-//   1. mov rax/rdi/rdx immediates. syscall write then exit.
-//   2. Message is ASCII digits plus newline.
+//   1. Function prologue and epilogue stack frame management.
+//   2. Immediate register moves, register-to-register addition, and stack spill operations.
+//   3. Standalone sys_write and sys_exit execution image generation.
 
 import "elf_u.oo";
 
@@ -36,6 +37,47 @@ fn elf_push_msg(b: List[Int], s: String) -> List[Int] {
         i = i + 1;
     }
     return out;
+}
+
+pub fn elf_x64_prologue(b: List[Int], stack_size: Int) -> List[Int] {
+    let mut out: List[Int] = elf_u8(b, 85);
+    out = elf_u8(out, 72); out = elf_u8(out, 137); out = elf_u8(out, 229);
+    if stack_size > 0 {
+        out = elf_u8(out, 72); out = elf_u8(out, 129); out = elf_u8(out, 236);
+        out = elf_u32(out, stack_size);
+    }
+    return out;
+}
+
+pub fn elf_x64_epilogue(b: List[Int]) -> List[Int] {
+    let mut out: List[Int] = elf_u8(b, 72);
+    out = elf_u8(out, 137); out = elf_u8(out, 236);
+    out = elf_u8(out, 93);
+    return elf_u8(out, 195);
+}
+
+pub fn elf_x64_mov_imm(b: List[Int], phys_reg: Int, imm: Int) -> List[Int] {
+    let mut out: List[Int] = elf_u8(b, 72);
+    out = elf_u8(out, 199);
+    out = elf_u8(out, 192 + (phys_reg % 8));
+    return elf_i32(out, imm);
+}
+
+pub fn elf_x64_add_reg(b: List[Int], dst_reg: Int, src_reg: Int) -> List[Int] {
+    let mut out: List[Int] = elf_u8(b, 72);
+    out = elf_u8(out, 1);
+    let modrm: Int = 192 + (src_reg % 8) * 8 + (dst_reg % 8);
+    return elf_u8(out, modrm);
+}
+
+pub fn elf_x64_spill_op(b: List[Int], is_store: Bool, phys_reg: Int, slot: Int) -> List[Int] {
+    let disp: Int = 0 - (slot + 1) * 8;
+    let mut out: List[Int] = elf_u8(b, 72);
+    let opc: Int = if is_store { 137 } else { 139 };
+    out = elf_u8(out, opc);
+    let modrm: Int = 133 + (phys_reg % 8) * 8;
+    out = elf_u8(out, modrm);
+    return elf_i32(out, disp);
 }
 
 pub fn elf_x64_write_exit(msg: String) -> List[Int] {

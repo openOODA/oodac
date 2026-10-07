@@ -1,0 +1,95 @@
+// # MIR Function Container and Control Flow Construction
+//
+// Logline: Function-level container managing blocks, entry allocas, and CFG edges.
+//
+// Setup: MirFn holds function signature, entry allocas, and ordered basic blocks.
+//
+// Beats:
+//   1. MirFn initialization and metadata assignment.
+//   2. Entry block and alloca management.
+//   3. Bidirectional edge connection and block querying.
+
+import "mir_types.oo";
+import "mir_inst.oo";
+import "mir_block.oo";
+
+pub type MirFn = struct {
+    name: String,
+    entry: String,
+    ret_ty: String,
+    vis: String,
+    params: String,
+    scope_id: Int,
+    allocas: List[MirInst],
+    blocks: List[MirBlock],
+    header: String
+};
+
+pub fn mir_fn_new(name: String, entry: String, ret_ty: String, vis: String, params: String, scope_id: Int) -> MirFn {
+    let empty_allocas: List[MirInst] = list_new();
+    let mut blocks: List[MirBlock] = list_new();
+    if entry != "" {
+        let entry_b: MirBlock = mir_block_new(entry);
+        blocks = list_push(blocks, entry_b);
+    }
+    return MirFn {
+        name: name,
+        entry: entry,
+        ret_ty: ret_ty,
+        vis: vis,
+        params: params,
+        scope_id: scope_id,
+        allocas: empty_allocas,
+        blocks: blocks,
+        header: ""
+    };
+}
+
+pub fn mir_fn_set_header(f: &mut MirFn, h: String) {
+    f.header = h;
+}
+
+pub fn mir_fn_add_alloca(f: &mut MirFn, inst: MirInst) {
+    f.allocas = list_push(f.allocas, inst);
+}
+
+pub fn mir_fn_add_block(f: &mut MirFn, b: MirBlock) {
+    f.blocks = list_push(f.blocks, b);
+}
+
+pub fn mir_fn_find_block(f: &MirFn, label: String) -> Int {
+    let n: Int = list_len(f.blocks);
+    let mut i: Int = 0;
+    while i < n {
+        let b: MirBlock = list_get(f.blocks, i);
+        if b.label == label { return i; }
+        i = i + 1;
+    }
+    return 0 - 1;
+}
+
+pub fn mir_fn_block_count(f: &MirFn) -> Int {
+    return list_len(f.blocks);
+}
+
+pub fn mir_fn_get_block(f: &MirFn, idx: Int) -> MirBlock {
+    let b: MirBlock = list_get(f.blocks, idx);
+    return b;
+}
+
+pub fn mir_fn_connect_edge(f: &mut MirFn, from_label: String, to_label: String) {
+    let from_idx: Int = mir_fn_find_block(f, from_label);
+    let to_idx: Int = mir_fn_find_block(f, to_label);
+    if from_idx < 0 || to_idx < 0 { return; }
+    let n: Int = list_len(f.blocks);
+    let mut new_blocks: List[MirBlock] = list_new();
+    let mut i: Int = 0;
+    while i < n {
+        let mut b: MirBlock = list_get(f.blocks, i);
+        if i == from_idx { mir_block_add_succ(&mut b, to_label); }
+        if i == to_idx { mir_block_add_pred(&mut b, from_label); }
+        new_blocks = list_push(new_blocks, b);
+        i = i + 1;
+    }
+    f.blocks = new_blocks;
+}

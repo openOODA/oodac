@@ -1,0 +1,82 @@
+// # MIR Basic Block Representation and Invariants
+//
+// Logline: Basic block representation with predecessor and successor edges.
+//
+// Setup: Blocks hold sequences of MirInst with termination invariants.
+//
+// Beats:
+//   1. MirBlock encapsulates label, instruction sequence, and CFG edges.
+//   2. Instruction addition with termination tracking.
+//   3. Predecessor and successor edge registration and queries.
+
+import "mir_types.oo";
+import "mir_inst.oo";
+
+pub type MirBlock = struct {
+    id: String,
+    label: String,
+    insts: List[MirInst],
+    preds: List[String],
+    succs: List[String],
+    terminated: Bool
+};
+
+pub fn mir_block_new(label: String) -> MirBlock {
+    let empty_insts: List[MirInst] = list_new();
+    let empty_preds: List[String] = list_new();
+    let empty_succs: List[String] = list_new();
+    return MirBlock {
+        id: label,
+        label: label,
+        insts: empty_insts,
+        preds: empty_preds,
+        succs: empty_succs,
+        terminated: false
+    };
+}
+
+pub fn mir_block_add_inst(b: &mut MirBlock, inst: MirInst) {
+    if !b.terminated {
+        b.insts = list_push(b.insts, inst);
+        if mir_is_terminator(inst.op) {
+            b.terminated = true;
+        }
+    }
+}
+
+pub fn mir_block_add_succ(b: &mut MirBlock, target: String) {
+    let n: Int = list_len(b.succs);
+    let mut i: Int = 0;
+    while i < n {
+        if list_get(b.succs, i) == target { return; }
+        i = i + 1;
+    }
+    b.succs = list_push(b.succs, target);
+}
+
+pub fn mir_block_add_pred(b: &mut MirBlock, source: String) {
+    let n: Int = list_len(b.preds);
+    let mut i: Int = 0;
+    while i < n {
+        if list_get(b.preds, i) == source { return; }
+        i = i + 1;
+    }
+    b.preds = list_push(b.preds, source);
+}
+
+pub fn mir_block_is_terminated(b: &MirBlock) -> Bool {
+    return b.terminated;
+}
+
+pub fn mir_block_inst_count(b: &MirBlock) -> Int {
+    return list_len(b.insts);
+}
+
+pub fn mir_block_get_inst(b: &MirBlock, idx: Int) -> MirInst {
+    let inst: MirInst = list_get(b.insts, idx);
+    return inst;
+}
+
+pub fn mir_block_succ_count(b: &MirBlock) -> Int {
+    return list_len(b.succs);
+}

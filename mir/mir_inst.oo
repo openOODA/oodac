@@ -1,0 +1,73 @@
+// # MIR Instruction Constructors and Formatters
+//
+// Logline: Multi-arity constructors, predicates, and textual formatting for MIR.
+//
+// Setup: Formats instructions and operands for debug printing and assembly emission.
+//
+// Beats:
+//   1. Arity-specific constructors mir_inst_0 .. mir_inst_3.
+//   2. Opcode predicates for branch, terminator, and alloca.
+//   3. Operand and instruction argument formatting.
+
+import "mir_types.oo";
+
+pub fn mir_inst_0(op: String, ty: String, dst: String, line: Int, col: Int, scope_id: Int) -> MirInst {
+    let empty_args: List[MirOpnd] = list_new();
+    return MirInst { op: op, dst: dst, ty: ty, args: empty_args, raw_args: "", line: line, col: col, scope_id: scope_id };
+}
+
+pub fn mir_inst_1(op: String, ty: String, dst: String, a1: MirOpnd, line: Int, col: Int, scope_id: Int) -> MirInst {
+    let mut args: List[MirOpnd] = list_new();
+    args = list_push(args, a1);
+    return MirInst { op: op, dst: dst, ty: ty, args: args, raw_args: "", line: line, col: col, scope_id: scope_id };
+}
+
+pub fn mir_inst_2(op: String, ty: String, dst: String, a1: MirOpnd, a2: MirOpnd, line: Int, col: Int, scope_id: Int) -> MirInst {
+    let mut args: List[MirOpnd] = list_new();
+    args = list_push(args, a1);
+    args = list_push(args, a2);
+    return MirInst { op: op, dst: dst, ty: ty, args: args, raw_args: "", line: line, col: col, scope_id: scope_id };
+}
+
+pub fn mir_inst_3(op: String, ty: String, dst: String, a1: MirOpnd, a2: MirOpnd, a3: MirOpnd, line: Int, col: Int, scope_id: Int) -> MirInst {
+    let mut args: List[MirOpnd] = list_new();
+    args = list_push(args, a1);
+    args = list_push(args, a2);
+    args = list_push(args, a3);
+    return MirInst { op: op, dst: dst, ty: ty, args: args, raw_args: "", line: line, col: col, scope_id: scope_id };
+}
+
+pub fn mir_opnd_format(o: MirOpnd) -> String {
+    if o.kind == 1 { return "%" + o.val; }
+    if o.kind == 2 { return o.val; }
+    if o.kind == 3 { return "\"" + o.val + "\""; }
+    if o.kind == 5 { return "@" + o.val; }
+    if o.kind == 6 { return "%" + o.val; }
+    return o.val;
+}
+
+pub fn mir_inst_format_args(inst: MirInst) -> String {
+    if inst.raw_args != "" { return inst.raw_args; }
+    let n: Int = list_len(inst.args);
+    if n == 0 { return ""; }
+    let mut out: String = "";
+    let mut i: Int = 0;
+    while i < n {
+        let opnd: MirOpnd = list_get(inst.args, i);
+        if i > 0 { out = out + ", "; }
+        out = out + mir_opnd_format(opnd);
+        i = i + 1;
+    }
+    return out;
+}
+
+pub fn mir_is_terminator(op: String) -> Bool {
+    if op == "br" || op == "ret" || op == "unreachable" || op == "switch" {
+        return true;
+    }
+    return false;
+}
+
+pub fn mir_is_branch(op: String) -> Bool {
+    return op == "br";
+}

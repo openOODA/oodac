@@ -1,0 +1,71 @@
+// # Sovereign MIR Typed Operands and Base Instructions
+//
+// Logline: Typed in-memory operand and core instruction structures.
+//
+// Setup: MIR represents SSA operations decoupled from backend targets.
+//
+// Beats:
+//   1. MirOpnd encapsulates registers, immediates, globals, and labels.
+//   2. MirInst represents typed SSA instructions with source coordinates.
+//   3. Constructor helpers for operands and instructions.
+
+pub type MirOpnd = struct {
+    kind: Int,
+    val: String,
+    ty: String,
+    is_reg: Bool,
+    imm_int: Int
+};
+
+pub type MirInst = struct {
+    op: String,
+    dst: String,
+    ty: String,
+    args: List[MirOpnd],
+    raw_args: String,
+    line: Int,
+    col: Int,
+    scope_id: Int
+};
+
+pub fn mir_opnd_none() -> MirOpnd {
+    return MirOpnd { kind: 0, val: "", ty: "void", is_reg: false, imm_int: 0 };
+}
+
+pub fn mir_opnd_reg(name: String, ty: String) -> MirOpnd {
+    return MirOpnd { kind: 1, val: name, ty: ty, is_reg: true, imm_int: 0 };
+}
+
+pub fn mir_opnd_imm_int(val: Int, ty: String) -> MirOpnd {
+    return MirOpnd { kind: 2, val: val.to_string(), ty: ty, is_reg: false, imm_int: val };
+}
+
+pub fn mir_opnd_imm_str(txt: String) -> MirOpnd {
+    return MirOpnd { kind: 3, val: txt, ty: "str", is_reg: false, imm_int: 0 };
+}
+
+pub fn mir_opnd_null(ty: String) -> MirOpnd {
+    return MirOpnd { kind: 4, val: "null", ty: ty, is_reg: false, imm_int: 0 };
+}
+
+pub fn mir_opnd_global(name: String, ty: String) -> MirOpnd {
+    return MirOpnd { kind: 5, val: name, ty: ty, is_reg: false, imm_int: 0 };
+}
+
+pub fn mir_opnd_label(label: String) -> MirOpnd {
+    return MirOpnd { kind: 6, val: label, ty: "label", is_reg: false, imm_int: 0 };
+}
+
+pub fn mir_inst_make(op: String, ty: String, dst: String, raw: String, line: Int, col: Int, scope_id: Int) -> MirInst {
+    let empty_args: List[MirOpnd] = list_new();
+    return MirInst {
+        op: op,
+        dst: dst,
+        ty: ty,
+        args: empty_args,
+        raw_args: raw,
+        line: line,
+        col: col,
+        scope_id: scope_id
+    };
+}
