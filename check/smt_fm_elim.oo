@@ -116,7 +116,29 @@ fn fm_elim_step(all_rows: List[List[Int]], m: Int, var_idx: Int) -> List[List[In
         let mut qi: Int = 0;
         while qi < n_neg {
             let comb: List[Int] = fm_combine_row(list_get(pos_rows, pi), list_get(neg_rows, qi), m, var_idx);
-            if list_len(next_rows) < 128 { next_rows = list_push(next_rows, comb); }
+            let mut is_taut: Bool = true;
+            let mut ci: Int = 0;
+            while ci < m {
+                if list_get(comb, ci) != 0 { is_taut = false; }
+                ci = ci + 1;
+            }
+            if !(is_taut && list_get(comb, m) >= 0) {
+                let mut is_subsumed: Bool = false;
+                let n_next: Int = list_len(next_rows);
+                let mut chk_i: Int = 0;
+                while chk_i < n_next && !is_subsumed {
+                    let ex: List[Int] = list_get(next_rows, chk_i);
+                    let mut same_lhs: Bool = true;
+                    let mut cj: Int = 0;
+                    while cj < m {
+                        if list_get(ex, cj) != list_get(comb, cj) { same_lhs = false; }
+                        cj = cj + 1;
+                    }
+                    if same_lhs && list_get(ex, m) <= list_get(comb, m) { is_subsumed = true; }
+                    chk_i = chk_i + 1;
+                }
+                if !is_subsumed && list_len(next_rows) < 64 { next_rows = list_push(next_rows, comb); }
+            }
             qi = qi + 1;
         }
         pi = pi + 1;
@@ -150,9 +172,12 @@ pub fn smt_fm_solve(clauses: List[String], wp: String) -> Bool {
     if wp != "" && !smt_contract_parse_is_const(wp) {
         rows = list_push(rows, fm_encode_clause(m, names, wp, true));
     }
+    let mut steps: Int = 0;
+    let max_steps: Int = 256;
     let mut vi: Int = 0;
-    while vi < m {
+    while vi < m && steps < max_steps {
         rows = fm_elim_step(rows, m, vi);
+        steps = steps + 1;
         let cur_nr: Int = list_len(rows);
         let mut c_chk: Int = 0;
         while c_chk < cur_nr {

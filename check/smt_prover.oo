@@ -78,6 +78,15 @@ pub fn smt_prover_prove_bounds(pre: String, idx_var: String, len_var: String) ->
     return has_lo && has_hi;
 }
 
+pub fn smt_prover_prove_bv_bounds(pre: String, val_var: String, max_bound: Int) -> Bool {
+    let lines: List[String] = str_split(pre, "\n");
+    let wp_lo: String = smt_contract_parse_pack("ensures", val_var, 1, ">=", 0, "", 0, "0", "0", false, 1);
+    let wp_hi: String = smt_contract_parse_pack("ensures", val_var, 1, "<=", max_bound, "", 0, "0", "0", false, 1);
+    let ok_lo: Bool = smt_fm_solve(lines, wp_lo);
+    let ok_hi: Bool = smt_fm_solve(lines, wp_hi);
+    return ok_lo && ok_hi;
+}
+
 fn smt_prover_extract_reqs(toks: List[String], start: Int, end: Int) -> String {
     let mut out: String = "";
     let mut seg_start: Int = start;

@@ -1,0 +1,46 @@
+// # Probe: SMT Fourier-Motzkin Timeout and Bitvector Bounds
+//
+// Logline: Verify multi-variable Fourier-Motzkin elimination with subsumption pruning and bitvector bound checks.
+//
+// Setup: Pure compute. Evaluates multi-variable inequality systems and QF_BV constraints.
+//
+// Beats:
+//   1. Multi-variable chained inequalities x <= y <= z.
+//   2. Bitvector bound verification (0 <= x <= 1000).
+//   3. Refutation of invalid bound.
+// RULES.oot 1.7: Under 256 lines.
+
+import "check/smt_contract_parse.oo";
+import "check/smt_fm_elim.oo";
+import "check/smt_prover.oo";
+
+pub fn main() {
+    let cl1: String = smt_contract_parse_pack("requires", "x", 1, ">=", 0, "", 0, "0", "0", false, 1);
+    let cl2: String = smt_contract_parse_pack("requires", "x", 1, "<=", 0, "y", 1, "0", "0", false, 1);
+    let cl3: String = smt_contract_parse_pack("requires", "y", 1, "<", 0, "z", 1, "0", "0", false, 1);
+    let mut pre: String = cl1 + "\n" + cl2 + "\n" + cl3;
+
+    let proven_chain: Bool = smt_fm_prove_bounds(pre, "x", "z");
+    if !proven_chain {
+        println("ERR\tsmt_fm\tchained bound x < z should be proven");
+        process_exit(1);
+    }
+
+    let cl_bv1: String = smt_contract_parse_pack("requires", "val", 1, ">=", 10, "", 0, "0", "0", false, 1);
+    let cl_bv2: String = smt_contract_parse_pack("requires", "val", 1, "<=", 255, "", 0, "0", "0", false, 1);
+    let pre_bv: String = cl_bv1 + "\n" + cl_bv2;
+
+    let bv_ok: Bool = smt_prover_prove_bv_bounds(pre_bv, "val", 255);
+    if !bv_ok {
+        println("ERR\tsmt_fm\tbitvector bound val <= 255 should be proven");
+        process_exit(1);
+    }
+
+    let bv_fail: Bool = smt_prover_prove_bv_bounds(pre_bv, "val", 50);
+    if bv_fail {
+        println("ERR\tsmt_fm\tinvalid tight bound val <= 50 should be refuted");
+        process_exit(1);
+    }
+
+    println("OK");
+}
