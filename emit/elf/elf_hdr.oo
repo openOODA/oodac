@@ -58,7 +58,81 @@ pub fn elf_ehdr_rel(text_len: Int) -> List[Int] {
     b = elf_u16(b, 0);
     b = elf_u16(b, 0);
     b = elf_u16(b, 64);
-    b = elf_u16(b, 3);
+    b = elf_u16(b, 6);
     b = elf_u16(b, 2);
     return b;
+}
+
+pub fn elf_shdr(b: List[Int], name: Int, ty: Int, flags: Int, off: Int, sz: Int, link: Int, info: Int, align: Int, entsz: Int) -> List[Int] {
+    let mut out: List[Int] = elf_u32(b, name);
+    out = elf_u32(out, ty);
+    out = elf_u64(out, flags);
+    out = elf_u64(out, 0);
+    out = elf_u64(out, off);
+    out = elf_u64(out, sz);
+    out = elf_u32(out, link);
+    out = elf_u32(out, info);
+    out = elf_u64(out, align);
+    return elf_u64(out, entsz);
+}
+
+pub fn elf_sym(b: List[Int], name: Int, info: Int, shndx: Int, val: Int, sz: Int) -> List[Int] {
+    let mut out: List[Int] = elf_u32(b, name);
+    out = elf_u8(out, info);
+    out = elf_u8(out, 0);
+    out = elf_u16(out, shndx);
+    out = elf_u64(out, val);
+    return elf_u64(out, sz);
+}
+
+pub fn elf_rela(b: List[Int], off: Int, sym_idx: Int, r_type: Int, addend: Int) -> List[Int] {
+    let mut out: List[Int] = elf_u64(b, off);
+    out = elf_u32(out, r_type);
+    out = elf_u32(out, sym_idx);
+    out = elf_i32(out, addend);
+    let hi: Int = if addend < 0 { 0 - 1 } else { 0 };
+    return elf_i32(out, hi);
+}
+
+pub fn elf_rel_shdrs(b: List[Int], t_off: Int, t_sz: Int, sh_off: Int, sh_sz: Int, sy_off: Int, sy_sz: Int, st_off: Int, st_sz: Int, r_off: Int, r_sz: Int) -> List[Int] {
+    let mut out: List[Int] = elf_shdr(b, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    out = elf_shdr(out, 1, 1, 6, t_off, t_sz, 0, 0, 16, 0);
+    out = elf_shdr(out, 7, 3, 0, sh_off, sh_sz, 0, 0, 1, 0);
+    out = elf_shdr(out, 17, 2, 0, sy_off, sy_sz, 4, 1, 8, 24);
+    out = elf_shdr(out, 25, 3, 0, st_off, st_sz, 0, 0, 1, 0);
+    return elf_shdr(out, 33, 4, 64, r_off, r_sz, 3, 1, 8, 24);
+}
+
+pub fn elf_rel_module(text_bytes: List[Int], fn_name: String, ext_name: String, call_off: Int) -> List[Int] {
+    let mut shstr: List[Int] = bytes_push(bytes_new(), 0);
+    shstr = elf_push_msg(shstr, ".text"); shstr = bytes_push(shstr, 0);
+    shstr = elf_push_msg(shstr, ".shstrtab"); shstr = bytes_push(shstr, 0);
+    shstr = elf_push_msg(shstr, ".symtab"); shstr = bytes_push(shstr, 0);
+    shstr = elf_push_msg(shstr, ".strtab"); shstr = bytes_push(shstr, 0);
+    shstr = elf_push_msg(shstr, ".rela.text"); shstr = bytes_push(shstr, 0);
+    let mut strt: List[Int] = bytes_push(bytes_new(), 0);
+    strt = elf_push_msg(strt, fn_name); strt = bytes_push(strt, 0);
+    let ext_off: Int = list_len(strt);
+    if ext_name != "" { strt = elf_push_msg(strt, ext_name); strt = bytes_push(strt, 0); }
+    let mut symt: List[Int] = elf_sym(bytes_new(), 0, 0, 0, 0, 0);
+    symt = elf_sym(symt, 1, 18, 1, 0, list_len(text_bytes));
+    if ext_name != "" { symt = elf_sym(symt, ext_off, 16, 0, 0, 0); }
+    let mut rel: List[Int] = bytes_new();
+    if ext_name != "" && call_off >= 0 { rel = elf_rela(rel, call_off, 2, 2, 0 - 4); }
+    let off_text: Int = 64;
+    let off_shstr: Int = off_text + list_len(text_bytes);
+    let off_sym: Int = ((off_shstr + list_len(shstr) + 7) / 8) * 8;
+    let off_str: Int = off_sym + list_len(symt);
+    let off_rela: Int = ((off_str + list_len(strt) + 7) / 8) * 8;
+    let off_shdrs: Int = ((off_rela + list_len(rel) + 7) / 8) * 8;
+    let mut b: List[Int] = elf_ehdr_rel(off_shdrs - 64);
+    let mut ti: Int = 0; while ti < list_len(text_bytes) { b = bytes_push(b, list_get(text_bytes, ti)); ti = ti + 1; }
+    let mut si: Int = 0; while si < list_len(shstr) { b = bytes_push(b, list_get(shstr, si)); si = si + 1; }
+    b = elf_pad(b, 8);
+    let mut syi: Int = 0; while syi < list_len(symt) { b = bytes_push(b, list_get(symt, syi)); syi = syi + 1; }
+    let mut sti: Int = 0; while sti < list_len(strt) { b = bytes_push(b, list_get(strt, sti)); sti = sti + 1; }
+    b = elf_pad(b, 8);
+    let mut ri: Int = 0; while ri < list_len(rel) { b = bytes_push(b, list_get(rel, ri)); ri = ri + 1; }
+    b = elf_pad(b, 8);
+    return elf_rel_shdrs(b, off_text, list_len(text_bytes), off_shstr, list_len(shstr), off_sym, list_len(symt), off_str, list_len(strt), off_rela, list_len(rel));
 }

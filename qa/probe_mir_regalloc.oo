@@ -76,14 +76,25 @@ fn test_mir_branch_and_rel() {
     let mut b: List[Int] = bytes_new();
     b = elf_x64_branch(b, 0, 16);
     b = elf_x64_branch(b, 4, 32);
+    b = elf_x64_branch(b, 100, 16);
+    b = elf_x64_branch(b, 104, 32);
     b = elf_x64_call(b, 64);
-    if list_len(b) != 16 {
+    if list_len(b) != 20 {
         println("ERR\tprobe_mir_regalloc\tbranch bytes length mismatch");
         process_exit(1);
     }
-    let rel_hdr: List[Int] = elf_ehdr_rel(64);
-    if list_len(rel_hdr) != 64 {
-        println("ERR\tprobe_mir_regalloc\trelocatable header length mismatch");
+    let mut b_sib: List[Int] = bytes_new();
+    b_sib = elf_x64_sib_op(b_sib, false, 0, 5, 1, 3, 16);
+    b_sib = elf_x64_sib_op(b_sib, true, 0, 5, 1, 3, 16);
+    if list_len(b_sib) != 16 || list_get(b_sib, 1) != 139 || list_get(b_sib, 9) != 137 {
+        println("ERR\tprobe_mir_regalloc\tsib encoding mismatch");
+        process_exit(1);
+    }
+    let mut text_code: List[Int] = bytes_new();
+    text_code = elf_u8(text_code, 184); text_code = elf_u32(text_code, 42); text_code = elf_u8(text_code, 195);
+    let obj: List[Int] = elf_rel_module(text_code, "test_fn", "ext_fn", 1);
+    if list_len(obj) < 400 || list_get(obj, 0) != 127 || list_get(obj, 1) != 69 {
+        println("ERR\tprobe_mir_regalloc\trelocatable module object mismatch");
         process_exit(1);
     }
 }

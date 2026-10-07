@@ -12,6 +12,7 @@
 import "elf_stmt.oo";
 import "elf_hdr.oo";
 import "elf_x64.oo";
+import "elf_u.oo";
 import "mir/anchor.oo";
 
 fn elf_bytes_concat(hdr: List[Int], body: List[Int]) -> List[Int] {
@@ -60,6 +61,19 @@ pub fn elf_mir_lower(insts: List[MirInst], pool_size: Int) -> List[Int] {
         i = i + 1;
     }
     return elf_x64_epilogue(b);
+}
+
+pub fn elf_x64_write_exit(msg: String) -> List[Int] {
+    let mut b: List[Int] = bytes_new();
+    b = elf_u8(b, 72); b = elf_u8(b, 199); b = elf_u8(b, 192); b = elf_u32(b, 1);
+    b = elf_u8(b, 72); b = elf_u8(b, 199); b = elf_u8(b, 199); b = elf_u32(b, 1);
+    b = elf_u8(b, 72); b = elf_u8(b, 141); b = elf_u8(b, 53); b = elf_u32(b, 21);
+    b = elf_u8(b, 72); b = elf_u8(b, 199); b = elf_u8(b, 194); b = elf_u32(b, chars_len(msg));
+    b = elf_u8(b, 15); b = elf_u8(b, 5);
+    b = elf_u8(b, 72); b = elf_u8(b, 199); b = elf_u8(b, 192); b = elf_u32(b, 60);
+    b = elf_u8(b, 72); b = elf_u8(b, 49); b = elf_u8(b, 255);
+    b = elf_u8(b, 15); b = elf_u8(b, 5);
+    return elf_push_msg(b, msg);
 }
 
 pub fn elf_emit_mir_program(insts: List[MirInst], msg: String) -> String {

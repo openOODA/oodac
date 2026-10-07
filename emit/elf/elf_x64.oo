@@ -57,30 +57,35 @@ pub fn elf_x64_spill_op(b: List[Int], is_store: Bool, phys_reg: Int, slot: Int) 
     return elf_i32(out, disp);
 }
 
-pub fn elf_x64_branch(b: List[Int], cond: Int, rel32: Int) -> List[Int] {
-    if cond == 0 {
-        let mut out: List[Int] = elf_u8(b, 233);
-        return elf_i32(out, rel32);
+pub fn elf_x64_sib_op(b: List[Int], is_store: Bool, reg: Int, base: Int, index: Int, scale_pwr: Int, disp: Int) -> List[Int] {
+    let mut out: List[Int] = elf_u8(b, 72);
+    out = elf_u8(out, if is_store { 137 } else { 139 });
+    let modrm: Int = 128 + (reg % 8) * 8 + 4;
+    out = elf_u8(out, modrm);
+    let sib: Int = (scale_pwr % 4) * 64 + (index % 8) * 8 + (base % 8);
+    out = elf_u8(out, sib);
+    return elf_i32(out, disp);
+}
+
+pub fn elf_x64_branch(b: List[Int], cond: Int, rel: Int) -> List[Int] {
+    let force_near: Bool = cond >= 100;
+    let c: Int = if force_near { cond - 100 } else { cond };
+    if !force_near && rel >= 0 - 128 && rel <= 127 {
+        let opc: Int = if c == 0 { 235 } else { 112 + c };
+        let mut out: List[Int] = elf_u8(b, opc);
+        let b8: Int = if rel >= 0 { rel } else { 256 + rel };
+        return elf_u8(out, b8);
     }
-    let mut out2: List[Int] = elf_u8(b, 15);
-    out2 = elf_u8(out2, 128 + cond);
-    return elf_i32(out2, rel32);
+    if c == 0 {
+        let mut out2: List[Int] = elf_u8(b, 233);
+        return elf_i32(out2, rel);
+    }
+    let mut out3: List[Int] = elf_u8(b, 15);
+    out3 = elf_u8(out3, 128 + c);
+    return elf_i32(out3, rel);
 }
 
 pub fn elf_x64_call(b: List[Int], rel32: Int) -> List[Int] {
     let mut out: List[Int] = elf_u8(b, 232);
     return elf_i32(out, rel32);
-}
-
-pub fn elf_x64_write_exit(msg: String) -> List[Int] {
-    let mut b: List[Int] = bytes_new();
-    b = elf_u8(b, 72); b = elf_u8(b, 199); b = elf_u8(b, 192); b = elf_u32(b, 1);
-    b = elf_u8(b, 72); b = elf_u8(b, 199); b = elf_u8(b, 199); b = elf_u32(b, 1);
-    b = elf_u8(b, 72); b = elf_u8(b, 141); b = elf_u8(b, 53); b = elf_u32(b, 21);
-    b = elf_u8(b, 72); b = elf_u8(b, 199); b = elf_u8(b, 194); b = elf_u32(b, chars_len(msg));
-    b = elf_u8(b, 15); b = elf_u8(b, 5);
-    b = elf_u8(b, 72); b = elf_u8(b, 199); b = elf_u8(b, 192); b = elf_u32(b, 60);
-    b = elf_u8(b, 72); b = elf_u8(b, 49); b = elf_u8(b, 255);
-    b = elf_u8(b, 15); b = elf_u8(b, 5);
-    return elf_push_msg(b, msg);
 }
