@@ -1,12 +1,12 @@
-// # ELF64 ET_EXEC header and one PT_LOAD
+// # ELF64 ET_EXEC and ET_REL File Headers
 //
-// Logline: 64-byte ehdr + 56-byte phdr, load at 0x400000, entry at 0x400078.
+// Logline: 64-byte ehdr with PT_LOAD for standalone executables or section tables for relocatables.
 //
-// Setup: Little-endian x86-64. filesz covers header plus payload.
+// Setup: Little-endian x86-64. Fixed 64-byte header structure matching System V AMD64 ABI.
 //
 // Beats:
-//   1. Magic 7fELF, ELF64, LSB, ET_EXEC, EM_X86_64.
-//   2. One PF_R|PF_X LOAD from file offset 0.
+//   1. ET_EXEC header with single PT_LOAD segment for zero-dependency execution.
+//   2. ET_REL header for relocatable object modules.
 
 import "elf_u.oo";
 
@@ -38,5 +38,27 @@ pub fn elf_ehdr_phdr(payload_len: Int) -> List[Int] {
     b = elf_u64(b, filesz);
     b = elf_u64(b, filesz);
     b = elf_u64(b, 4096);
+    return b;
+}
+
+pub fn elf_ehdr_rel(text_len: Int) -> List[Int] {
+    let mut b: List[Int] = bytes_new();
+    b = elf_u8(b, 127); b = elf_u8(b, 69); b = elf_u8(b, 76); b = elf_u8(b, 70);
+    b = elf_u8(b, 2); b = elf_u8(b, 1); b = elf_u8(b, 1);
+    b = elf_u8(b, 0); b = elf_u8(b, 0); b = elf_u8(b, 0); b = elf_u8(b, 0);
+    b = elf_u8(b, 0); b = elf_u8(b, 0); b = elf_u8(b, 0); b = elf_u8(b, 0); b = elf_u8(b, 0);
+    b = elf_u16(b, 1);
+    b = elf_u16(b, 62);
+    b = elf_u32(b, 1);
+    b = elf_u64(b, 0);
+    b = elf_u64(b, 0);
+    b = elf_u64(b, 64 + text_len);
+    b = elf_u32(b, 0);
+    b = elf_u16(b, 64);
+    b = elf_u16(b, 0);
+    b = elf_u16(b, 0);
+    b = elf_u16(b, 64);
+    b = elf_u16(b, 3);
+    b = elf_u16(b, 2);
     return b;
 }

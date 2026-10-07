@@ -8,10 +8,12 @@
 //   1. Verify physical register assignment within pool bounds.
 //   2. Verify interval expiration and physical register reuse on disjoint ranges.
 //   3. Verify deterministic stack spill slot allocation under register pressure.
-//   4. Verify direct x86-64 machine code and ELF64 header emission.
+//   4. Verify direct x86-64 machine code, branch, call, and ELF64 header emission.
 
 import "mir/anchor.oo";
 import "emit/elf/elf_emit.oo";
+import "emit/elf/elf_hdr.oo";
+import "emit/elf/elf_x64.oo";
 
 fn test_regalloc_basic() {
     let mut ra: MirRegAlloc = mir_regalloc_new();
@@ -70,6 +72,22 @@ fn test_regalloc_spill() {
     }
 }
 
+fn test_mir_branch_and_rel() {
+    let mut b: List[Int] = bytes_new();
+    b = elf_x64_branch(b, 0, 16);
+    b = elf_x64_branch(b, 4, 32);
+    b = elf_x64_call(b, 64);
+    if list_len(b) != 16 {
+        println("ERR\tprobe_mir_regalloc\tbranch bytes length mismatch");
+        process_exit(1);
+    }
+    let rel_hdr: List[Int] = elf_ehdr_rel(64);
+    if list_len(rel_hdr) != 64 {
+        println("ERR\tprobe_mir_regalloc\trelocatable header length mismatch");
+        process_exit(1);
+    }
+}
+
 fn test_mir_elf_emission() {
     let mut insts: List[MirInst] = list_new();
     let op0: MirOpnd = mir_opnd_imm_int(42, "i64");
@@ -95,6 +113,7 @@ pub fn main() {
     test_regalloc_basic();
     test_regalloc_reuse();
     test_regalloc_spill();
+    test_mir_branch_and_rel();
     test_mir_elf_emission();
     println("OK");
 }

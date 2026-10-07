@@ -46,14 +46,15 @@ pub fn elf_mir_lower(insts: List[MirInst], pool_size: Int) -> List[Int] {
                 b = elf_x64_spill_op(b, true, 0, slot);
             }
         }
-        if inst.op == "add" && list_len(inst.args) >= 2 {
+        if (inst.op == "add" || inst.op == "sub" || inst.op == "cmp") && list_len(inst.args) >= 2 {
             let op0: MirOpnd = list_get(inst.args, 0);
             let op1: MirOpnd = list_get(inst.args, 1);
             let p0: Int = mir_regalloc_lookup_phys(&ra, op0.val);
             let p1: Int = mir_regalloc_lookup_phys(&ra, op1.val);
             let pd: Int = mir_regalloc_lookup_phys(&ra, inst.dst);
+            let opc: Int = if inst.op == "sub" { 41 } else if inst.op == "cmp" { 57 } else { 1 };
             if p0 >= 0 && p1 >= 0 && pd >= 0 {
-                b = elf_x64_add_reg(b, pd, p1);
+                b = elf_x64_alu_reg(b, opc, pd, p1);
             }
         }
         i = i + 1;

@@ -6,38 +6,10 @@
 //
 // Beats:
 //   1. Function prologue and epilogue stack frame management.
-//   2. Immediate register moves, register-to-register addition, and stack spill operations.
-//   3. Standalone sys_write and sys_exit execution image generation.
+//   2. Immediate register moves, zeroing idiom, ALU ops, and stack spills.
+//   3. Control flow branches, calls, and standalone write/exit execution images.
 
 import "elf_u.oo";
-
-fn elf_ch(c: String) -> Int {
-    if c == "0" { return 48; }
-    if c == "1" { return 49; }
-    if c == "2" { return 50; }
-    if c == "3" { return 51; }
-    if c == "4" { return 52; }
-    if c == "5" { return 53; }
-    if c == "6" { return 54; }
-    if c == "7" { return 55; }
-    if c == "8" { return 56; }
-    if c == "9" { return 57; }
-    if c == "-" { return 45; }
-    if c == "\n" { return 10; }
-    println("ERR\temit\telf: bad msg char");
-    process_exit(1);
-    return 0;
-}
-
-fn elf_push_msg(b: List[Int], s: String) -> List[Int] {
-    let mut out: List[Int] = b;
-    let mut i: Int = 0;
-    while i < chars_len(s) {
-        out = elf_u8(out, elf_ch(char_at(s, i)));
-        i = i + 1;
-    }
-    return out;
-}
 
 pub fn elf_x64_prologue(b: List[Int], stack_size: Int) -> List[Int] {
     let mut out: List[Int] = elf_u8(b, 85);
@@ -57,15 +29,20 @@ pub fn elf_x64_epilogue(b: List[Int]) -> List[Int] {
 }
 
 pub fn elf_x64_mov_imm(b: List[Int], phys_reg: Int, imm: Int) -> List[Int] {
+    let reg: Int = phys_reg % 8;
+    if imm == 0 {
+        let mut out_z: List[Int] = elf_u8(b, 49);
+        return elf_u8(out_z, 192 + reg * 8 + reg);
+    }
     let mut out: List[Int] = elf_u8(b, 72);
     out = elf_u8(out, 199);
-    out = elf_u8(out, 192 + (phys_reg % 8));
+    out = elf_u8(out, 192 + reg);
     return elf_i32(out, imm);
 }
 
-pub fn elf_x64_add_reg(b: List[Int], dst_reg: Int, src_reg: Int) -> List[Int] {
+pub fn elf_x64_alu_reg(b: List[Int], opc: Int, dst_reg: Int, src_reg: Int) -> List[Int] {
     let mut out: List[Int] = elf_u8(b, 72);
-    out = elf_u8(out, 1);
+    out = elf_u8(out, opc);
     let modrm: Int = 192 + (src_reg % 8) * 8 + (dst_reg % 8);
     return elf_u8(out, modrm);
 }
@@ -78,6 +55,21 @@ pub fn elf_x64_spill_op(b: List[Int], is_store: Bool, phys_reg: Int, slot: Int) 
     let modrm: Int = 133 + (phys_reg % 8) * 8;
     out = elf_u8(out, modrm);
     return elf_i32(out, disp);
+}
+
+pub fn elf_x64_branch(b: List[Int], cond: Int, rel32: Int) -> List[Int] {
+    if cond == 0 {
+        let mut out: List[Int] = elf_u8(b, 233);
+        return elf_i32(out, rel32);
+    }
+    let mut out2: List[Int] = elf_u8(b, 15);
+    out2 = elf_u8(out2, 128 + cond);
+    return elf_i32(out2, rel32);
+}
+
+pub fn elf_x64_call(b: List[Int], rel32: Int) -> List[Int] {
+    let mut out: List[Int] = elf_u8(b, 232);
+    return elf_i32(out, rel32);
 }
 
 pub fn elf_x64_write_exit(msg: String) -> List[Int] {

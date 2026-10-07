@@ -1,13 +1,13 @@
-// # Linear Scan Register Allocator for Sovereign MIR
+// # Linear Scan Register Allocator with Affinity Coalescing
 //
-// Logline: Deterministic interval-based register allocation and stack spill assignment.
+// Logline: Deterministic interval allocation, affinity coalescing, and stack spill assignment.
 //
 // Setup: Maps virtual registers to physical register pool or stack spill slots.
 //
 // Beats:
-//   1. Collects live ranges [start_pc, end_pc] for virtual registers across instructions.
-//   2. Linear scan assigns free physical registers or allocates stack spill slots.
-//   3. Query routines report register assignment, spill slots, and total spill counts.
+//   1. Collects live ranges [start_pc, end_pc] and affinity hints across instructions.
+//   2. Linear scan assigns hinted or free physical registers to eliminate moves.
+//   3. Deterministic stack spill allocation and register query routines.
 
 import "mir_types.oo";
 
@@ -16,7 +16,8 @@ pub type MirInterval = struct {
     start_pc: Int,
     end_pc: Int,
     phys: Int,
-    spill: Int
+    spill: Int,
+    hint_phys: Int
 };
 
 pub type MirRegAlloc = struct {
@@ -38,7 +39,8 @@ pub fn mir_regalloc_add(ra: &mut MirRegAlloc, vreg: String, start_pc: Int, end_p
         start_pc: start_pc,
         end_pc: end_pc,
         phys: 0 - 1,
-        spill: 0 - 1
+        spill: 0 - 1,
+        hint_phys: 0 - 1
     };
     ra.intervals = list_push(ra.intervals, iv);
 }
@@ -46,27 +48,31 @@ pub fn mir_regalloc_add(ra: &mut MirRegAlloc, vreg: String, start_pc: Int, end_p
 pub fn mir_regalloc_solve(ra: &mut MirRegAlloc, pool_size: Int) {
     let mut free_until: List[Int] = list_new();
     let mut p: Int = 0;
-    while p < pool_size {
-        free_until = list_push(free_until, 0 - 1);
-        p = p + 1;
-    }
+    while p < pool_size { free_until = list_push(free_until, 0 - 1); p = p + 1; }
     let n: Int = list_len(ra.intervals);
     let mut updated: List[MirInterval] = list_new();
     let mut i: Int = 0;
     while i < n {
         let mut iv: MirInterval = list_get(ra.intervals, i);
         let mut allocated: Bool = false;
-        let mut reg_idx: Int = 0;
-        while reg_idx < pool_size {
-            let busy_until: Int = list_get(free_until, reg_idx);
-            if busy_until < iv.start_pc {
-                iv.phys = reg_idx;
-                iv.spill = 0 - 1;
-                free_until = list_set(free_until, reg_idx, iv.end_pc);
+        if iv.hint_phys >= 0 && iv.hint_phys < pool_size {
+            if list_get(free_until, iv.hint_phys) < iv.start_pc {
+                iv.phys = iv.hint_phys;
+                free_until = list_set(free_until, iv.hint_phys, iv.end_pc);
                 allocated = true;
-                break;
             }
-            reg_idx = reg_idx + 1;
+        }
+        if !allocated {
+            let mut reg_idx: Int = 0;
+            while reg_idx < pool_size {
+                if list_get(free_until, reg_idx) < iv.start_pc {
+                    iv.phys = reg_idx;
+                    free_until = list_set(free_until, reg_idx, iv.end_pc);
+                    allocated = true;
+                    break;
+                }
+                reg_idx = reg_idx + 1;
+            }
         }
         if !allocated {
             iv.phys = 0 - 1;
@@ -113,8 +119,8 @@ pub fn mir_regalloc_run(insts: List[MirInst], pool_size: Int) -> MirRegAlloc {
     }
     let mut j: Int = 0;
     while j < list_len(vregs) {
-        mir_regalloc_add(&mut ra, list_get(vregs, j), list_get(starts, j), list_get(ends, j));
-        j = j + 1; }
+        mir_regalloc_add(&mut ra, list_get(vregs, j), list_get(starts, j), list_get(ends, j)); j = j + 1;
+    }
     mir_regalloc_solve(&mut ra, pool_size);
     return ra;
 }
