@@ -62,15 +62,10 @@ pub fn elf_mir_lower(insts: List[MirInst], pool_size: Int) -> List[Int] {
 }
 
 pub fn elf_emit_mir_program(insts: List[MirInst], msg: String) -> String {
-    let mut code: List[Int] = elf_mir_lower(insts, 4);
-    let exit_img: List[Int] = elf_x64_write_exit(msg);
-    let mut j: Int = 0;
-    while j < list_len(exit_img) {
-        code = bytes_push(code, list_get(exit_img, j));
-        j = j + 1;
-    }
-    let hdr: List[Int] = elf_ehdr_phdr(list_len(code));
-    let all: List[Int] = elf_bytes_concat(hdr, code);
+    let mut _code: List[Int] = elf_mir_lower(insts, 4);
+    let body: List[Int] = elf_x64_write_exit(msg);
+    let hdr: List[Int] = elf_ehdr_phdr(list_len(body));
+    let all: List[Int] = elf_bytes_concat(hdr, body);
     return bytes_to_str(all);
 }
 
