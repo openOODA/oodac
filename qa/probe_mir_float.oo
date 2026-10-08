@@ -1,0 +1,98 @@
+// # Probe: Native Floating-Point and XMM Micro-Ops
+//
+// Logline: Verify scalar f64/f32 SSE2 instructions, float ALU encodings, and float virtual registers.
+//
+// Setup: Pure compute test harness exercising elf_x64 float helpers and mir_types is_float tagging.
+//
+// Beats:
+//   1. Verify movsd load/store ModR/M and SIB encoding for stack frames.
+//   2. Verify addsd, subsd, mulsd, divsd, and ucomisd opcode and operand prefixes.
+//   3. Verify cvtsi2sd and cvttsd2si integer-float conversion prefixes and operand layout.
+
+import "emit/elf/elf_x64.oo";
+import "mir/mir_types.oo";
+
+fn test_movsd() {
+    let mut b_store: List[Int] = bytes_new();
+    b_store = elf_x64_movsd(b_store, true, 0, 5, 0 - 8);
+    if list_len(b_store) != 8 {
+        println("ERR\tprobe_mir_float\tmovsd store len mismatch");
+        process_exit(1);
+    }
+    if list_get(b_store, 0) != 242 || list_get(b_store, 1) != 15 || list_get(b_store, 2) != 17 || list_get(b_store, 3) != 133 {
+        println("ERR\tprobe_mir_float\tmovsd store bytes mismatch");
+        process_exit(1);
+    }
+
+    let mut b_load_sib: List[Int] = bytes_new();
+    b_load_sib = elf_x64_movsd(b_load_sib, false, 1, 4, 32);
+    if list_len(b_load_sib) != 9 {
+        println("ERR\tprobe_mir_float\tmovsd load sib len mismatch");
+        process_exit(1);
+    }
+    if list_get(b_load_sib, 2) != 16 || list_get(b_load_sib, 3) != 140 || list_get(b_load_sib, 4) != 36 {
+        println("ERR\tprobe_mir_float\tmovsd load sib bytes mismatch");
+        process_exit(1);
+    }
+}
+
+fn test_float_alu() {
+    let mut b_add: List[Int] = bytes_new();
+    b_add = elf_x64_float_alu(b_add, 88, 0, 1);
+    if list_len(b_add) != 4 || list_get(b_add, 0) != 242 || list_get(b_add, 2) != 88 || list_get(b_add, 3) != 193 {
+        println("ERR\tprobe_mir_float\taddsd encoding mismatch");
+        process_exit(1);
+    }
+
+    let mut b_sub: List[Int] = bytes_new();
+    b_sub = elf_x64_float_alu(b_sub, 92, 2, 3);
+    if list_len(b_sub) != 4 || list_get(b_sub, 2) != 92 || list_get(b_sub, 3) != 211 {
+        println("ERR\tprobe_mir_float\tsubsd encoding mismatch");
+        process_exit(1);
+    }
+
+    let mut b_ucomi: List[Int] = bytes_new();
+    b_ucomi = elf_x64_float_alu(b_ucomi, 46, 0, 1);
+    if list_len(b_ucomi) != 4 || list_get(b_ucomi, 0) != 102 || list_get(b_ucomi, 2) != 46 || list_get(b_ucomi, 3) != 193 {
+        println("ERR\tprobe_mir_float\tucomisd prefix mismatch");
+        process_exit(1);
+    }
+
+    let mut b_cvti: List[Int] = bytes_new();
+    b_cvti = elf_x64_float_alu(b_cvti, 42, 0, 0);
+    if list_len(b_cvti) != 5 || list_get(b_cvti, 0) != 242 || list_get(b_cvti, 1) != 72 || list_get(b_cvti, 3) != 42 {
+        println("ERR\tprobe_mir_float\tcvtsi2sd rex.w prefix mismatch");
+        process_exit(1);
+    }
+
+    let mut b_cvtt: List[Int] = bytes_new();
+    b_cvtt = elf_x64_float_alu(b_cvtt, 44, 0, 0);
+    if list_len(b_cvtt) != 5 || list_get(b_cvtt, 1) != 72 || list_get(b_cvtt, 3) != 44 {
+        println("ERR\tprobe_mir_float\tcvttsd2si rex.w prefix mismatch");
+        process_exit(1);
+    }
+}
+
+fn test_mir_float_operands() {
+    let f0: MirOpnd = mir_opnd_reg("%f0", "f64");
+    let f1: MirOpnd = mir_opnd_reg("%f1", "f32");
+    let f2: MirOpnd = mir_opnd_reg("%f2", "Float");
+    let v0: MirOpnd = mir_opnd_reg("%v0", "i64");
+    let i0: MirOpnd = mir_opnd_imm_int(42, "i64");
+
+    if !f0.is_float || !f1.is_float || !f2.is_float {
+        println("ERR\tprobe_mir_float\tfloat register tag mismatch");
+        process_exit(1);
+    }
+    if v0.is_float || i0.is_float {
+        println("ERR\tprobe_mir_float\tinteger operand tagged as float");
+        process_exit(1);
+    }
+}
+
+pub fn main() {
+    test_movsd();
+    test_float_alu();
+    test_mir_float_operands();
+    println("OK");
+}

@@ -28,6 +28,7 @@ probe_result_let_callee.oo # must-fail input of probe_result_let.oo
 probe_result_let_ok_str.oo # must-fail input of probe_result_let.oo
 # --- Fixtures: inputs driven by wired probes, not standalone mains ---
 probe_concat_sib.oo # sibling TU of the stale emit-c concat family (below)
+probe_concat_entry.oo # entry TU of the stale emit-c concat family (below)
 probe_amp_rvalue.oo # victim of stale probe_amp_rvalue_emit.oo (emit-c residual)
 # --- Negatives: wired as must-fail assertions in the backstop step itself ---
 probe_no_main.oo # NEGATIVE: build must fail, no ELF

@@ -26,6 +26,23 @@ fn elf_bytes_concat(hdr: List[Int], body: List[Int]) -> List[Int] {
     return all;
 }
 
+pub fn elf_x64_prologue(b: List[Int], stack_size: Int) -> List[Int] {
+    let mut out: List[Int] = elf_u8(b, 85);
+    out = elf_u8(out, 72); out = elf_u8(out, 137); out = elf_u8(out, 229);
+    if stack_size > 0 {
+        out = elf_u8(out, 72); out = elf_u8(out, 129); out = elf_u8(out, 236);
+        out = elf_u32(out, stack_size);
+    }
+    return out;
+}
+
+pub fn elf_x64_epilogue(b: List[Int]) -> List[Int] {
+    let mut out: List[Int] = elf_u8(b, 72);
+    out = elf_u8(out, 137); out = elf_u8(out, 236);
+    out = elf_u8(out, 93);
+    return elf_u8(out, 195);
+}
+
 pub fn elf_mir_lower(insts: List[MirInst], pool_size: Int) -> List[Int] {
     let ra: MirRegAlloc = mir_regalloc_run(insts, pool_size);
     let num_spills: Int = mir_regalloc_spill_count(&ra);

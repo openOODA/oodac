@@ -1,0 +1,108 @@
+// # Probe: In-Tree Sovereign Static Linker for Multi-Module Objects
+//
+// Logline: Verify multi-module object layout, symbol resolution, and PC32 relocation patching.
+//
+// Setup: Pure compute test harness exercising mir_link without GNU ld or external tools.
+//
+// Beats:
+//   1. Link two modules with cross-module call and verify exact S + A - P displacement.
+//   2. Link three modules forming a call-chain and verify cascading displacements.
+//   3. Verify ELF header encapsulation and custom entry point symbol patching.
+
+import "mir/mir_link.oo";
+import "emit/elf/elf_u.oo";
+
+fn test_linker_two_modules() {
+    let mut code1: List[Int] = bytes_new();
+    code1 = elf_u8(code1, 72); code1 = elf_u8(code1, 131); code1 = elf_u8(code1, 236); code1 = elf_u8(code1, 8);
+    code1 = elf_u8(code1, 232);
+    code1 = elf_u32(code1, 0);
+    code1 = elf_u8(code1, 72); code1 = elf_u8(code1, 131); code1 = elf_u8(code1, 196); code1 = elf_u8(code1, 8);
+    code1 = elf_u8(code1, 195);
+    let mut m1: MirModule = mir_module_new("caller_mod", code1);
+    mir_module_add_rel(&mut m1, 5, "answer_fn", 0 - 4);
+
+    let mut code2: List[Int] = bytes_new();
+    code2 = elf_u8(code2, 184); code2 = elf_u32(code2, 42); code2 = elf_u8(code2, 195);
+    let mut m2: MirModule = mir_module_new("callee_mod", code2);
+    mir_module_add_sym(&mut m2, "answer_fn", 0, true);
+
+    let mut linker: MirLinker = mir_linker_new("");
+    mir_linker_add(&mut linker, m1);
+    mir_linker_add(&mut linker, m2);
+    let elf: List[Int] = mir_linker_link(&linker);
+
+    if list_len(elf) < 140 {
+        println("ERR\tprobe_mir_link\telf size too small");
+        process_exit(1);
+    }
+    if list_get(elf, 0) != 127 || list_get(elf, 1) != 69 || list_get(elf, 2) != 76 || list_get(elf, 3) != 70 {
+        println("ERR\tprobe_mir_link\telf magic mismatch");
+        process_exit(1);
+    }
+    let disp_b0: Int = list_get(elf, 120 + 5);
+    let disp_b1: Int = list_get(elf, 120 + 6);
+    let disp_b2: Int = list_get(elf, 120 + 7);
+    let disp_b3: Int = list_get(elf, 120 + 8);
+    if disp_b0 != 7 || disp_b1 != 0 || disp_b2 != 0 || disp_b3 != 0 {
+        println("ERR\tprobe_mir_link\tdisplacement mismatch, expected 7");
+        process_exit(1);
+    }
+}
+
+fn test_linker_three_modules() {
+    let mut c1: List[Int] = bytes_new();
+    c1 = elf_u8(c1, 232); c1 = elf_u32(c1, 0); c1 = elf_u8(c1, 195);
+    let mut m1: MirModule = mir_module_new("m1", c1);
+    mir_module_add_rel(&mut m1, 1, "step_two", 0 - 4);
+
+    let mut c2: List[Int] = bytes_new();
+    c2 = elf_u8(c2, 232); c2 = elf_u32(c2, 0); c2 = elf_u8(c2, 195);
+    let mut m2: MirModule = mir_module_new("m2", c2);
+    mir_module_add_sym(&mut m2, "step_two", 0, true);
+    mir_module_add_rel(&mut m2, 1, "step_three", 0 - 4);
+
+    let mut c3: List[Int] = bytes_new();
+    c3 = elf_u8(c3, 184); c3 = elf_u32(c3, 99); c3 = elf_u8(c3, 195);
+    let mut m3: MirModule = mir_module_new("m3", c3);
+    mir_module_add_sym(&mut m3, "step_three", 0, true);
+
+    let mut linker: MirLinker = mir_linker_new("");
+    mir_linker_add(&mut linker, m1);
+    mir_linker_add(&mut linker, m2);
+    mir_linker_add(&mut linker, m3);
+    let elf: List[Int] = mir_linker_link(&linker);
+
+    let d1: Int = list_get(elf, 120 + 1);
+    let d2: Int = list_get(elf, 120 + 16 + 1);
+    if d1 != 11 || d2 != 11 {
+        println("ERR\tprobe_mir_link\tcascade displacement mismatch");
+        process_exit(1);
+    }
+}
+
+fn test_linker_entry_sym() {
+    let mut c: List[Int] = bytes_new();
+    c = elf_u8(c, 195);
+    let mut m: MirModule = mir_module_new("main_mod", c);
+    mir_module_add_sym(&mut m, "custom_start", 0, true);
+    let mut linker: MirLinker = mir_linker_new("custom_start");
+    mir_linker_add(&mut linker, m);
+    let elf: List[Int] = mir_linker_link(&linker);
+    let e0: Int = list_get(elf, 24);
+    let e1: Int = list_get(elf, 25);
+    let e2: Int = list_get(elf, 26);
+    let e3: Int = list_get(elf, 27);
+    let entry_val: Int = e0 + e1 * 256 + e2 * 65536 + e3 * 16777216;
+    if entry_val != 4194424 {
+        println("ERR\tprobe_mir_link\tentry point mismatch");
+        process_exit(1);
+    }
+}
+
+pub fn main() {
+    test_linker_two_modules();
+    test_linker_three_modules();
+    test_linker_entry_sym();
+    println("OK");
+}

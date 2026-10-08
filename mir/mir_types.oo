@@ -14,7 +14,8 @@ pub type MirOpnd = struct {
     val: String,
     ty: String,
     is_reg: Bool,
-    imm_int: Int
+    imm_int: Int,
+    is_float: Bool
 };
 
 pub type MirInst = struct {
@@ -29,31 +30,32 @@ pub type MirInst = struct {
 };
 
 pub fn mir_opnd_none() -> MirOpnd {
-    return MirOpnd { kind: 0, val: "", ty: "void", is_reg: false, imm_int: 0 };
+    return MirOpnd { kind: 0, val: "", ty: "void", is_reg: false, imm_int: 0, is_float: false };
 }
 
 pub fn mir_opnd_reg(name: String, ty: String) -> MirOpnd {
-    return MirOpnd { kind: 1, val: name, ty: ty, is_reg: true, imm_int: 0 };
+    let is_fl: Bool = ty == "f64" || ty == "f32" || ty == "Float";
+    return MirOpnd { kind: 1, val: name, ty: ty, is_reg: true, imm_int: 0, is_float: is_fl };
 }
 
 pub fn mir_opnd_imm_int(val: Int, ty: String) -> MirOpnd {
-    return MirOpnd { kind: 2, val: val.to_string(), ty: ty, is_reg: false, imm_int: val };
+    return MirOpnd { kind: 2, val: val.to_string(), ty: ty, is_reg: false, imm_int: val, is_float: false };
 }
 
 pub fn mir_opnd_imm_str(txt: String) -> MirOpnd {
-    return MirOpnd { kind: 3, val: txt, ty: "str", is_reg: false, imm_int: 0 };
+    return MirOpnd { kind: 3, val: txt, ty: "str", is_reg: false, imm_int: 0, is_float: false };
 }
 
 pub fn mir_opnd_null(ty: String) -> MirOpnd {
-    return MirOpnd { kind: 4, val: "null", ty: ty, is_reg: false, imm_int: 0 };
+    return MirOpnd { kind: 4, val: "null", ty: ty, is_reg: false, imm_int: 0, is_float: false };
 }
 
 pub fn mir_opnd_global(name: String, ty: String) -> MirOpnd {
-    return MirOpnd { kind: 5, val: name, ty: ty, is_reg: false, imm_int: 0 };
+    return MirOpnd { kind: 5, val: name, ty: ty, is_reg: false, imm_int: 0, is_float: false };
 }
 
 pub fn mir_opnd_label(label: String) -> MirOpnd {
-    return MirOpnd { kind: 6, val: label, ty: "label", is_reg: false, imm_int: 0 };
+    return MirOpnd { kind: 6, val: label, ty: "label", is_reg: false, imm_int: 0, is_float: false };
 }
 
 pub fn mir_inst_make(op: String, ty: String, dst: String, raw: String, line: Int, col: Int, scope_id: Int) -> MirInst {

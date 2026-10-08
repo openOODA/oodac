@@ -7,13 +7,14 @@
 // Beats:
 //   1. Re-export typed operands and instructions.
 //   2. Re-export basic blocks and control flow graph.
-//   3. Re-export linear scan register allocator.
+//   3. Re-export linear scan register allocator and linker.
 
 import "mir_types.oo";
 import "mir_inst.oo";
 import "mir_block.oo";
 import "mir_fn.oo";
 import "mir_regalloc.oo";
+import "mir_link.oo";
 
 pub fn mir_anchor_active() -> Bool {
     return true;
